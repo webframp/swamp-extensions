@@ -1,0 +1,53 @@
+manifestVersion: 1
+name: "@webframp/aws/inventory"
+version: "2026.03.30.1"
+description: |
+  Discover running AWS resources for cost estimation and inventory management.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Requires appropriate IAM permissions
+  for each service being inventoried.
+
+  ## Required IAM Permissions
+
+  - `ec2:DescribeInstances`
+  - `rds:DescribeDBInstances`
+  - `dynamodb:ListTables`, `dynamodb:DescribeTable`
+  - `lambda:ListFunctions`
+  - `s3:ListBuckets`
+
+  ## Usage
+
+  ```bash
+  # Create inventory model
+  swamp model create @webframp/aws/inventory aws-inventory \
+    --global region=us-east-1
+
+  # List running EC2 instances
+  swamp model method run aws-inventory list_ec2
+
+  # List RDS databases
+  swamp model method run aws-inventory list_rds
+
+  # Full inventory across all resource types
+  swamp model method run aws-inventory inventory_all
+  ```
+
+  ## Supported Resources
+
+  - **EC2** - Instances with state, type, tags
+  - **RDS** - Database instances with engine, storage, Multi-AZ
+  - **DynamoDB** - Tables with billing mode, capacity, size
+  - **Lambda** - Functions with runtime, memory, timeout
+  - **S3** - Buckets (global listing)
+repository: "https://github.com/webframp/aws-costs"
+models:
+  - aws/inventory.ts
+labels:
+  - aws
+  - inventory
+  - cost
+  - finops
+  - cloud
+  - infrastructure
