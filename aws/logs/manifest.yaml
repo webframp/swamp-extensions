@@ -1,0 +1,65 @@
+manifestVersion: 1
+name: "@webframp/aws/logs"
+version: "2026.03.30.1"
+description: |
+  Query and analyze CloudWatch Logs for operational visibility and incident investigation.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Requires CloudWatch Logs permissions.
+
+  ## Required IAM Permissions
+
+  - `logs:DescribeLogGroups`
+  - `logs:StartQuery`
+  - `logs:GetQueryResults`
+  - `logs:FilterLogEvents`
+
+  ## Usage
+
+  ```bash
+  # Create logs model
+  swamp model create @webframp/aws/logs aws-logs --global-arg region=us-east-1
+
+  # List log groups
+  swamp model method run aws-logs list_log_groups --input prefix=/aws/lambda
+
+  # Run a Logs Insights query
+  swamp model method run aws-logs query \
+    --input 'logGroupNames=["/aws/lambda/my-function"]' \
+    --input 'queryString=fields @timestamp, @message | filter @message like /error/i | limit 50' \
+    --input startTime=1h
+
+  # Find error patterns
+  swamp model method run aws-logs find_errors \
+    --input 'logGroupNames=["/aws/lambda/my-function"]' \
+    --input startTime=2h
+
+  # Get recent events with filter
+  swamp model method run aws-logs get_recent_events \
+    --input logGroupName=/aws/lambda/my-function \
+    --input filterPattern=ERROR
+  ```
+
+  ## Time Formats
+
+  The `startTime` and `endTime` parameters accept:
+  - Relative times: `30m`, `1h`, `2d` (minutes, hours, days ago)
+  - ISO 8601 dates: `2026-03-30T12:00:00Z`
+
+  ## Methods
+
+  - **list_log_groups** - Discover log groups by prefix
+  - **query** - Run CloudWatch Logs Insights queries
+  - **find_errors** - Analyze error patterns with keyword detection
+  - **get_recent_events** - Filter recent log events
+repository: "https://github.com/webframp/aws-costs"
+models:
+  - aws/logs.ts
+labels:
+  - aws
+  - cloudwatch
+  - logs
+  - observability
+  - ops
+  - incident-response
