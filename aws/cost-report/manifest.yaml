@@ -1,0 +1,51 @@
+manifestVersion: 1
+name: "@webframp/aws/cost-report"
+version: "2026.03.30.6"
+description: |
+  Format AWS cost estimates into readable reports with breakdowns and recommendations.
+
+  ## Features
+
+  - Formatted markdown tables for EC2, RDS, and spec-based estimates
+  - Cost breakdowns by tag (owner, project)
+  - Actionable recommendations for cost optimization
+  - JSON output for programmatic analysis
+
+  ## Usage
+
+  The report runs automatically after `@webframp/aws/cost-estimate` methods.
+  It can also be run standalone:
+
+  ```bash
+  # Run after method execution (automatic)
+  swamp model method run cost-est estimate_from_spec --input-file spec.json
+
+  # Run standalone on existing model
+  swamp model report cost-est --json
+  ```
+
+  ## Report Output
+
+  - Resource tables with per-item costs
+  - Tag-based cost allocation (by owner, project)
+  - Recommendations for:
+    - Right-sizing expensive resources
+    - Windows to Linux migration opportunities
+    - Multi-AZ considerations for RDS
+    - Tagging gaps
+
+  ## Labels
+
+  Filter reports using labels:
+
+  ```bash
+  swamp model method run <model> <method> --report-label cost
+  ```
+repository: "https://github.com/webframp/aws-costs"
+reports:
+  - cost_report.ts
+labels:
+  - aws
+  - cost
+  - finops
+  - report
