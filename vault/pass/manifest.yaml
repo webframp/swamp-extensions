@@ -1,0 +1,18 @@
+manifestVersion: 1
+name: "@webframp/pass"
+version: "2026.03.30.1"
+description: "GPG-encrypted password store using the pass CLI (passwordstore.org)"
+vaults:
+  - pass/mod.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+tags:
+  - vault
+  - secrets
+  - pass
+  - gpg
+  - passwordstore
+  - encryption
