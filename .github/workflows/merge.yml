@@ -1,12 +1,12 @@
-name: Merge and Release
+name: Merge PR
 
 on:
   issue_comment:
     types: [created]
 
 jobs:
-  merge-and-release:
-    name: Merge PR and Release
+  merge:
+    name: Merge PR
     runs-on: ubuntu-latest
     # Only run on PR comments from repo owner with slash commands
     if: >-
@@ -15,8 +15,6 @@ jobs:
       (
         startsWith(github.event.comment.body, '/lgtm') ||
         startsWith(github.event.comment.body, '/approve') ||
-        startsWith(github.event.comment.body, '/approved') ||
-        startsWith(github.event.comment.body, '/accepted') ||
         startsWith(github.event.comment.body, '/shipit')
       )
     permissions:
@@ -30,8 +28,6 @@ jobs:
         run: |
           PR_DATA=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }})
           echo "head_sha=$(echo $PR_DATA | jq -r '.head.sha')" >> $GITHUB_OUTPUT
-          echo "head_ref=$(echo $PR_DATA | jq -r '.head.ref')" >> $GITHUB_OUTPUT
-          echo "title=$(echo $PR_DATA | jq -r '.title')" >> $GITHUB_OUTPUT
 
       - name: Check CI status
         id: ci-status
@@ -68,34 +64,3 @@ jobs:
             --repo ${{ github.repository }} \
             --squash \
             --delete-branch
-
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: Generate version
-        id: version
-        run: |
-          # CalVer format: YYYY.MM.DD.N
-          DATE=$(date +%Y.%m.%d)
-
-          # Find existing tags for today and increment
-          EXISTING=$(git tag -l "${DATE}.*" | sort -V | tail -1)
-          if [ -z "$EXISTING" ]; then
-            VERSION="${DATE}.1"
-          else
-            MICRO=$(echo $EXISTING | cut -d. -f4)
-            VERSION="${DATE}.$((MICRO + 1))"
-          fi
-
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            --repo ${{ github.repository }} \
-            --title "${{ steps.pr.outputs.title }}" \
-            --generate-notes
