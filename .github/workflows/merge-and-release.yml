@@ -1,0 +1,94 @@
+name: Merge and Release
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  merge-and-release:
+    name: Merge PR and Release
+    runs-on: ubuntu-latest
+    # Only run on PR comments (not issue comments) with approval keywords
+    if: |
+      github.event.issue.pull_request &&
+      contains(fromJSON('["accept", "accepted", "approve", "approved", "lgtm", "ship it"]'), toLower(github.event.comment.body))
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Get PR info
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_DATA=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }})
+          echo "head_sha=$(echo $PR_DATA | jq -r '.head.sha')" >> $GITHUB_OUTPUT
+          echo "head_ref=$(echo $PR_DATA | jq -r '.head.ref')" >> $GITHUB_OUTPUT
+          echo "title=$(echo $PR_DATA | jq -r '.title')" >> $GITHUB_OUTPUT
+
+      - name: Check CI status
+        id: ci-status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get combined status for the PR head commit
+          STATUS=$(gh api repos/${{ github.repository }}/commits/${{ steps.pr.outputs.head_sha }}/status --jq '.state')
+
+          # Also check for any failing check runs
+          CHECKS=$(gh api repos/${{ github.repository }}/commits/${{ steps.pr.outputs.head_sha }}/check-runs --jq '.check_runs | map(select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null)) | length')
+
+          if [ "$STATUS" = "success" ] || [ "$STATUS" = "pending" -a "$CHECKS" = "0" ]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment if CI not passed
+        if: steps.ci-status.outputs.passed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --body "Cannot merge: CI checks have not passed. Please wait for all checks to complete successfully."
+          exit 1
+
+      - name: Merge PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge ${{ github.event.issue.number }} \
+            --repo ${{ github.repository }} \
+            --squash \
+            --delete-branch
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Generate version
+        id: version
+        run: |
+          # CalVer format: YYYY.MM.DD.N
+          DATE=$(date +%Y.%m.%d)
+
+          # Find existing tags for today and increment
+          EXISTING=$(git tag -l "${DATE}.*" | sort -V | tail -1)
+          if [ -z "$EXISTING" ]; then
+            VERSION="${DATE}.1"
+          else
+            MICRO=$(echo $EXISTING | cut -d. -f4)
+            VERSION="${DATE}.$((MICRO + 1))"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --repo ${{ github.repository }} \
+            --title "${{ steps.pr.outputs.title }}" \
+            --generate-notes
