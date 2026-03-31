@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-report"
-version: "2026.03.30.6"
+version: "2026.03.31.1"
 description: |
   Format AWS cost estimates into readable reports with breakdowns and recommendations.
 
@@ -41,7 +41,7 @@ description: |
   ```bash
   swamp model method run <model> <method> --report-label cost
   ```
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 reports:
   - cost_report.ts
 labels:

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-estimate"
-version: "2026.03.30.4"
+version: "2026.03.31.1"
 description: |
   Calculate AWS infrastructure costs from inventory data or planned specs.
 
@@ -47,7 +47,7 @@ description: |
   - Assumes On-Demand pricing (no Reserved Instances or Savings Plans)
   - EC2: Includes compute only (no EBS, transfer)
   - RDS: Includes compute + storage (gp2 rate default)
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/cost_estimate.ts
 labels:

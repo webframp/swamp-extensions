@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/inventory"
-version: "2026.03.30.1"
+version: "2026.03.31.1"
 description: |
   Discover running AWS resources for cost estimation and inventory management.
 
@@ -41,7 +41,7 @@ description: |
   - **DynamoDB** - Tables with billing mode, capacity, size
   - **Lambda** - Functions with runtime, memory, timeout
   - **S3** - Buckets (global listing)
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/inventory.ts
 labels:

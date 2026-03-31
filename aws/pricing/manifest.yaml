@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/pricing"
-version: "2026.03.30.1"
+version: "2026.03.31.1"
 description: |
   AWS Pricing API model for looking up service costs.
 
@@ -44,7 +44,7 @@ description: |
   - `AmazonDynamoDB` - DynamoDB
   - `AmazonElastiCache` - ElastiCache
   - `AmazonEKS` - Elastic Kubernetes Service
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/pricing.ts
 labels:

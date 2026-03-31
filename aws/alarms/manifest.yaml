@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/alarms"
-version: "2026.03.30.1"
+version: "2026.03.31.1"
 description: |
   Query and analyze CloudWatch Alarms for operational visibility and incident response.
 
@@ -50,7 +50,7 @@ description: |
   - **get_active** - Get all alarms currently in ALARM state
   - **get_history** - Get alarm state change history
   - **get_summary** - Get summary with state counts and recent changes
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/alarms.ts
 labels:

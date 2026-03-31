@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/traces"
-version: "2026.03.30.1"
+version: "2026.03.31.1"
 description: |
   Query and analyze X-Ray distributed traces for incident investigation and performance analysis.
 
@@ -61,7 +61,7 @@ description: |
   - **get_traces** - Get trace summaries with optional filter expression
   - **get_errors** - Get error/fault traces (convenience method)
   - **analyze_errors** - Analyze error patterns across traces
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/traces.ts
 labels:

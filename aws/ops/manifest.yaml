@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws-ops"
-version: "2026.03.30.4"
+version: "2026.03.31.1"
 description: |
   AWS Operations Toolkit - Unified incident investigation and operational visibility.
 
@@ -66,7 +66,7 @@ description: |
   - `aws-metrics` - @webframp/aws/metrics
   - `aws-alarms` - @webframp/aws/alarms
   - `aws-traces` - @webframp/aws/traces
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 workflows:
   - workflow-c3866eb0-6190-4154-b8e1-304624aba93e.yaml
 reports:

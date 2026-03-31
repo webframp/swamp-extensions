@@ -57,7 +57,7 @@ description: |
   - **analyze** - Analyze metrics for trends, anomalies, and summary statistics
   - **get_ec2_cpu** - Convenience method for EC2 CPU utilization
   - **get_lambda_metrics** - Get key Lambda function metrics (invocations, errors, duration, throttles)
-repository: "https://github.com/webframp/aws-costs"
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/metrics.ts
 labels:
