@@ -8,17 +8,16 @@ jobs:
   merge-and-release:
     name: Merge PR and Release
     runs-on: ubuntu-latest
-    # Only run on PR comments from repo owner with approval keywords
+    # Only run on PR comments from repo owner with slash commands
     if: >-
       github.event.issue.pull_request &&
       github.event.comment.user.login == github.repository_owner &&
       (
-        github.event.comment.body == 'approved' ||
-        github.event.comment.body == 'approve' ||
-        github.event.comment.body == 'accept' ||
-        github.event.comment.body == 'accepted' ||
-        github.event.comment.body == 'lgtm' ||
-        github.event.comment.body == 'ship it'
+        startsWith(github.event.comment.body, '/lgtm') ||
+        startsWith(github.event.comment.body, '/approve') ||
+        startsWith(github.event.comment.body, '/approved') ||
+        startsWith(github.event.comment.body, '/accepted') ||
+        startsWith(github.event.comment.body, '/shipit')
       )
     permissions:
       contents: write
