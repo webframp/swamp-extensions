@@ -1,0 +1,61 @@
+name: Publish Extensions
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  detect-changes:
+    name: Detect changed extensions
+    runs-on: ubuntu-latest
+    outputs:
+      extensions: ${{ steps.changes.outputs.extensions }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: changes
+        name: Find extensions with changes
+        run: |
+          # Compare against the previous commit on main
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # First push to branch — compare against parent
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          EXTENSIONS="[]"
+
+          # Find all extension directories (those containing a manifest.yaml)
+          for manifest in $(find . -name "manifest.yaml" -not -path "./.git/*"); do
+            dir=$(dirname "$manifest" | sed 's|^\./||')
+            if echo "$CHANGED_FILES" | grep -q "^${dir}/"; then
+              EXTENSIONS=$(echo "$EXTENSIONS" | jq -c ". + [\"${dir}\"]")
+              echo "Extension changed: ${dir}"
+            fi
+          done
+
+          echo "extensions=$EXTENSIONS" >> "$GITHUB_OUTPUT"
+          echo "Extensions to publish: $EXTENSIONS"
+
+  publish:
+    name: Publish ${{ matrix.extension }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.extensions != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extension: ${{ fromJson(needs.detect-changes.outputs.extensions) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: systeminit/setup-swamp@v0.1.0
+        with:
+          api-key: ${{ secrets.SWAMP_API_KEY }}
+      - name: Publish extension
+        working-directory: ${{ matrix.extension }}
+        run: swamp extension push manifest.yaml
