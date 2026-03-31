@@ -1,0 +1,62 @@
+manifestVersion: 1
+name: "@webframp/aws/alarms"
+version: "2026.03.30.1"
+description: |
+  Query and analyze CloudWatch Alarms for operational visibility and incident response.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Requires CloudWatch permissions.
+
+  ## Required IAM Permissions
+
+  - `cloudwatch:DescribeAlarms`
+  - `cloudwatch:DescribeAlarmHistory`
+
+  ## Usage
+
+  ```bash
+  # Create alarms model
+  swamp model create @webframp/aws/alarms aws-alarms --global-arg region=us-east-1
+
+  # List all alarms
+  swamp model method run aws-alarms list_alarms
+
+  # List alarms in ALARM state
+  swamp model method run aws-alarms list_alarms --input stateValue=ALARM
+
+  # Get active alarms (convenience method)
+  swamp model method run aws-alarms get_active
+
+  # Get alarm history for last 24 hours
+  swamp model method run aws-alarms get_history --input startTime=24h
+
+  # Get history for a specific alarm
+  swamp model method run aws-alarms get_history --input alarmName=my-alarm --input startTime=7d
+
+  # Get alarm summary with state counts and recent changes
+  swamp model method run aws-alarms get_summary --input historyHours=6
+  ```
+
+  ## Time Formats
+
+  The `startTime` and `endTime` parameters accept:
+  - Relative times: `30m`, `1h`, `2d` (minutes, hours, days ago)
+  - ISO 8601 dates: `2026-03-30T12:00:00Z`
+
+  ## Methods
+
+  - **list_alarms** - List alarms with optional state and prefix filters
+  - **get_active** - Get all alarms currently in ALARM state
+  - **get_history** - Get alarm state change history
+  - **get_summary** - Get summary with state counts and recent changes
+repository: "https://github.com/webframp/aws-costs"
+models:
+  - aws/alarms.ts
+labels:
+  - aws
+  - cloudwatch
+  - alarms
+  - observability
+  - ops
+  - incident-response
