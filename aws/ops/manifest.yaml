@@ -1,0 +1,86 @@
+manifestVersion: 1
+name: "@webframp/aws-ops"
+version: "2026.03.30.4"
+description: |
+  AWS Operations Toolkit - Unified incident investigation and operational visibility.
+
+  This extension provides a complete workflow for investigating AWS outages by
+  gathering data from CloudWatch Logs, Metrics, Alarms, and X-Ray Traces,
+  plus an incident report that summarizes all findings.
+
+  ## Quick Start
+
+  ```bash
+  # Install the extension (auto-resolves dependencies)
+  swamp extension pull @webframp/aws-ops
+
+  # Create model instances for your region
+  swamp model create @webframp/aws/logs aws-logs --global-arg region=us-east-1
+  swamp model create @webframp/aws/metrics aws-metrics --global-arg region=us-east-1
+  swamp model create @webframp/aws/alarms aws-alarms --global-arg region=us-east-1
+  swamp model create @webframp/aws/traces aws-traces --global-arg region=us-east-1
+
+  # Run the investigate-outage workflow
+  swamp workflow run @webframp/investigate-outage
+  ```
+
+  ## Required IAM Permissions
+
+  - `logs:DescribeLogGroups`
+  - `logs:StartQuery`
+  - `logs:GetQueryResults`
+  - `logs:FilterLogEvents`
+  - `cloudwatch:ListMetrics`
+  - `cloudwatch:GetMetricStatistics`
+  - `cloudwatch:GetMetricData`
+  - `cloudwatch:DescribeAlarms`
+  - `cloudwatch:DescribeAlarmHistory`
+  - `xray:GetServiceGraph`
+  - `xray:GetTraceSummaries`
+
+  ## Included Components
+
+  ### Workflows
+
+  - **@webframp/investigate-outage** - Unified incident investigation workflow that:
+    - Gathers alarm summary and active alarms
+    - Analyzes Lambda Duration and Errors metrics for anomalies
+    - Gets X-Ray service dependency graph
+    - Finds error traces and analyzes error patterns
+    - Lists CloudWatch log groups
+    - Gets alarm state change history
+    - Generates an incident report summarizing all findings
+
+  ### Reports
+
+  - **@webframp/incident-report** - Workflow-scope report that aggregates findings into:
+    - Alarm status and recent state changes
+    - Metric anomaly highlights
+    - Trace error analysis with top faulty services
+    - Actionable recommendations
+
+  ### Model Dependencies
+
+  The workflow expects these model instances (create them before running):
+  - `aws-logs` - @webframp/aws/logs
+  - `aws-metrics` - @webframp/aws/metrics
+  - `aws-alarms` - @webframp/aws/alarms
+  - `aws-traces` - @webframp/aws/traces
+repository: "https://github.com/webframp/aws-costs"
+workflows:
+  - workflow-c3866eb0-6190-4154-b8e1-304624aba93e.yaml
+reports:
+  - incident_report.ts
+labels:
+  - aws
+  - cloudwatch
+  - xray
+  - observability
+  - ops
+  - incident-response
+  - workflow
+dependencies:
+  - "@webframp/aws/logs@2026.03.30.1"
+  - "@webframp/aws/metrics@2026.03.30.1"
+  - "@webframp/aws/alarms@2026.03.30.1"
+  - "@webframp/aws/traces@2026.03.30.1"

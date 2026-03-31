@@ -1,0 +1,143 @@
+id: c3866eb0-6190-4154-b8e1-304624aba93e
+name: "@webframp/investigate-outage"
+description: |
+  Unified AWS outage investigation workflow.
+  Gathers data from CloudWatch Logs, Metrics, Alarms, and X-Ray Traces
+  to provide a comprehensive view of system health during an incident.
+tags:
+  incident-response: "true"
+  aws: "true"
+  observability: "true"
+reports:
+  require:
+    - "@webframp/incident-report"
+inputs:
+  properties:
+    region:
+      type: string
+      default: us-east-1
+      description: AWS region to investigate
+    timeRange:
+      type: string
+      default: 1h
+      description: Time range to look back (e.g., 30m, 1h, 6h)
+    logGroupPrefix:
+      type: string
+      description: Optional log group prefix to filter (e.g., /aws/lambda)
+    namespace:
+      type: string
+      description: Optional CloudWatch namespace to filter metrics (e.g., AWS/Lambda)
+  required: []
+jobs:
+  - name: gather-observability-data
+    description: Collect data from all observability sources in parallel
+    steps:
+      - name: check-alarms
+        description: Get alarm summary and active alarms
+        task:
+          type: model_method
+          modelIdOrName: aws-alarms
+          methodName: get_summary
+          inputs:
+            historyHours: 6
+        allowFailure: true
+
+      - name: get-active-alarms
+        description: Get all currently active alarms
+        task:
+          type: model_method
+          modelIdOrName: aws-alarms
+          methodName: get_active
+        allowFailure: true
+
+      - name: analyze-metrics
+        description: Analyze Lambda Duration metrics for anomalies
+        task:
+          type: model_method
+          modelIdOrName: aws-metrics
+          methodName: analyze
+          inputs:
+            namespace: AWS/Lambda
+            metricName: Duration
+            startTime: ${{ inputs.timeRange }}
+        allowFailure: true
+
+      - name: analyze-errors-metric
+        description: Analyze Lambda Errors metrics
+        task:
+          type: model_method
+          modelIdOrName: aws-metrics
+          methodName: analyze
+          inputs:
+            namespace: AWS/Lambda
+            metricName: Errors
+            startTime: ${{ inputs.timeRange }}
+        allowFailure: true
+
+      - name: get-service-graph
+        description: Get X-Ray service dependency graph
+        task:
+          type: model_method
+          modelIdOrName: aws-traces
+          methodName: get_service_graph
+          inputs:
+            startTime: ${{ inputs.timeRange }}
+        allowFailure: true
+
+      - name: get-error-traces
+        description: Get traces with errors or faults
+        task:
+          type: model_method
+          modelIdOrName: aws-traces
+          methodName: get_errors
+          inputs:
+            startTime: ${{ inputs.timeRange }}
+            errorType: any
+            limit: 50
+        allowFailure: true
+
+      - name: analyze-trace-errors
+        description: Analyze error patterns in traces
+        task:
+          type: model_method
+          modelIdOrName: aws-traces
+          methodName: analyze_errors
+          inputs:
+            startTime: ${{ inputs.timeRange }}
+        allowFailure: true
+
+  - name: gather-logs
+    description: Search logs for errors (runs in parallel with observability)
+    steps:
+      - name: list-log-groups
+        description: Discover log groups
+        task:
+          type: model_method
+          modelIdOrName: aws-logs
+          methodName: list_log_groups
+          inputs:
+            limit: 50
+        allowFailure: true
+
+  - name: deep-dive
+    description: Perform deeper analysis based on initial findings
+    dependsOn:
+      - job: gather-observability-data
+        condition:
+          type: completed
+      - job: gather-logs
+        condition:
+          type: completed
+    steps:
+      - name: get-alarm-history
+        description: Get alarm state change history
+        task:
+          type: model_method
+          modelIdOrName: aws-alarms
+          methodName: get_history
+          inputs:
+            startTime: ${{ inputs.timeRange }}
+            historyItemType: StateUpdate
+        allowFailure: true
+
+version: 1
