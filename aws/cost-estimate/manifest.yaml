@@ -1,0 +1,59 @@
+manifestVersion: 1
+name: "@webframp/aws/cost-estimate"
+version: "2026.03.30.4"
+description: |
+  Calculate AWS infrastructure costs from inventory data or planned specs.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. The Pricing API is public data
+  but requires valid AWS credentials.
+
+  ## Usage
+
+  ### From Inventory (existing resources)
+
+  First gather inventory using `@webframp/aws/inventory`, then estimate costs:
+
+  ```bash
+  # Create models
+  swamp model create @webframp/aws/inventory aws-inventory --global-arg region=us-east-1
+  swamp model create @webframp/aws/cost-estimate cost-est
+
+  # Gather inventory
+  swamp model method run aws-inventory list_ec2
+
+  # Get inventory data
+  EC2_DATA=$(swamp data get aws-inventory ec2-us-east-1 --json | jq '.data.resources')
+
+  # Estimate costs (pass inventory as JSON)
+  swamp model method run cost-est estimate_ec2 \
+    --input "inventory=${EC2_DATA}"
+  ```
+
+  ### From Spec (planned resources)
+
+  Estimate costs before deployment:
+
+  ```bash
+  swamp model method run cost-est estimate_from_spec \
+    --input 'ec2Instances=[{"name":"web","instanceType":"t3.medium","count":3}]' \
+    --input 'rdsInstances=[{"name":"db","dbInstanceClass":"db.t3.medium","engine":"postgres","storageGb":100}]'
+  ```
+
+  ## Pricing Notes
+
+  - Uses AWS Pricing API for real-time rates
+  - Assumes On-Demand pricing (no Reserved Instances or Savings Plans)
+  - EC2: Includes compute only (no EBS, transfer)
+  - RDS: Includes compute + storage (gp2 rate default)
+repository: "https://github.com/webframp/aws-costs"
+models:
+  - aws/cost_estimate.ts
+labels:
+  - aws
+  - cost
+  - pricing
+  - finops
+  - estimate
+  - cloud
