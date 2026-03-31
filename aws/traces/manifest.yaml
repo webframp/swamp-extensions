@@ -1,0 +1,74 @@
+manifestVersion: 1
+name: "@webframp/aws/traces"
+version: "2026.03.30.1"
+description: |
+  Query and analyze X-Ray distributed traces for incident investigation and performance analysis.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Requires X-Ray permissions.
+
+  ## Required IAM Permissions
+
+  - `xray:GetServiceGraph`
+  - `xray:GetTraceSummaries`
+
+  ## Usage
+
+  ```bash
+  # Create traces model
+  swamp model create @webframp/aws/traces aws-traces --global-arg region=us-east-1
+
+  # Get service dependency graph
+  swamp model method run aws-traces get_service_graph --input startTime=1h
+
+  # Get trace summaries
+  swamp model method run aws-traces get_traces --input startTime=1h
+
+  # Get traces with filter expression
+  swamp model method run aws-traces get_traces \
+    --input startTime=1h \
+    --input 'filterExpression=service("api") AND http.status = 500'
+
+  # Get error traces (convenience method)
+  swamp model method run aws-traces get_errors --input errorType=fault
+
+  # Analyze error patterns
+  swamp model method run aws-traces analyze_errors --input startTime=6h
+  ```
+
+  ## Time Formats
+
+  The `startTime` and `endTime` parameters accept:
+  - Relative times: `30m`, `1h`, `2d` (minutes, hours, days ago)
+  - ISO 8601 dates: `2026-03-30T12:00:00Z`
+
+  ## Filter Expressions
+
+  X-Ray filter expressions support:
+  - `service("name")` - Filter by service name
+  - `http.url` - HTTP URL
+  - `http.method` - HTTP method (GET, POST, etc.)
+  - `http.status` - HTTP status code
+  - `responsetime > 5` - Response time in seconds
+  - `fault = true` - Traces with faults (5xx)
+  - `error = true` - Traces with errors (4xx)
+  - `throttle = true` - Throttled requests
+
+  ## Methods
+
+  - **get_service_graph** - Get service dependency graph with health statistics
+  - **get_traces** - Get trace summaries with optional filter expression
+  - **get_errors** - Get error/fault traces (convenience method)
+  - **analyze_errors** - Analyze error patterns across traces
+repository: "https://github.com/webframp/aws-costs"
+models:
+  - aws/traces.ts
+labels:
+  - aws
+  - xray
+  - traces
+  - distributed-tracing
+  - observability
+  - ops
+  - incident-response
