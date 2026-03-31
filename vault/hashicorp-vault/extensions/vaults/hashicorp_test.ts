@@ -198,24 +198,6 @@ function startMockVaultServer(kvVersion: "1" | "2" = "2"): MockVaultServer {
   };
 }
 
-async function withMockVault<T>(
-  fn: (ctx: { secrets: Map<string, Record<string, unknown>> }) => Promise<T>,
-  kvVersion: "1" | "2" = "2",
-): Promise<T> {
-  const { url, server, secrets } = startMockVaultServer(kvVersion);
-
-  // Create provider pointing to mock server
-  const originalCreateProvider = vault.createProvider;
-
-  try {
-    // Temporarily override to inject mock URL
-    const result = await fn({ secrets });
-    return result;
-  } finally {
-    await server.shutdown();
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Behavioral tests - KV v2
 // ---------------------------------------------------------------------------
@@ -355,7 +337,7 @@ Deno.test({
   fn: async () => {
     // Create a server that checks the path includes the custom mount
     let requestedPath = "";
-    const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
       requestedPath = new URL(req.url).pathname;
       return Response.json({ data: { data: { value: "test" } } });
     });
@@ -384,7 +366,7 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     let capturedHeaders: Headers | null = null;
-    const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+    const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
       capturedHeaders = req.headers;
       return Response.json({ data: { data: { value: "test" } } });
     });

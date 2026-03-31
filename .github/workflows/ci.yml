@@ -32,7 +32,7 @@ jobs:
           elif [ "${{ matrix.task }}" = "test" ]; then
             # Run tests if any exist
             if ls extensions/vaults/*_test.ts 1> /dev/null 2>&1; then
-              deno test --allow-env --allow-run extensions/vaults/
+              deno test --allow-env --allow-run --allow-net extensions/vaults/
             else
               echo "No tests found, skipping"
             fi
