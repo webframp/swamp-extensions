@@ -148,11 +148,52 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: systeminit/swamp/.github/actions/adversarial-review@f2fa92c43a43a3c386d81c9c7d518a08cd22497e
+      - uses: anthropics/claude-code-action@v1
         env:
-          CLAUDE_CODE_USE_BEDROCK: "1"
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
         with:
+          use_bedrock: "true"
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          display_report: "true"
+          allowed_tools: "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr review:*),Bash(touch /tmp/review-failed)"
+          prompt: |
+            TASK: Review PR #${{ github.event.pull_request.number }} in ${{ github.repository }}
+
+            STEPS:
+            1. Run `gh pr diff ${{ github.event.pull_request.number }}` to see the changes
+            2. Read any changed files that need deeper inspection
+            3. If CLAUDE.md exists, read it for project conventions
+            4. Analyze for: logic errors, security issues, error handling gaps, breaking changes
+            5. REQUIRED: Submit your review using gh pr review (see format below)
+
+            REVIEW FORMAT - You MUST run one of these commands:
+
+            If NO critical issues found:
+            ```
+            gh pr review ${{ github.event.pull_request.number }} --comment --body "## Adversarial Review
+
+            **Verdict: PASS**
+
+            [Your findings or 'No significant issues found']"
+            ```
+
+            If critical issues found:
+            ```
+            gh pr review ${{ github.event.pull_request.number }} --request-changes --body "## Adversarial Review
+
+            **Verdict: FAIL**
+
+            [List each issue with file, line, description, fix]"
+            touch /tmp/review-failed
+            ```
+
+            IMPORTANT: You MUST call `gh pr review` before finishing. This is required.
+
+      - name: Fail if changes requested
+        shell: bash
+        run: |
+          if [ -f /tmp/review-failed ]; then
+            echo "::error::Adversarial review requested changes"
+            exit 1
+          fi
