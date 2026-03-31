@@ -1,0 +1,55 @@
+manifestVersion: 1
+name: "@webframp/aws/pricing"
+version: "2026.03.30.1"
+description: |
+  AWS Pricing API model for looking up service costs.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. The Pricing API is public data
+  and doesn't require special IAM permissions, but does require valid
+  AWS credentials.
+
+  ## Regions
+
+  The AWS Pricing API is only available in us-east-1 and ap-south-1.
+  Configure the model with one of these regions.
+
+  ## Usage
+
+  ```bash
+  # Create pricing lookup model
+  swamp model create @webframp/aws/pricing aws-pricing
+
+  # List available services
+  swamp model method run aws-pricing list_services
+
+  # Get EC2 instance types
+  swamp model method run aws-pricing get_attribute_values \
+    --input serviceCode=AmazonEC2 \
+    --input attributeName=instanceType
+
+  # Get pricing for a specific EC2 instance
+  swamp model method run aws-pricing get_ec2_price \
+    --input instanceType=t3.medium \
+    --input region=us-east-1
+  ```
+
+  ## Common Service Codes
+
+  - `AmazonEC2` - Elastic Compute Cloud
+  - `AmazonRDS` - Relational Database Service
+  - `AmazonS3` - Simple Storage Service
+  - `AWSLambda` - Lambda Functions
+  - `AmazonDynamoDB` - DynamoDB
+  - `AmazonElastiCache` - ElastiCache
+  - `AmazonEKS` - Elastic Kubernetes Service
+repository: "https://github.com/webframp/aws-costs"
+models:
+  - aws/pricing.ts
+labels:
+  - aws
+  - pricing
+  - cost
+  - finops
+  - cloud
