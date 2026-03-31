@@ -4,26 +4,17 @@
 import { z } from "npm:zod@4.3.6";
 import {
   CloudWatchClient,
+  type Datapoint,
+  type Dimension,
   GetMetricDataCommand,
   GetMetricStatisticsCommand,
   ListMetricsCommand,
 } from "npm:@aws-sdk/client-cloudwatch@3.1010.0";
 
-// Local types for SDK responses
+// Local type for SDK dimension responses (Name/Value optional in list responses)
 interface AwsDimension {
   Name?: string;
   Value?: string;
-}
-
-interface AwsDatapoint {
-  Timestamp?: Date;
-  Average?: number;
-  Sum?: number;
-  Minimum?: number;
-  Maximum?: number;
-  SampleCount?: number;
-  Unit?: string;
-  [key: string]: unknown;
 }
 
 // =============================================================================
@@ -368,7 +359,7 @@ export const model = {
           : new Date();
         const period = args.period || calculatePeriod(startTime, endTime);
 
-        const dimensions: AwsDimension[] = args.dimensions.map((d) => ({
+        const dimensions: Dimension[] = args.dimensions.map((d) => ({
           Name: d.name,
           Value: d.value,
         }));
@@ -386,7 +377,7 @@ export const model = {
         const response = await client.send(command);
 
         const datapoints = (response.Datapoints || [])
-          .map((dp: AwsDatapoint) => ({
+          .map((dp: Datapoint) => ({
             timestamp: dp.Timestamp?.toISOString() || "",
             value: (dp[args.statistic] as number) ?? 0,
             unit: dp.Unit || null,
@@ -498,7 +489,7 @@ export const model = {
           : new Date();
         const period = calculatePeriod(startTime, endTime);
 
-        const dimensions: AwsDimension[] = args.dimensions.map((d) => ({
+        const dimensions: Dimension[] = args.dimensions.map((d) => ({
           Name: d.name,
           Value: d.value,
         }));
@@ -516,7 +507,7 @@ export const model = {
         const response = await client.send(command);
 
         const datapoints = (response.Datapoints || [])
-          .map((dp: AwsDatapoint) => ({
+          .map((dp: Datapoint) => ({
             timestamp: dp.Timestamp?.toISOString() || "",
             value: (dp[args.statistic] as number) ?? 0,
           }))
@@ -629,7 +620,7 @@ export const model = {
         const response = await client.send(command);
 
         const datapoints = (response.Datapoints || [])
-          .map((dp: AwsDatapoint) => ({
+          .map((dp: Datapoint) => ({
             timestamp: dp.Timestamp?.toISOString() || "",
             average: dp.Average ?? 0,
             maximum: dp.Maximum ?? 0,
