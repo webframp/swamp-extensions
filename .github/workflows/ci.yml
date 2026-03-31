@@ -150,6 +150,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: systeminit/swamp/.github/actions/adversarial-review@f2fa92c43a43a3c386d81c9c7d518a08cd22497e
         env:
+          CLAUDE_CODE_USE_BEDROCK: "1"
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
         with:
