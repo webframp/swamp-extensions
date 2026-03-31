@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@webframp/gopass"
+version: "2026.03.30.1"
+description: "gopass password manager (gopass.pw) - pass compatible with extra features"
+vaults:
+  - gopass/mod.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+tags:
+  - vault
+  - secrets
+  - gopass
+  - pass
+  - gpg
+  - passwordstore
+  - encryption
