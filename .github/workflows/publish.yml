@@ -67,8 +67,16 @@ jobs:
         id: manifest
         working-directory: ${{ matrix.extension }}
         run: |
-          NAME=$(grep '^name:' manifest.yaml | sed 's/name: *"\?\([^"]*\)"\?/\1/')
-          VERSION=$(grep '^version:' manifest.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
+          # Extract name and version, stripping both single and double quotes
+          NAME=$(grep '^name:' manifest.yaml | sed "s/name: *[\"']\\?\\([^\"']*\\)[\"']\\?/\\1/")
+          VERSION=$(grep '^version:' manifest.yaml | sed "s/version: *[\"']\\?\\([^\"']*\\)[\"']\\?/\\1/")
+
+          # Fail if extraction failed
+          if [ -z "$NAME" ] || [ -z "$VERSION" ]; then
+            echo "::error::Failed to extract name or version from manifest.yaml"
+            exit 1
+          fi
+
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Extension: $NAME@$VERSION"
