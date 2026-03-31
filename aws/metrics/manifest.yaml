@@ -1,0 +1,69 @@
+manifestVersion: 1
+name: "@webframp/aws/metrics"
+version: "2026.03.30.1"
+description: |
+  Query and analyze CloudWatch Metrics for operational visibility and performance monitoring.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Requires CloudWatch permissions.
+
+  ## Required IAM Permissions
+
+  - `cloudwatch:ListMetrics`
+  - `cloudwatch:GetMetricStatistics`
+  - `cloudwatch:GetMetricData`
+
+  ## Usage
+
+  ```bash
+  # Create metrics model
+  swamp model create @webframp/aws/metrics aws-metrics --global-arg region=us-east-1
+
+  # List available metrics
+  swamp model method run aws-metrics list_metrics --input namespace=AWS/EC2
+
+  # Get metric data
+  swamp model method run aws-metrics get_data \
+    --input namespace=AWS/EC2 \
+    --input metricName=CPUUtilization \
+    --input 'dimensions=[{"name":"InstanceId","value":"i-1234567890abcdef0"}]' \
+    --input startTime=1h
+
+  # Analyze a metric for trends and anomalies
+  swamp model method run aws-metrics analyze \
+    --input namespace=AWS/Lambda \
+    --input metricName=Errors \
+    --input 'dimensions=[{"name":"FunctionName","value":"my-function"}]' \
+    --input startTime=6h
+
+  # Get EC2 CPU utilization (convenience method)
+  swamp model method run aws-metrics get_ec2_cpu --input instanceId=i-1234567890abcdef0
+
+  # Get Lambda function metrics
+  swamp model method run aws-metrics get_lambda_metrics --input functionName=my-function
+  ```
+
+  ## Time Formats
+
+  The `startTime` and `endTime` parameters accept:
+  - Relative times: `30m`, `1h`, `2d` (minutes, hours, days ago)
+  - ISO 8601 dates: `2026-03-30T12:00:00Z`
+
+  ## Methods
+
+  - **list_metrics** - Discover available CloudWatch metrics by namespace
+  - **get_data** - Retrieve metric data points with configurable statistics
+  - **analyze** - Analyze metrics for trends, anomalies, and summary statistics
+  - **get_ec2_cpu** - Convenience method for EC2 CPU utilization
+  - **get_lambda_metrics** - Get key Lambda function metrics (invocations, errors, duration, throttles)
+repository: "https://github.com/webframp/aws-costs"
+models:
+  - aws/metrics.ts
+labels:
+  - aws
+  - cloudwatch
+  - metrics
+  - observability
+  - ops
+  - monitoring
