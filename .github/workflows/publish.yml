@@ -18,11 +18,16 @@ jobs:
         name: Find extensions with changes
         run: |
           # Compare against the previous commit on main
-          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+          BEFORE="${{ github.event.before }}"
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             # First push to branch — compare against parent
             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          elif ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            # Before commit doesn't exist (force push) — compare against parent
+            echo "Note: Previous commit $BEFORE not found (likely force push), comparing against HEAD~1"
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
           else
-            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            CHANGED_FILES=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
           fi
 
           echo "Changed files:"
