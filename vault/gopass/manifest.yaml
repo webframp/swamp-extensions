@@ -1,10 +1,10 @@
 manifestVersion: 1
 name: "@webframp/gopass"
-version: "2026.03.31.1"
+version: "2026.03.31.2"
 description: "gopass password manager (gopass.pw) - pass compatible with extra features"
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:
-  - gopass/mod.ts
+  - gopass.ts
 platforms:
   - linux-x86_64
   - linux-aarch64
