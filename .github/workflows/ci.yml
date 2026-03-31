@@ -269,7 +269,7 @@ jobs:
             ### Verdict
             [PASS / FAIL with one-line summary]
           claude_args: |
-            --model claude-opus-4-6
+            --model anthropic.claude-opus-4-6-v1
             --allowedTools Read,Glob,Grep,Bash(gh pr review:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(touch /tmp/review-failed)
 
       - name: Fail if changes requested
