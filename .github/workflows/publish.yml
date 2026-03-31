@@ -52,6 +52,8 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.extensions != '[]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +63,33 @@ jobs:
       - uses: systeminit/setup-swamp@v0.1.0
         with:
           api-key: ${{ secrets.SWAMP_API_KEY }}
+      - name: Extract manifest info
+        id: manifest
+        working-directory: ${{ matrix.extension }}
+        run: |
+          NAME=$(grep '^name:' manifest.yaml | sed 's/name: *"\?\([^"]*\)"\?/\1/')
+          VERSION=$(grep '^version:' manifest.yaml | sed 's/version: *"\?\([^"]*\)"\?/\1/')
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Extension: $NAME@$VERSION"
+
       - name: Publish extension
         working-directory: ${{ matrix.extension }}
         run: swamp extension push manifest.yaml --yes
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.manifest.outputs.name }}@${{ steps.manifest.outputs.version }}"
+
+          # Check if release already exists
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping"
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Published to swamp.club registry" \
+            --target "${{ github.sha }}"
