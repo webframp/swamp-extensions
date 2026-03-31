@@ -99,7 +99,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [check, lint, fmt]
+        task: [check, lint, fmt, test]
     defaults:
       run:
         working-directory: cloudflare
@@ -114,6 +114,13 @@ jobs:
             deno fmt --check extensions/models/
           elif [ "${{ matrix.task }}" = "lint" ]; then
             deno lint extensions/models/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            # Run tests if any exist
+            if ls extensions/models/cloudflare/*_test.ts 1> /dev/null 2>&1; then
+              deno test --allow-net extensions/models/
+            else
+              echo "No tests found, skipping"
+            fi
           else
             deno check extensions/models/cloudflare/*.ts
           fi
@@ -131,3 +138,20 @@ jobs:
             echo "Validating $manifest"
             (cd "$dir" && swamp extension fmt manifest.yaml --check)
           done
+
+  adversarial-review:
+    name: Adversarial Code Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: systeminit/swamp/.github/actions/adversarial-review@f2fa92c43a43a3c386d81c9c7d518a08cd22497e
+        env:
+          AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
