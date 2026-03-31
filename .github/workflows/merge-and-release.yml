@@ -8,10 +8,18 @@ jobs:
   merge-and-release:
     name: Merge PR and Release
     runs-on: ubuntu-latest
-    # Only run on PR comments (not issue comments) with approval keywords
-    if: |
+    # Only run on PR comments from repo owner with approval keywords
+    if: >-
       github.event.issue.pull_request &&
-      contains(fromJSON('["accept", "accepted", "approve", "approved", "lgtm", "ship it"]'), toLower(github.event.comment.body))
+      github.event.comment.user.login == github.repository_owner &&
+      (
+        github.event.comment.body == 'approved' ||
+        github.event.comment.body == 'approve' ||
+        github.event.comment.body == 'accept' ||
+        github.event.comment.body == 'accepted' ||
+        github.event.comment.body == 'lgtm' ||
+        github.event.comment.body == 'ship it'
+      )
     permissions:
       contents: write
       pull-requests: write
