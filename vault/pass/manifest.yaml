@@ -4,7 +4,7 @@ version: "2026.03.31.1"
 description: "GPG-encrypted password store using the pass CLI (passwordstore.org)"
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:
-  - pass/mod.ts
+  - pass.ts
 platforms:
   - linux-x86_64
   - linux-aarch64

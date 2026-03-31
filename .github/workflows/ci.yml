@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         vault: [pass, gopass, hashicorp-vault]
-        task: [check, lint, fmt]
+        task: [check, lint, fmt, test]
     defaults:
       run:
         working-directory: vault/${{ matrix.vault }}
@@ -29,8 +29,16 @@ jobs:
             deno fmt --check extensions/vaults/
           elif [ "${{ matrix.task }}" = "lint" ]; then
             deno lint extensions/vaults/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            # Run tests if any exist
+            if ls extensions/vaults/*_test.ts 1> /dev/null 2>&1; then
+              deno test --allow-env --allow-run extensions/vaults/
+            else
+              echo "No tests found, skipping"
+            fi
           else
-            deno check extensions/vaults/*/mod.ts
+            # Check all .ts files except test files
+            deno check extensions/vaults/*.ts
           fi
 
   aws-model-check:
