@@ -22,13 +22,32 @@ Each extension lives in its own directory with:
 - File names: `snake_case.ts`
 - Test files: `<name>_test.ts` next to implementation
 
-## Testing
+## Testing Rules
 
-- Use `@systeminit/swamp-testing` for test utilities
-- Mock external APIs with `Deno.serve({ port: 0, onListen() {} }, handler)`
-- Run tests: `deno test --allow-net extensions/`
+- Never rely on live cloud services in tests
+- Use local HTTP servers (`Deno.serve({ port: 0, onListen() {} }, handler)`) or Deno.Command mocking
+- Restore all env vars in a `finally` block
+- Tests that create SDK clients with connection pooling need `sanitizeResources: false` with a comment explaining why
+- Use `@systeminit/swamp-testing` conformance helpers (`assertVaultExportConformance`, `assertDatastoreExportConformance`, etc.)
+- Canonical test example: `vault/gopass/extensions/vaults/gopass_test.ts`
+
+## Commands
+
+Run from extension directory (e.g., `cd vault/macos-keychain`):
+
+```bash
+deno task check    # Type check
+deno task lint     # Lint
+deno task fmt      # Format
+deno task test     # Run tests
+```
 
 ## Versioning
 
 - CalVer format: `YYYY.MM.DD.N` (e.g., `2026.03.31.1`)
 - Bump version in `manifest.yaml` for each release
+- Pin all npm dependencies to exact versions in `deno.json` (no ranges)
+
+## Publishing
+
+CI auto-publishes when `manifest.yaml` changes on main and the version is newer than the registry. Manual: `swamp extension push manifest.yaml`

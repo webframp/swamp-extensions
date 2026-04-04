@@ -1,1 +1,6 @@
-deno.lock
+# BEGIN swamp managed section - DO NOT EDIT
+
+# Runtime data (not needed in version control)
+.swamp/
+
+# END swamp managed section
