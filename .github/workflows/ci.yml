@@ -125,6 +125,34 @@ jobs:
             deno check extensions/models/cloudflare/*.ts
           fi
 
+  datastore-check:
+    name: datastore/${{ matrix.datastore }} - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        datastore: [gitlab-datastore]
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: datastore/${{ matrix.datastore }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/
+          else
+            deno check extensions/datastores/gitlab_datastore/mod.ts
+          fi
+
   manifest-validate:
     name: Validate manifests
     runs-on: ubuntu-latest

@@ -1,0 +1,5 @@
+# Swamp runtime data
+.swamp/
+
+# Deno
+deno.lock
