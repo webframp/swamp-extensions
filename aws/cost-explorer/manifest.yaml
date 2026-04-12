@@ -1,0 +1,43 @@
+manifestVersion: 1
+name: "@webframp/aws/cost-explorer"
+version: "2026.04.12.1"
+description: |
+  Query AWS Cost Explorer for actual spend analysis by service, usage type,
+  and time period. Identifies top cost drivers and spend trends.
+
+  ## Authentication
+
+  Uses the default AWS credential chain.
+
+  ## Required IAM Permissions
+
+  - `ce:GetCostAndUsage`
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/aws/cost-explorer aws-costs \
+    --global region=us-east-1
+
+  # Spend breakdown by service (last 30 days)
+  swamp model method run aws-costs get_cost_by_service
+
+  # Drill into a service's usage types
+  swamp model method run aws-costs get_cost_by_usage_type \
+    --input service=Amazon Elastic Compute Cloud - Compute
+
+  # Daily cost trend
+  swamp model method run aws-costs get_cost_trend --input days=30
+
+  # Top 20 cost drivers
+  swamp model method run aws-costs get_top_cost_drivers
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/cost_explorer.ts
+labels:
+  - aws
+  - cost
+  - finops
+  - cost-explorer
+  - billing
