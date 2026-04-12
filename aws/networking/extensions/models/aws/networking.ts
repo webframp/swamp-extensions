@@ -392,44 +392,46 @@ export const model = {
         let natGatewayIds = args.natGatewayIds;
         if (!natGatewayIds) {
           const ec2Client = new EC2Client({ region });
-          const natCmd = new DescribeNatGatewaysCommand({
-            Filter: [
-              { Name: "state", Values: ["available"] },
-            ],
-          });
-          const natResp = await ec2Client.send(natCmd);
-          natGatewayIds = (natResp.NatGateways || [])
-            .map((gw) => gw.NatGatewayId)
-            .filter((id): id is string => !!id);
+          natGatewayIds = [];
+          let nextToken: string | undefined;
+          do {
+            const natResp = await ec2Client.send(
+              new DescribeNatGatewaysCommand({
+                Filter: [{ Name: "state", Values: ["available"] }],
+                NextToken: nextToken,
+              }),
+            );
+            for (const gw of natResp.NatGateways || []) {
+              if (gw.NatGatewayId) natGatewayIds.push(gw.NatGatewayId);
+            }
+            nextToken = natResp.NextToken;
+          } while (nextToken);
         }
 
         // Discover or use provided load balancer info
         type LbInfo = { name: string; arn: string };
-        let lbInfos: LbInfo[];
-        if (args.loadBalancerNames) {
-          // When names are provided, we still need to discover ARNs
-          const elbClient = new ElasticLoadBalancingV2Client({ region });
-          const lbCmd = new DescribeLoadBalancersCommand({
-            Names: args.loadBalancerNames,
-          });
-          const lbResp = await elbClient.send(lbCmd);
-          lbInfos = (lbResp.LoadBalancers || [])
-            .filter((lb) => lb.LoadBalancerName && lb.LoadBalancerArn)
-            .map((lb) => ({
-              name: lb.LoadBalancerName!,
-              arn: lb.LoadBalancerArn!,
-            }));
-        } else {
-          const elbClient = new ElasticLoadBalancingV2Client({ region });
-          const lbCmd = new DescribeLoadBalancersCommand({});
-          const lbResp = await elbClient.send(lbCmd);
-          lbInfos = (lbResp.LoadBalancers || [])
-            .filter((lb) => lb.LoadBalancerName && lb.LoadBalancerArn)
-            .map((lb) => ({
-              name: lb.LoadBalancerName!,
-              arn: lb.LoadBalancerArn!,
-            }));
-        }
+        const elbClient = new ElasticLoadBalancingV2Client({ region });
+        const lbInfos: LbInfo[] = [];
+        let lbMarker: string | undefined;
+        do {
+          const lbResp = await elbClient.send(
+            new DescribeLoadBalancersCommand({
+              ...(args.loadBalancerNames
+                ? { Names: args.loadBalancerNames }
+                : {}),
+              Marker: lbMarker,
+            }),
+          );
+          for (const lb of lbResp.LoadBalancers || []) {
+            if (lb.LoadBalancerName && lb.LoadBalancerArn) {
+              lbInfos.push({
+                name: lb.LoadBalancerName,
+                arn: lb.LoadBalancerArn,
+              });
+            }
+          }
+          lbMarker = lbResp.NextMarker;
+        } while (lbMarker);
 
         // Gather NAT Gateway metrics
         const natGatewayMetrics: {
