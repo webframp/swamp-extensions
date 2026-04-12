@@ -1,0 +1,46 @@
+manifestVersion: 1
+name: "@webframp/aws-cost-audit"
+version: "2026.04.12.1"
+description: |
+  AWS cost audit workflow — identifies infrastructure waste by combining
+  Cost Explorer spend data, resource inventory, and networking inspection.
+  Generates a report with savings recommendations.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/aws-cost-audit
+
+  swamp model create @webframp/aws/cost-explorer aws-costs --global-arg region=us-east-1
+  swamp model create @webframp/aws/networking aws-networking --global-arg region=us-east-1
+  swamp model create @webframp/aws/inventory aws-inventory --global-arg region=us-east-1
+
+  swamp workflow run @webframp/cost-audit
+  ```
+
+  ## Required IAM Permissions
+
+  - `ce:GetCostAndUsage`
+  - `ec2:DescribeInstances`, `ec2:DescribeNatGateways`, `ec2:DescribeAddresses`
+  - `rds:DescribeDBInstances`
+  - `dynamodb:ListTables`, `dynamodb:DescribeTable`
+  - `lambda:ListFunctions`
+  - `s3:ListBuckets`
+  - `elasticloadbalancing:DescribeLoadBalancers`, `elasticloadbalancing:DescribeTargetGroups`, `elasticloadbalancing:DescribeTargetHealth`
+  - `cloudwatch:GetMetricStatistics`
+repository: "https://github.com/webframp/swamp-extensions"
+workflows:
+  - cost-audit.yaml
+reports:
+  - cost_audit_report.ts
+labels:
+  - aws
+  - cost
+  - finops
+  - audit
+  - networking
+  - workflow
+dependencies:
+  - "@webframp/aws/cost-explorer@2026.04.12.1"
+  - "@webframp/aws/networking@2026.04.12.1"
+  - "@webframp/aws/inventory@2026.03.31.1"

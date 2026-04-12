@@ -1,0 +1,132 @@
+id: dd789d8f-82ff-42d4-9e26-c5201c36a929
+name: "@webframp/cost-audit"
+description: |
+  AWS cost audit workflow — gathers spend data from Cost Explorer,
+  resource inventory, and networking details, then enriches with
+  CloudWatch metrics and identifies top cost drivers. Results feed
+  into the cost-audit report for savings recommendations.
+tags:
+  cost: "true"
+  finops: "true"
+  aws: "true"
+reports:
+  require:
+    - "@webframp/cost-audit-report"
+inputs:
+  properties:
+    region:
+      type: string
+      default: us-east-1
+      description: AWS region to audit
+    costPeriod:
+      type: string
+      default: 30d
+      description: Cost lookback period (e.g., 7d, 30d, 90d)
+    metricsTimeRange:
+      type: string
+      default: 7d
+      description: Metrics lookback period (e.g., 1d, 7d, 14d)
+  required: []
+jobs:
+  - name: gather-cost-and-resources
+    description: Collect cost data and resource inventory in parallel
+    steps:
+      - name: get-cost-by-service
+        description: Get cost breakdown by AWS service
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_by_service
+          inputs:
+            days: 30
+        allowFailure: true
+
+      - name: get-cost-by-usage-type-ec2
+        description: Get EC2 cost breakdown by usage type
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_by_usage_type
+          inputs:
+            service: "Amazon Elastic Compute Cloud - Compute"
+            days: 30
+        allowFailure: true
+
+      - name: get-cost-trend
+        description: Get daily cost trend over the period
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_trend
+          inputs:
+            days: 30
+        allowFailure: true
+
+      - name: inventory-all
+        description: Gather full resource inventory
+        task:
+          type: model_method
+          modelIdOrName: aws-inventory
+          methodName: inventory_all
+        allowFailure: true
+
+      - name: list-nat-gateways
+        description: List NAT Gateways for networking waste analysis
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_nat_gateways
+        allowFailure: true
+
+      - name: list-load-balancers
+        description: List load balancers for utilization analysis
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_load_balancers
+        allowFailure: true
+
+      - name: list-elastic-ips
+        description: List Elastic IPs to find unattached addresses
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_elastic_ips
+        allowFailure: true
+
+  - name: enrich-metrics
+    description: Gather data transfer metrics for networking resources
+    dependsOn:
+      - job: gather-cost-and-resources
+        condition:
+          type: completed
+    steps:
+      - name: get-data-transfer-metrics
+        description: Get data transfer metrics for NAT Gateways and load balancers
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: get_data_transfer_metrics
+          inputs:
+            days: 7
+        allowFailure: true
+
+  - name: deep-dive
+    description: Perform deeper cost analysis based on initial findings
+    dependsOn:
+      - job: gather-cost-and-resources
+        condition:
+          type: completed
+    steps:
+      - name: get-top-cost-drivers
+        description: Identify the top cost drivers by service and usage type
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_top_cost_drivers
+          inputs:
+            days: 30
+            limit: 20
+        allowFailure: true
+
+version: 1
