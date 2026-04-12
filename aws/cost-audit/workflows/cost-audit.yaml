@@ -18,14 +18,14 @@ inputs:
       type: string
       default: us-east-1
       description: AWS region to audit
-    costPeriod:
-      type: string
-      default: 30d
-      description: Cost lookback period (e.g., 7d, 30d, 90d)
-    metricsTimeRange:
-      type: string
-      default: 7d
-      description: Metrics lookback period (e.g., 1d, 7d, 14d)
+    costDays:
+      type: number
+      default: 30
+      description: Cost lookback in days (e.g., 7, 30, 90)
+    metricsDays:
+      type: number
+      default: 7
+      description: Metrics lookback in days (e.g., 1, 7, 14)
   required: []
 jobs:
   - name: gather-cost-and-resources
@@ -38,7 +38,7 @@ jobs:
           modelIdOrName: aws-costs
           methodName: get_cost_by_service
           inputs:
-            days: 30
+            days: ${{ inputs.costDays }}
         allowFailure: true
 
       - name: get-cost-by-usage-type-ec2
@@ -49,7 +49,7 @@ jobs:
           methodName: get_cost_by_usage_type
           inputs:
             service: "Amazon Elastic Compute Cloud - Compute"
-            days: 30
+            days: ${{ inputs.costDays }}
         allowFailure: true
 
       - name: get-cost-trend
@@ -59,7 +59,7 @@ jobs:
           modelIdOrName: aws-costs
           methodName: get_cost_trend
           inputs:
-            days: 30
+            days: ${{ inputs.costDays }}
         allowFailure: true
 
       - name: inventory-all
@@ -108,7 +108,7 @@ jobs:
           modelIdOrName: aws-networking
           methodName: get_data_transfer_metrics
           inputs:
-            days: 7
+            days: ${{ inputs.metricsDays }}
         allowFailure: true
 
   - name: deep-dive
@@ -125,7 +125,7 @@ jobs:
           modelIdOrName: aws-costs
           methodName: get_top_cost_drivers
           inputs:
-            days: 30
+            days: ${{ inputs.costDays }}
             limit: 20
         allowFailure: true
 
