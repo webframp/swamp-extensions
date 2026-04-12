@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        extension: [pricing, inventory, logs, metrics, alarms, traces, cost-estimate]
+        extension: [pricing, inventory, logs, metrics, alarms, traces, cost-estimate, cost-explorer, networking]
         task: [check, lint, fmt]
     defaults:
       run:
@@ -73,7 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        extension: [cost-report, ops]
+        extension: [cost-report, ops, cost-audit]
         task: [check, lint, fmt]
     defaults:
       run:
