@@ -1,0 +1,49 @@
+manifestVersion: 1
+name: "@webframp/aws/networking"
+version: "2026.04.12.1"
+description: |
+  Inspect VPC networking resources that commonly generate hidden costs:
+  NAT Gateways, Load Balancers, and Elastic IPs.
+
+  ## Authentication
+
+  Uses the default AWS credential chain.
+
+  ## Required IAM Permissions
+
+  - `ec2:DescribeNatGateways`
+  - `ec2:DescribeAddresses`
+  - `elasticloadbalancing:DescribeLoadBalancers`
+  - `elasticloadbalancing:DescribeTargetGroups`
+  - `elasticloadbalancing:DescribeTargetHealth`
+  - `cloudwatch:GetMetricStatistics`
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/aws/networking aws-networking \
+    --global region=us-east-1
+
+  # List NAT Gateways
+  swamp model method run aws-networking list_nat_gateways
+
+  # List ALBs/NLBs with target group info
+  swamp model method run aws-networking list_load_balancers
+
+  # Find unattached Elastic IPs
+  swamp model method run aws-networking list_elastic_ips
+
+  # Get data transfer metrics for networking resources
+  swamp model method run aws-networking get_data_transfer_metrics
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/networking.ts
+labels:
+  - aws
+  - networking
+  - vpc
+  - nat-gateway
+  - load-balancer
+  - cost
+  - finops
