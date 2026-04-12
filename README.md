@@ -1,14 +1,21 @@
 # Swamp Extensions
 
-Extensions for [swamp](https://github.com/systeminit/swamp) providing vault integrations, AWS operations, and Cloudflare management.
+Extensions for [swamp](https://github.com/systeminit/swamp) providing vault integrations, datastore backends, AWS operations, and Cloudflare management.
 
 ## Vault Extensions
 
 | Extension | Description | Dependencies |
 |-----------|-------------|--------------|
-| [`@webframp/pass-vault`](vault/pass/) | [pass](https://www.passwordstore.org/) (the standard Unix password manager) vault provider | None (shells out to `pass`) |
-| [`@webframp/gopass-vault`](vault/gopass/) | [gopass](https://www.gopass.pw/) vault provider | None (shells out to `gopass`) |
-| [`@webframp/hashicorp-vault`](vault/hashicorp-vault/) | HashiCorp Vault provider via the `vault` CLI | None (shells out to `vault`) |
+| [`@webframp/pass`](vault/pass/) | [pass](https://www.passwordstore.org/) (the standard Unix password manager) vault provider | None (shells out to `pass`) |
+| [`@webframp/gopass`](vault/gopass/) | [gopass](https://www.gopass.pw/) vault provider | None (shells out to `gopass`) |
+| [`@webframp/hashicorp-vault`](vault/hashicorp-vault/) | HashiCorp Vault provider via REST API (KV v1 and v2) | None (uses fetch) |
+| [`@webframp/macos-keychain`](vault/macos-keychain/) | macOS Keychain vault using the `security` CLI | None (shells out to `security`) |
+
+## Datastore Extensions
+
+| Extension | Description | Dependencies |
+|-----------|-------------|--------------|
+| [`@webframp/gitlab-datastore`](datastore/gitlab-datastore/) | Stores swamp runtime data in GitLab using the Terraform state HTTP API. Provides distributed locking and bidirectional sync. | None (uses fetch) |
 
 ## AWS Extensions
 
@@ -38,9 +45,13 @@ manually with:
 
 ```bash
 # Vault extensions
-swamp extension pull @webframp/pass-vault
-swamp extension pull @webframp/gopass-vault
+swamp extension pull @webframp/pass
+swamp extension pull @webframp/gopass
 swamp extension pull @webframp/hashicorp-vault
+swamp extension pull @webframp/macos-keychain
+
+# Datastore extensions
+swamp extension pull @webframp/gitlab-datastore
 
 # AWS extensions
 swamp extension pull @webframp/aws/pricing
@@ -65,13 +76,30 @@ Create a vault using an extension type:
 
 ```bash
 # pass
-swamp vault create @webframp/pass-vault my-vault --config '{"store":"default"}'
+swamp vault create @webframp/pass my-vault --config '{"store":"default"}'
 
 # gopass
-swamp vault create @webframp/gopass-vault my-vault --config '{"store":"default"}'
+swamp vault create @webframp/gopass my-vault --config '{"store":"default"}'
 
 # HashiCorp Vault
 swamp vault create @webframp/hashicorp-vault my-vault --config '{"address":"https://vault.example.com"}'
+
+# macOS Keychain
+swamp vault create @webframp/macos-keychain my-vault --config '{"service":"swamp"}'
+```
+
+### Datastore extensions
+
+Configure a datastore backend for remote state storage:
+
+```bash
+# GitLab Datastore
+swamp datastore create @webframp/gitlab-datastore my-store \
+  --config '{"projectId":"123","token":"glpat-xxxx"}'
+
+# With custom GitLab instance
+swamp datastore create @webframp/gitlab-datastore my-store \
+  --config '{"projectId":"mygroup/myproject","token":"glpat-xxxx","baseUrl":"https://gitlab.example.com"}'
 ```
 
 ### AWS extensions
@@ -126,12 +154,25 @@ cd aws/cost-report
 deno check extensions/reports/cost_report.ts
 deno lint extensions/reports/
 deno fmt extensions/reports/
+
+# Datastore extension example
+cd datastore/gitlab-datastore
+deno check extensions/datastores/gitlab_datastore/mod.ts
+deno lint extensions/
+deno fmt extensions/
+deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/
 ```
 
 ## Publishing
 
+Extensions are published automatically via GitHub Actions when changes are
+pushed to `main`. Each directory containing a `manifest.yaml` is detected
+and published to the [swamp.club registry](https://swamp.club).
+
+Manual publishing:
+
 ```bash
-cd aws/logs  # or any extension directory
+cd datastore/gitlab-datastore  # or any extension directory
 swamp extension push manifest.yaml
 ```
 
