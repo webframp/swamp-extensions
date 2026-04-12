@@ -29,7 +29,10 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing vault inte
 | [`@webframp/aws/traces`](aws/traces/) | X-Ray distributed tracing | `@aws-sdk/client-xray` |
 | [`@webframp/aws/cost-estimate`](aws/cost-estimate/) | Cost estimation from inventory specs | `@aws-sdk/client-pricing` |
 | [`@webframp/aws/cost-report`](aws/cost-report/) | Cost report formatting (report extension) | None |
+| [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
+| [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
 | [`@webframp/aws-ops`](aws/ops/) | Incident investigation workflow with report | None |
+| [`@webframp/aws-cost-audit`](aws/cost-audit/) | Cost audit workflow — spend analysis, networking waste, savings recommendations | Requires `cost-explorer`, `networking`, `inventory` models |
 
 ## Cloudflare Extensions
 
@@ -61,8 +64,11 @@ swamp extension pull @webframp/aws/metrics
 swamp extension pull @webframp/aws/alarms
 swamp extension pull @webframp/aws/traces
 swamp extension pull @webframp/aws/cost-estimate
+swamp extension pull @webframp/aws/cost-explorer
+swamp extension pull @webframp/aws/networking
 swamp extension pull @webframp/aws/cost-report
 swamp extension pull @webframp/aws-ops
+swamp extension pull @webframp/aws-cost-audit
 
 # Cloudflare extension
 swamp extension pull @webframp/cloudflare
@@ -115,6 +121,14 @@ swamp model create @webframp/aws/traces aws-traces --global-arg region=us-east-1
 
 # Run the investigate-outage workflow
 swamp workflow run @webframp/investigate-outage
+
+# Cost audit — create the required model instances
+swamp model create @webframp/aws/cost-explorer aws-costs --global-arg region=us-east-1
+swamp model create @webframp/aws/networking aws-networking --global-arg region=us-east-1
+swamp model create @webframp/aws/inventory aws-inventory --global-arg region=us-east-1
+
+# Run the cost audit workflow
+swamp workflow run @webframp/cost-audit
 ```
 
 ### Cloudflare extension
