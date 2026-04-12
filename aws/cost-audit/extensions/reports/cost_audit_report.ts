@@ -147,25 +147,25 @@ export const report = {
       "get_cost_by_service",
     );
     if (costByServiceData) {
-      const costData = costByServiceData as {
-        services: Array<{
+      // Model writes: { region, queryType, data: [{service, amount, unit, percentage}], fetchedAt }
+      const raw = costByServiceData as {
+        data: Array<{
           service: string;
           amount: number;
+          unit: string;
           percentage: number;
         }>;
-        total: number;
-        currency: string;
-        periodDays: number;
       };
+      const services = raw.data || [];
+      const total = services.reduce((sum, s) => sum + s.amount, 0);
+      const currency = services[0]?.unit || "USD";
 
       findings.push(
-        `Total spend over ${costData.periodDays || 30} days: **$${
-          costData.total.toFixed(2)
-        } ${costData.currency || "USD"}**\n`,
+        `Total spend over 30 days: **$${total.toFixed(2)} ${currency}**\n`,
       );
       findings.push("| Service | Amount | % of Total |");
       findings.push("| ------- | -----: | ---------: |");
-      for (const svc of costData.services || []) {
+      for (const svc of services) {
         findings.push(
           `| ${svc.service} | $${svc.amount.toFixed(2)} | ${
             svc.percentage.toFixed(1)
@@ -175,10 +175,10 @@ export const report = {
       findings.push("");
 
       jsonFindings.costSummary = {
-        total: costData.total,
-        currency: costData.currency || "USD",
-        periodDays: costData.periodDays || 30,
-        services: costData.services,
+        total,
+        currency,
+        periodDays: 30,
+        services,
       };
     } else {
       findings.push("No cost-by-service data available.\n");
@@ -192,17 +192,20 @@ export const report = {
       "get_top_cost_drivers",
     );
     if (topDriversData) {
-      const drivers = topDriversData as {
-        drivers: Array<{
+      // Model writes: { region, queryType, data: [{service, usageType, amount, unit}], fetchedAt }
+      const raw = topDriversData as {
+        data: Array<{
           service: string;
           usageType: string;
           amount: number;
+          unit: string;
         }>;
       };
+      const drivers = raw.data || [];
 
       findings.push("| Service | Usage Type | Amount |");
       findings.push("| ------- | ---------- | -----: |");
-      for (const driver of drivers.drivers || []) {
+      for (const driver of drivers) {
         findings.push(
           `| ${driver.service} | ${driver.usageType} | $${
             driver.amount.toFixed(2)
@@ -211,7 +214,7 @@ export const report = {
       }
       findings.push("");
 
-      jsonFindings.topCostDrivers = drivers.drivers;
+      jsonFindings.topCostDrivers = drivers;
     } else {
       findings.push("No top cost driver data available.\n");
     }
@@ -227,6 +230,7 @@ export const report = {
     }> = [];
 
     // NAT Gateways
+    // Model writes: { region, queryType, data: [{natGatewayId, state, vpcId, subnetId, ...}], fetchedAt }
     const natData = await getStepData("aws-networking", "list_nat_gateways");
     const transferMetrics = await getStepData(
       "aws-networking",
@@ -234,35 +238,38 @@ export const report = {
     );
 
     if (natData) {
-      const nats = natData as {
-        natGateways: Array<{
+      const natRaw = natData as {
+        data: Array<{
           natGatewayId: string;
           state: string;
           subnetId: string;
           vpcId: string;
         }>;
-        count: number;
       };
+      const natGateways = natRaw.data || [];
 
+      // Transfer metrics: { region, queryType, data: { natGateways: [{id, totalBytes, ...}], ... }, fetchedAt }
       const metricsMap = new Map<string, number>();
       if (transferMetrics) {
-        const metrics = transferMetrics as {
-          natGatewayMetrics?: Array<{
-            natGatewayId: string;
-            bytesProcessed: number;
-          }>;
+        const metricsRaw = transferMetrics as {
+          data: {
+            natGateways?: Array<{
+              id: string;
+              totalBytes: number;
+            }>;
+          };
         };
-        for (const m of metrics.natGatewayMetrics || []) {
-          metricsMap.set(m.natGatewayId, m.bytesProcessed);
+        for (const m of metricsRaw.data?.natGateways || []) {
+          metricsMap.set(m.id, m.totalBytes);
         }
       }
 
-      if (nats.count > 0) {
+      if (natGateways.length > 0) {
         findings.push("### NAT Gateways\n");
         findings.push("| NAT Gateway | VPC | Bytes Processed (7d) | Status |");
         findings.push("| ----------- | --- | -------------------: | ------ |");
 
-        for (const nat of nats.natGateways || []) {
+        for (const nat of natGateways) {
           const bytes = metricsMap.get(nat.natGatewayId) ?? 0;
           const bytesGB = (bytes / 1024 / 1024 / 1024).toFixed(2);
           // Less than 1GB in 7 days extrapolates to < ~4.3GB/month
@@ -286,49 +293,53 @@ export const report = {
     }
 
     // Load Balancers
+    // Model writes: { region, queryType, data: [{arn, name, type, scheme, vpcId, state, ...}], fetchedAt }
     const albData = await getStepData("aws-networking", "list_load_balancers");
 
     if (albData) {
-      const albs = albData as {
-        loadBalancers: Array<{
-          loadBalancerArn: string;
-          loadBalancerName: string;
+      const albRaw = albData as {
+        data: Array<{
+          arn: string;
+          name: string;
           type: string;
           state: string;
         }>;
-        count: number;
       };
+      const loadBalancers = albRaw.data || [];
 
+      // Transfer metrics LB data: { data: { loadBalancers: [{name, requestCount, ...}] } }
       const albMetricsMap = new Map<string, number>();
       if (transferMetrics) {
-        const metrics = transferMetrics as {
-          loadBalancerMetrics?: Array<{
-            loadBalancerName: string;
-            requestCount: number;
-          }>;
+        const metricsRaw = transferMetrics as {
+          data: {
+            loadBalancers?: Array<{
+              name: string;
+              requestCount: number;
+            }>;
+          };
         };
-        for (const m of metrics.loadBalancerMetrics || []) {
-          albMetricsMap.set(m.loadBalancerName, m.requestCount);
+        for (const m of metricsRaw.data?.loadBalancers || []) {
+          albMetricsMap.set(m.name, m.requestCount);
         }
       }
 
-      if (albs.count > 0) {
+      if (loadBalancers.length > 0) {
         findings.push("### Load Balancers\n");
         findings.push("| Load Balancer | Type | Requests (7d) | Status |");
         findings.push("| ------------- | ---- | ------------: | ------ |");
 
-        for (const alb of albs.loadBalancers || []) {
-          const requests = albMetricsMap.get(alb.loadBalancerName) ?? 0;
+        for (const alb of loadBalancers) {
+          const requests = albMetricsMap.get(alb.name) ?? 0;
           // Less than 10000 requests in 7 days extrapolates to very low monthly usage
           const isLow = requests < 10000;
           const status = isLow ? "LOW TRAFFIC" : "OK";
           findings.push(
-            `| ${alb.loadBalancerName} | ${alb.type} | ${requests.toLocaleString()} | ${status} |`,
+            `| ${alb.name} | ${alb.type} | ${requests.toLocaleString()} | ${status} |`,
           );
 
           if (isLow) {
             networkingWaste.push({
-              resource: alb.loadBalancerName,
+              resource: alb.name,
               type: "Load Balancer",
               issue: "Low traffic — baseline cost wasted",
               estimatedMonthlyCost: "$16+",
@@ -340,23 +351,21 @@ export const report = {
     }
 
     // Elastic IPs
+    // Model writes: { region, queryType, data: [{allocationId, publicIp, associationId, isAttached, ...}], fetchedAt }
     const eipData = await getStepData("aws-networking", "list_elastic_ips");
 
     if (eipData) {
-      const eips = eipData as {
-        addresses: Array<{
+      const eipRaw = eipData as {
+        data: Array<{
           publicIp: string;
           allocationId: string;
-          associationId?: string;
-          instanceId?: string;
-          networkInterfaceId?: string;
+          associationId: string | null;
+          isAttached: boolean;
         }>;
-        count: number;
       };
+      const addresses = eipRaw.data || [];
 
-      const unattached = (eips.addresses || []).filter(
-        (eip) => !eip.associationId,
-      );
+      const unattached = addresses.filter((eip) => !eip.isAttached);
 
       if (unattached.length > 0) {
         findings.push("### Unattached Elastic IPs\n");
@@ -377,7 +386,7 @@ export const report = {
         findings.push("");
       }
 
-      if (eips.count > 0 && unattached.length === 0) {
+      if (addresses.length > 0 && unattached.length === 0) {
         findings.push("All Elastic IPs are attached.\n");
       }
     }
@@ -393,31 +402,40 @@ export const report = {
     // === SECTION 4: INFRASTRUCTURE INVENTORY ===
     findings.push("\n## Infrastructure Inventory\n");
 
+    // Inventory model writes: { region, resourceType, resources: { ec2: [...], rds: [...], ... }, fetchedAt }
     const inventoryData = await getStepData("aws-inventory", "inventory_all");
     if (inventoryData) {
       const inventory = inventoryData as {
-        resources: Record<string, number>;
-        totalResources: number;
+        resources: Record<string, unknown[]>;
       };
 
+      // Count resources by type
+      const resourceCounts: Record<string, number> = {};
+      let totalResources = 0;
+      for (
+        const [resourceType, items] of Object.entries(
+          inventory.resources || {},
+        )
+      ) {
+        const count = Array.isArray(items) ? items.length : 0;
+        resourceCounts[resourceType] = count;
+        totalResources += count;
+      }
+
       findings.push(
-        `Total resources discovered: **${inventory.totalResources}**\n`,
+        `Total resources discovered: **${totalResources}**\n`,
       );
       findings.push("| Resource Type | Count |");
       findings.push("| ------------- | ----: |");
 
-      for (
-        const [resourceType, count] of Object.entries(
-          inventory.resources || {},
-        )
-      ) {
+      for (const [resourceType, count] of Object.entries(resourceCounts)) {
         findings.push(`| ${resourceType} | ${count} |`);
       }
       findings.push("");
 
       jsonFindings.inventory = {
-        totalResources: inventory.totalResources,
-        resources: inventory.resources,
+        totalResources,
+        resources: resourceCounts,
       };
     } else {
       findings.push("No inventory data available.\n");
@@ -471,14 +489,17 @@ export const report = {
     }
 
     // Cost trend warning
+    // Model writes: { region, queryType, data: { dataPoints: [...], trend: "..." }, fetchedAt }
     const costTrendData = await getStepData("aws-costs", "get_cost_trend");
     if (costTrendData) {
-      const trend = costTrendData as {
-        trend: string;
-        dailyCosts: Array<{ date: string; amount: number }>;
+      const trendRaw = costTrendData as {
+        data: {
+          trend: string;
+          dataPoints: Array<{ date: string; amount: number }>;
+        };
       };
 
-      if (trend.trend === "increasing") {
+      if (trendRaw.data?.trend === "increasing") {
         recommendations.push({
           priority: 4,
           action:
