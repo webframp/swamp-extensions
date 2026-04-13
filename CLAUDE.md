@@ -12,9 +12,10 @@ Community extensions for swamp - models, vaults, datastores, and reports.
 ## Extension Structure
 
 Each extension lives in its own directory with:
+- `.swamp.yaml` - Repo marker (run `swamp repo init` in the directory to create)
 - `manifest.yaml` - Extension metadata and entry points
 - `extensions/models/`, `extensions/vaults/`, etc. - Implementation files
-- `deno.json` - Dependencies (import `@systeminit/swamp-testing` for tests)
+- `deno.json` - Dependencies (import `@systeminit/swamp-testing` for tests, optional for model-only extensions)
 
 ## Naming Conventions
 
@@ -50,4 +51,4 @@ deno task test     # Run tests
 
 ## Publishing
 
-CI auto-publishes when `manifest.yaml` changes on main and the version is newer than the registry. Manual: `swamp extension push manifest.yaml`
+CI auto-publishes when `manifest.yaml` changes on main and the version is newer than the registry. Do not push extensions locally — always push code to GitHub and let CI handle publishing via `swamp extension push manifest.yaml --yes`.
