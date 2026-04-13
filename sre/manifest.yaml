@@ -1,0 +1,61 @@
+manifestVersion: 1
+name: "@webframp/sre"
+version: "2026.04.13.1"
+description: |
+  SRE Health Check - Unified site reliability health check workflow with report.
+
+  Runs network probes (HTTP, TLS certs, DNS, ports) against target endpoints
+  and collects local system health (disk, memory, load), then generates
+  a unified SRE health report with actionable findings.
+
+  ## Quick Start
+
+  ```bash
+  # Install the extension (auto-resolves dependencies)
+  swamp extension pull @webframp/sre
+
+  # Create model instances
+  swamp model create @webframp/network net-probe
+  swamp model create @webframp/system sys-diag
+
+  # Run the health check workflow
+  swamp workflow run @webframp/sre-health-check --input target=https://example.com
+  ```
+
+  ## Included Components
+
+  ### Workflows
+
+  - **@webframp/sre-health-check** - Unified health check workflow that:
+    - Checks HTTP endpoint status and timing
+    - Inspects TLS certificate expiry
+    - Resolves DNS records
+    - Tests TCP port connectivity
+    - Checks disk, memory, and system load
+    - Generates a health report with severity-rated findings
+
+  ### Reports
+
+  - **@webframp/sre-health-report** - Workflow-scope report that aggregates findings into:
+    - Overall health status (HEALTHY/WARNING/CRITICAL/DEGRADED)
+    - Severity-rated findings per check
+    - Actionable recommendations
+
+  ### Model Dependencies
+
+  The workflow expects these model instances (create them before running):
+  - `net-probe` - @webframp/network
+  - `sys-diag` - @webframp/system
+repository: "https://github.com/webframp/swamp-extensions"
+workflows:
+  - workflow-893ef149-d509-44de-9755-69b95f4087a8.yaml
+reports:
+  - sre_health_report.ts
+labels:
+  - sre
+  - ops
+  - health-check
+  - workflow
+dependencies:
+  - "@webframp/network@2026.04.13.1"
+  - "@webframp/system@2026.04.13.1"

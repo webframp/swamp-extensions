@@ -1,0 +1,119 @@
+id: 893ef149-d509-44de-9755-69b95f4087a8
+name: "@webframp/sre-health-check"
+description: |
+  Site reliability health check workflow.
+  Runs network probes (HTTP, TLS certs, DNS, ports) against target endpoints
+  and collects local system health (disk, memory, load), then generates
+  a unified SRE health report with actionable findings.
+tags:
+  sre: "true"
+  ops: "true"
+  health-check: "true"
+reports:
+  require:
+    - "@webframp/sre-health-report"
+inputs:
+  properties:
+    target:
+      type: string
+      default: "https://example.com"
+      description: Primary URL to health-check (HTTP + cert + DNS)
+    checkPorts:
+      type: string
+      default: "80,443"
+      description: Comma-separated TCP ports to check on the target host
+  required: []
+jobs:
+  - name: network-probes
+    description: Run network probes against the target endpoint
+    steps:
+      - name: http-check
+        description: Check HTTP endpoint status and timing
+        task:
+          type: model_method
+          modelIdOrName: net-probe
+          methodName: http_check
+          inputs:
+            url: ${{ inputs.target }}
+            method: GET
+        allowFailure: true
+
+      - name: cert-check
+        description: Inspect TLS certificate expiry
+        task:
+          type: model_method
+          modelIdOrName: net-probe
+          methodName: cert_check
+          inputs:
+            host: ${{ inputs.target }}
+            port: 443
+        allowFailure: true
+
+      - name: dns-check
+        description: Resolve DNS A records for the target
+        task:
+          type: model_method
+          modelIdOrName: net-probe
+          methodName: dns_lookup
+          inputs:
+            domain: ${{ inputs.target }}
+            recordType: A
+        allowFailure: true
+
+      - name: port-check
+        description: Check TCP port connectivity
+        task:
+          type: model_method
+          modelIdOrName: net-probe
+          methodName: port_check
+          inputs:
+            host: ${{ inputs.target }}
+            ports: ${{ inputs.checkPorts }}
+        allowFailure: true
+
+  - name: system-health
+    description: Collect local system health metrics
+    steps:
+      - name: disk-usage
+        description: Check filesystem disk usage
+        task:
+          type: model_method
+          modelIdOrName: sys-diag
+          methodName: get_disk_usage
+        allowFailure: true
+
+      - name: memory-usage
+        description: Check memory and swap usage
+        task:
+          type: model_method
+          modelIdOrName: sys-diag
+          methodName: get_memory
+        allowFailure: true
+
+      - name: system-load
+        description: Check uptime and load averages
+        task:
+          type: model_method
+          modelIdOrName: sys-diag
+          methodName: get_uptime
+        allowFailure: true
+
+  - name: finalize
+    description: Trigger report generation after all probes complete
+    dependsOn:
+      - job: network-probes
+        condition:
+          type: completed
+      - job: system-health
+        condition:
+          type: completed
+    steps:
+      - name: os-info
+        description: Collect OS info for report context
+        task:
+          type: model_method
+          modelIdOrName: sys-diag
+          methodName: get_os_info
+        allowFailure: true
+
+version: 1
