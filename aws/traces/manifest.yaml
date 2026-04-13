@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/traces"
-version: "2026.03.31.1"
+version: "2026.04.13.1"
 description: |
   Query and analyze X-Ray distributed traces for incident investigation and performance analysis.
 
