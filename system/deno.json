@@ -1,0 +1,17 @@
+{
+  "tasks": {
+    "check": "deno check extensions/models/system/diagnostics.ts extensions/models/system/diagnostics_test.ts",
+    "lint": "deno lint extensions/models/",
+    "fmt": "deno fmt extensions/models/",
+    "fmt:check": "deno fmt --check extensions/models/",
+    "test": "deno test --allow-env --allow-read extensions/models/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
+  }
+}

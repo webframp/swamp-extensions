@@ -142,6 +142,34 @@ jobs:
             echo "No tests found, skipping"
           fi
 
+  network-test:
+    name: network - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: network
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-env --allow-net=0.0.0.0 --allow-read extensions/models/
+
+  system-test:
+    name: system - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: system
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-env --allow-read extensions/models/
+
   datastore-check:
     name: datastore/${{ matrix.datastore }} - ${{ matrix.task }}
     runs-on: ubuntu-latest

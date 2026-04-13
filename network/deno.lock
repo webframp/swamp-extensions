@@ -1,0 +1,37 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/assert@1": "1.0.19",
+    "jsr:@std/assert@1.0.19": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.12",
+    "jsr:@systeminit/swamp-testing@0.20260331.5": "0.20260331.5",
+    "npm:zod@4.3.6": "4.3.6"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.12": {
+      "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
+    },
+    "@systeminit/swamp-testing@0.20260331.5": {
+      "integrity": "7f336df3a10433f2218c998b1b9757cba134585f44d53776ed82420b12b04df7",
+      "dependencies": [
+        "jsr:@std/assert@1.0.19"
+      ]
+    }
+  },
+  "npm": {
+    "zod@4.3.6": {
+      "integrity": "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@systeminit/swamp-testing@0.20260331.5"
+    ]
+  }
+}

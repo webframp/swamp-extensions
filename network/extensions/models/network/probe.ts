@@ -52,6 +52,7 @@ const HttpCheckSchema = z.object({
   })),
   timingMs: z.number(),
   tlsProtocol: z.string().nullable(),
+  error: z.string().nullable(),
   fetchedAt: z.string(),
 });
 
@@ -76,6 +77,7 @@ const CertInfoSchema = z.object({
   notAfter: z.string().nullable(),
   daysUntilExpiry: z.number().nullable(),
   serialNumber: z.string().nullable(),
+  error: z.string().nullable(),
   fetchedAt: z.string(),
 });
 
@@ -466,84 +468,150 @@ export const model = {
         args: { url: string; method: string },
         context: ModelContext,
       ) => {
-        const redirectChain: Array<{ url: string; statusCode: number }> = [];
-        let currentUrl = args.url;
-        let finalResponse: Response | null = null;
-
         const startTime = performance.now();
 
-        // Follow redirects manually to capture the chain
-        for (let i = 0; i < 10; i++) {
-          const response = await fetch(currentUrl, {
-            method: args.method,
-            redirect: "manual",
-          });
+        try {
+          const redirectChain: Array<{ url: string; statusCode: number }> = [];
+          let currentUrl = args.url;
+          let finalResponse: Response | null = null;
 
-          if (
-            [301, 302, 303, 307, 308].includes(response.status) &&
-            response.headers.get("location")
-          ) {
-            redirectChain.push({
-              url: currentUrl,
-              statusCode: response.status,
+          // Follow redirects manually to capture the chain
+          for (let i = 0; i < 10; i++) {
+            const response = await fetch(currentUrl, {
+              method: args.method,
+              redirect: "manual",
             });
-            const location = response.headers.get("location")!;
-            currentUrl = new URL(location, currentUrl).toString();
-            // Consume and discard body to free resources
-            await response.body?.cancel();
-            continue;
+
+            if (
+              [301, 302, 303, 307, 308].includes(response.status) &&
+              response.headers.get("location")
+            ) {
+              redirectChain.push({
+                url: currentUrl,
+                statusCode: response.status,
+              });
+              const location = response.headers.get("location")!;
+              currentUrl = new URL(location, currentUrl).toString();
+              // Consume and discard body to free resources
+              await response.body?.cancel();
+              continue;
+            }
+
+            finalResponse = response;
+            break;
           }
 
-          finalResponse = response;
-          break;
+          const timingMs = Math.round(performance.now() - startTime);
+
+          if (!finalResponse) {
+            const errorData = {
+              url: args.url,
+              method: args.method,
+              statusCode: 0,
+              statusText: "",
+              headers: {},
+              redirectChain,
+              timingMs,
+              tlsProtocol: null,
+              error: `Too many redirects for ${args.url}`,
+              fetchedAt: new Date().toISOString(),
+            };
+
+            const instance = new URL(args.url).hostname;
+            const handle = await context.writeResource(
+              "http_checks",
+              instance,
+              errorData,
+            );
+
+            context.logger.info(
+              "HTTP {method} {url}: too many redirects in {ms}ms",
+              { method: args.method, url: args.url, ms: timingMs },
+            );
+
+            return { dataHandles: [handle] };
+          }
+
+          // Convert headers to a plain object
+          const headers: Record<string, string> = {};
+          finalResponse.headers.forEach((value, key) => {
+            headers[key] = value;
+          });
+
+          // Consume body to release resources
+          await finalResponse.body?.cancel();
+
+          // Attempt to determine TLS protocol from the URL scheme
+          const urlObj = new URL(currentUrl);
+          const tlsProtocol = urlObj.protocol === "https:" ? "TLS" : null;
+
+          const data = {
+            url: args.url,
+            method: args.method,
+            statusCode: finalResponse.status,
+            statusText: finalResponse.statusText,
+            headers,
+            redirectChain,
+            timingMs,
+            tlsProtocol,
+            error: null,
+            fetchedAt: new Date().toISOString(),
+          };
+
+          const instance = new URL(args.url).hostname;
+          const handle = await context.writeResource(
+            "http_checks",
+            instance,
+            data,
+          );
+
+          context.logger.info("HTTP {method} {url}: {status} in {ms}ms", {
+            method: args.method,
+            url: args.url,
+            status: finalResponse.status,
+            ms: timingMs,
+          });
+
+          return { dataHandles: [handle] };
+        } catch (err: unknown) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          const timingMs = Math.round(performance.now() - startTime);
+
+          const errorData = {
+            url: args.url,
+            method: args.method,
+            statusCode: 0,
+            statusText: "",
+            headers: {},
+            redirectChain: [],
+            timingMs,
+            tlsProtocol: null,
+            error: errorMessage,
+            fetchedAt: new Date().toISOString(),
+          };
+
+          let instance: string;
+          try {
+            instance = new URL(args.url).hostname;
+          } catch {
+            instance = args.url;
+          }
+
+          const handle = await context.writeResource(
+            "http_checks",
+            instance,
+            errorData,
+          );
+
+          context.logger.info("HTTP {method} {url}: error {error} in {ms}ms", {
+            method: args.method,
+            url: args.url,
+            error: errorMessage,
+            ms: timingMs,
+          });
+
+          return { dataHandles: [handle] };
         }
-
-        const timingMs = Math.round(performance.now() - startTime);
-
-        if (!finalResponse) {
-          throw new Error(`Too many redirects for ${args.url}`);
-        }
-
-        // Convert headers to a plain object
-        const headers: Record<string, string> = {};
-        finalResponse.headers.forEach((value, key) => {
-          headers[key] = value;
-        });
-
-        // Consume body to release resources
-        await finalResponse.body?.cancel();
-
-        // Attempt to determine TLS protocol from the URL scheme
-        const urlObj = new URL(currentUrl);
-        const tlsProtocol = urlObj.protocol === "https:" ? "TLS" : null;
-
-        const data = {
-          url: args.url,
-          method: args.method,
-          statusCode: finalResponse.status,
-          statusText: finalResponse.statusText,
-          headers,
-          redirectChain,
-          timingMs,
-          tlsProtocol,
-          fetchedAt: new Date().toISOString(),
-        };
-
-        const instance = new URL(args.url).hostname;
-        const handle = await context.writeResource(
-          "http_checks",
-          instance,
-          data,
-        );
-
-        context.logger.info("HTTP {method} {url}: {status} in {ms}ms", {
-          method: args.method,
-          url: args.url,
-          status: finalResponse.status,
-          ms: timingMs,
-        });
-
-        return { dataHandles: [handle] };
       },
     },
 
@@ -604,6 +672,38 @@ export const model = {
           `echo | openssl s_client -connect ${args.host}:${args.port} -servername ${args.host} 2>/dev/null | openssl x509 -noout -dates -subject -issuer -serial`,
         ]);
 
+        const instance = `${args.host}-${args.port}`;
+
+        if (!result.success) {
+          const errorMessage = result.stderr.trim() || "openssl command failed";
+          const data = {
+            host: args.host,
+            port: args.port,
+            subject: null,
+            issuer: null,
+            notBefore: null,
+            notAfter: null,
+            daysUntilExpiry: null,
+            serialNumber: null,
+            error: errorMessage,
+            fetchedAt: new Date().toISOString(),
+          };
+
+          const handle = await context.writeResource(
+            "cert_info",
+            instance,
+            data,
+          );
+
+          context.logger.info("Cert {host}:{port}: error {error}", {
+            host: args.host,
+            port: args.port,
+            error: errorMessage,
+          });
+
+          return { dataHandles: [handle] };
+        }
+
         const parsed = parseCertOutput(result.stdout);
         const daysUntilExpiry = computeDaysUntilExpiry(parsed.notAfter);
 
@@ -616,10 +716,10 @@ export const model = {
           notAfter: parsed.notAfter,
           daysUntilExpiry,
           serialNumber: parsed.serialNumber,
+          error: null,
           fetchedAt: new Date().toISOString(),
         };
 
-        const instance = `${args.host}-${args.port}`;
         const handle = await context.writeResource("cert_info", instance, data);
 
         context.logger.info("Cert {host}:{port}: expires in {days} days", {
@@ -731,4 +831,13 @@ export const model = {
       },
     },
   },
+};
+
+// Exported for testing
+export const _internals = {
+  parseDigJson,
+  parseWhoisText,
+  parseTracerouteOutput,
+  parseCertOutput,
+  computeDaysUntilExpiry,
 };
