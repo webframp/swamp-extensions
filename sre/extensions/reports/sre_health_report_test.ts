@@ -5,7 +5,7 @@ import {
   assertEquals,
   assertStringIncludes,
 } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { report } from "./sre_health_report.ts";
+import { parseSizeToMB, report } from "./sre_health_report.ts";
 
 // --- Test helpers ---
 
@@ -441,7 +441,8 @@ Deno.test("report: all healthy checks produce HEALTHY status", async () => {
       }],
     },
     [dataPath("sys-diag", "get_memory", "mem-output")]: {
-      mem: { used: "4G", total: "16G", available: "12G" },
+      mem: { used: "4Gi", total: "16Gi", available: "12Gi" },
+      swap: { total: "8Gi", used: "100Mi", free: "7.9Gi" },
     },
     [dataPath("sys-diag", "get_uptime", "uptime-output")]: {
       loadAverage1m: "0.5",
@@ -531,6 +532,144 @@ Deno.test("report logs summary", async () => {
     await report.execute(context);
     assertEquals(logs.length, 1);
     assertStringIncludes(logs[0].msg, "SRE health report");
+  } finally {
+    cleanup();
+  }
+});
+
+// --- findStepData skips report handles ---
+
+// --- parseSizeToMB ---
+
+Deno.test("parseSizeToMB: Gi values", () => {
+  assertEquals(parseSizeToMB("31Gi"), 31 * 1024);
+  assertEquals(parseSizeToMB("3.2Gi"), 3.2 * 1024);
+});
+
+Deno.test("parseSizeToMB: Mi values", () => {
+  assertEquals(parseSizeToMB("456Mi"), 456);
+  assertEquals(parseSizeToMB("1.5Mi"), 1.5);
+});
+
+Deno.test("parseSizeToMB: returns null for unparseable", () => {
+  assertEquals(parseSizeToMB(""), null);
+  assertEquals(parseSizeToMB("abc"), null);
+});
+
+// --- DNS tool failure ---
+
+Deno.test("report: DNS COMMAND_FAILED produces error (not critical) finding", async () => {
+  const steps = [makeStep("net-probe", "dns_lookup", "dns-output")];
+  const data: Record<string, Record<string, unknown>> = {
+    [dataPath("net-probe", "dns_lookup", "dns-output")]: {
+      status: "COMMAND_FAILED",
+      records: [],
+    },
+  };
+  const { context, cleanup } = createContext(steps, data);
+  try {
+    const result = await report.execute(context);
+    const findings = (result.json as Record<string, unknown>)
+      .findings as Array<Record<string, unknown>>;
+    const dnsFinding = findings.find((f) => f.check === "DNS");
+    assertEquals(dnsFinding?.severity, "error");
+    assertStringIncludes(
+      dnsFinding?.message as string,
+      "dig not installed",
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+// --- Memory threshold scenarios ---
+
+Deno.test("report: memory at 90% produces warn finding", async () => {
+  const steps = [makeStep("sys-diag", "get_memory", "mem-output")];
+  const data: Record<string, Record<string, unknown>> = {
+    [dataPath("sys-diag", "get_memory", "mem-output")]: {
+      mem: { total: "16Gi", used: "14.4Gi", free: "0.4Gi", available: "1.6Gi" },
+      swap: { total: "0B", used: "0B", free: "0B" },
+    },
+  };
+  const { context, cleanup } = createContext(steps, data);
+  try {
+    const result = await report.execute(context);
+    const findings = (result.json as Record<string, unknown>)
+      .findings as Array<Record<string, unknown>>;
+    const memFinding = findings.find((f) => f.check === "Memory");
+    assertEquals(memFinding?.severity, "warn");
+  } finally {
+    cleanup();
+  }
+});
+
+Deno.test("report: memory at 96% produces critical finding", async () => {
+  const steps = [makeStep("sys-diag", "get_memory", "mem-output")];
+  const data: Record<string, Record<string, unknown>> = {
+    [dataPath("sys-diag", "get_memory", "mem-output")]: {
+      mem: { total: "16Gi", used: "15.4Gi", free: "0.1Gi", available: "0.6Gi" },
+      swap: { total: "0B", used: "0B", free: "0B" },
+    },
+  };
+  const { context, cleanup } = createContext(steps, data);
+  try {
+    const result = await report.execute(context);
+    const findings = (result.json as Record<string, unknown>)
+      .findings as Array<Record<string, unknown>>;
+    const memFinding = findings.find((f) => f.check === "Memory");
+    assertEquals(memFinding?.severity, "critical");
+    assertStringIncludes(result.markdown, "Investigate memory pressure");
+  } finally {
+    cleanup();
+  }
+});
+
+Deno.test("report: low memory usage produces ok finding with percentage", async () => {
+  const steps = [makeStep("sys-diag", "get_memory", "mem-output")];
+  const data: Record<string, Record<string, unknown>> = {
+    [dataPath("sys-diag", "get_memory", "mem-output")]: {
+      mem: { total: "16Gi", used: "4Gi", free: "8Gi", available: "12Gi" },
+      swap: { total: "8Gi", used: "100Mi", free: "7.9Gi" },
+    },
+  };
+  const { context, cleanup } = createContext(steps, data);
+  try {
+    const result = await report.execute(context);
+    const findings = (result.json as Record<string, unknown>)
+      .findings as Array<Record<string, unknown>>;
+    const memFinding = findings.find((f) => f.check === "Memory");
+    assertEquals(memFinding?.severity, "ok");
+    assertStringIncludes(memFinding?.message as string, "(25%)");
+    // Low swap usage should not produce a finding
+    const swapFinding = findings.find((f) => f.check === "Swap");
+    assertEquals(swapFinding, undefined);
+  } finally {
+    cleanup();
+  }
+});
+
+// --- Swap scenarios ---
+
+Deno.test("report: high swap usage produces warn finding", async () => {
+  const steps = [makeStep("sys-diag", "get_memory", "mem-output")];
+  const data: Record<string, Record<string, unknown>> = {
+    [dataPath("sys-diag", "get_memory", "mem-output")]: {
+      mem: { total: "16Gi", used: "4Gi", free: "8Gi", available: "12Gi" },
+      swap: { total: "8Gi", used: "5Gi", free: "3Gi" },
+    },
+  };
+  const { context, cleanup } = createContext(steps, data);
+  try {
+    const result = await report.execute(context);
+    const findings = (result.json as Record<string, unknown>)
+      .findings as Array<Record<string, unknown>>;
+    const swapFinding = findings.find((f) => f.check === "Swap");
+    assertEquals(swapFinding?.severity, "warn");
+    assertStringIncludes(
+      result.markdown,
+      "swap usage indicates memory pressure",
+    );
   } finally {
     cleanup();
   }

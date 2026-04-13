@@ -35,7 +35,39 @@ const CERT_EXPIRY_WARN_DAYS = 30;
 const CERT_EXPIRY_CRITICAL_DAYS = 7;
 const DISK_WARN_PERCENT = 80;
 const DISK_CRITICAL_PERCENT = 90;
+const MEMORY_WARN_PERCENT = 80;
+const MEMORY_CRITICAL_PERCENT = 95;
+const SWAP_WARN_PERCENT = 50;
 const LOAD_WARN_ABSOLUTE = 4.0;
+
+// DNS status values that indicate the dig command itself failed (tool not installed, etc.)
+// vs actual DNS resolution failures (NXDOMAIN, SERVFAIL, REFUSED)
+const DNS_TOOL_FAILURE_STATUSES = ["COMMAND_FAILED"];
+
+/**
+ * Parse a human-readable size string (e.g., "3.2Gi", "456Mi", "27Gi") into
+ * megabytes for comparison. Returns null if unparseable.
+ */
+export function parseSizeToMB(size: string): number | null {
+  const match = size.match(/^([\d.]+)\s*(B|Ki|Mi|Gi|Ti|K|M|G|T)?/i);
+  if (!match) return null;
+  const value = parseFloat(match[1]);
+  if (isNaN(value)) return null;
+  const unit = (match[2] ?? "B").toLowerCase();
+  const multipliers: Record<string, number> = {
+    b: 1 / (1024 * 1024),
+    ki: 1 / 1024,
+    k: 1 / 1024,
+    mi: 1,
+    m: 1,
+    gi: 1024,
+    g: 1024,
+    ti: 1024 * 1024,
+    t: 1024 * 1024,
+  };
+  const mult = multipliers[unit];
+  return mult !== undefined ? value * mult : null;
+}
 
 type Severity = "ok" | "warn" | "critical" | "error";
 
@@ -227,7 +259,14 @@ export const report = {
         const status = data.status as string;
         const records = data.records as Array<Record<string, unknown>>;
 
-        if (status === "NOERROR" && records.length > 0) {
+        if (DNS_TOOL_FAILURE_STATUSES.includes(status)) {
+          findings.push({
+            check: "DNS",
+            severity: "error",
+            message:
+              "DNS probe unavailable (dig not installed or not executable)",
+          });
+        } else if (status === "NOERROR" && records.length > 0) {
           findings.push({
             check: "DNS",
             severity: "ok",
@@ -361,12 +400,46 @@ export const report = {
       if (data) {
         jsonData.memory = data;
         const mem = data.mem as Record<string, string>;
+        const totalMB = parseSizeToMB(mem.total);
+        const usedMB = parseSizeToMB(mem.used);
+        const usedPercent = totalMB && usedMB
+          ? Math.round((usedMB / totalMB) * 100)
+          : null;
+
+        let memSeverity: Severity = "ok";
+        if (usedPercent !== null && usedPercent >= MEMORY_CRITICAL_PERCENT) {
+          memSeverity = "critical";
+        } else if (
+          usedPercent !== null && usedPercent >= MEMORY_WARN_PERCENT
+        ) {
+          memSeverity = "warn";
+        }
+
+        const pctStr = usedPercent !== null ? ` (${usedPercent}%)` : "";
         findings.push({
           check: "Memory",
-          severity: "ok",
+          severity: memSeverity,
           message:
-            `${mem.used} used of ${mem.total} total (${mem.available} available)`,
+            `${mem.used} used of ${mem.total} total${pctStr}, ${mem.available} available`,
         });
+
+        // Swap check
+        const swap = data.swap as Record<string, string> | undefined;
+        if (swap && swap.total && swap.total !== "0B") {
+          const swapTotalMB = parseSizeToMB(swap.total);
+          const swapUsedMB = parseSizeToMB(swap.used);
+          const swapPercent = swapTotalMB && swapUsedMB
+            ? Math.round((swapUsedMB / swapTotalMB) * 100)
+            : null;
+
+          if (swapPercent !== null && swapPercent >= SWAP_WARN_PERCENT) {
+            findings.push({
+              check: "Swap",
+              severity: "warn",
+              message: `${swap.used} used of ${swap.total} (${swapPercent}%)`,
+            });
+          }
+        }
       }
     }
 
@@ -499,6 +572,11 @@ export const report = {
           } filesystem — clean logs, temp files, or expand volume`,
         );
       }
+      if (f.check === "Memory") {
+        recommendations.push(
+          "Investigate memory pressure — identify high-memory processes and consider adding RAM",
+        );
+      }
     }
 
     for (const f of warnings) {
@@ -522,6 +600,16 @@ export const report = {
       if (f.check === "Load") {
         recommendations.push(
           "Investigate high system load — check for runaway processes or increased traffic",
+        );
+      }
+      if (f.check === "Memory") {
+        recommendations.push(
+          "Monitor memory usage — approaching capacity",
+        );
+      }
+      if (f.check === "Swap") {
+        recommendations.push(
+          "High swap usage indicates memory pressure — investigate and consider adding RAM",
         );
       }
     }
