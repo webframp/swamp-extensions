@@ -17,7 +17,7 @@ Each extension lives in its own directory with:
 - `extensions/models/`, `extensions/vaults/`, `extensions/datastores/`, `extensions/reports/` - Implementation files
 - `deno.json` - Dependencies (import `@systeminit/swamp-testing` for tests, optional for model-only extensions)
 
-**Note:** `swamp repo init` also generates a managed `CLAUDE.md` in each extension directory. In this monorepo, those per-extension files are not tracked in git — the root `CLAUDE.md` serves as the single source of project guidance. Add per-extension `CLAUDE.md` to `.gitignore` if needed.
+**Do not commit per-extension `CLAUDE.md` files.** Running `swamp repo init` generates a managed `CLAUDE.md` in each extension directory — these are local development aids, not project artifacts. The root `CLAUDE.md` is the single source of project guidance. Per-extension `CLAUDE.md` files are excluded by the root `.gitignore`.
 
 ## Manifest Format
 
