@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/github"
-version: "2026.04.12.1"
+version: "2026.04.13.1"
 description: |
   Query GitHub data using the gh CLI for repository, PR, issue, release, and workflow visibility.
 

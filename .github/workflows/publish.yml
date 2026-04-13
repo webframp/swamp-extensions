@@ -35,10 +35,10 @@ jobs:
 
           EXTENSIONS="[]"
 
-          # Find all extension directories (those containing a manifest.yaml)
+          # Find extensions where manifest.yaml itself changed (version bump required to publish)
           for manifest in $(find . -name "manifest.yaml" -not -path "./.git/*"); do
             dir=$(dirname "$manifest" | sed 's|^\./||')
-            if echo "$CHANGED_FILES" | grep -q "^${dir}/"; then
+            if echo "$CHANGED_FILES" | grep -q "^${dir}/manifest\.yaml$"; then
               EXTENSIONS=$(echo "$EXTENSIONS" | jq -c ". + [\"${dir}\"]")
               echo "Extension changed: ${dir}"
             fi
