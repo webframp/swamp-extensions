@@ -1,0 +1,17 @@
+manifestVersion: 1
+name: "@webframp/dry-run"
+version: "2026.04.13.1"
+description: "Dry-run execution driver that captures method requests without executing them. Useful for debugging, auditing, and validating workflows."
+repository: "https://github.com/webframp/swamp-extensions"
+drivers:
+  - dry_run.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - driver
+  - debugging
+  - dry-run
+  - audit
