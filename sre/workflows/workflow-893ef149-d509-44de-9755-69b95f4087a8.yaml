@@ -17,11 +17,17 @@ inputs:
     target:
       type: string
       default: "https://example.com"
-      description: Primary URL to health-check (HTTP + cert + DNS)
-    checkPorts:
+      description: Full URL for HTTP health check
+    targetHost:
       type: string
-      default: "80,443"
-      description: Comma-separated TCP ports to check on the target host
+      default: "example.com"
+      description: Bare hostname for cert, DNS, and port checks (no protocol or path)
+    checkPorts:
+      type: array
+      items:
+        type: integer
+      default: [80, 443]
+      description: TCP ports to check on the target host
   required: []
 jobs:
   - name: network-probes
@@ -45,7 +51,7 @@ jobs:
           modelIdOrName: net-probe
           methodName: cert_check
           inputs:
-            host: ${{ inputs.target }}
+            host: ${{ inputs.targetHost }}
             port: 443
         allowFailure: true
 
@@ -56,7 +62,7 @@ jobs:
           modelIdOrName: net-probe
           methodName: dns_lookup
           inputs:
-            domain: ${{ inputs.target }}
+            domain: ${{ inputs.targetHost }}
             recordType: A
         allowFailure: true
 
@@ -67,7 +73,7 @@ jobs:
           modelIdOrName: net-probe
           methodName: port_check
           inputs:
-            host: ${{ inputs.target }}
+            host: ${{ inputs.targetHost }}
             ports: ${{ inputs.checkPorts }}
         allowFailure: true
 
