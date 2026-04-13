@@ -1,0 +1,58 @@
+manifestVersion: 1
+name: "@webframp/gitlab"
+version: "2026.04.13.1"
+description: |
+  Query GitLab data using the glab CLI for project, merge request, issue, release, and pipeline visibility.
+
+  ## Authentication
+
+  Uses the glab CLI's built-in authentication. Run `glab auth login` to configure.
+
+  ## Required Tools
+
+  - `glab` CLI (https://gitlab.com/gitlab-org/cli) installed and authenticated
+
+  ## Usage
+
+  ```bash
+  # Create gitlab model (default host from glab config)
+  swamp model create @webframp/gitlab gitlab
+
+  # Create with specific GitLab host
+  swamp model create @webframp/gitlab gitlab --global-arg host=git.example.org
+
+  # List your projects
+  swamp model method run gitlab list_projects
+
+  # Get detailed project info
+  swamp model method run gitlab get_project_info --input project=group/repo
+
+  # List open merge requests
+  swamp model method run gitlab list_merge_requests --input project=group/repo
+
+  # List closed issues
+  swamp model method run gitlab list_issues --input project=group/repo --input state=closed
+
+  # List releases
+  swamp model method run gitlab list_releases --input project=group/repo
+
+  # List recent CI/CD pipelines
+  swamp model method run gitlab list_pipelines --input project=group/repo
+  ```
+
+  ## Methods
+
+  - **list_projects** - List projects for the authenticated user
+  - **get_project_info** - Get detailed information about a specific project
+  - **list_merge_requests** - List merge requests for a project
+  - **list_issues** - List issues for a project
+  - **list_releases** - List releases for a project
+  - **list_pipelines** - List recent CI/CD pipelines for a project
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - gitlab/projects.ts
+labels:
+  - gitlab
+  - git
+  - devops
+  - ci
