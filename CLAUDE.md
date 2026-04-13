@@ -1,11 +1,11 @@
 # Project: swamp-extensions
 
-Community extensions for swamp - models, vaults, datastores, and reports.
+Community extensions for swamp - models, vaults, datastores, drivers, reports, and workflows.
 
 ## Code Style
 
 - TypeScript strict mode, Deno runtime
-- Use named exports: `export const model = { ... }` or `export const vault = { ... }`
+- Use named exports: `export const model = { ... }`, `export const vault = { ... }`, `export const report = { ... }`, etc.
 - All code must pass `deno check`, `deno lint`, and `deno fmt`
 - Include test coverage for all extensions (`*_test.ts` files)
 
@@ -14,12 +14,54 @@ Community extensions for swamp - models, vaults, datastores, and reports.
 Each extension lives in its own directory with:
 - `.swamp.yaml` - Repo marker (run `swamp repo init` in the directory to create)
 - `manifest.yaml` - Extension metadata and entry points
-- `extensions/models/`, `extensions/vaults/`, etc. - Implementation files
+- `extensions/models/`, `extensions/vaults/`, `extensions/datastores/`, `extensions/reports/` - Implementation files
 - `deno.json` - Dependencies (import `@systeminit/swamp-testing` for tests, optional for model-only extensions)
+
+**Note:** `swamp repo init` also generates a managed `CLAUDE.md` in each extension directory. In this monorepo, those per-extension files are not tracked in git — the root `CLAUDE.md` serves as the single source of project guidance. Add per-extension `CLAUDE.md` to `.gitignore` if needed.
+
+## Manifest Format
+
+```yaml
+manifestVersion: 1
+name: "@webframp/extension-name"
+version: "2026.04.13.1"          # CalVer: YYYY.MM.DD.N
+
+# At least one extension type required:
+models:
+  - path/to/model.ts
+vaults:
+  - path/to/vault.ts
+datastores:
+  - path/to/datastore.ts
+drivers:
+  - path/to/driver.ts
+reports:
+  - path/to/report.ts
+workflows:
+  - path/to/workflow.yaml
+
+# Optional metadata:
+labels: [aws, cost, finops]
+platforms: [linux-x86_64, linux-aarch64, darwin-x86_64, darwin-aarch64]
+dependencies:
+  - "@webframp/other-ext@2026.04.12.1"
+include: []                      # Additional files to bundle
+```
+
+All paths must be relative, no `..` segments, no absolute paths.
+
+## Extension Types
+
+- **Models** - Typed representations of external systems. Export `model` with `type`, `version`, `methods`, `resources`.
+- **Vaults** - Secret storage providers. Implement `VaultProvider`: `get()`, `put()`, `list()`, `getName()`.
+- **Datastores** - Storage backends for runtime data. Implement `DatastoreProvider`: `createLock()`, `createVerifier()`, `resolveDatastorePath()`.
+- **Drivers** - Custom execution engines. Implement `ExecutionDriver`: `execute(request, callbacks)`.
+- **Reports** - Analysis generators scoped to method, model, or workflow. Export `report` with `scope`, `description`, `execute()`.
+- **Workflows** - YAML orchestration of model methods across parallel jobs/steps.
 
 ## Naming Conventions
 
-- Extension types: `@webframp/<name>` (e.g., `@webframp/cloudflare`)
+- Extension names: `@webframp/<name>` (e.g., `@webframp/cloudflare`) or `@webframp/<category>/<name>` for grouped extensions (e.g., `@webframp/aws/pricing`)
 - File names: `snake_case.ts`
 - Test files: `<name>_test.ts` next to implementation
 
@@ -29,8 +71,36 @@ Each extension lives in its own directory with:
 - Use local HTTP servers (`Deno.serve({ port: 0, onListen() {} }, handler)`) or Deno.Command mocking
 - Restore all env vars in a `finally` block
 - Tests that create SDK clients with connection pooling need `sanitizeResources: false` with a comment explaining why
-- Use `@systeminit/swamp-testing` conformance helpers (`assertVaultExportConformance`, `assertDatastoreExportConformance`, etc.)
-- Canonical test example: `vault/gopass/extensions/vaults/gopass_test.ts`
+- Use `@systeminit/swamp-testing` conformance helpers and test factories
+
+### Test Factories
+
+```typescript
+import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createReportTestContext } from "@systeminit/swamp-testing";
+```
+
+- `createModelTestContext({ globalArgs, storedResources })` - Test model methods, inspect via `getWrittenResources()`, `getLogsByLevel()`
+- `createVaultTestContext()` - Test vault operations with mock secrets
+- `createDatastoreTestContext()` - Test locking, health checks, sync
+- `createDriverTestContext()` - Test execution drivers with captured logs
+- `createReportTestContext()` - Test report generation with mock repositories
+
+### Conformance Helpers
+
+- `assertVaultExportConformance(module)` - Validate vault provider exports
+- `assertDatastoreExportConformance(module)` - Validate datastore provider exports
+
+### Mocking Utilities
+
+- `withMockedFetch(handler)` - Mock HTTP requests (for API-based extensions)
+- `withMockedCommand(handler)` - Mock `Deno.Command` executions (for CLI-based extensions)
+
+### Canonical Test Examples
+
+- Vault (CLI mock): `vault/gopass/extensions/vaults/gopass_test.ts`
+- Model (HTTP mock): `cloudflare/extensions/models/cloudflare/zone_test.ts`
+- Datastore: `datastore/gitlab-datastore/extensions/datastores/gitlab_datastore/mod_test.ts`
 
 ## Commands
 
@@ -48,7 +118,21 @@ deno task test     # Run tests
 - CalVer format: `YYYY.MM.DD.N` (e.g., `2026.03.31.1`)
 - Bump version in `manifest.yaml` for each release
 - Pin all npm dependencies to exact versions in `deno.json` (no ranges)
+- Swamp's bundler inlines npm packages at bundle time; `deno.lock` does NOT cover extension deps
 
 ## Publishing
 
 CI auto-publishes when `manifest.yaml` changes on main and the version is newer than the registry. Do not push extensions locally — always push code to GitHub and let CI handle publishing via `swamp extension push manifest.yaml --yes`.
+
+## Swamp Skills
+
+These swamp skills are available for guidance when working on extensions (invoke via the Skill tool):
+
+- `swamp-extension-model` - Create custom TypeScript models
+- `swamp-extension-vault` - Create custom vault providers
+- `swamp-extension-datastore` - Create custom datastore backends
+- `swamp-extension-driver` - Create custom execution drivers
+- `swamp-report` - Create and run reports
+- `swamp-workflow` - Create and edit workflows
+- `swamp-model` - Work with swamp models (creating instances, running methods)
+- `swamp-data` - Manage model data lifecycle with CEL expressions
