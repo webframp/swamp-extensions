@@ -1,0 +1,47 @@
+manifestVersion: 1
+name: "@webframp/system"
+version: "2026.04.12.1"
+description: |
+  Query local system diagnostics via shell commands for operational visibility.
+
+  ## Usage
+
+  ```bash
+  # Create system diagnostics model
+  swamp model create @webframp/system sys-diag
+
+  # Get disk usage
+  swamp model method run sys-diag get_disk_usage
+
+  # Get memory info
+  swamp model method run sys-diag get_memory
+
+  # Get uptime and load averages
+  swamp model method run sys-diag get_uptime
+
+  # Get top processes by CPU
+  swamp model method run sys-diag get_processes
+
+  # Get network interfaces
+  swamp model method run sys-diag get_network_interfaces
+
+  # Get OS info
+  swamp model method run sys-diag get_os_info
+  ```
+
+  ## Methods
+
+  - **get_disk_usage** - Filesystem usage from df
+  - **get_memory** - Memory and swap usage from free
+  - **get_uptime** - Boot time, uptime string, and load averages
+  - **get_processes** - Top 20 processes sorted by CPU usage
+  - **get_network_interfaces** - Network interfaces and addresses from ip
+  - **get_os_info** - OS release info and kernel version
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - system/diagnostics.ts
+labels:
+  - system
+  - linux
+  - diagnostics
+  - ops

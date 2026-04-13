@@ -1,0 +1,55 @@
+manifestVersion: 1
+name: "@webframp/github"
+version: "2026.04.12.1"
+description: |
+  Query GitHub data using the gh CLI for repository, PR, issue, release, and workflow visibility.
+
+  ## Authentication
+
+  Uses the gh CLI's built-in authentication. Run `gh auth login` to configure.
+
+  ## Required Tools
+
+  - `gh` CLI (https://cli.github.com/) installed and authenticated
+
+  ## Usage
+
+  ```bash
+  # Create github model
+  swamp model create @webframp/github github
+
+  # List your repos
+  swamp model method run github list_repos
+
+  # Get detailed repo info
+  swamp model method run github get_repo_info --input repo=owner/repo
+
+  # List open PRs
+  swamp model method run github list_prs --input repo=owner/repo
+
+  # List closed issues
+  swamp model method run github list_issues --input repo=owner/repo --input state=closed
+
+  # List releases
+  swamp model method run github list_releases --input repo=owner/repo
+
+  # List recent workflow runs
+  swamp model method run github list_workflows --input repo=owner/repo
+  ```
+
+  ## Methods
+
+  - **list_repos** - List repositories for the authenticated user
+  - **get_repo_info** - Get detailed information about a specific repository
+  - **list_prs** - List pull requests for a repository
+  - **list_issues** - List issues for a repository
+  - **list_releases** - List releases for a repository
+  - **list_workflows** - List recent workflow runs for a repository
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - github/repos.ts
+labels:
+  - github
+  - git
+  - devops
+  - repos

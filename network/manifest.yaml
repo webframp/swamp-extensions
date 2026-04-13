@@ -1,0 +1,61 @@
+manifestVersion: 1
+name: "@webframp/network"
+version: "2026.04.12.1"
+description: |
+  DNS and network probing model that generates diverse diagnostic events.
+
+  ## Tools Required
+
+  - `dig` (DNS lookups)
+  - `whois` (domain registration info)
+  - `traceroute` (network path tracing)
+  - `openssl` (TLS certificate inspection)
+
+  ## Usage
+
+  ```bash
+  # Create the network probe model
+  swamp model create @webframp/network net-probe
+
+  # DNS lookup
+  swamp model method run net-probe dns_lookup --input domain=example.com
+  swamp model method run net-probe dns_lookup --input domain=example.com --input recordType=MX
+
+  # HTTP check
+  swamp model method run net-probe http_check --input url=https://example.com
+
+  # WHOIS lookup
+  swamp model method run net-probe whois_lookup --input domain=example.com
+
+  # TLS certificate check
+  swamp model method run net-probe cert_check --input host=example.com
+
+  # Traceroute
+  swamp model method run net-probe traceroute --input host=example.com
+
+  # Port scan
+  swamp model method run net-probe port_check --input host=example.com --input ports=[80,443,8080]
+  ```
+
+  ## Methods
+
+  - **dns_lookup** - Run dig to resolve DNS records for a domain
+  - **http_check** - Fetch a URL and record status, headers, timing, and redirects
+  - **whois_lookup** - Query WHOIS for domain registration details
+  - **cert_check** - Inspect TLS certificate subject, issuer, and validity dates
+  - **traceroute** - Trace network path to a host
+  - **port_check** - Test TCP connectivity on specific ports
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - network/probe.ts
+labels:
+  - network
+  - dns
+  - http
+  - diagnostics
+  - ops
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64

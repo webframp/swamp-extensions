@@ -93,16 +93,21 @@ jobs:
             deno check extensions/reports/*.ts
           fi
 
-  cloudflare-check:
-    name: cloudflare - ${{ matrix.task }}
+  model-check:
+    name: ${{ matrix.extension }} - ${{ matrix.task }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        task: [check, lint, fmt, test]
+        extension:
+          - { dir: cloudflare, models: cloudflare }
+          - { dir: github, models: github }
+          - { dir: system, models: system }
+          - { dir: network, models: network }
+        task: [check, lint, fmt]
     defaults:
       run:
-        working-directory: cloudflare
+        working-directory: ${{ matrix.extension.dir }}
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
@@ -114,15 +119,27 @@ jobs:
             deno fmt --check extensions/models/
           elif [ "${{ matrix.task }}" = "lint" ]; then
             deno lint extensions/models/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            # Run tests if any exist
-            if ls extensions/models/cloudflare/*_test.ts 1> /dev/null 2>&1; then
-              deno test --allow-net extensions/models/
-            else
-              echo "No tests found, skipping"
-            fi
           else
-            deno check extensions/models/cloudflare/*.ts
+            deno check extensions/models/${{ matrix.extension.models }}/*.ts
+          fi
+
+  cloudflare-test:
+    name: cloudflare - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: |
+          if ls extensions/models/cloudflare/*_test.ts 1> /dev/null 2>&1; then
+            deno test --allow-net extensions/models/
+          else
+            echo "No tests found, skipping"
           fi
 
   datastore-check:
