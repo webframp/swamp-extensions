@@ -310,7 +310,6 @@ Deno.test("list_merge_requests writes mergeRequests resource", async () => {
   };
 
   try {
-    // deno-lint-ignore no-explicit-any
     await model.methods.list_merge_requests.execute(
       { project: "group/repo", state: "opened" },
       // deno-lint-ignore no-explicit-any

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/hashicorp-vault"
-version: "2026.04.13.1"
+version: "2026.04.14.1"
 description: "HashiCorp Vault secrets management via REST API (KV v1 and v2)"
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:
