@@ -52,6 +52,39 @@ jobs:
             days: ${{ inputs.costDays }}
         allowFailure: true
 
+      - name: get-cost-by-usage-type-rds
+        description: Get RDS cost breakdown by usage type
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_by_usage_type
+          inputs:
+            service: "Amazon Relational Database Service"
+            days: ${{ inputs.costDays }}
+        allowFailure: true
+
+      - name: get-cost-by-usage-type-s3
+        description: Get S3 cost breakdown by usage type
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_by_usage_type
+          inputs:
+            service: "Amazon Simple Storage Service"
+            days: ${{ inputs.costDays }}
+        allowFailure: true
+
+      - name: get-cost-by-usage-type-lambda
+        description: Get Lambda cost breakdown by usage type
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_by_usage_type
+          inputs:
+            service: "AWS Lambda"
+            days: ${{ inputs.costDays }}
+        allowFailure: true
+
       - name: get-cost-trend
         description: Get daily cost trend over the period
         task:

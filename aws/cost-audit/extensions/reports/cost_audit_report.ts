@@ -135,10 +135,6 @@ export const report = {
       );
     }
 
-    // Suppress unused variable warnings — these helpers are available
-    // for future expansion but not all are called in every code path.
-    void findAllStepData;
-
     // === SECTION 1: COST SUMMARY ===
     findings.push("## Cost Summary\n");
 
@@ -218,6 +214,57 @@ export const report = {
     } else {
       findings.push("No top cost driver data available.\n");
     }
+
+    // === SERVICE DEEP DIVE ===
+    findings.push("\n## Service Deep Dive\n");
+
+    const usageTypeSteps = findAllStepData(
+      "aws-costs",
+      "get_cost_by_usage_type",
+    );
+    const serviceBreakdowns: Array<{
+      service: string;
+      items: Array<{ usageType: string; amount: number }>;
+    }> = [];
+
+    for (const { stepName, loc } of usageTypeSteps) {
+      const data = await getData(
+        loc.modelType,
+        loc.modelId,
+        loc.dataName,
+        loc.version,
+      );
+      if (!data) continue;
+
+      const raw = data as {
+        data: Array<{ usageType: string; amount: number; unit: string }>;
+      };
+      const items = (raw.data || []).filter((i) => i.amount > 0.01);
+      if (items.length === 0) continue;
+
+      // Extract service name from step name (e.g., "get-cost-by-usage-type-ec2" -> "EC2")
+      const serviceSuffix = stepName.replace("get-cost-by-usage-type-", "")
+        .toUpperCase();
+      const total = items.reduce((sum, i) => sum + i.amount, 0);
+
+      findings.push(`### ${serviceSuffix} — $${total.toFixed(2)}\n`);
+      findings.push("| Usage Type | Amount |");
+      findings.push("| ---------- | -----: |");
+      for (
+        const item of items.sort((a, b) => b.amount - a.amount).slice(0, 10)
+      ) {
+        findings.push(`| ${item.usageType} | $${item.amount.toFixed(2)} |`);
+      }
+      findings.push("");
+
+      serviceBreakdowns.push({ service: serviceSuffix, items });
+    }
+
+    if (usageTypeSteps.length === 0) {
+      findings.push("No service usage type data available.\n");
+    }
+
+    jsonFindings.serviceBreakdowns = serviceBreakdowns;
 
     // === SECTION 3: NETWORKING WASTE ===
     findings.push("\n## Networking Waste Analysis\n");
