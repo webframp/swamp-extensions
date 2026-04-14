@@ -11,12 +11,16 @@ export async function redmineApi<T = null>(
   method: string,
   path: string,
   body?: unknown,
+  username?: string,
 ): Promise<T> {
   const url = `${host}${path}`;
   const headers: Record<string, string> = {
     "X-Redmine-API-Key": apiKey,
     "Content-Type": "application/json",
   };
+  if (username) {
+    headers["X-Redmine-Username"] = username;
+  }
 
   const response = await fetch(url, {
     method,
@@ -56,6 +60,7 @@ export async function redmineApiPaginated<T>(
   resultKey: string,
   params?: Record<string, string>,
   maxItems?: number,
+  username?: string,
 ): Promise<T[]> {
   const cap = Math.min(maxItems ?? 100, 500);
   const pageSize = Math.min(cap, 100);
@@ -70,11 +75,15 @@ export async function redmineApiPaginated<T>(
     });
 
     const url = `${host}${path}?${queryParams}`;
+    const fetchHeaders: Record<string, string> = {
+      "X-Redmine-API-Key": apiKey,
+      "Content-Type": "application/json",
+    };
+    if (username) {
+      fetchHeaders["X-Redmine-Username"] = username;
+    }
     const response = await fetch(url, {
-      headers: {
-        "X-Redmine-API-Key": apiKey,
-        "Content-Type": "application/json",
-      },
+      headers: fetchHeaders,
     });
 
     if (!response.ok) {

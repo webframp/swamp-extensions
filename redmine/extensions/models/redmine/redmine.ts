@@ -159,7 +159,12 @@ export function mapIssueDetail(raw: RawIssue) {
 // =============================================================================
 
 type MethodContext = {
-  globalArgs: { host: string; apiKey: string; project: string };
+  globalArgs: {
+    host: string;
+    apiKey: string;
+    project: string;
+    username?: string;
+  };
   writeResource: (
     spec: string,
     name: string,
@@ -185,6 +190,9 @@ export const model = {
       "Redmine API key (40-character hex string)",
     ),
     project: z.string().describe("Default project identifier"),
+    username: z.string().optional().describe(
+      "Redmine username for X-Redmine-Username header (required by some ingress configurations)",
+    ),
   }),
 
   // ---------------------------------------------------------------------------
@@ -241,12 +249,14 @@ export const model = {
       description: "List all issue statuses",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ issue_statuses: RawStatus[] }>(
           host,
           apiKey,
           "GET",
           "/issue_statuses.json",
+          undefined,
+          username,
         );
 
         const statuses = data.issue_statuses.map((s) => ({
@@ -271,12 +281,14 @@ export const model = {
       description: "List all trackers",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ trackers: RawTracker[] }>(
           host,
           apiKey,
           "GET",
           "/trackers.json",
+          undefined,
+          username,
         );
 
         const trackers = data.trackers.map((t) => ({
@@ -302,12 +314,15 @@ export const model = {
       description: "List all accessible projects",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
         const rawProjects = await redmineApiPaginated<RawProject>(
           host,
           apiKey,
           "/projects.json",
           "projects",
+          undefined,
+          undefined,
+          username,
         );
 
         const projects = rawProjects.map((p) => ({
@@ -345,7 +360,7 @@ export const model = {
         args: { project?: string },
         context: MethodContext,
       ) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
 
         const rawMemberships = await redmineApiPaginated<RawMembership>(
@@ -353,6 +368,9 @@ export const model = {
           apiKey,
           `/projects/${project}/memberships.json`,
           "memberships",
+          undefined,
+          undefined,
+          username,
         );
 
         const members = rawMemberships.map((m) => {
@@ -390,12 +408,14 @@ export const model = {
       description: "List all custom field definitions",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ custom_fields: RawCustomField[] }>(
           host,
           apiKey,
           "GET",
           "/custom_fields.json",
+          undefined,
+          username,
         );
 
         const customFields = data.custom_fields.map((cf) => ({
@@ -461,7 +481,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
         const params: Record<string, string> = {};
 
         const projectId = args.project ?? context.globalArgs.project;
@@ -490,6 +510,7 @@ export const model = {
           "issues",
           params,
           args.limit ?? 100,
+          username,
         );
 
         const issues = rawIssues.map(mapIssue);
@@ -526,12 +547,14 @@ export const model = {
         args: { issueId: number },
         context: MethodContext,
       ) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ issue: RawIssue }>(
           host,
           apiKey,
           "GET",
           `/issues/${args.issueId}.json?include=journals,children`,
+          undefined,
+          username,
         );
 
         const issue = mapIssueDetail(data.issue);
@@ -582,7 +605,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
 
         // Build payload with only defined fields
         const issuePayload: Record<string, unknown> = {
@@ -620,6 +643,7 @@ export const model = {
           "POST",
           "/issues.json",
           { issue: issuePayload },
+          username,
         );
 
         const issue = mapIssueDetail(data.issue);
@@ -678,7 +702,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
-        const { host, apiKey } = context.globalArgs;
+        const { host, apiKey, username } = context.globalArgs;
 
         // Build update payload with only defined fields
         const issuePayload: Record<string, unknown> = {};
@@ -726,6 +750,7 @@ export const model = {
           "PUT",
           `/issues/${args.issueId}.json`,
           { issue: issuePayload },
+          username,
         );
 
         // Re-fetch the updated issue
@@ -734,6 +759,8 @@ export const model = {
           apiKey,
           "GET",
           `/issues/${args.issueId}.json?include=journals,children`,
+          undefined,
+          username,
         );
 
         const issue = mapIssueDetail(data.issue);
