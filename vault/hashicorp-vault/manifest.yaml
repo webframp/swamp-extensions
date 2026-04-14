@@ -10,7 +10,7 @@ platforms:
   - linux-aarch64
   - darwin-x86_64
   - darwin-aarch64
-tags:
+labels:
   - vault
   - secrets
   - hashicorp

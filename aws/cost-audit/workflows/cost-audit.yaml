@@ -68,6 +68,8 @@ jobs:
           type: model_method
           modelIdOrName: aws-inventory
           methodName: inventory_all
+          inputs:
+            includeS3: true
         allowFailure: true
 
       - name: list-nat-gateways

@@ -48,6 +48,8 @@ jobs:
           type: model_method
           modelIdOrName: aws-alarms
           methodName: get_active
+          inputs:
+            limit: 50
         allowFailure: true
 
       - name: analyze-metrics
@@ -59,7 +61,10 @@ jobs:
           inputs:
             namespace: AWS/Lambda
             metricName: Duration
+            dimensions: []
+            statistic: Average
             startTime: ${{ inputs.timeRange }}
+            anomalyThreshold: 2
         allowFailure: true
 
       - name: analyze-errors-metric
@@ -71,7 +76,10 @@ jobs:
           inputs:
             namespace: AWS/Lambda
             metricName: Errors
+            dimensions: []
+            statistic: Sum
             startTime: ${{ inputs.timeRange }}
+            anomalyThreshold: 2
         allowFailure: true
 
       - name: get-service-graph
@@ -138,6 +146,7 @@ jobs:
           inputs:
             startTime: ${{ inputs.timeRange }}
             historyItemType: StateUpdate
+            limit: 100
         allowFailure: true
 
 version: 1
