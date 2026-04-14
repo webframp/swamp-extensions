@@ -564,11 +564,74 @@ export const model = {
           value: z.union([z.string(), z.array(z.string())]),
         })).optional().describe("Custom field values"),
       }),
-      execute: (
-        _args: Record<string, unknown>,
-        _context: MethodContext,
-      ): never => {
-        throw new Error("Not implemented");
+      execute: async (
+        args: {
+          subject: string;
+          project?: string;
+          trackerId?: number;
+          statusId?: number;
+          priorityId?: number;
+          assignedToId?: number;
+          description?: string;
+          parentIssueId?: number;
+          estimatedHours?: number;
+          customFields?: Array<{
+            id: number;
+            value: string | string[];
+          }>;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey } = context.globalArgs;
+
+        // Build payload with only defined fields
+        const issuePayload: Record<string, unknown> = {
+          project_id: args.project ?? context.globalArgs.project,
+          subject: args.subject,
+        };
+        if (args.trackerId !== undefined) {
+          issuePayload.tracker_id = args.trackerId;
+        }
+        if (args.description !== undefined) {
+          issuePayload.description = args.description;
+        }
+        if (args.assignedToId !== undefined) {
+          issuePayload.assigned_to_id = args.assignedToId;
+        }
+        if (args.statusId !== undefined) {
+          issuePayload.status_id = args.statusId;
+        }
+        if (args.priorityId !== undefined) {
+          issuePayload.priority_id = args.priorityId;
+        }
+        if (args.parentIssueId !== undefined) {
+          issuePayload.parent_issue_id = args.parentIssueId;
+        }
+        if (args.estimatedHours !== undefined) {
+          issuePayload.estimated_hours = args.estimatedHours;
+        }
+        if (args.customFields !== undefined) {
+          issuePayload.custom_fields = args.customFields;
+        }
+
+        const data = await redmineApi<{ issue: RawIssue }>(
+          host,
+          apiKey,
+          "POST",
+          "/issues.json",
+          { issue: issuePayload },
+        );
+
+        const issue = mapIssueDetail(data.issue);
+
+        const handle = await context.writeResource(
+          "issue_detail",
+          String(data.issue.id),
+          issue,
+        );
+
+        context.logger.info("Created issue {id}", { id: data.issue.id });
+        return { dataHandles: [handle] };
       },
     },
 
@@ -585,17 +648,102 @@ export const model = {
         parentIssueId: z.number().optional().describe("New parent issue ID"),
         estimatedHours: z.number().optional().describe("New estimated hours"),
         doneRatio: z.number().optional().describe("Percent done (0-100)"),
+        dueDate: z.string().optional().describe("Updated due date (YYYY-MM-DD)"),
         notes: z.string().optional().describe("Journal note to add"),
         customFields: z.array(z.object({
           id: z.number(),
           value: z.union([z.string(), z.array(z.string())]),
         })).optional().describe("Custom field values to update"),
       }),
-      execute: (
-        _args: Record<string, unknown>,
-        _context: MethodContext,
-      ): never => {
-        throw new Error("Not implemented");
+      execute: async (
+        args: {
+          issueId: number;
+          subject?: string;
+          statusId?: number;
+          trackerId?: number;
+          priorityId?: number;
+          assignedToId?: number;
+          description?: string;
+          parentIssueId?: number;
+          estimatedHours?: number;
+          doneRatio?: number;
+          dueDate?: string;
+          notes?: string;
+          customFields?: Array<{
+            id: number;
+            value: string | string[];
+          }>;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey } = context.globalArgs;
+
+        // Build update payload with only defined fields
+        const issuePayload: Record<string, unknown> = {};
+        if (args.statusId !== undefined) {
+          issuePayload.status_id = args.statusId;
+        }
+        if (args.subject !== undefined) {
+          issuePayload.subject = args.subject;
+        }
+        if (args.description !== undefined) {
+          issuePayload.description = args.description;
+        }
+        if (args.assignedToId !== undefined) {
+          issuePayload.assigned_to_id = args.assignedToId;
+        }
+        if (args.notes !== undefined) {
+          issuePayload.notes = args.notes;
+        }
+        if (args.doneRatio !== undefined) {
+          issuePayload.done_ratio = args.doneRatio;
+        }
+        if (args.dueDate !== undefined) {
+          issuePayload.due_date = args.dueDate;
+        }
+        if (args.trackerId !== undefined) {
+          issuePayload.tracker_id = args.trackerId;
+        }
+        if (args.priorityId !== undefined) {
+          issuePayload.priority_id = args.priorityId;
+        }
+        if (args.parentIssueId !== undefined) {
+          issuePayload.parent_issue_id = args.parentIssueId;
+        }
+        if (args.estimatedHours !== undefined) {
+          issuePayload.estimated_hours = args.estimatedHours;
+        }
+        if (args.customFields !== undefined) {
+          issuePayload.custom_fields = args.customFields;
+        }
+
+        // PUT returns 204 No Content
+        await redmineApi(
+          host,
+          apiKey,
+          "PUT",
+          `/issues/${args.issueId}.json`,
+          { issue: issuePayload },
+        );
+
+        // Re-fetch the updated issue
+        const data = await redmineApi<{ issue: RawIssue }>(
+          host,
+          apiKey,
+          "GET",
+          `/issues/${args.issueId}.json?include=journals,children`,
+        );
+
+        const issue = mapIssueDetail(data.issue);
+
+        const handle = await context.writeResource(
+          "issue_detail",
+          String(args.issueId),
+          issue,
+        );
+
+        context.logger.info("Updated issue {id}", { id: args.issueId });
+        return { dataHandles: [handle] };
       },
     },
   },

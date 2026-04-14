@@ -1,12 +1,7 @@
 // Redmine Model Tests
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import {
-  assertEquals,
-  assertExists,
-  assertMatch,
-  assertThrows,
-} from "jsr:@std/assert@1";
+import { assertEquals, assertExists, assertMatch } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./redmine.ts";
 
@@ -454,35 +449,165 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
-// Stub Method Tests
+// Mutation Method Tests
 // ---------------------------------------------------------------------------
 
-Deno.test("redmine model: stub methods throw Not implemented", () => {
-  const { context } = makeContext();
-  const ctx = context as unknown as Parameters<
-    typeof model.methods.create_issue.execute
-  >[1];
+Deno.test({
+  name:
+    "redmine model: create_issue sends correct POST body and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedMethod: string | null = null;
+    let capturedBody: Record<string, unknown> | null = null;
 
-  assertThrows(
-    () =>
-      model.methods.create_issue.execute(
-        { subject: "test" },
-        ctx,
-      ),
-    Error,
-    "Not implemented",
-  );
-  assertThrows(
-    () =>
-      model.methods.update_issue.execute(
-        { issueId: 1 },
-        ctx as unknown as Parameters<
+    const createdIssue = {
+      ...mockIssue1,
+      id: 200,
+      subject: "New issue via API",
+      parent: { id: 50 },
+      custom_fields: [{ id: 7, name: "Sprint", value: "Sprint 3" }],
+    };
+
+    const { url, server } = startMockRedmine(async (req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues.json" && req.method === "POST") {
+        capturedMethod = req.method;
+        capturedBody = await req.json();
+        return Response.json({ issue: createdIssue }, { status: 201 });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const result = await model.methods.create_issue.execute(
+        {
+          subject: "New issue via API",
+          trackerId: 3,
+          parentIssueId: 50,
+          customFields: [{ id: 7, value: "Sprint 3" }],
+        },
+        context as unknown as Parameters<
+          typeof model.methods.create_issue.execute
+        >[1],
+      );
+
+      // Verify POST method was used
+      assertEquals(capturedMethod, "POST");
+
+      // Verify request body structure
+      const body = capturedBody as unknown as {
+        issue: Record<string, unknown>;
+      };
+      assertEquals(body.issue.subject, "New issue via API");
+      assertEquals(body.issue.tracker_id, 3);
+      assertEquals(body.issue.project_id, TEST_PROJECT);
+      assertEquals(body.issue.parent_issue_id, 50);
+      assertEquals(body.issue.custom_fields, [{ id: 7, value: "Sprint 3" }]);
+
+      // Verify resource written
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "issue_detail");
+      assertEquals(resources[0].name, "200");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: update_issue sends PUT and re-fetches issue detail",
+  sanitizeResources: false,
+  fn: async () => {
+    let putCalled = false;
+    let capturedPutBody: Record<string, unknown> | null = null;
+
+    const updatedIssue = {
+      ...mockIssue1,
+      status: { id: 5, name: "Closed", is_closed: true },
+      journals: [
+        {
+          id: 501,
+          user: { id: 10, name: "Alice" },
+          notes: "Closing this issue",
+          created_on: "2026-04-14T10:00:00Z",
+          details: [
+            {
+              property: "attr",
+              name: "status_id",
+              old_value: "2",
+              new_value: "5",
+            },
+          ],
+        },
+      ],
+      children: [],
+    };
+
+    const { url, server } = startMockRedmine(async (req) => {
+      const u = new URL(req.url);
+      if (
+        u.pathname === `/issues/${mockIssue1.id}.json` &&
+        req.method === "PUT"
+      ) {
+        putCalled = true;
+        capturedPutBody = await req.json();
+        return new Response(null, { status: 204 });
+      }
+      if (
+        u.pathname === `/issues/${mockIssue1.id}.json` &&
+        req.method === "GET"
+      ) {
+        return Response.json({ issue: updatedIssue });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const result = await model.methods.update_issue.execute(
+        {
+          issueId: mockIssue1.id,
+          statusId: 5,
+          notes: "Closing this issue",
+        },
+        context as unknown as Parameters<
           typeof model.methods.update_issue.execute
         >[1],
-      ),
-    Error,
-    "Not implemented",
-  );
+      );
+
+      // Verify PUT was called
+      assertEquals(putCalled, true);
+
+      // Verify PUT body
+      const body = capturedPutBody as unknown as {
+        issue: Record<string, unknown>;
+      };
+      assertEquals(body.issue.status_id, 5);
+      assertEquals(body.issue.notes, "Closing this issue");
+
+      // Verify resource written from re-fetched data
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "issue_detail");
+
+      // Verify the re-fetched data shows updated status
+      const data = resources[0].data as {
+        status: { id: number; name: string };
+      };
+      assertEquals(data.status.id, 5);
+      assertEquals(data.status.name, "Closed");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
 });
 
 // ---------------------------------------------------------------------------
