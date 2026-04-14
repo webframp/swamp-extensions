@@ -30,6 +30,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws-ops`](aws/ops/) | AWS incident investigation — gathers alarms, metrics, traces, and logs, then generates an incident report | `@webframp/aws/logs`, `@webframp/aws/metrics`, `@webframp/aws/alarms`, `@webframp/aws/traces` |
 | [`@webframp/aws-cost-audit`](aws/cost-audit/) | AWS cost audit — analyzes spend, resource inventory, and networking waste, then generates savings recommendations | `@webframp/aws/cost-explorer`, `@webframp/aws/networking`, `@webframp/aws/inventory` |
 | [`@webframp/aws/cost-report`](aws/cost-report/) | AWS cost report formatting (standalone report extension) | None |
+| [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — CRUD operations on issues, projects, users, and custom fields, plus flow metrics and sprint summary reports with a scaffold-story workflow | None |
 
 ## Vault Extensions
 
@@ -72,6 +73,7 @@ swamp extension pull @webframp/sre
 swamp extension pull @webframp/cloudflare-audit
 swamp extension pull @webframp/aws-ops
 swamp extension pull @webframp/aws-cost-audit
+swamp extension pull @webframp/redmine
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing
@@ -154,6 +156,20 @@ swamp model create @webframp/aws/networking aws-networking --global-arg region=u
 swamp model create @webframp/aws/inventory aws-inventory --global-arg region=us-east-1
 
 swamp workflow run @webframp/cost-audit
+```
+
+### Redmine issue tracking
+
+```bash
+swamp extension pull @webframp/redmine
+
+swamp model create @webframp/redmine tracker \
+  --global-arg host=https://your-redmine.example.org \
+  --global-arg apiKey=YOUR_API_KEY \
+  --global-arg project=your-project
+
+swamp workflow run @webframp/scaffold-story \
+  --input subject="ADDS | LDAP | Implement Geographic Redundancy"
 ```
 
 ### Vault extensions
