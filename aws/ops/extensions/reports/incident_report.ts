@@ -430,6 +430,62 @@ export const report = {
       };
     }
 
+    // === LOG ERROR ANALYSIS SECTION ===
+    const logErrorsData = await getStepData("aws-logs", "find_errors");
+    if (logErrorsData) {
+      const errors = logErrorsData as {
+        logGroupName: string;
+        timeRange: { start: string; end: string };
+        totalErrors: number;
+        patterns: Array<{
+          pattern: string;
+          count: number;
+          firstOccurrence: string | null;
+          lastOccurrence: string | null;
+          sampleMessages: string[];
+        }>;
+        fetchedAt: string;
+      };
+
+      findings.push("\n## Log Error Analysis\n");
+      findings.push(
+        `Found **${errors.totalErrors} error(s)** across **${errors.patterns.length} pattern(s)** in \`${errors.logGroupName}\`.\n`,
+      );
+
+      if (errors.patterns.length > 0) {
+        findings.push("### Error Patterns\n");
+        findings.push("| Pattern | Count | Last Occurrence |");
+        findings.push("| ------- | ----- | --------------- |");
+        for (const p of errors.patterns) {
+          findings.push(
+            `| ${p.pattern} | ${p.count} | ${p.lastOccurrence || "N/A"} |`,
+          );
+        }
+        findings.push("");
+
+        // Show sample messages from the first pattern
+        const firstPattern = errors.patterns[0];
+        if (
+          firstPattern.sampleMessages &&
+          firstPattern.sampleMessages.length > 0
+        ) {
+          findings.push("### Sample Messages\n");
+          for (const msg of firstPattern.sampleMessages.slice(0, 3)) {
+            const sanitized = msg.replace(/\n/g, " ").substring(0, 300);
+            findings.push(`> ${sanitized}\n`);
+          }
+          findings.push("");
+        }
+      }
+
+      jsonFindings.logErrors = {
+        totalErrors: errors.totalErrors,
+        patternCount: errors.patterns.length,
+        patterns: errors.patterns,
+        logGroupName: errors.logGroupName,
+      };
+    }
+
     // === RECOMMENDATIONS ===
     findings.push("\n## Recommendations\n");
 
@@ -477,6 +533,20 @@ export const report = {
     ) {
       recommendations.push(
         "- **Address service faults** - Fault rate above 1%, investigate the top faulty services listed above",
+      );
+    }
+
+    // Check for log errors
+    const logErrorsJson = jsonFindings.logErrors as
+      | { totalErrors?: number; patternCount?: number }
+      | undefined;
+    if (
+      logErrorsJson &&
+      logErrorsJson.totalErrors &&
+      logErrorsJson.totalErrors > 0
+    ) {
+      recommendations.push(
+        `- **Investigate ${logErrorsJson.totalErrors} error(s) found in Lambda logs** — ${logErrorsJson.patternCount} distinct pattern(s) detected`,
       );
     }
 

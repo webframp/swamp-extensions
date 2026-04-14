@@ -128,6 +128,19 @@ jobs:
             limit: 50
         allowFailure: true
 
+      - name: find-lambda-errors
+        description: Search Lambda log groups for error patterns
+        task:
+          type: model_method
+          modelIdOrName: aws-logs
+          methodName: find_errors
+          inputs:
+            logGroupNames:
+              - /aws/lambda
+            startTime: ${{ inputs.timeRange }}
+            limit: 100
+        allowFailure: true
+
   - name: deep-dive
     description: Perform deeper analysis based on initial findings
     dependsOn:
