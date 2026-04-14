@@ -445,12 +445,75 @@ export const model = {
         limit: z.number().optional().describe(
           "Max results (default 25, max 100)",
         ),
+        sort: z.string().optional().describe(
+          "Sort field (e.g., 'updated_on:desc')",
+        ),
       }),
-      execute: (
-        _args: Record<string, unknown>,
-        _context: MethodContext,
-      ): never => {
-        throw new Error("Not implemented");
+      execute: async (
+        args: {
+          project?: string;
+          trackerId?: number;
+          statusId?: number | "open" | "closed" | "*";
+          assignedToId?: number | "me";
+          parentId?: number;
+          limit?: number;
+          sort?: string;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey } = context.globalArgs;
+        const params: Record<string, string> = {};
+
+        const projectId = args.project ?? context.globalArgs.project;
+        params.project_id = projectId;
+
+        if (args.trackerId !== undefined) {
+          params.tracker_id = String(args.trackerId);
+        }
+        if (args.statusId !== undefined) {
+          params.status_id = String(args.statusId);
+        }
+        if (args.assignedToId !== undefined) {
+          params.assigned_to_id = String(args.assignedToId);
+        }
+        if (args.parentId !== undefined) {
+          params.parent_id = String(args.parentId);
+        }
+        if (args.sort !== undefined) {
+          params.sort = args.sort;
+        }
+
+        const rawIssues = await redmineApiPaginated<RawIssue>(
+          host,
+          apiKey,
+          "/issues.json",
+          "issues",
+          params,
+          args.limit ?? 100,
+        );
+
+        const issues = rawIssues.map(mapIssue);
+
+        // Build instance name from active filters
+        const filterParts: string[] = [];
+        if (args.statusId !== undefined) {
+          filterParts.push(String(args.statusId));
+        }
+        if (args.trackerId !== undefined) {
+          filterParts.push(String(args.trackerId));
+        }
+        const instanceName = filterParts.length > 0
+          ? filterParts.join("-")
+          : "all";
+
+        const handle = await context.writeResource("issues", instanceName, {
+          issues,
+          totalCount: issues.length,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        context.logger.info("Found {count} issues", { count: issues.length });
+        return { dataHandles: [handle] };
       },
     },
 
@@ -459,11 +522,28 @@ export const model = {
       arguments: z.object({
         issueId: z.number().describe("Issue ID"),
       }),
-      execute: (
-        _args: { issueId: number },
-        _context: MethodContext,
-      ): never => {
-        throw new Error("Not implemented");
+      execute: async (
+        args: { issueId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey } = context.globalArgs;
+        const data = await redmineApi<{ issue: RawIssue }>(
+          host,
+          apiKey,
+          "GET",
+          `/issues/${args.issueId}.json?include=journals,children`,
+        );
+
+        const issue = mapIssueDetail(data.issue);
+
+        const handle = await context.writeResource(
+          "issue_detail",
+          String(args.issueId),
+          issue,
+        );
+
+        context.logger.info("Fetched issue {id}", { id: args.issueId });
+        return { dataHandles: [handle] };
       },
     },
 

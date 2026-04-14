@@ -460,32 +460,14 @@ Deno.test({
 Deno.test("redmine model: stub methods throw Not implemented", () => {
   const { context } = makeContext();
   const ctx = context as unknown as Parameters<
-    typeof model.methods.list_issues.execute
+    typeof model.methods.create_issue.execute
   >[1];
 
-  assertThrows(
-    () => model.methods.list_issues.execute({}, ctx),
-    Error,
-    "Not implemented",
-  );
-  assertThrows(
-    () =>
-      model.methods.get_issue.execute(
-        { issueId: 1 },
-        ctx as unknown as Parameters<
-          typeof model.methods.get_issue.execute
-        >[1],
-      ),
-    Error,
-    "Not implemented",
-  );
   assertThrows(
     () =>
       model.methods.create_issue.execute(
         { subject: "test" },
-        ctx as unknown as Parameters<
-          typeof model.methods.create_issue.execute
-        >[1],
+        ctx,
       ),
     Error,
     "Not implemented",
@@ -501,4 +483,246 @@ Deno.test("redmine model: stub methods throw Not implemented", () => {
     Error,
     "Not implemented",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Issue Query Method Tests
+// ---------------------------------------------------------------------------
+
+const mockIssue1 = {
+  id: 100,
+  project: { id: 1, name: "App Services" },
+  tracker: { id: 3, name: "Story" },
+  status: { id: 2, name: "In Progress", is_closed: false },
+  priority: { id: 2, name: "Normal" },
+  author: { id: 1, name: "Admin" },
+  assigned_to: { id: 10, name: "Alice" },
+  category: null,
+  subject: "ADDS | LDAP | Implement Geographic Redundancy",
+  description: "Background: ...",
+  start_date: "2026-04-01",
+  due_date: "2026-04-14",
+  done_ratio: 50,
+  is_private: false,
+  estimated_hours: null,
+  created_on: "2026-04-01T08:00:00Z",
+  updated_on: "2026-04-10T12:00:00Z",
+  closed_on: null,
+  custom_fields: [{ id: 1, name: "Category", value: "Project" }],
+};
+
+const mockIssue2 = {
+  id: 101,
+  project: { id: 1, name: "App Services" },
+  tracker: { id: 4, name: "Task" },
+  status: { id: 1, name: "New", is_closed: false },
+  priority: { id: 2, name: "Normal" },
+  author: { id: 10, name: "Alice" },
+  assigned_to: null,
+  category: null,
+  subject: "Write unit tests for LDAP module",
+  description: null,
+  start_date: null,
+  due_date: null,
+  done_ratio: 0,
+  is_private: false,
+  estimated_hours: null,
+  created_on: "2026-04-10T08:00:00Z",
+  updated_on: "2026-04-10T08:00:00Z",
+  closed_on: null,
+  custom_fields: [],
+};
+
+Deno.test({
+  name:
+    "redmine model: list_issues returns filtered issues and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedProjectId: string | null = null;
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues.json") {
+        capturedProjectId = u.searchParams.get("project_id");
+        return Response.json({
+          issues: [mockIssue1, mockIssue2],
+          total_count: 2,
+          offset: 0,
+          limit: 100,
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const result = await model.methods.list_issues.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.list_issues.execute
+        >[1],
+      );
+
+      // Verify project_id filter was applied from global args
+      assertEquals(capturedProjectId, TEST_PROJECT);
+
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "issues");
+
+      const data = resources[0].data as {
+        issues: Array<Record<string, unknown>>;
+        totalCount: number;
+      };
+      assertEquals(data.totalCount, 2);
+      assertEquals(data.issues.length, 2);
+
+      // Verify camelCase mapping
+      assertEquals(data.issues[0].assignedTo, { id: 10, name: "Alice" });
+      assertEquals(data.issues[0].customFields, [
+        { id: 1, name: "Category", value: "Project" },
+      ]);
+      assertEquals(data.issues[1].assignedTo, null);
+      assertEquals(data.issues[1].customFields, []);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: list_issues applies tracker and status filters",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedTrackerId: string | null = null;
+    let capturedStatusId: string | null = null;
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues.json") {
+        capturedTrackerId = u.searchParams.get("tracker_id");
+        capturedStatusId = u.searchParams.get("status_id");
+        return Response.json({
+          issues: [mockIssue1],
+          total_count: 1,
+          offset: 0,
+          limit: 100,
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+
+    try {
+      const { context } = makeContext();
+      await model.methods.list_issues.execute(
+        { trackerId: 3, statusId: "open" as const },
+        context as unknown as Parameters<
+          typeof model.methods.list_issues.execute
+        >[1],
+      );
+
+      assertEquals(capturedTrackerId, "3");
+      assertEquals(capturedStatusId, "open");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: get_issue returns issue detail with journals and children",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedInclude: string | null = null;
+    const mockDetailIssue = {
+      ...mockIssue1,
+      journals: [
+        {
+          id: 501,
+          user: { id: 10, name: "Alice" },
+          notes: "Changed status",
+          created_on: "2026-04-05T10:00:00Z",
+          details: [
+            {
+              property: "attr",
+              name: "status_id",
+              old_value: "1",
+              new_value: "2",
+            },
+          ],
+        },
+      ],
+      children: [
+        { id: 200, tracker: { id: 4, name: "Task" }, subject: "Sub-task 1" },
+      ],
+    };
+
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === `/issues/${mockIssue1.id}.json`) {
+        capturedInclude = u.searchParams.get("include");
+        return Response.json({ issue: mockDetailIssue });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const result = await model.methods.get_issue.execute(
+        { issueId: mockIssue1.id },
+        context as unknown as Parameters<
+          typeof model.methods.get_issue.execute
+        >[1],
+      );
+
+      // Verify include param
+      assertEquals(capturedInclude, "journals,children");
+
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "issue_detail");
+      assertEquals(resources[0].name, String(mockIssue1.id));
+
+      const data = resources[0].data as {
+        id: number;
+        journals: Array<{
+          id: number;
+          user: { id: number; name: string };
+          notes: string;
+          createdOn: string;
+          details: Array<{
+            property: string;
+            name: string;
+            oldValue: string | null;
+            newValue: string | null;
+          }>;
+        }>;
+        children: Array<{
+          id: number;
+          tracker: { id: number; name: string };
+          subject: string;
+        }>;
+      };
+
+      // Verify journals mapped to camelCase
+      assertEquals(data.journals.length, 1);
+      assertEquals(data.journals[0].createdOn, "2026-04-05T10:00:00Z");
+      assertEquals(data.journals[0].details[0].oldValue, "1");
+      assertEquals(data.journals[0].details[0].newValue, "2");
+
+      // Verify children mapped
+      assertEquals(data.children.length, 1);
+      assertEquals(data.children[0].id, 200);
+      assertEquals(data.children[0].subject, "Sub-task 1");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
 });
