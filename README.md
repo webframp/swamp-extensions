@@ -20,6 +20,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/cost-estimate`](aws/cost-estimate/) | Cost estimation from inventory specs | `@aws-sdk/client-pricing` |
 | [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
 | [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
+| [`@webframp/terraform`](terraform/) | Terraform/OpenTofu state reader — resource inventory, full state, and outputs | None (shells out to `terraform` or `tofu`) |
 
 ## Workflow + Report Extensions
 
@@ -67,6 +68,7 @@ swamp extension pull @webframp/github
 swamp extension pull @webframp/gitlab
 swamp extension pull @webframp/system
 swamp extension pull @webframp/network
+swamp extension pull @webframp/terraform
 
 # Workflow + report extensions (auto-pull model dependencies)
 swamp extension pull @webframp/sre
@@ -170,6 +172,29 @@ swamp model create @webframp/redmine tracker \
 
 swamp workflow run @webframp/scaffold-story \
   --input subject="ADDS | LDAP | Implement Geographic Redundancy"
+```
+
+### Terraform state reader
+
+```bash
+swamp extension pull @webframp/terraform
+
+swamp model create @webframp/terraform tf-infra \
+  --global-arg workDir=/path/to/terraform/repo
+
+# List all managed resources
+swamp model method run tf-infra list_resources
+
+# Read full state (one swamp resource per TF resource)
+swamp model method run tf-infra read_state
+
+# Read outputs
+swamp model method run tf-infra get_outputs
+
+# OpenTofu variant
+swamp model create @webframp/terraform tf-tofu \
+  --global-arg workDir=/path/to/tofu/repo \
+  --global-arg binary=tofu
 ```
 
 ### Vault extensions
