@@ -1,0 +1,17 @@
+{
+  "tasks": {
+    "check": "deno check extensions/reports/cloudflare_audit_report.ts",
+    "lint": "deno lint extensions/reports/",
+    "fmt": "deno fmt extensions/reports/",
+    "fmt:check": "deno fmt --check extensions/reports/",
+    "test": "deno test extensions/reports/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
+  }
+}
