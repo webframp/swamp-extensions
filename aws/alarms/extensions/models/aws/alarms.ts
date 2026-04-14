@@ -397,13 +397,19 @@ export const model = {
       description:
         "Get a summary of all alarms including state counts and recent changes",
       arguments: z.object({
+        startTime: z
+          .string()
+          .optional()
+          .describe(
+            "Start time for recent changes (ISO date or relative: 1h, 30m, 2d). Overrides historyHours when set.",
+          ),
         historyHours: z
           .number()
           .default(6)
           .describe("Hours to look back for recent state changes"),
       }),
       execute: async (
-        args: { historyHours: number },
+        args: { startTime?: string; historyHours: number },
         context: {
           globalArgs: { region: string };
           writeResource: (
@@ -462,9 +468,9 @@ export const model = {
         }
 
         // Get recent state changes
-        const startTime = new Date(
-          Date.now() - args.historyHours * 60 * 60 * 1000,
-        );
+        const startTime = args.startTime
+          ? parseRelativeTime(args.startTime)
+          : new Date(Date.now() - args.historyHours * 60 * 60 * 1000);
         const recentChanges: Array<{
           alarmName: string;
           previousState: string;

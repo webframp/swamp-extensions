@@ -39,7 +39,7 @@ jobs:
           modelIdOrName: aws-alarms
           methodName: get_summary
           inputs:
-            historyHours: 6
+            startTime: ${{ inputs.timeRange }}
         allowFailure: true
 
       - name: get-active-alarms
@@ -124,6 +124,7 @@ jobs:
           modelIdOrName: aws-logs
           methodName: list_log_groups
           inputs:
+            prefix: ${{ inputs.logGroupPrefix }}
             limit: 50
         allowFailure: true
 
