@@ -648,7 +648,9 @@ export const model = {
         parentIssueId: z.number().optional().describe("New parent issue ID"),
         estimatedHours: z.number().optional().describe("New estimated hours"),
         doneRatio: z.number().optional().describe("Percent done (0-100)"),
-        dueDate: z.string().optional().describe("Updated due date (YYYY-MM-DD)"),
+        dueDate: z.string().optional().describe(
+          "Updated due date (YYYY-MM-DD)",
+        ),
         notes: z.string().optional().describe("Journal note to add"),
         customFields: z.array(z.object({
           id: z.number(),
