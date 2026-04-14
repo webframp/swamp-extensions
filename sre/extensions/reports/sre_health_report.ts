@@ -20,7 +20,7 @@ interface StepExecution {
 
 interface DataRepository {
   getContent(
-    modelType: string,
+    modelType: unknown,
     modelId: string,
     dataName: string,
     version?: number,
@@ -111,18 +111,37 @@ export const report = {
       dataName: string,
       version: number,
     ): Promise<Record<string, unknown> | null> {
+      const repo = context.dataRepository;
+      // First try string-based getContent (works with mock test context).
+      // If the real runtime rejects it (type.toDirectoryPath is not a function),
+      // retry with a type-like object that satisfies the internal API.
       try {
-        const raw = await context.dataRepository.getContent(
+        const raw = await repo.getContent(
           modelType,
           modelId,
           dataName,
           version,
         );
-        if (!raw) return null;
-        return JSON.parse(new TextDecoder().decode(raw));
+        if (raw) return JSON.parse(new TextDecoder().decode(raw));
       } catch {
-        return null;
+        try {
+          const typeArg = {
+            raw: modelType,
+            toDirectoryPath: () => modelType,
+            toString: () => modelType,
+          };
+          const raw = await repo.getContent(
+            typeArg,
+            modelId,
+            dataName,
+            version,
+          );
+          if (raw) return JSON.parse(new TextDecoder().decode(raw));
+        } catch {
+          // both approaches failed
+        }
       }
+      return null;
     }
 
     function findStepData(
