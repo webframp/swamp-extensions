@@ -1,0 +1,34 @@
+manifestVersion: 1
+name: "@webframp/terraform"
+version: "2026.04.14.1"
+description: |
+  Read Terraform and OpenTofu state via CLI and marshal into swamp data.
+
+  Shells out to `terraform show -json` (or `tofu show -json`) to read state
+  from any configured backend, then writes swamp resources keyed by Terraform
+  resource address for CEL consumption in workflows and reports.
+
+  Supports workspace selection and binary switching between Terraform and
+  OpenTofu via global arguments.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/terraform
+  swamp model create @webframp/terraform tf-infra \
+    --global-arg workDir=/path/to/terraform/repo
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - terraform/terraform.ts
+labels:
+  - terraform
+  - opentofu
+  - iac
+  - infrastructure
+  - state
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
