@@ -135,6 +135,108 @@ export const report = {
       );
     }
 
+    // === SECTION 0: MONTH-OVER-MONTH COMPARISON ===
+    const comparisonData = await getStepData(
+      "aws-costs",
+      "get_cost_comparison",
+    );
+    if (comparisonData) {
+      const comp = comparisonData as {
+        data: {
+          currentPeriod: { start: string; end: string; total: number };
+          previousPeriod: { start: string; end: string; total: number };
+          totalDelta: number;
+          totalDeltaPercent: number;
+          services: Array<{
+            service: string;
+            currentAmount: number;
+            previousAmount: number;
+            delta: number;
+            deltaPercent: number;
+          }>;
+        };
+      };
+      const d = comp.data;
+
+      findings.push("## Month-over-Month Comparison\n");
+      const direction = d.totalDelta >= 0 ? "increase" : "decrease";
+      findings.push(
+        `Total spend **${direction}d** by **$${
+          Math.abs(d.totalDelta).toFixed(2)
+        }** (${
+          d.totalDeltaPercent.toFixed(1)
+        }%) compared to previous period.\n`,
+      );
+      findings.push(
+        `- Current period (${d.currentPeriod.start} → ${d.currentPeriod.end}): **$${
+          d.currentPeriod.total.toFixed(2)
+        }**`,
+      );
+      findings.push(
+        `- Previous period (${d.previousPeriod.start} → ${d.previousPeriod.end}): **$${
+          d.previousPeriod.total.toFixed(2)
+        }**\n`,
+      );
+
+      // Top increases
+      const increases = d.services.filter((s) => s.delta > 0.01).sort((
+        a,
+        b,
+      ) => b.delta - a.delta).slice(0, 5);
+      if (increases.length > 0) {
+        findings.push("### Largest Increases\n");
+        findings.push("| Service | Current | Previous | Change | % |");
+        findings.push("| ------- | ------: | -------: | -----: | -: |");
+        for (const s of increases) {
+          findings.push(
+            `| ${s.service} | $${s.currentAmount.toFixed(2)} | $${
+              s.previousAmount.toFixed(2)
+            } | +$${s.delta.toFixed(2)} | ${s.deltaPercent.toFixed(1)}% |`,
+          );
+        }
+        findings.push("");
+      }
+
+      // Top decreases
+      const decreases = d.services.filter((s) => s.delta < -0.01).sort((
+        a,
+        b,
+      ) => a.delta - b.delta).slice(0, 5);
+      if (decreases.length > 0) {
+        findings.push("### Largest Decreases\n");
+        findings.push("| Service | Current | Previous | Change | % |");
+        findings.push("| ------- | ------: | -------: | -----: | -: |");
+        for (const s of decreases) {
+          findings.push(
+            `| ${s.service} | $${s.currentAmount.toFixed(2)} | $${
+              s.previousAmount.toFixed(2)
+            } | -$${Math.abs(s.delta).toFixed(2)} | ${
+              s.deltaPercent.toFixed(1)
+            }% |`,
+          );
+        }
+        findings.push("");
+      }
+
+      // Flag unusual increases (>25%)
+      const unusual = d.services.filter((s) =>
+        s.deltaPercent > 25 && s.currentAmount > 1
+      );
+      if (unusual.length > 0) {
+        findings.push("### Unusual Spend (>25% increase)\n");
+        for (const s of unusual) {
+          findings.push(
+            `- **${s.service}**: +${s.deltaPercent.toFixed(1)}% ($${
+              s.previousAmount.toFixed(2)
+            } → $${s.currentAmount.toFixed(2)})`,
+          );
+        }
+        findings.push("");
+      }
+
+      jsonFindings.comparison = d;
+    }
+
     // === SECTION 1: COST SUMMARY ===
     findings.push("## Cost Summary\n");
 

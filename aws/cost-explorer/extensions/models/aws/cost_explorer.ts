@@ -421,5 +421,150 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+
+    get_cost_comparison: {
+      description:
+        "Compare costs between current and previous period by service",
+      arguments: z.object({
+        days: z
+          .number()
+          .default(30)
+          .describe("Period length in days"),
+      }),
+      execute: async (
+        args: { days: number },
+        context: MethodContext,
+      ) => {
+        const client = new CostExplorerClient({
+          region: context.globalArgs.region,
+        });
+
+        const now = new Date();
+        const currentStart = new Date(now);
+        currentStart.setDate(currentStart.getDate() - args.days);
+        const previousStart = new Date(currentStart);
+        previousStart.setDate(previousStart.getDate() - args.days);
+
+        const fmt = (d: Date): string => d.toISOString().slice(0, 10);
+
+        const queryPeriod = async (start: Date, end: Date) => {
+          const command = new GetCostAndUsageCommand({
+            TimePeriod: { Start: fmt(start), End: fmt(end) },
+            Granularity: "MONTHLY",
+            Metrics: ["UnblendedCost"],
+            GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
+          });
+          const response = await client.send(command);
+
+          const services = new Map<string, number>();
+          for (const result of response.ResultsByTime || []) {
+            for (const group of result.Groups || []) {
+              const service = group.Keys?.[0] || "Unknown";
+              const amount = parseFloat(
+                group.Metrics?.UnblendedCost?.Amount || "0",
+              );
+              services.set(
+                service,
+                (services.get(service) || 0) + amount,
+              );
+            }
+          }
+          return services;
+        };
+
+        const currentServices = await queryPeriod(currentStart, now);
+        const previousServices = await queryPeriod(
+          previousStart,
+          currentStart,
+        );
+
+        // Merge all service names
+        const allServices = new Set([
+          ...currentServices.keys(),
+          ...previousServices.keys(),
+        ]);
+
+        const services: Array<{
+          service: string;
+          currentAmount: number;
+          previousAmount: number;
+          delta: number;
+          deltaPercent: number;
+        }> = [];
+
+        let currentTotal = 0;
+        let previousTotal = 0;
+
+        for (const service of allServices) {
+          const current =
+            Math.round((currentServices.get(service) || 0) * 100) / 100;
+          const previous =
+            Math.round((previousServices.get(service) || 0) * 100) / 100;
+          const delta = Math.round((current - previous) * 100) / 100;
+          const deltaPercent = previous > 0
+            ? Math.round(((current - previous) / previous) * 10000) / 100
+            : current > 0
+            ? 100
+            : 0;
+
+          currentTotal += current;
+          previousTotal += previous;
+          services.push({
+            service,
+            currentAmount: current,
+            previousAmount: previous,
+            delta,
+            deltaPercent,
+          });
+        }
+
+        services.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+        const totalDelta = Math.round((currentTotal - previousTotal) * 100) /
+          100;
+        const totalDeltaPercent = previousTotal > 0
+          ? Math.round(
+            ((currentTotal - previousTotal) / previousTotal) * 10000,
+          ) / 100
+          : 0;
+
+        const data = {
+          currentPeriod: {
+            start: fmt(currentStart),
+            end: fmt(now),
+            total: Math.round(currentTotal * 100) / 100,
+          },
+          previousPeriod: {
+            start: fmt(previousStart),
+            end: fmt(currentStart),
+            total: Math.round(previousTotal * 100) / 100,
+          },
+          totalDelta,
+          totalDeltaPercent,
+          services,
+        };
+
+        const handle = await context.writeResource(
+          "costs",
+          `comparison-${args.days}d`,
+          {
+            region: context.globalArgs.region,
+            queryType: "cost_comparison",
+            data,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info(
+          "Cost comparison over {days}d: {delta} ({deltaPercent}%)",
+          {
+            days: args.days,
+            delta: totalDelta.toFixed(2),
+            deltaPercent: totalDeltaPercent.toFixed(1),
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
   },
 };

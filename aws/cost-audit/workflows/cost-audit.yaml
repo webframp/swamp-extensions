@@ -95,6 +95,16 @@ jobs:
             days: ${{ inputs.costDays }}
         allowFailure: true
 
+      - name: get-cost-comparison
+        description: Compare current period costs to previous period
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_comparison
+          inputs:
+            days: ${{ inputs.costDays }}
+        allowFailure: true
+
       - name: inventory-all
         description: Gather full resource inventory including stopped instances and EBS
         task:

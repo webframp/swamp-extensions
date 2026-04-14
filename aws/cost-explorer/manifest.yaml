@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-explorer"
-version: "2026.04.13.1"
+version: "2026.04.14.1"
 description: |
   Query AWS Cost Explorer for actual spend analysis by service, usage type,
   and time period. Identifies top cost drivers and spend trends.
