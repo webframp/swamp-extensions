@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/sre"
-version: "2026.04.13.1"
+version: "2026.04.13.2"
 description: |
   SRE Health Check - Unified site reliability health check workflow with report.
 

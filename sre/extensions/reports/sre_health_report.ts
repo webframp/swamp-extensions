@@ -18,6 +18,15 @@ interface StepExecution {
   dataHandles: DataHandle[];
 }
 
+interface DataRepository {
+  getContent(
+    modelType: string,
+    modelId: string,
+    dataName: string,
+    version?: number,
+  ): Promise<Uint8Array | null>;
+}
+
 interface WorkflowReportContext {
   workflowId: string;
   workflowRunId: string;
@@ -25,6 +34,7 @@ interface WorkflowReportContext {
   workflowStatus: string;
   stepExecutions: StepExecution[];
   repoDir: string;
+  dataRepository: DataRepository;
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
   };
@@ -102,10 +112,14 @@ export const report = {
       version: number,
     ): Promise<Record<string, unknown> | null> {
       try {
-        const dataPath =
-          `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
-        const content = await Deno.readTextFile(dataPath);
-        return JSON.parse(content);
+        const raw = await context.dataRepository.getContent(
+          modelType,
+          modelId,
+          dataName,
+          version,
+        );
+        if (!raw) return null;
+        return JSON.parse(new TextDecoder().decode(raw));
       } catch {
         return null;
       }

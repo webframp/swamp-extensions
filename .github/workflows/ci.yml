@@ -102,6 +102,7 @@ jobs:
         extension:
           - { dir: cloudflare, models: cloudflare }
           - { dir: github, models: github }
+          - { dir: gitlab, models: gitlab }
           - { dir: system, models: system }
           - { dir: network, models: network }
         task: [check, lint, fmt]
@@ -170,6 +171,34 @@ jobs:
       - name: deno test
         run: deno test --allow-env --allow-read extensions/models/
 
+  gitlab-test:
+    name: gitlab - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gitlab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-run extensions/models/
+
+  github-test:
+    name: github - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: github
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-run extensions/models/
+
   sre-report-check:
     name: sre - ${{ matrix.task }}
     runs-on: ubuntu-latest
@@ -207,7 +236,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: deno test
-        run: deno test --allow-read --allow-write --allow-env extensions/reports/
+        run: deno test extensions/reports/
 
   datastore-check:
     name: datastore/${{ matrix.datastore }} - ${{ matrix.task }}

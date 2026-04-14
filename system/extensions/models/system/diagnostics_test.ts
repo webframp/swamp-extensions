@@ -368,6 +368,119 @@ Deno.test(
   },
 );
 
+// =============================================================================
+// Argument Schema Tests
+// =============================================================================
+
+Deno.test("system model: get_disk_usage takes no arguments", () => {
+  const result = model.methods.get_disk_usage.arguments.safeParse({});
+  assertEquals(result.success, true);
+});
+
+Deno.test("system model: get_processes count defaults to 20", () => {
+  const result = model.methods.get_processes.arguments.safeParse({});
+  assertEquals(result.success, true);
+  if (result.success) {
+    assertEquals(result.data.count, 20);
+  }
+});
+
+Deno.test("system model: get_processes accepts custom count", () => {
+  const result = model.methods.get_processes.arguments.safeParse({ count: 5 });
+  assertEquals(result.success, true);
+  if (result.success) {
+    assertEquals(result.data.count, 5);
+  }
+});
+
+Deno.test("system model: globalArguments accepts empty object", () => {
+  const result = model.globalArguments.safeParse({});
+  assertEquals(result.success, true);
+});
+
+// =============================================================================
+// Resource Schema Validation Tests
+// =============================================================================
+
+Deno.test("system model: disk_usage schema validates", () => {
+  const result = model.resources.disk_usage.schema.safeParse({
+    filesystems: [{
+      source: "/dev/sda1",
+      fstype: "ext4",
+      size: "50G",
+      used: "20G",
+      avail: "28G",
+      usePercent: "42%",
+      target: "/",
+    }],
+    count: 1,
+    fetchedAt: "2026-01-01T00:00:00Z",
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("system model: memory schema validates", () => {
+  const result = model.resources.memory.schema.safeParse({
+    mem: {
+      total: "16Gi",
+      used: "4Gi",
+      free: "8Gi",
+      shared: "512Mi",
+      cache: "4Gi",
+      available: "12Gi",
+    },
+    swap: { total: "8Gi", used: "100Mi", free: "7.9Gi" },
+    fetchedAt: "2026-01-01T00:00:00Z",
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("system model: uptime schema validates", () => {
+  const result = model.resources.uptime.schema.safeParse({
+    bootTime: "2026-04-01 00:00:00",
+    uptimeString: "up 12 days",
+    loadAverage1m: "0.50",
+    loadAverage5m: "0.30",
+    loadAverage15m: "0.20",
+    fetchedAt: "2026-01-01T00:00:00Z",
+  });
+  assertEquals(result.success, true);
+});
+
+// =============================================================================
+// More Execution Tests
+// =============================================================================
+
+Deno.test("system model: command failure throws error", async () => {
+  await withMockedCommand(
+    (_cmd, _args) => ({ stdout: "", success: false }),
+    async () => {
+      const { context } = createModelTestContext({
+        globalArgs: {},
+        definition: { id: "test-id", name: "sys", version: 1, tags: {} },
+      });
+
+      let threw = false;
+      try {
+        await model.methods.get_disk_usage.execute(
+          {},
+          context as unknown as Parameters<
+            typeof model.methods.get_disk_usage.execute
+          >[1],
+        );
+      } catch (e) {
+        threw = true;
+        assertEquals(
+          (e as Error).message.includes("failed"),
+          true,
+          "Error message should mention failure",
+        );
+      }
+      assertEquals(threw, true, "Should have thrown an error");
+    },
+  );
+});
+
 Deno.test("system model: get_os_info parses uname output", async () => {
   const unameOutput =
     "Linux testhost 6.6.87-generic #1 SMP PREEMPT_DYNAMIC x86_64 GNU/Linux";

@@ -4,7 +4,7 @@
     "lint": "deno lint extensions/reports/",
     "fmt": "deno fmt extensions/reports/",
     "fmt:check": "deno fmt --check extensions/reports/",
-    "test": "deno test --allow-read extensions/reports/"
+    "test": "deno test extensions/reports/"
   },
   "lint": {
     "rules": {
