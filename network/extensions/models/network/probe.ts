@@ -185,14 +185,75 @@ function parseDigJson(
 
     return { records, server, queryTime, status };
   } catch {
-    // Fallback: try line-based parsing of dig output without +json
-    return {
-      records: [],
-      server: null,
-      queryTime: null,
-      status: "PARSE_ERROR",
-    };
+    // Fallback: try line-based parsing of standard dig text output
+    return parseDigText(stdout);
   }
+}
+
+function parseDigText(
+  stdout: string,
+): {
+  records: z.infer<typeof DnsRecordSchema>[];
+  server: string | null;
+  queryTime: string | null;
+  status: string;
+} {
+  const records: z.infer<typeof DnsRecordSchema>[] = [];
+  let server: string | null = null;
+  let queryTime: string | null = null;
+  let status = "NOERROR";
+
+  const lines = stdout.split("\n");
+  let inAnswer = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Extract status from header
+    const statusMatch = trimmed.match(/status:\s*(\w+)/);
+    if (statusMatch) {
+      status = statusMatch[1];
+    }
+
+    // Detect ANSWER SECTION
+    if (trimmed === ";; ANSWER SECTION:") {
+      inAnswer = true;
+      continue;
+    }
+
+    // End of ANSWER SECTION (next section header or blank line)
+    if (inAnswer && (trimmed.startsWith(";;") || trimmed === "")) {
+      inAnswer = false;
+      continue;
+    }
+
+    // Parse answer records: "example.com. 300 IN A 172.66.147.243"
+    if (inAnswer && !trimmed.startsWith(";")) {
+      const parts = trimmed.split(/\s+/);
+      if (parts.length >= 5) {
+        records.push({
+          name: parts[0].replace(/\.$/, ""),
+          type: parts[3],
+          ttl: parseInt(parts[1], 10) || null,
+          data: parts.slice(4).join(" "),
+        });
+      }
+    }
+
+    // Extract server
+    const serverMatch = trimmed.match(/;;\s*SERVER:\s*([^#(]+)/);
+    if (serverMatch) {
+      server = serverMatch[1].trim();
+    }
+
+    // Extract query time
+    const timeMatch = trimmed.match(/;;\s*Query time:\s*(\d+\s*msec)/);
+    if (timeMatch) {
+      queryTime = timeMatch[1].replace(" ", "");
+    }
+  }
+
+  return { records, server, queryTime, status };
 }
 
 function parseWhoisText(
@@ -418,14 +479,29 @@ export const model = {
         args: { domain: string; recordType: string },
         context: ModelContext,
       ) => {
-        const result = await runCommand([
+        // Try dig +json first; if unsupported, fall back to standard text output
+        let result = await runCommand([
           "dig",
           "+json",
           args.domain,
           args.recordType,
         ]);
 
-        const parsed = parseDigJson(result.stdout);
+        let parsed;
+        if (
+          result.success ||
+          !result.stderr.includes("Invalid option: +json")
+        ) {
+          parsed = parseDigJson(result.stdout);
+        } else {
+          // +json not supported, retry with standard text output
+          result = await runCommand([
+            "dig",
+            args.domain,
+            args.recordType,
+          ]);
+          parsed = parseDigText(result.stdout);
+        }
 
         const data = {
           domain: args.domain,
@@ -836,6 +912,7 @@ export const model = {
 // Exported for testing
 export const _internals = {
   parseDigJson,
+  parseDigText,
   parseWhoisText,
   parseTracerouteOutput,
   parseCertOutput,

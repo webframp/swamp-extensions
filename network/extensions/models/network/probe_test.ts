@@ -384,6 +384,7 @@ Deno.test("network model: each method has arguments and execute", () => {
 
 const {
   parseDigJson,
+  parseDigText,
   parseWhoisText,
   parseTracerouteOutput,
   parseCertOutput,
@@ -432,12 +433,44 @@ Deno.test("parseDigJson: valid dig +json output parses records, server, queryTim
   assertEquals(result.queryTime, "42ms");
 });
 
-Deno.test("parseDigJson: invalid JSON returns PARSE_ERROR status, empty records", () => {
+Deno.test("parseDigJson: invalid JSON falls through to text parser", () => {
   const result = parseDigJson("this is not json at all");
-  assertEquals(result.status, "PARSE_ERROR");
+  // Falls through to parseDigText which returns NOERROR with empty records
+  assertEquals(result.status, "NOERROR");
   assertEquals(result.records, []);
   assertEquals(result.server, null);
   assertEquals(result.queryTime, null);
+});
+
+Deno.test("parseDigText: standard dig output parses records and metadata", () => {
+  const output = [
+    "; <<>> DiG 9.20.18 <<>> example.com A",
+    ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 8653",
+    ";; ANSWER SECTION:",
+    "example.com.\t\t300\tIN\tA\t93.184.216.34",
+    "",
+    ";; Query time: 23 msec",
+    ";; SERVER: 10.255.255.254#53(10.255.255.254) (UDP)",
+  ].join("\n");
+  const result = parseDigText(output);
+  assertEquals(result.status, "NOERROR");
+  assertEquals(result.records.length, 1);
+  assertEquals(result.records[0].name, "example.com");
+  assertEquals(result.records[0].type, "A");
+  assertEquals(result.records[0].ttl, 300);
+  assertEquals(result.records[0].data, "93.184.216.34");
+  assertEquals(result.server, "10.255.255.254");
+  assertEquals(result.queryTime, "23msec");
+});
+
+Deno.test("parseDigText: NXDOMAIN returns correct status", () => {
+  const output = [
+    ";; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 1234",
+    "",
+  ].join("\n");
+  const result = parseDigText(output);
+  assertEquals(result.status, "NXDOMAIN");
+  assertEquals(result.records, []);
 });
 
 // ---------------------------------------------------------------------------
