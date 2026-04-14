@@ -63,13 +63,15 @@ jobs:
         allowFailure: true
 
       - name: inventory-all
-        description: Gather full resource inventory
+        description: Gather full resource inventory including stopped instances and EBS
         task:
           type: model_method
           modelIdOrName: aws-inventory
           methodName: inventory_all
           inputs:
             includeS3: true
+            includeStoppedEc2: true
+            includeEbs: true
         allowFailure: true
 
       - name: list-nat-gateways

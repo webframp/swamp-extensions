@@ -437,6 +437,71 @@ export const report = {
         totalResources,
         resources: resourceCounts,
       };
+
+      // Stopped EC2 instances
+      const ec2Resources = inventory.resources.ec2 as
+        | Array<{
+          instanceId: string;
+          instanceType: string;
+          state: string;
+          launchTime: string | null;
+          tags: Record<string, string>;
+        }>
+        | undefined;
+
+      if (ec2Resources) {
+        const stoppedEc2 = ec2Resources.filter((i) => i.state === "stopped");
+        if (stoppedEc2.length > 0) {
+          findings.push("\n### Stopped EC2 Instances\n");
+          findings.push("| Instance ID | Type | Launch Time | Name |");
+          findings.push("| ----------- | ---- | ----------- | ---- |");
+          for (const inst of stoppedEc2) {
+            findings.push(
+              `| ${inst.instanceId} | ${inst.instanceType} | ${
+                inst.launchTime || "N/A"
+              } | ${inst.tags?.Name || "—"} |`,
+            );
+          }
+          findings.push("");
+          findings.push(
+            `> **${stoppedEc2.length} stopped instance(s)** — EBS storage costs continue while stopped.\n`,
+          );
+        }
+      }
+
+      // Unattached EBS volumes
+      const ebsResources = inventory.resources.ebs as
+        | Array<{
+          volumeId: string;
+          volumeType: string;
+          size: number;
+          state: string;
+          isAttached: boolean;
+          createTime: string | null;
+        }>
+        | undefined;
+
+      if (ebsResources) {
+        const unattached = ebsResources.filter((v) => !v.isAttached);
+        if (unattached.length > 0) {
+          const totalGB = unattached.reduce((sum, v) => sum + v.size, 0);
+          const estimatedMonthlyCost = (totalGB * 0.08).toFixed(2);
+          findings.push("\n### Unattached EBS Volumes\n");
+          findings.push("| Volume ID | Type | Size (GB) | Created |");
+          findings.push("| --------- | ---- | --------: | ------- |");
+          for (const vol of unattached) {
+            findings.push(
+              `| ${vol.volumeId} | ${vol.volumeType} | ${vol.size} | ${
+                vol.createTime || "N/A"
+              } |`,
+            );
+          }
+          findings.push("");
+          findings.push(
+            `> **${unattached.length} unattached volume(s)** totaling ${totalGB} GB — estimated ~$${estimatedMonthlyCost}/month (gp3 rate).\n`,
+          );
+        }
+      }
     } else {
       findings.push("No inventory data available.\n");
     }
@@ -505,6 +570,38 @@ export const report = {
           action:
             "Investigate increasing cost trend — spending is rising over the period",
           estimatedSavings: "Variable",
+        });
+      }
+    }
+
+    // Stopped EC2 instances
+    if (inventoryData) {
+      const ec2Res = (inventoryData as { resources: Record<string, unknown[]> })
+        .resources
+        .ec2 as Array<{ state: string }> | undefined;
+      const stoppedCount = ec2Res?.filter((i) =>
+        i.state === "stopped"
+      ).length || 0;
+      if (stoppedCount > 0) {
+        recommendations.push({
+          priority: 5,
+          action:
+            `Terminate or snapshot ${stoppedCount} stopped EC2 instance(s)`,
+          estimatedSavings: "EBS storage costs while stopped",
+        });
+      }
+
+      const ebsRes = (inventoryData as { resources: Record<string, unknown[]> })
+        .resources
+        .ebs as Array<{ isAttached: boolean; size: number }> | undefined;
+      const unattachedEbs = ebsRes?.filter((v) => !v.isAttached) || [];
+      if (unattachedEbs.length > 0) {
+        const totalGB = unattachedEbs.reduce((sum, v) => sum + v.size, 0);
+        recommendations.push({
+          priority: 6,
+          action:
+            `Delete or snapshot ${unattachedEbs.length} unattached EBS volume(s) (${totalGB} GB)`,
+          estimatedSavings: `~$${(totalGB * 0.08).toFixed(2)}/month`,
         });
       }
     }
