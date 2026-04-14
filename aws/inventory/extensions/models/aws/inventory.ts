@@ -8,6 +8,7 @@ import {
 } from "npm:@aws-sdk/client-rds@3.1010.0";
 import {
   DescribeInstancesCommand,
+  DescribeVolumesCommand,
   EC2Client,
 } from "npm:@aws-sdk/client-ec2@3.1010.0";
 import {
@@ -77,6 +78,23 @@ const LambdaFunctionSchema = z.object({
 const S3BucketSchema = z.object({
   bucketName: z.string(),
   creationDate: z.string().nullable(),
+});
+
+const EBSVolumeSchema = z.object({
+  volumeId: z.string(),
+  volumeType: z.string(),
+  size: z.number(),
+  state: z.string(),
+  availabilityZone: z.string(),
+  encrypted: z.boolean(),
+  attachments: z.array(z.object({
+    instanceId: z.string(),
+    device: z.string(),
+    state: z.string(),
+  })),
+  isAttached: z.boolean(),
+  createTime: z.string().nullable(),
+  tags: z.record(z.string(), z.string()),
 });
 
 const InventoryResultSchema = z.object({
@@ -457,6 +475,100 @@ export const model = {
       },
     },
 
+    list_ebs: {
+      description: "List EBS volumes with attachment status",
+      arguments: z.object({
+        stateFilter: z
+          .array(z.string())
+          .default(["available", "in-use"])
+          .describe("Volume states to include"),
+      }),
+      execute: async (
+        args: { stateFilter: string[] },
+        context: {
+          globalArgs: { region: string };
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const client = new EC2Client({ region: context.globalArgs.region });
+        const volumes: z.infer<typeof EBSVolumeSchema>[] = [];
+        let nextToken: string | undefined;
+
+        do {
+          const command = new DescribeVolumesCommand({
+            Filters: [
+              {
+                Name: "status",
+                Values: args.stateFilter,
+              },
+            ],
+            NextToken: nextToken,
+          });
+          const response = await client.send(command);
+
+          if (response.Volumes) {
+            for (const vol of response.Volumes) {
+              if (vol.VolumeId) {
+                const tags: Record<string, string> = {};
+                if (vol.Tags) {
+                  for (const tag of vol.Tags) {
+                    if (tag.Key && tag.Value) {
+                      tags[tag.Key] = tag.Value;
+                    }
+                  }
+                }
+                const attachments = (vol.Attachments || [])
+                  .filter((a) => a.InstanceId && a.Device && a.State)
+                  .map((a) => ({
+                    instanceId: a.InstanceId!,
+                    device: a.Device!,
+                    state: a.State!,
+                  }));
+                volumes.push({
+                  volumeId: vol.VolumeId,
+                  volumeType: vol.VolumeType || "unknown",
+                  size: vol.Size || 0,
+                  state: vol.State || "unknown",
+                  availabilityZone: vol.AvailabilityZone || "unknown",
+                  encrypted: vol.Encrypted || false,
+                  attachments,
+                  isAttached: attachments.length > 0,
+                  createTime: vol.CreateTime?.toISOString() || null,
+                  tags,
+                });
+              }
+            }
+          }
+          nextToken = response.NextToken;
+        } while (nextToken);
+
+        const handle = await context.writeResource(
+          "inventory",
+          `ebs-${context.globalArgs.region}`,
+          {
+            region: context.globalArgs.region,
+            resourceType: "ebs",
+            resources: volumes,
+            count: volumes.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info("Found {count} EBS volumes in {region}", {
+          count: volumes.length,
+          region: context.globalArgs.region,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
     inventory_all: {
       description: "Run full inventory across all supported resource types",
       arguments: z.object({
@@ -464,9 +576,21 @@ export const model = {
           .boolean()
           .default(true)
           .describe("Include S3 buckets (global)"),
+        includeStoppedEc2: z
+          .boolean()
+          .default(false)
+          .describe("Include stopped EC2 instances"),
+        includeEbs: z
+          .boolean()
+          .default(false)
+          .describe("Include EBS volumes"),
       }),
       execute: async (
-        args: { includeS3: boolean },
+        args: {
+          includeS3: boolean;
+          includeStoppedEc2: boolean;
+          includeEbs: boolean;
+        },
         context: {
           globalArgs: { region: string };
           writeResource: (
@@ -487,9 +611,12 @@ export const model = {
         const ec2Client = new EC2Client({ region });
         const ec2Instances: z.infer<typeof EC2InstanceSchema>[] = [];
         let ec2Token: string | undefined;
+        const ec2States = args.includeStoppedEc2
+          ? ["running", "stopped"]
+          : ["running"];
         do {
           const cmd = new DescribeInstancesCommand({
-            Filters: [{ Name: "instance-state-name", Values: ["running"] }],
+            Filters: [{ Name: "instance-state-name", Values: ec2States }],
             NextToken: ec2Token,
           });
           const resp = await ec2Client.send(cmd);
@@ -618,6 +745,47 @@ export const model = {
           summary.s3 = s3Buckets.length;
         }
 
+        // EBS (optional)
+        const ebsVolumes: z.infer<typeof EBSVolumeSchema>[] = [];
+        if (args.includeEbs) {
+          let ebsToken: string | undefined;
+          do {
+            const cmd = new DescribeVolumesCommand({
+              NextToken: ebsToken,
+            });
+            const resp = await ec2Client.send(cmd);
+            for (const vol of resp.Volumes || []) {
+              if (vol.VolumeId) {
+                const tags: Record<string, string> = {};
+                for (const t of vol.Tags || []) {
+                  if (t.Key && t.Value) tags[t.Key] = t.Value;
+                }
+                const attachments = (vol.Attachments || [])
+                  .filter((a) => a.InstanceId && a.Device && a.State)
+                  .map((a) => ({
+                    instanceId: a.InstanceId!,
+                    device: a.Device!,
+                    state: a.State!,
+                  }));
+                ebsVolumes.push({
+                  volumeId: vol.VolumeId,
+                  volumeType: vol.VolumeType || "unknown",
+                  size: vol.Size || 0,
+                  state: vol.State || "unknown",
+                  availabilityZone: vol.AvailabilityZone || "unknown",
+                  encrypted: vol.Encrypted || false,
+                  attachments,
+                  isAttached: attachments.length > 0,
+                  createTime: vol.CreateTime?.toISOString() || null,
+                  tags,
+                });
+              }
+            }
+            ebsToken = resp.NextToken;
+          } while (ebsToken);
+          summary.ebs = ebsVolumes.length;
+        }
+
         // Write combined inventory
         const handle = await context.writeResource(
           "inventory",
@@ -631,6 +799,7 @@ export const model = {
               dynamodb: ddbTables,
               lambda: lambdaFns,
               ...(args.includeS3 ? { s3: s3Buckets } : {}),
+              ...(args.includeEbs ? { ebs: ebsVolumes } : {}),
             },
             count: Object.values(summary).reduce((a, b) => a + b, 0),
             fetchedAt: new Date().toISOString(),

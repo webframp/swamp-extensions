@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/inventory"
-version: "2026.04.13.1"
+version: "2026.04.14.1"
 description: |
   Discover running AWS resources for cost estimation and inventory management.
 
