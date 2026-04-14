@@ -24,6 +24,8 @@ models:
 reports:
   - flow_metrics_report.ts
   - sprint_summary_report.ts
+workflows:
+  - scaffold-story.yaml
 labels:
   - redmine
   - issue-tracker

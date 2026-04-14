@@ -1,0 +1,56 @@
+id: scaffold-story-001
+name: "@webframp/scaffold-story"
+description: |
+  Create a Redmine story with structured fields.
+  Creates a parent story issue using the story template format.
+  Child tasks can be added afterward using the create_issue method
+  with the parentId set to the created story's ID.
+tags:
+  redmine: "true"
+  workflow: "true"
+  story: "true"
+reports:
+  require: []
+inputs:
+  properties:
+    subject:
+      type: string
+      description: "Story subject (Technology | Service | Objective format)"
+    description:
+      type: string
+      default: ""
+      description: "Story description using the story template"
+    tracker:
+      type: string
+      default: "Story"
+      description: "Tracker name for the parent issue"
+    parentId:
+      type: integer
+      description: "Optional parent theme ID to link the story under"
+    assigneeId:
+      type: integer
+      description: "Optional assignee user ID"
+    priorityId:
+      type: integer
+      description: "Optional priority ID"
+  required:
+    - subject
+jobs:
+  - name: create-story
+    description: Create the parent story issue in Redmine
+    steps:
+      - name: create-parent
+        description: Create the story with provided details
+        task:
+          type: model_method
+          modelIdOrName: tracker
+          methodName: create_issue
+          inputs:
+            tracker: ${{ inputs.tracker }}
+            subject: ${{ inputs.subject }}
+            description: ${{ inputs.description }}
+            parentId: ${{ inputs.parentId }}
+            assigneeId: ${{ inputs.assigneeId }}
+            priorityId: ${{ inputs.priorityId }}
+
+version: 1
