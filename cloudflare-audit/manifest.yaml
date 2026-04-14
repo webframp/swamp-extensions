@@ -1,0 +1,54 @@
+manifestVersion: 1
+name: "@webframp/cloudflare-audit"
+version: "2026.04.14.1"
+description: |
+  Cloudflare security and configuration audit workflow.
+  Inspects zone settings, DNS records, WAF rules, Workers, and cache
+  configuration, then generates a severity-rated report with findings
+  and recommendations.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/cloudflare-audit
+
+  swamp model create @webframp/cloudflare/zone cf-zone \
+    --global-arg apiToken=CLOUDFLARE_API_TOKEN
+  swamp model create @webframp/cloudflare/dns cf-dns \
+    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+  swamp model create @webframp/cloudflare/waf cf-waf \
+    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+  swamp model create @webframp/cloudflare/worker cf-worker \
+    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg accountId=ACCOUNT_ID
+  swamp model create @webframp/cloudflare/cache cf-cache \
+    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+
+  swamp workflow run @webframp/cloudflare-audit --input zoneId=ZONE_ID
+  ```
+
+  ## Checks Performed
+
+  - SSL mode (off/flexible/full/strict)
+  - Always Use HTTPS enabled
+  - Development mode disabled
+  - Zone paused/active status
+  - Firewall rules present and active
+  - WAF managed rulesets enabled
+  - DNS records proxied (origin IP exposure)
+  - Dangling CNAMEs (subdomain takeover risk)
+  - CAA records present
+  - Worker scripts bound to routes
+  - Cache level and hit rate
+repository: "https://github.com/webframp/swamp-extensions"
+workflows:
+  - workflow-ada3d8bb-9cde-436e-8bbc-7a45add10e8d.yaml
+reports:
+  - cloudflare_audit_report.ts
+labels:
+  - cloudflare
+  - security
+  - audit
+  - dns
+  - waf
+dependencies:
+  - "@webframp/cloudflare@2026.04.13.1"
