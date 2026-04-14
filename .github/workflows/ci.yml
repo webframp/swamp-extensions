@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         extension: [pricing, inventory, logs, metrics, alarms, traces, cost-estimate, cost-explorer, networking]
-        task: [check, lint, fmt]
+        task: [check, lint, fmt, test]
     defaults:
       run:
         working-directory: aws/${{ matrix.extension }}
@@ -63,6 +63,12 @@ jobs:
             deno fmt --check extensions/models/
           elif [ "${{ matrix.task }}" = "lint" ]; then
             deno lint extensions/models/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            if ls extensions/models/aws/*_test.ts 1> /dev/null 2>&1; then
+              deno test --allow-env --allow-net --allow-sys extensions/models/
+            else
+              echo "No tests found, skipping"
+            fi
           else
             deno check extensions/models/aws/*.ts
           fi
@@ -74,7 +80,7 @@ jobs:
       fail-fast: false
       matrix:
         extension: [cost-report, ops, cost-audit]
-        task: [check, lint, fmt]
+        task: [check, lint, fmt, test]
     defaults:
       run:
         working-directory: aws/${{ matrix.extension }}
@@ -89,6 +95,12 @@ jobs:
             deno fmt --check extensions/reports/
           elif [ "${{ matrix.task }}" = "lint" ]; then
             deno lint extensions/reports/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            if ls extensions/reports/*_test.ts 1> /dev/null 2>&1; then
+              deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/reports/
+            else
+              echo "No tests found, skipping"
+            fi
           else
             deno check extensions/reports/*.ts
           fi
