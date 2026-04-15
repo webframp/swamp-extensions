@@ -30,6 +30,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/cloudflare-audit`](cloudflare-audit/) | Cloudflare security and configuration audit — inspects zone settings, DNS, WAF, Workers, and cache, then generates a severity-rated report | `@webframp/cloudflare` |
 | [`@webframp/aws-ops`](aws/ops/) | AWS incident investigation — gathers alarms, metrics, traces, and logs, then generates an incident report | `@webframp/aws/logs`, `@webframp/aws/metrics`, `@webframp/aws/alarms`, `@webframp/aws/traces` |
 | [`@webframp/aws-cost-audit`](aws/cost-audit/) | AWS cost audit — analyzes spend, resource inventory, and networking waste, then generates savings recommendations | `@webframp/aws/cost-explorer`, `@webframp/aws/networking`, `@webframp/aws/inventory` |
+| [`@webframp/aws/terraform-drift`](aws/terraform-drift/) | Terraform drift detection — compares TF state against live AWS resources | `@webframp/terraform`, `@webframp/aws/inventory`, `@webframp/aws/networking` |
 | [`@webframp/aws/cost-report`](aws/cost-report/) | AWS cost report formatting (standalone report extension) | None |
 | [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — CRUD operations on issues, projects, users, and custom fields, plus flow metrics and sprint summary reports with a scaffold-story workflow | None |
 
@@ -75,6 +76,7 @@ swamp extension pull @webframp/sre
 swamp extension pull @webframp/cloudflare-audit
 swamp extension pull @webframp/aws-ops
 swamp extension pull @webframp/aws-cost-audit
+swamp extension pull @webframp/aws/terraform-drift
 swamp extension pull @webframp/redmine
 
 # AWS model extensions
@@ -158,6 +160,23 @@ swamp model create @webframp/aws/networking aws-networking --global-arg region=u
 swamp model create @webframp/aws/inventory aws-inventory --global-arg region=us-east-1
 
 swamp workflow run @webframp/cost-audit
+```
+
+### Terraform drift detection
+
+```bash
+swamp extension pull @webframp/aws/terraform-drift
+
+# Create required model instances
+swamp model create @webframp/terraform tf-infra \
+  --global-arg workDir=/path/to/terraform/repo
+swamp model create @webframp/aws/inventory aws-inventory \
+  --global-arg region=us-east-1
+swamp model create @webframp/aws/networking aws-networking \
+  --global-arg region=us-east-1
+
+# Run drift detection
+swamp workflow run @webframp/terraform-drift
 ```
 
 ### Redmine issue tracking

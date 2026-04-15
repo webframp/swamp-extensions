@@ -367,6 +367,45 @@ jobs:
       - name: deno test
         run: deno test --allow-run --allow-env --allow-read extensions/models/
 
+  terraform-drift-check:
+    name: terraform-drift - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [check, lint, fmt]
+    defaults:
+      run:
+        working-directory: aws/terraform-drift
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/reports/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/reports/
+          else
+            deno check extensions/reports/drift_report.ts
+          fi
+
+  terraform-drift-test:
+    name: terraform-drift - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws/terraform-drift
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-env --allow-read --allow-write extensions/reports/
+
   datastore-check:
     name: datastore/${{ matrix.datastore }} - ${{ matrix.task }}
     runs-on: ubuntu-latest
