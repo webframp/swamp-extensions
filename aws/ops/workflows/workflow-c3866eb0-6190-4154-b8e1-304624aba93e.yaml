@@ -2,8 +2,9 @@ id: c3866eb0-6190-4154-b8e1-304624aba93e
 name: "@webframp/investigate-outage"
 description: |
   Unified AWS outage investigation workflow.
-  Gathers data from CloudWatch Logs, Metrics, Alarms, and X-Ray Traces
-  to provide a comprehensive view of system health during an incident.
+  Gathers data from CloudWatch Logs, Metrics, Alarms, X-Ray Traces,
+  resource inventory, and networking to provide a comprehensive view
+  of system health during an incident.
 tags:
   incident-response: "true"
   aws: "true"
@@ -82,6 +83,36 @@ jobs:
             anomalyThreshold: 2
         allowFailure: true
 
+      - name: analyze-elb-5xx
+        description: Analyze ALB 5XX error count
+        task:
+          type: model_method
+          modelIdOrName: aws-metrics
+          methodName: analyze
+          inputs:
+            namespace: AWS/ApplicationELB
+            metricName: HTTPCode_ELB_5XX_Count
+            dimensions: []
+            statistic: Sum
+            startTime: ${{ inputs.timeRange }}
+            anomalyThreshold: 2
+        allowFailure: true
+
+      - name: analyze-elb-latency
+        description: Analyze ALB target response time
+        task:
+          type: model_method
+          modelIdOrName: aws-metrics
+          methodName: analyze
+          inputs:
+            namespace: AWS/ApplicationELB
+            metricName: TargetResponseTime
+            dimensions: []
+            statistic: Average
+            startTime: ${{ inputs.timeRange }}
+            anomalyThreshold: 2
+        allowFailure: true
+
       - name: get-service-graph
         description: Get X-Ray service dependency graph
         task:
@@ -141,6 +172,47 @@ jobs:
             limit: 100
         allowFailure: true
 
+  - name: gather-infrastructure
+    description: Collect resource inventory and networking state (runs in parallel)
+    steps:
+      - name: list-ec2-instances
+        description: List EC2 instances across all states
+        task:
+          type: model_method
+          modelIdOrName: aws-inventory
+          methodName: list_ec2
+          inputs:
+            stateFilter:
+              - running
+              - stopped
+              - stopping
+              - pending
+        allowFailure: true
+
+      - name: list-lambda-functions
+        description: List Lambda functions
+        task:
+          type: model_method
+          modelIdOrName: aws-inventory
+          methodName: list_lambda
+        allowFailure: true
+
+      - name: list-load-balancers
+        description: List ALBs and NLBs with target health
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_load_balancers
+        allowFailure: true
+
+      - name: list-nat-gateways
+        description: List NAT gateway status
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_nat_gateways
+        allowFailure: true
+
   - name: deep-dive
     description: Perform deeper analysis based on initial findings
     dependsOn:
@@ -148,6 +220,9 @@ jobs:
         condition:
           type: completed
       - job: gather-logs
+        condition:
+          type: completed
+      - job: gather-infrastructure
         condition:
           type: completed
     steps:

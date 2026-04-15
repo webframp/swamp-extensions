@@ -486,6 +486,183 @@ export const report = {
       };
     }
 
+    // === INFRASTRUCTURE SECTION ===
+    findings.push("\n## Infrastructure\n");
+
+    const ec2Data = await getStepData("aws-inventory", "list_ec2");
+    if (ec2Data) {
+      const inv = ec2Data as {
+        region: string;
+        resourceType: string;
+        resources: Array<{
+          instanceId: string;
+          instanceType: string;
+          state: string;
+          tags: Record<string, string>;
+        }>;
+        count: number;
+      };
+
+      findings.push(`### EC2 Instances (${inv.count})\n`);
+      if (inv.count > 0) {
+        const byState: Record<string, number> = {};
+        for (const inst of inv.resources) {
+          byState[inst.state] = (byState[inst.state] || 0) + 1;
+        }
+        findings.push("| State | Count |");
+        findings.push("| ----- | ----- |");
+        for (const [state, count] of Object.entries(byState).sort()) {
+          findings.push(`| ${state} | ${count} |`);
+        }
+        findings.push("");
+
+        // List non-running instances as potential concern
+        const nonRunning = inv.resources.filter((i) => i.state !== "running");
+        if (nonRunning.length > 0) {
+          findings.push("**Non-running instances:**\n");
+          for (const inst of nonRunning.slice(0, 10)) {
+            const name = inst.tags?.Name || inst.instanceId;
+            findings.push(
+              `- \`${name}\` (${inst.instanceType}) — ${inst.state}`,
+            );
+          }
+          findings.push("");
+        }
+      } else {
+        findings.push("No EC2 instances found.\n");
+      }
+
+      jsonFindings.ec2 = {
+        count: inv.count,
+        byState: Object.fromEntries(
+          Object.entries(
+            inv.resources.reduce(
+              (acc: Record<string, number>, i) => {
+                acc[i.state] = (acc[i.state] || 0) + 1;
+                return acc;
+              },
+              {},
+            ),
+          ),
+        ),
+      };
+    }
+
+    const lambdaData = await getStepData("aws-inventory", "list_lambda");
+    if (lambdaData) {
+      const inv = lambdaData as {
+        resources: Array<{
+          functionName: string;
+          runtime: string;
+          memorySize: number;
+          lastModified: string;
+        }>;
+        count: number;
+      };
+
+      findings.push(`### Lambda Functions (${inv.count})\n`);
+      if (inv.count > 0) {
+        const byRuntime: Record<string, number> = {};
+        for (const fn of inv.resources) {
+          const rt = fn.runtime || "unknown";
+          byRuntime[rt] = (byRuntime[rt] || 0) + 1;
+        }
+        findings.push("| Runtime | Count |");
+        findings.push("| ------- | ----- |");
+        for (const [runtime, count] of Object.entries(byRuntime).sort()) {
+          findings.push(`| ${runtime} | ${count} |`);
+        }
+        findings.push("");
+      } else {
+        findings.push("No Lambda functions found.\n");
+      }
+
+      jsonFindings.lambda = { count: inv.count };
+    }
+
+    // === NETWORKING SECTION ===
+    findings.push("\n## Networking\n");
+
+    const lbData = await getStepData("aws-networking", "list_load_balancers");
+    if (lbData) {
+      const net = lbData as {
+        data: Array<{
+          name: string;
+          type: string;
+          scheme: string;
+          state: string;
+          vpcId: string;
+          arn: string;
+        }>;
+      };
+
+      const lbs = net.data || [];
+      findings.push(`### Load Balancers (${lbs.length})\n`);
+      if (lbs.length > 0) {
+        findings.push("| Name | Type | Scheme | State |");
+        findings.push("| ---- | ---- | ------ | ----- |");
+        for (const lb of lbs) {
+          findings.push(
+            `| ${lb.name} | ${lb.type} | ${lb.scheme} | ${lb.state} |`,
+          );
+        }
+        findings.push("");
+
+        const unhealthy = lbs.filter((lb) => lb.state !== "active");
+        if (unhealthy.length > 0) {
+          findings.push(
+            `**${unhealthy.length} load balancer(s) not in active state.**\n`,
+          );
+        }
+      } else {
+        findings.push("No load balancers found.\n");
+      }
+
+      jsonFindings.loadBalancers = {
+        count: lbs.length,
+        unhealthy: lbs.filter((lb) => lb.state !== "active").length,
+      };
+    }
+
+    const natData = await getStepData("aws-networking", "list_nat_gateways");
+    if (natData) {
+      const net = natData as {
+        data: Array<{
+          natGatewayId: string;
+          state: string;
+          vpcId: string;
+          subnetId: string;
+        }>;
+      };
+
+      const gws = net.data || [];
+      findings.push(`### NAT Gateways (${gws.length})\n`);
+      if (gws.length > 0) {
+        findings.push("| NAT Gateway | State | VPC | Subnet |");
+        findings.push("| ----------- | ----- | --- | ------ |");
+        for (const gw of gws) {
+          findings.push(
+            `| ${gw.natGatewayId} | ${gw.state} | ${gw.vpcId} | ${gw.subnetId} |`,
+          );
+        }
+        findings.push("");
+
+        const nonAvailable = gws.filter((gw) => gw.state !== "available");
+        if (nonAvailable.length > 0) {
+          findings.push(
+            `**${nonAvailable.length} NAT gateway(s) not in available state.**\n`,
+          );
+        }
+      } else {
+        findings.push("No NAT gateways found.\n");
+      }
+
+      jsonFindings.natGateways = {
+        count: gws.length,
+        unhealthy: gws.filter((gw) => gw.state !== "available").length,
+      };
+    }
+
     // === RECOMMENDATIONS ===
     findings.push("\n## Recommendations\n");
 
@@ -548,6 +725,58 @@ export const report = {
       recommendations.push(
         `- **Investigate ${logErrorsJson.totalErrors} error(s) found in Lambda logs** — ${logErrorsJson.patternCount} distinct pattern(s) detected`,
       );
+    }
+
+    // Check for unhealthy load balancers
+    const lbJson = jsonFindings.loadBalancers as
+      | { unhealthy?: number }
+      | undefined;
+    if (lbJson && lbJson.unhealthy && lbJson.unhealthy > 0) {
+      recommendations.push(
+        `- **Check load balancer health** — ${lbJson.unhealthy} load balancer(s) not in active state`,
+      );
+    }
+
+    // Check for unhealthy NAT gateways
+    const natJson = jsonFindings.natGateways as
+      | { unhealthy?: number }
+      | undefined;
+    if (natJson && natJson.unhealthy && natJson.unhealthy > 0) {
+      recommendations.push(
+        `- **Investigate NAT gateway issues** — ${natJson.unhealthy} gateway(s) not in available state, may block outbound traffic`,
+      );
+    }
+
+    // Check for non-running EC2 instances
+    const ec2Json = jsonFindings.ec2 as
+      | { byState?: Record<string, number> }
+      | undefined;
+    if (ec2Json?.byState) {
+      const stopped = ec2Json.byState["stopped"] || 0;
+      const stopping = ec2Json.byState["stopping"] || 0;
+      if (stopped + stopping > 0) {
+        recommendations.push(
+          `- **Review stopped EC2 instances** — ${
+            stopped + stopping
+          } instance(s) stopped or stopping`,
+        );
+      }
+    }
+
+    // Check for ELB 5xx spikes
+    for (const mf of metricFindings) {
+      if (mf.metric.includes("HTTPCode_ELB_5XX") && mf.anomalyCount > 0) {
+        recommendations.push(
+          "- **Investigate ELB 5XX errors** — Anomalous 5XX error rate detected on Application Load Balancers",
+        );
+      }
+      if (
+        mf.metric.includes("TargetResponseTime") && mf.trend === "increasing"
+      ) {
+        recommendations.push(
+          "- **Monitor ALB target latency** — Target response time is trending upward",
+        );
+      }
     }
 
     if (recommendations.length === 0) {
