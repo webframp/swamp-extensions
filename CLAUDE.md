@@ -120,9 +120,29 @@ deno task test     # Run tests
 - Pin all npm dependencies to exact versions in `deno.json` (no ranges)
 - Swamp's bundler inlines npm packages at bundle time; `deno.lock` does NOT cover extension deps
 
+## Development Workflow
+
+All changes go through pull requests — no direct pushes to main.
+
+1. **Branch** — Create a branch from main. Name it however you like; `feat/`, `fix/`, `docs/` prefixes are conventional but not required.
+2. **Develop** — Make changes, run `deno task check && deno task lint && deno task fmt && deno task test` locally in the extension directory.
+3. **Commit** — Use [Conventional Commits](https://www.conventionalcommits.org/). Scope is the extension name or directory.
+   - `feat(aws/terraform-drift): add VPC drift detection`
+   - `fix(cloudflare): handle rate limit on zone list`
+   - `docs: update README with new extension`
+   - `ci: add redmine to test matrix`
+   - `chore(terraform): bump AWS SDK to 3.1020.0`
+   - `test(vault/gopass): add edge case for empty store`
+4. **Push and open PR** — Push the branch and open a PR against main. CI runs check/lint/fmt/test. The adversarial code review runs automatically on PRs.
+5. **Address review** — Fix any issues raised by CI or the adversarial review. Push additional commits (do not force-push over review comments).
+6. **Merge** — Comment `/lgtm`, `/approve`, or `/shipit` on the PR. The merge workflow squash-merges after verifying CI passed, then deletes the branch.
+7. **Publish** — After merge to main, CI runs again. Only after CI passes does the publish workflow run, auto-publishing any extensions with bumped `manifest.yaml` versions.
+
+**Version bumps**: Bump `version` in `manifest.yaml` (CalVer `YYYY.MM.DD.N`) in the same PR as the code change. Do not bump versions in separate commits or PRs.
+
 ## Publishing
 
-CI auto-publishes when `manifest.yaml` changes on main and the version is newer than the registry. Do not push extensions locally — always push code to GitHub and let CI handle publishing via `swamp extension push manifest.yaml --yes`.
+CI auto-publishes when `manifest.yaml` changes land on main and CI passes. The publish workflow triggers only after a successful CI run — it will not publish broken code. Do not push extensions locally — always open a PR and let CI handle publishing via `swamp extension push manifest.yaml --yes`.
 
 ## Swamp Skills
 
