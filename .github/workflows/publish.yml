@@ -2,6 +2,7 @@ name: Publish Extensions
 
 on:
   workflow_run:
+    # NOTE: Must match the `name:` field in ci.yml exactly
     workflows: ["CI"]
     types: [completed]
     branches: [main]
@@ -11,7 +12,7 @@ jobs:
     name: Detect changed extensions
     runs-on: ubuntu-latest
     # Only run when CI succeeded on main
-    if: github.event.workflow_run.conclusion == 'success'
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
       extensions: ${{ steps.changes.outputs.extensions }}
     steps:
