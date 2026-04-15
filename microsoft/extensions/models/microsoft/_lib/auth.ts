@@ -33,16 +33,20 @@ export interface DeviceCodeResponse {
 }
 
 // The scopes required for Outlook and Teams delegated access.
+//
+// Intentionally minimal — scoped to the signed-in user's own data only:
+//   - Mail.Send is excluded (extension never sends mail)
+//   - Team.ReadBasic.All, Channel.ReadBasic.All, ChannelMessage.Read.All are
+//     excluded because "All" variants cover the entire tenant and
+//     ChannelMessage.Read.All additionally requires admin consent.
+//     list_channel_messages and list_teams will return 403 unless those scopes
+//     are separately granted; Chat.Read is sufficient for 1:1 and group chats.
 export const GRAPH_SCOPES = [
   "offline_access",
-  "Mail.ReadWrite",
-  "Mail.Send",
-  "MailboxSettings.Read",
-  "Team.ReadBasic.All",
-  "Channel.ReadBasic.All",
-  "ChannelMessage.Read.All",
-  "Chat.Read",
   "User.Read",
+  "Mail.ReadWrite",
+  "MailboxSettings.Read",
+  "Chat.Read",
 ].join(" ");
 
 // ---------------------------------------------------------------------------
