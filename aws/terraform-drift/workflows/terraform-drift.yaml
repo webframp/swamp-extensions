@@ -1,0 +1,89 @@
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+name: "@webframp/terraform-drift"
+description: |
+  Compare Terraform state against live AWS resources to detect drift.
+  Collects Terraform-declared state via CLI, then gathers live AWS
+  resource data, and produces a drift report.
+tags:
+  terraform: "true"
+  drift: "true"
+  aws: "true"
+  compliance: "true"
+reports:
+  require:
+    - "@webframp/terraform-drift-report"
+inputs:
+  properties:
+    region:
+      type: string
+      default: us-east-1
+      description: AWS region to check for drift
+  required: []
+jobs:
+  - name: gather-terraform-state
+    description: Read Terraform state and resource inventory
+    steps:
+      - name: tf-list-resources
+        description: List all resources in Terraform state
+        task:
+          type: model_method
+          modelIdOrName: tf-infra
+          methodName: list_resources
+        allowFailure: false
+
+      - name: tf-read-state
+        description: Read full Terraform state with all resource attributes
+        task:
+          type: model_method
+          modelIdOrName: tf-infra
+          methodName: read_state
+        allowFailure: false
+
+      - name: tf-get-outputs
+        description: Read Terraform output values
+        task:
+          type: model_method
+          modelIdOrName: tf-infra
+          methodName: get_outputs
+        allowFailure: true
+
+  - name: gather-aws-live-state
+    description: Collect live AWS resource state for comparison
+    steps:
+      - name: aws-inventory
+        description: Run full AWS resource inventory
+        task:
+          type: model_method
+          modelIdOrName: aws-inventory
+          methodName: inventory_all
+          inputs:
+            includeS3: false
+            includeStoppedEc2: true
+            includeEbs: true
+        allowFailure: true
+
+      - name: aws-nat-gateways
+        description: List NAT Gateways
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_nat_gateways
+        allowFailure: true
+
+      - name: aws-load-balancers
+        description: List load balancers
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_load_balancers
+        allowFailure: true
+
+      - name: aws-elastic-ips
+        description: List Elastic IPs
+        task:
+          type: model_method
+          modelIdOrName: aws-networking
+          methodName: list_elastic_ips
+        allowFailure: true
+
+version: 1
