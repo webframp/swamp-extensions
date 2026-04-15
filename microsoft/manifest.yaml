@@ -1,0 +1,24 @@
+manifestVersion: 1
+name: "@webframp/microsoft"
+version: "2026.04.15.1"
+description: "Microsoft 365 integration — Outlook mail triage and Teams message management via Graph API"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - microsoft/outlook.ts
+  - microsoft/teams.ts
+reports:
+  - ../reports/inbox_triage_report.ts
+  - ../reports/teams_digest_report.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+tags:
+  - microsoft
+  - microsoft365
+  - outlook
+  - teams
+  - mail
+  - email
+  - graph-api
