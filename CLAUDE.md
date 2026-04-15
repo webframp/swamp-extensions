@@ -17,7 +17,7 @@ Each extension lives in its own directory with:
 - `extensions/models/`, `extensions/vaults/`, `extensions/datastores/`, `extensions/reports/` - Implementation files
 - `deno.json` - Dependencies (import `@systeminit/swamp-testing` for tests, optional for model-only extensions)
 
-**Do not commit per-extension `CLAUDE.md` files.** Running `swamp repo init` generates a managed `CLAUDE.md` in each extension directory — these are local development aids, not project artifacts. The root `CLAUDE.md` is the single source of project guidance. Per-extension `CLAUDE.md` files are excluded by the root `.gitignore`.
+**Do not commit per-extension `CLAUDE.md` or `AGENTS.md` files.** Running `swamp repo init` generates a managed `CLAUDE.md` in each extension directory — these are local development aids, not project artifacts. After running `swamp repo init`, also create a symlink: `ln -s CLAUDE.md AGENTS.md` so OpenCode picks up the same guidance. Both files are excluded by the root `.gitignore`. The root `CLAUDE.md` (symlinked as `AGENTS.md`) is the single source of project guidance.
 
 ## Manifest Format
 
