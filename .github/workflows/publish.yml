@@ -1,34 +1,29 @@
 name: Publish Extensions
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
 
 jobs:
   detect-changes:
     name: Detect changed extensions
     runs-on: ubuntu-latest
+    # Only run when CI succeeded on main
+    if: github.event.workflow_run.conclusion == 'success'
     outputs:
       extensions: ${{ steps.changes.outputs.extensions }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
       - id: changes
         name: Find extensions with changes
         run: |
-          # Compare against the previous commit on main
-          BEFORE="${{ github.event.before }}"
-          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            # First push to branch — compare against parent
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-          elif ! git cat-file -e "$BEFORE" 2>/dev/null; then
-            # Before commit doesn't exist (force push) — compare against parent
-            echo "Note: Previous commit $BEFORE not found (likely force push), comparing against HEAD~1"
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-          else
-            CHANGED_FILES=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
-          fi
+          # Compare against the parent commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
 
           echo "Changed files:"
           echo "$CHANGED_FILES"
@@ -60,6 +55,8 @@ jobs:
         extension: ${{ fromJson(needs.detect-changes.outputs.extensions) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: systeminit/setup-swamp@v0.1.0
         with:
           api-key: ${{ secrets.SWAMP_API_KEY }}
@@ -101,4 +98,4 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --notes "Published to swamp.club registry" \
-            --target "${{ github.sha }}"
+            --target "${{ github.event.workflow_run.head_sha }}"
