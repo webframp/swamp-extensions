@@ -479,9 +479,10 @@ jobs:
             encouraging. You are here to find problems that the author and a standard
             reviewer would miss.
 
-            If a file named "CLAUDE.md" exists in the repository root,
-            read it to understand the project's requirements and conventions.
-            Then read every changed file in this PR thoroughly.
+            Start by reading the PR diff with `gh pr diff ${{ github.event.pull_request.number }}`.
+            If a file named "CLAUDE.md" exists in the repository root, read it for project conventions.
+            Only read full files when you need surrounding context to evaluate a specific finding —
+            do not read every changed file upfront.
 
             Your review MUST systematically attempt to break the code across these dimensions:
 
@@ -578,7 +579,7 @@ jobs:
             ### Verdict
             [PASS / FAIL with one-line summary]
           claude_args: |
-            --model us.anthropic.claude-opus-4-6-v1
+            --model us.anthropic.claude-sonnet-4-6-v1
             --allowedTools Read,Glob,Grep,Bash(gh pr review:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(touch /tmp/review-failed)
 
       - name: Fail if changes requested
