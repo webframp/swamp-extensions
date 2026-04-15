@@ -103,6 +103,14 @@ Deno.test({
         result.markdown,
         "No metric analysis data available.",
       );
+      assertStringIncludes(
+        result.markdown,
+        "No infrastructure inventory data available.",
+      );
+      assertStringIncludes(
+        result.markdown,
+        "No networking data available.",
+      );
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
