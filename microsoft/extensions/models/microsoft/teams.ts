@@ -295,7 +295,12 @@ export const model = {
     },
 
     list_channel_messages: {
-      description: "Fetch messages from a Teams channel",
+      description: "Fetch messages from a Teams channel. " +
+        "NOTE: requires ChannelMessage.Read.All delegated scope (admin consent) and " +
+        "Channel.ReadBasic.All — these are not included in the default minimal scope set " +
+        "for security reasons. This method will return a 403 unless those scopes are " +
+        "explicitly granted on the app registration. Use get_chat_messages for 1:1 and " +
+        "group chats instead, which works with the default Chat.Read scope.",
       arguments: z.object({
         teamId: z.string().describe("Teams team ID"),
         channelId: z.string().describe("Teams channel ID"),
@@ -424,7 +429,10 @@ export const model = {
     },
 
     list_teams: {
-      description: "List Teams the signed-in user is a member of",
+      description: "List Teams the signed-in user is a member of. " +
+        "NOTE: requires Team.ReadBasic.All delegated scope — not included in the default " +
+        "minimal scope set for security reasons (tenant-wide read). This method will return " +
+        "a 403 unless that scope is explicitly granted on the app registration.",
       arguments: z.object({}),
       execute: async (
         _args: Record<never, never>,
