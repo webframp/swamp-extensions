@@ -678,6 +678,177 @@ Deno.test("report: handles no step data gracefully", async () => {
 });
 
 // =============================================================================
+// tags_all preference over tags
+// =============================================================================
+
+Deno.test("report: uses tags_all for comparison when present", async () => {
+  const tmpDir = await Deno.makeTempDir();
+  try {
+    await writeStepData(
+      tmpDir,
+      TF_MODEL_TYPE,
+      TF_MODEL_ID,
+      "aws_instance.web",
+      1,
+      {
+        address: "aws_instance.web",
+        mode: "managed",
+        type: "aws_instance",
+        name: "web",
+        providerName: "registry.terraform.io/hashicorp/aws",
+        values: {
+          id: "i-abc123",
+          instance_type: "t3.micro",
+          tags: { Name: "web" },
+          tags_all: { Name: "web", Environment: "test", ManagedBy: "terraform" },
+        },
+        dependsOn: [],
+      },
+    );
+
+    await writeStepData(
+      tmpDir,
+      INV_MODEL_TYPE,
+      INV_MODEL_ID,
+      "all-us-east-1",
+      1,
+      {
+        region: "us-east-1",
+        resourceType: "all",
+        resources: {
+          ec2: [
+            {
+              instanceId: "i-abc123",
+              instanceType: "t3.micro",
+              state: "running",
+              tags: { Name: "web", Environment: "production", ManagedBy: "terraform" },
+            },
+          ],
+        },
+        count: 1,
+        fetchedAt: new Date().toISOString(),
+      },
+    );
+
+    const steps: StepExecution[] = [
+      makeStep("tf-infra", TF_MODEL_TYPE, TF_MODEL_ID, "read_state", [
+        { name: "aws_instance.web", dataId: "d1", version: 1 },
+      ]),
+      makeStep(
+        "aws-inventory",
+        INV_MODEL_TYPE,
+        INV_MODEL_ID,
+        "inventory_all",
+        [{ name: "all-us-east-1", dataId: "d2", version: 1 }],
+      ),
+    ];
+
+    const ctx = makeContext(tmpDir, steps);
+    const result = await report.execute(ctx);
+
+    assertStringIncludes(result.markdown, "tags.Environment");
+    // deno-lint-ignore no-explicit-any
+    const json = result.json as any;
+    const envDrift = json.findings[0].fields.find(
+      (f: { field: string }) => f.field === "tags.Environment",
+    );
+    assertEquals(envDrift.terraform, "test");
+    assertEquals(envDrift.aws, "production");
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+// =============================================================================
+// Extra AWS tags detection
+// =============================================================================
+
+Deno.test("report: detects extra tags added outside Terraform", async () => {
+  const tmpDir = await Deno.makeTempDir();
+  try {
+    await writeStepData(
+      tmpDir,
+      TF_MODEL_TYPE,
+      TF_MODEL_ID,
+      "aws_instance.web",
+      1,
+      {
+        address: "aws_instance.web",
+        mode: "managed",
+        type: "aws_instance",
+        name: "web",
+        providerName: "registry.terraform.io/hashicorp/aws",
+        values: {
+          id: "i-abc123",
+          instance_type: "t3.micro",
+          tags: { Name: "web" },
+        },
+        dependsOn: [],
+      },
+    );
+
+    await writeStepData(
+      tmpDir,
+      INV_MODEL_TYPE,
+      INV_MODEL_ID,
+      "all-us-east-1",
+      1,
+      {
+        region: "us-east-1",
+        resourceType: "all",
+        resources: {
+          ec2: [
+            {
+              instanceId: "i-abc123",
+              instanceType: "t3.micro",
+              state: "running",
+              tags: { Name: "web", DriftTest: "true", Owner: "manual" },
+            },
+          ],
+        },
+        count: 1,
+        fetchedAt: new Date().toISOString(),
+      },
+    );
+
+    const steps: StepExecution[] = [
+      makeStep("tf-infra", TF_MODEL_TYPE, TF_MODEL_ID, "read_state", [
+        { name: "aws_instance.web", dataId: "d1", version: 1 },
+      ]),
+      makeStep(
+        "aws-inventory",
+        INV_MODEL_TYPE,
+        INV_MODEL_ID,
+        "inventory_all",
+        [{ name: "all-us-east-1", dataId: "d2", version: 1 }],
+      ),
+    ];
+
+    const ctx = makeContext(tmpDir, steps);
+    const result = await report.execute(ctx);
+
+    assertStringIncludes(result.markdown, "tags.DriftTest");
+    assertStringIncludes(result.markdown, "tags.Owner");
+    // deno-lint-ignore no-explicit-any
+    const json = result.json as any;
+    assertEquals(json.summary.fieldDrifts, 1);
+    const fields = json.findings[0].fields;
+    const driftTest = fields.find(
+      (f: { field: string }) => f.field === "tags.DriftTest",
+    );
+    assertEquals(driftTest.terraform, "(not defined)");
+    assertEquals(driftTest.aws, "true");
+    const owner = fields.find(
+      (f: { field: string }) => f.field === "tags.Owner",
+    );
+    assertEquals(owner.terraform, "(not defined)");
+    assertEquals(owner.aws, "manual");
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});
+
+// =============================================================================
 // EIP comparison
 // =============================================================================
 

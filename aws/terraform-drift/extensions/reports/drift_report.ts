@@ -433,14 +433,28 @@ export const report = {
       awsTags: Record<string, string> | undefined,
       drifts: NonNullable<DriftFinding["fields"]>,
     ): void {
-      const tfTags = tfr.values.tags as Record<string, string> | undefined;
+      // Prefer tags_all (includes default_tags) over resource-level tags
+      const tfTags =
+        (tfr.values.tags_all as Record<string, string> | undefined) ??
+          (tfr.values.tags as Record<string, string> | undefined);
       if (!tfTags || !awsTags) return;
+      // Check TF → AWS: changed or missing in AWS
       for (const [key, tfVal] of Object.entries(tfTags)) {
         if (awsTags[key] !== tfVal) {
           drifts.push({
             field: `tags.${key}`,
             terraform: tfVal,
             aws: awsTags[key] ?? "(missing)",
+          });
+        }
+      }
+      // Check AWS → TF: extra tags added outside Terraform
+      for (const key of Object.keys(awsTags)) {
+        if (!(key in tfTags)) {
+          drifts.push({
+            field: `tags.${key}`,
+            terraform: "(not defined)",
+            aws: awsTags[key],
           });
         }
       }
