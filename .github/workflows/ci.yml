@@ -676,11 +676,11 @@ jobs:
               positioned BEFORE any interpolated content?
 
             ### 2. Expression Injection
-            - Are GitHub Actions expressions (`${{ }}`) used in `run:` blocks where they
-              could be exploited? (e.g., `${{ github.event.pull_request.title }}` in a shell
+            - Are GitHub Actions expressions used in `run:` blocks where they could be
+              exploited? (e.g., interpolating github.event.pull_request.title in a shell
               command enables arbitrary code execution)
-            - Safe: `${{ github.event.pull_request.number }}` (integer, not injectable)
-            - Unsafe: `${{ github.event.pull_request.title }}` in run: blocks
+            - Safe: interpolating PR number (integer, not injectable)
+            - Unsafe: interpolating PR title, body, branch name, or commit messages in run: blocks
 
             ### 3. Dangerous Triggers
             - Is `pull_request_target` used? This runs with write permissions on the BASE
