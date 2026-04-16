@@ -457,6 +457,21 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+      - name: Dismiss stale bot reviews
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Dismiss any prior CHANGES_REQUESTED reviews from github-actions[bot]
+          # so a passing re-run cleanly marks the PR as approved/neutral.
+          gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" \
+            --jq '.[] | select(.state == "CHANGES_REQUESTED" and .user.login == "github-actions[bot]") | .id' \
+          | while read -r review_id; do
+              echo "Dismissing stale review $review_id"
+              gh api --method PUT \
+                "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews/${review_id}/dismissals" \
+                -f message="Superseded by new adversarial review run" \
+                -f event="DISMISS"
+            done
       - uses: anthropics/claude-code-action@v1
         env:
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
@@ -555,7 +570,7 @@ jobs:
 
             If there are NO critical or high severity findings:
             ```
-            gh pr review ${{ github.event.pull_request.number }} --comment --body "your review here"
+            gh pr review ${{ github.event.pull_request.number }} --approve --body "your review here"
             ```
 
             If there ARE critical or high severity findings:
