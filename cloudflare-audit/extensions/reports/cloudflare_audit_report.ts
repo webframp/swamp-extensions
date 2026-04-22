@@ -1,5 +1,13 @@
-// Cloudflare Audit Report
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * Cloudflare security and configuration audit report.
+ *
+ * Analyzes zone settings, DNS records, WAF rules, Workers, and cache
+ * configuration collected by the cloudflare-audit workflow. Produces a
+ * severity-rated Markdown report with findings and recommendations.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ * @module
+ */
 
 interface DataHandle {
   name: string;
@@ -49,10 +57,10 @@ interface Finding {
   detail?: string;
 }
 
-// Thresholds
+/** Cache hit-rate percentage below which a warning finding is emitted. */
 export const CACHE_HIT_RATE_WARN = 50;
 
-// Known subdomain takeover targets
+/** Regular expressions matching CNAME targets known to be vulnerable to subdomain takeover. */
 export const DANGLING_CNAME_PATTERNS: RegExp[] = [
   /\.herokuapp\.com$/i,
   /\.herokudns\.com$/i,
@@ -75,6 +83,7 @@ export const DANGLING_CNAME_PATTERNS: RegExp[] = [
 // deno-lint-ignore no-explicit-any
 type AnyRecord = Record<string, any>;
 
+/** Check zone-level settings: SSL mode, Always Use HTTPS, development mode, and zone status. */
 export function checkZone(
   zoneListData: AnyRecord[] | null,
   settingsData: AnyRecord | null,
@@ -164,6 +173,7 @@ export function checkZone(
   return findings;
 }
 
+/** Check WAF configuration: rule count, paused rules, and managed rulesets. */
 export function checkWaf(
   rulesData: AnyRecord[] | null,
   packagesData: AnyRecord[] | null,
@@ -232,6 +242,7 @@ export function checkWaf(
   return findings;
 }
 
+/** Check DNS records: unproxied records, dangling CNAMEs, and CAA presence. */
 export function checkDns(recordsData: AnyRecord[] | null): Finding[] {
   const findings: Finding[] = [];
 
@@ -311,6 +322,7 @@ export function checkDns(recordsData: AnyRecord[] | null): Finding[] {
   return findings;
 }
 
+/** Check Workers: detect orphaned scripts that have no associated routes. */
 export function checkWorkers(
   scriptsData: AnyRecord[] | null,
   routesData: AnyRecord[] | null,
@@ -354,6 +366,7 @@ export function checkWorkers(
   return findings;
 }
 
+/** Check cache configuration: cache level and hit rate against threshold. */
 export function checkCache(
   settingsData: AnyRecord | null,
   analyticsData: AnyRecord | null,
@@ -402,6 +415,7 @@ export function checkCache(
   return findings;
 }
 
+/** Workflow-scoped report that aggregates all audit check results into a Markdown summary with JSON data. */
 export const report = {
   name: "@webframp/cloudflare-audit-report",
   description:
@@ -411,10 +425,11 @@ export const report = {
 
   execute: async (context: WorkflowReportContext) => {
     const findings: Finding[] = [];
+    const now = new Date().toISOString();
     const jsonData: Record<string, unknown> = {
       workflowName: context.workflowName,
       workflowStatus: context.workflowStatus,
-      timestamp: new Date().toISOString(),
+      timestamp: now,
     };
 
     // --- Data access helpers ---
@@ -595,7 +610,7 @@ export const report = {
     lines.push(`# Cloudflare Audit Report: ${zoneName}`);
     lines.push("");
     lines.push(`**Status:** ${statusBanner} ${overallStatus}`);
-    lines.push(`**Timestamp:** ${new Date().toISOString()}`);
+    lines.push(`**Timestamp:** ${now}`);
     lines.push(
       `**Checks:** ${findings.length} total | ${criticals.length} critical | ${warnings.length} warning | ${oks.length} ok`,
     );
@@ -638,32 +653,40 @@ export const report = {
       const badge = { ok: "OK", warn: "WARN", critical: "CRIT", error: "ERR" }[
         f.severity
       ];
-      lines.push(`| ${f.check} | ${badge} | ${f.message} |`);
+      const escaped = f.message.split("|").join("\\|");
+      lines.push(`| ${f.check} | ${badge} | ${escaped} |`);
     }
     lines.push("");
 
     // --- Recommendations ---
 
+    const seen = new Set<string>();
     const recommendations: string[] = [];
+    const addRec = (text: string): void => {
+      if (!seen.has(text)) {
+        seen.add(text);
+        recommendations.push(text);
+      }
+    };
 
     for (const f of criticals) {
       if (f.check === "Zone" && f.message.includes("paused")) {
-        recommendations.push(
+        addRec(
           "Unpause the zone to restore Cloudflare proxy and security features",
         );
       }
       if (f.check === "Zone" && f.message.includes("SSL is disabled")) {
-        recommendations.push(
+        addRec(
           'Enable SSL immediately — set mode to "full" or "strict" to encrypt traffic end-to-end',
         );
       }
       if (f.check === "Zone" && f.message.includes("Development mode")) {
-        recommendations.push(
+        addRec(
           "Disable development mode — it bypasses caching and degrades performance",
         );
       }
       if (f.check === "DNS" && f.message.includes("subdomain takeover")) {
-        recommendations.push(
+        addRec(
           "Remove or update dangling CNAME records to prevent subdomain takeover attacks",
         );
       }
@@ -671,47 +694,47 @@ export const report = {
 
     for (const f of warnings) {
       if (f.check === "Zone" && f.message.includes("flexible")) {
-        recommendations.push(
+        addRec(
           'Upgrade SSL mode from "flexible" to "full" or "strict" to encrypt origin traffic',
         );
       }
       if (f.check === "Zone" && f.message.includes("Always Use HTTPS")) {
-        recommendations.push(
+        addRec(
           "Enable Always Use HTTPS to redirect all HTTP requests to HTTPS",
         );
       }
       if (f.check === "WAF" && f.message.includes("No WAF rules")) {
-        recommendations.push(
+        addRec(
           "Configure WAF rules to protect against common web attacks",
         );
       }
       if (f.check === "WAF" && f.message.includes("paused")) {
-        recommendations.push(
+        addRec(
           "Review and re-enable paused WAF rules to maintain security coverage",
         );
       }
       if (f.check === "DNS" && f.message.includes("unproxied")) {
-        recommendations.push(
+        addRec(
           "Enable Cloudflare proxy on exposed records to hide origin IP addresses",
         );
       }
       if (f.check === "DNS" && f.message.includes("CAA")) {
-        recommendations.push(
+        addRec(
           "Add CAA records to restrict which certificate authorities can issue certificates for your domain",
         );
       }
       if (f.check === "Workers" && f.message.includes("Orphaned")) {
-        recommendations.push(
+        addRec(
           "Remove orphaned worker scripts or create routes to activate them",
         );
       }
       if (f.check === "Cache" && f.message.includes("hit rate")) {
-        recommendations.push(
+        addRec(
           "Review cache rules and page rules to improve cache hit rate",
         );
       }
-      if (f.check === "Cache" && f.message.includes("cache level")) {
-        recommendations.push(
+      if (f.check === "Cache" && f.message.includes("Cache level")) {
+        addRec(
           "Upgrade cache level for better performance and reduced origin load",
         );
       }
