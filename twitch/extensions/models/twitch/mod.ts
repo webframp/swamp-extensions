@@ -144,7 +144,7 @@ const ModEventSchema = z.object({
   eventTimestamp: z.string(),
   userId: z.string(),
   userLogin: z.string(),
-  moderatorLogin: z.string(),
+  channelLogin: z.string(),
 });
 
 const ModEventsSchema = z.object({
@@ -222,6 +222,11 @@ export const model = {
           tags: string[];
         }>(creds, `/channels?broadcaster_id=${broadcasterId}`);
 
+        if (resp.data.length === 0) {
+          throw new Error(
+            `Channel info not found for broadcaster: ${broadcasterId}`,
+          );
+        }
         const ch = resp.data[0];
         const handle = await context.writeResource("channel", channel, {
           broadcasterId: ch.broadcaster_id,
@@ -230,7 +235,7 @@ export const model = {
           gameName: ch.game_name,
           gameId: ch.game_id,
           title: ch.title,
-          tags: ch.tags,
+          tags: ch.tags ?? [],
           fetchedAt: new Date().toISOString(),
         });
 
@@ -470,7 +475,7 @@ export const model = {
           eventTimestamp: e.event_timestamp,
           userId: e.event_data.user_id,
           userLogin: e.event_data.user_login,
-          moderatorLogin: e.event_data.broadcaster_login,
+          channelLogin: e.event_data.broadcaster_login,
         }));
 
         const handle = await context.writeResource("mod-events", channel, {

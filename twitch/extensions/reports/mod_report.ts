@@ -82,7 +82,7 @@ interface ModEvent {
   eventTimestamp: string;
   userId: string;
   userLogin: string;
-  moderatorLogin: string;
+  channelLogin: string;
 }
 
 interface ModEventsData {
@@ -433,18 +433,16 @@ export const report = {
 
       const capped = allModEvents.slice(0, 50);
       findings.push(
-        "| Channel | Event | User | Moderator | Timestamp |",
+        "| Channel | Event | User | Timestamp |",
       );
       findings.push(
-        "| ------- | ----- | ---- | --------- | --------- |",
+        "| ------- | ----- | ---- | --------- |",
       );
       for (const event of capped) {
         findings.push(
           `| ${escMd(event.channel)} | ${escMd(event.eventType)} | ${
             escMd(event.userLogin)
-          } | ${escMd(event.moderatorLogin)} | ${
-            escMd(event.eventTimestamp)
-          } |`,
+          } | ${escMd(event.eventTimestamp)} |`,
         );
       }
       findings.push("");

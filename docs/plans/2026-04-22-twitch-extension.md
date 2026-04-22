@@ -1,7 +1,5 @@
 # Twitch Moderation Extension Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Build a swamp extension (`@webframp/twitch`) that gives Twitch moderators cross-channel visibility into chat activity, user history, and moderation events via a model, workflow, and report.
 
 **Architecture:** A single model type where each instance represents one Twitch channel. A `_lib/api.ts` handles Helix API calls with token refresh and rate limiting. A workflow fans out across channel instances, and a report correlates findings cross-channel (suspicious users, ban overlap).
