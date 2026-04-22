@@ -1,5 +1,11 @@
-// Redmine API Helper
-// Shared utilities for all Redmine models
+/**
+ * Redmine API helper utilities.
+ *
+ * Shared HTTP client functions for all Redmine model methods.
+ * Handles authentication, pagination, and error responses.
+ *
+ * @module
+ */
 
 /**
  * Make a single Redmine API request.

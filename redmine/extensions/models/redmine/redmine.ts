@@ -1,4 +1,12 @@
-// Redmine Issue Tracker Model
+/**
+ * Redmine issue tracker model for swamp.
+ *
+ * Provides CRUD operations on Redmine issues, project queries,
+ * status/tracker/user lookups, and custom field access via the
+ * Redmine REST API.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "zod";
@@ -101,7 +109,7 @@ interface RawIssue {
 // =============================================================================
 
 /** Map a raw Redmine issue to camelCase fields. */
-export function mapIssue(raw: RawIssue) {
+export function mapIssue(raw: RawIssue): Record<string, unknown> {
   return {
     id: raw.id,
     project: raw.project,
@@ -131,7 +139,7 @@ export function mapIssue(raw: RawIssue) {
 }
 
 /** Map a raw Redmine issue detail (with journals and children) to camelCase fields. */
-export function mapIssueDetail(raw: RawIssue) {
+export function mapIssueDetail(raw: RawIssue): Record<string, unknown> {
   return {
     ...mapIssue(raw),
     journals: (raw.journals ?? []).map((j) => ({
@@ -179,9 +187,10 @@ type MethodContext = {
 // Model Definition
 // =============================================================================
 
+/** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.04.14.1",
+  version: "2026.04.22.1",
   globalArguments: z.object({
     host: z.string().describe(
       "Redmine instance URL (e.g. https://redmine.example.com)",

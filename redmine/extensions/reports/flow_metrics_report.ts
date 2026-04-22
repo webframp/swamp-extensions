@@ -1,4 +1,12 @@
-// Flow Metrics Report - cycle time, lead time, throughput, WIP age
+/**
+ * Flow metrics report for Redmine issues.
+ *
+ * Computes cycle time, lead time, throughput, and WIP age from
+ * Redmine issue journals collected during a workflow run. Produces
+ * both markdown and structured JSON output.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 interface DataHandle {
@@ -175,6 +183,7 @@ function findFirstInProgressDateByName(
   return null;
 }
 
+/** Flow metrics report: cycle time, lead time, throughput, and WIP age analysis. */
 export const report = {
   name: "@webframp/flow-metrics-report",
   description:

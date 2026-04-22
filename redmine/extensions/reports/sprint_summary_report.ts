@@ -1,4 +1,12 @@
-// Sprint Summary Report - status, tracker, assignee breakdowns; blocked; completed
+/**
+ * Sprint summary report for Redmine issues.
+ *
+ * Summarizes current sprint status with breakdowns by status, tracker,
+ * and assignee. Identifies blocked and completed items. Produces both
+ * markdown and structured JSON output.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 interface DataHandle {
@@ -88,6 +96,7 @@ function isBlocked(subject: string): boolean {
   return subject.toLowerCase().startsWith("[blocked]");
 }
 
+/** Sprint summary report: status, tracker, and assignee breakdowns. */
 export const report = {
   name: "@webframp/sprint-summary-report",
   description:
