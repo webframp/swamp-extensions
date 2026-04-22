@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws-ops"
-version: "2026.04.15.1"
+version: "2026.04.22.1"
 description: |
   AWS Operations Toolkit - Unified incident investigation and operational visibility.
 
@@ -88,6 +88,14 @@ labels:
   - ops
   - incident-response
   - workflow
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+include:
+  - README.md
+  - LICENSE.md
 dependencies:
   - "@webframp/aws/logs@2026.03.30.1"
   - "@webframp/aws/metrics@2026.03.30.1"
