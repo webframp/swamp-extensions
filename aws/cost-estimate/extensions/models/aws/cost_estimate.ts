@@ -1,5 +1,14 @@
-// AWS Cost Estimate Model - Calculate costs from inventory + pricing
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * AWS Cost Estimate Model - Calculate infrastructure costs from inventory data
+ * or planned resource specifications using the AWS Pricing API.
+ *
+ * Supports EC2 and RDS cost estimation with On-Demand pricing rates.
+ * Queries the AWS Pricing API for real-time rates and caches results
+ * within a single run to minimize API calls.
+ *
+ * @module
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 import { z } from "npm:zod@4.3.6";
 import {
@@ -186,6 +195,14 @@ async function getRDSHourlyRate(
 
 const HOURS_PER_MONTH = 730;
 
+/**
+ * AWS Cost Estimate model definition.
+ *
+ * Provides three methods for estimating AWS infrastructure costs:
+ * - `estimate_ec2` - Estimate EC2 costs from inventory data
+ * - `estimate_rds` - Estimate RDS costs from inventory data
+ * - `estimate_from_spec` - Estimate costs for planned resources before deployment
+ */
 export const model = {
   type: "@webframp/aws/cost-estimate",
   version: "2026.03.30.4",
