@@ -1,0 +1,79 @@
+manifestVersion: 1
+name: "@webframp/twitch"
+version: "2026.04.22.1"
+description: |
+  Twitch Moderation Toolkit — cross-channel moderation visibility for Twitch moderators.
+
+  This extension provides a model for interacting with the Twitch Helix API
+  (chatters, bans, mod events, user lookups), a workflow that audits all your
+  moderated channels in parallel, and a report that correlates findings
+  cross-channel to surface suspicious users and ban overlap.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/twitch
+
+  # Create one model instance per channel you moderate
+  swamp model create @webframp/twitch mod-drongo \
+    --global-arg channel=drongo \
+    --global-arg moderatorId=YOUR_TWITCH_USER_ID
+
+  # Run the cross-channel audit
+  swamp workflow run @webframp/twitch-mod-audit
+  ```
+
+  ## Authentication
+
+  Requires a Twitch application with OAuth2 user tokens. Store credentials in vault:
+
+  ```bash
+  swamp vault set twitch-client-id YOUR_CLIENT_ID
+  swamp vault set twitch-client-secret YOUR_CLIENT_SECRET
+  swamp vault set twitch-access-token YOUR_ACCESS_TOKEN
+  swamp vault set twitch-refresh-token YOUR_REFRESH_TOKEN
+  ```
+
+  To obtain tokens, register an app at dev.twitch.tv/console/apps with
+  redirect URL http://localhost:3000 and category "Chat Bot". Then authorize:
+
+  ```bash
+  # 1. Open in browser (replace YOUR_CLIENT_ID):
+  # https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=code&scope=moderator:read:chatters+moderation:read+moderator:manage:banned_users+channel:read:editors
+
+  # 2. Copy the code from the redirect URL, then exchange for tokens:
+  curl -X POST 'https://id.twitch.tv/oauth2/token' \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d 'client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET&code=AUTH_CODE&grant_type=authorization_code&redirect_uri=http://localhost:3000'
+
+  # 3. Get your moderator user ID:
+  curl -H 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
+    -H 'Client-Id: YOUR_CLIENT_ID' \
+    'https://api.twitch.tv/helix/users'
+  ```
+
+  The model refreshes expired access tokens automatically using the refresh token.
+
+  ## Required Scopes
+
+  - moderator:read:chatters
+  - moderation:read
+  - moderator:manage:banned_users
+  - channel:read:editors
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - twitch/mod.ts
+workflows:
+  - twitch-mod-audit.yaml
+reports:
+  - mod_report.ts
+labels:
+  - twitch
+  - moderation
+  - chat
+  - streaming
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
