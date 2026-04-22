@@ -1,4 +1,12 @@
-// AWS X-Ray Traces Operations Model
+/**
+ * AWS X-Ray Traces Operations Model
+ *
+ * Provides methods to query and analyze AWS X-Ray distributed traces,
+ * including service dependency graphs, trace summaries, error filtering,
+ * and error-pattern analysis for incident investigation.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -143,6 +151,13 @@ const ErrorAnalysisSchema = z.object({
 // Helper Functions
 // =============================================================================
 
+/**
+ * Parse a time string into a Date.
+ *
+ * Accepts relative durations such as 30m, 1h, or 2d (minutes, hours,
+ * days before now) and ISO 8601 timestamps. Falls back to one hour ago when
+ * the input cannot be parsed.
+ */
 function parseRelativeTime(timeStr: string): Date {
   const now = new Date();
 
@@ -169,7 +184,7 @@ function parseRelativeTime(timeStr: string): Date {
   return new Date(now.getTime() - 60 * 60 * 1000);
 }
 
-// Local interface for edge statistics
+/** Local interface representing X-Ray edge summary statistics. */
 interface EdgeStatistics {
   OkCount?: number;
   ErrorStatistics?: {
@@ -185,19 +200,19 @@ interface EdgeStatistics {
   TotalResponseTime?: number;
 }
 
-// Local interface for service edge
+/** Local interface for a service-to-service edge in the X-Ray graph. */
 interface ServiceEdge {
   ReferenceId?: number;
   SummaryStatistics?: EdgeStatistics;
 }
 
-// Local interface for histogram entry
+/** Local interface for a response-time histogram bucket. */
 interface HistogramEntry {
   Value?: number;
   Count?: number;
 }
 
-// Local interface for service
+/** Local interface representing an X-Ray service node. */
 interface ServiceNode {
   Name?: string;
   Type?: string;
@@ -211,7 +226,7 @@ interface ServiceNode {
   ResponseTimeHistogram?: HistogramEntry[];
 }
 
-// Local interface for annotation value
+/** Local interface for an X-Ray trace annotation value. */
 interface AnnotationValue {
   AnnotationValue?: {
     StringValue?: string;
@@ -220,19 +235,19 @@ interface AnnotationValue {
   };
 }
 
-// Local interface for user
+/** Local interface for an X-Ray trace user identity. */
 interface TraceUser {
   UserName?: string;
 }
 
-// Local interface for service id
+/** Local interface for an X-Ray service identifier. */
 interface ServiceId {
   Name?: string;
   Type?: string;
   AccountId?: string;
 }
 
-// Local interface for http info
+/** Local interface for HTTP metadata on a trace. */
 interface HttpInfo {
   HttpURL?: string;
   HttpMethod?: string;
@@ -241,7 +256,7 @@ interface HttpInfo {
   ClientIp?: string;
 }
 
-// Local interface for trace summary
+/** Local interface for a raw X-Ray trace summary. */
 interface TraceSummaryItem {
   Id?: string;
   Duration?: number;
@@ -260,6 +275,13 @@ interface TraceSummaryItem {
 // Model Definition
 // =============================================================================
 
+/**
+ * X-Ray traces model definition.
+ *
+ * Exposes four methods -- get_service_graph, get_traces, get_errors,
+ * and analyze_errors -- that query the AWS X-Ray API and write structured
+ * resources for downstream consumption by swamp reports and workflows.
+ */
 export const model = {
   type: "@webframp/aws/traces",
   version: "2026.03.30.1",
@@ -736,6 +758,7 @@ export const model = {
 // Helper Functions for Mapping
 // =============================================================================
 
+/** Map raw X-Ray edge statistics to the normalized schema shape. */
 function mapStatistics(stats: EdgeStatistics | undefined): {
   okCount: number;
   errorStatistics: {
@@ -767,6 +790,7 @@ function mapStatistics(stats: EdgeStatistics | undefined): {
   };
 }
 
+/** Map a raw X-Ray service node to the ServiceNodeSchema shape. */
 function mapService(svc: ServiceNode): z.infer<typeof ServiceNodeSchema> {
   return {
     name: svc.Name || "",
@@ -790,6 +814,7 @@ function mapService(svc: ServiceNode): z.infer<typeof ServiceNodeSchema> {
   };
 }
 
+/** Map a raw X-Ray trace summary to the TraceSummarySchema shape. */
 function mapTraceSummary(
   trace: TraceSummaryItem,
 ): z.infer<typeof TraceSummarySchema> {
