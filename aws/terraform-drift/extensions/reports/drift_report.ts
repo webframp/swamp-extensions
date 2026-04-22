@@ -1,6 +1,16 @@
-// Terraform AWS Drift Detection Report
+/**
+ * Terraform AWS Drift Detection Report.
+ *
+ * Compares Terraform state against live AWS resources (EC2 instances,
+ * NAT gateways, load balancers, Elastic IPs) to identify configuration
+ * drift. Produces both Markdown and JSON output summarizing missing,
+ * extra, and changed resources.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
+/** Reference to a data artifact produced by a workflow step. */
 interface DataHandle {
   name: string;
   dataId: string;
@@ -34,6 +44,7 @@ interface WorkflowReportContext {
 // Types
 // =============================================================================
 
+/** A single Terraform-managed resource extracted from state. */
 interface TfResource {
   address: string;
   mode: string;
@@ -44,6 +55,7 @@ interface TfResource {
   dependsOn: string[];
 }
 
+/** A detected drift between Terraform state and live AWS for one resource. */
 interface DriftFinding {
   tfAddress: string;
   tfType: string;
@@ -91,6 +103,32 @@ interface AwsElasticIp {
 // Report
 // =============================================================================
 
+/** Aggregated counts returned in the drift report JSON payload. */
+interface DriftSummary {
+  timestamp: string;
+  workflowName: string;
+  totalTfResources: number;
+  comparedResources: number;
+  driftedResources: number;
+  missingInAws: number;
+  fieldDrifts: number;
+  unsupportedTypes: number;
+}
+
+/** Result shape returned by {@link report.execute}. */
+interface DriftReportResult {
+  markdown: string;
+  json: { summary: DriftSummary; findings: DriftFinding[] };
+}
+
+/**
+ * Terraform drift detection report definition.
+ *
+ * Scoped to a workflow run, this report reads data produced by the
+ * `@webframp/terraform-drift` workflow -- Terraform resource state and
+ * live AWS inventory -- then compares each managed AWS resource against
+ * its Terraform declaration to surface drift.
+ */
 export const report = {
   name: "@webframp/terraform-drift-report",
   description:
@@ -98,7 +136,9 @@ export const report = {
   scope: "workflow" as const,
   labels: ["aws", "terraform", "drift", "compliance"],
 
-  execute: async (context: WorkflowReportContext) => {
+  execute: async (
+    context: WorkflowReportContext,
+  ): Promise<DriftReportResult> => {
     const findings: DriftFinding[] = [];
     const sections: string[] = [];
     const summary = {
