@@ -11,6 +11,8 @@
  *   inside a nix shell. Stdout becomes resource data, stderr streams as logs.
  * - **Bundle mode**: when request.bundle exists, writes it to a temp file
  *   and runs it with deno inside the nix shell.
+ *
+ * @module
  */
 
 const SIGKILL_GRACE_MS = 5_000;
@@ -459,13 +461,33 @@ async function executeBundle(
   }
 }
 
+/**
+ * The Nix shell execution driver definition.
+ *
+ * Registers the `@webframp/nix` driver type with swamp. Call
+ * {@link driver.createDriver} with a configuration object containing
+ * a `packages` array to instantiate the driver.
+ */
 export const driver = {
   type: "@webframp/nix",
   name: "Nix Shell",
   description:
     "Runs model methods inside a nix shell with declarative package dependencies. Supports pinning to a specific nixpkgs revision for full reproducibility.",
 
-  createDriver: (config?: Record<string, unknown>) => {
+  /**
+   * Create a configured Nix driver instance.
+   *
+   * @param config - Driver configuration containing at minimum a
+   *   `packages` string array listing nix packages to make available.
+   * @returns A driver instance with an `execute` method.
+   */
+  createDriver: (config?: Record<string, unknown>): {
+    type: string;
+    execute(
+      request: ExecutionRequest,
+      callbacks?: ExecutionCallbacks,
+    ): Promise<ExecutionResult>;
+  } => {
     const parsed = parseConfig(config);
     return {
       type: "@webframp/nix",
