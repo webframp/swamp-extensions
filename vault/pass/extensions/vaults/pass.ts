@@ -1,4 +1,12 @@
-// Pass (passwordstore.org) Vault Provider
+/**
+ * Pass (passwordstore.org) vault provider for swamp.
+ *
+ * Stores and retrieves secrets using the `pass` CLI with GPG encryption.
+ * Supports configurable key prefixing for namespace isolation and custom
+ * PASSWORD_STORE_DIR paths.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4";
@@ -14,13 +22,19 @@ const ConfigSchema = z.object({
   ),
 });
 
+/** Pass vault provider — delegates to the `pass` CLI for GPG-encrypted secret storage. */
 export const vault = {
   type: "@webframp/pass",
   name: "Pass (passwordstore.org)",
   description: "GPG-encrypted password store using the pass CLI",
   configSchema: ConfigSchema,
 
-  createProvider: (name: string, config: Record<string, unknown>) => {
+  createProvider: (name: string, config: Record<string, unknown>): {
+    get: (key: string) => Promise<string>;
+    put: (key: string, value: string) => Promise<void>;
+    list: () => Promise<string[]>;
+    getName: () => string;
+  } => {
     const parsed = ConfigSchema.parse(config);
     const storeDir = parsed.storeDir ||
       `${Deno.env.get("HOME")}/.password-store`;

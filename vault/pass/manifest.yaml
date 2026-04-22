@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/pass"
-version: "2026.04.22.1"
+version: "2026.04.22.2"
 description: "GPG-encrypted password store using the pass CLI (passwordstore.org)"
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:
@@ -10,6 +10,9 @@ platforms:
   - linux-aarch64
   - darwin-x86_64
   - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
 tags:
   - vault
   - secrets
