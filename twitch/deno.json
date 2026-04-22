@@ -4,7 +4,7 @@
     "lint": "deno lint extensions/models/ extensions/reports/",
     "fmt": "deno fmt extensions/models/ extensions/reports/",
     "fmt:check": "deno fmt --check extensions/models/ extensions/reports/",
-    "test": "deno test --allow-env --allow-net extensions/models/ extensions/reports/"
+    "test": "deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/models/ extensions/reports/"
   },
   "lint": {
     "rules": {
