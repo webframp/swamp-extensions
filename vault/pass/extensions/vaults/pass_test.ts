@@ -60,7 +60,6 @@ const OriginalCommand = Deno.Command;
 class MockCommand {
   #command: string;
   #args: string[];
-  #stdinMode: string;
   #stdinData: string | undefined;
 
   constructor(
@@ -75,7 +74,6 @@ class MockCommand {
   ) {
     this.#command = command;
     this.#args = options.args ?? [];
-    this.#stdinMode = options.stdin ?? "null";
   }
 
   #resolve(): { code: number; stdout: Uint8Array; stderr: Uint8Array } {
@@ -110,8 +108,23 @@ class MockCommand {
 
     if (this.#command === "find") {
       const storeDir = this.#args[0];
+      // Collect -not -path glob patterns to mimic real find filtering
+      const excludePatterns: string[] = [];
+      for (let i = 1; i < this.#args.length; i++) {
+        if (this.#args[i] === "-not" && this.#args[i + 1] === "-path") {
+          excludePatterns.push(this.#args[i + 2]);
+          i += 2;
+        }
+      }
       const files = [...mockSecrets.keys()]
         .map((key) => `${storeDir}/${key}.gpg`)
+        .filter((path) =>
+          !excludePatterns.some((pattern) => {
+            // Convert glob */<dir>/* to a simple includes check
+            const inner = pattern.replace(/^\*/, "").replace(/\*$/, "");
+            return path.includes(inner);
+          })
+        )
         .join("\n");
       return { code: 0, stdout: enc.encode(files), stderr: new Uint8Array() };
     }
@@ -263,6 +276,18 @@ Deno.test("pass vault: list returns sorted keys", async () => {
     await provider.put("mango", "m");
     const keys = await provider.list();
     assertEquals(keys, ["apple", "mango", "zebra"]);
+  });
+});
+
+Deno.test("pass vault: list excludes .git and .extensions entries", async () => {
+  await withMockedPass(async () => {
+    // Seed entries that would live under .git/ and .extensions/ in a real store
+    mockSecrets.set(".git/config", "git-data");
+    mockSecrets.set(".extensions/hook", "ext-data");
+    const provider = vault.createProvider("test", { storeDir: "/tmp/store" });
+    await provider.put("real-key", "real-value");
+    const keys = await provider.list();
+    assertEquals(keys, ["real-key"]);
   });
 });
 

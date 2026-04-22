@@ -8,7 +8,9 @@ const ConfigSchema = z.object({
     "PASSWORD_STORE_DIR override (defaults to ~/.password-store)",
   ),
   prefix: z.string().optional().default("swamp").describe(
-    "Key prefix for namespacing secrets (defaults to 'swamp')",
+    "Key prefix for namespacing secrets (defaults to 'swamp'). " +
+      "BREAKING from 2026.04.13.1: prior versions had no prefix. " +
+      "Set to '' (empty string) to access keys stored by earlier versions.",
   ),
 });
 
