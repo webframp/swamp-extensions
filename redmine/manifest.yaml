@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/redmine"
-version: "2026.04.14.1"
+version: "2026.04.22.1"
 description: |
   Redmine issue tracker integration - manage issues, projects, and workflows.
 
@@ -37,3 +37,6 @@ platforms:
   - linux-aarch64
   - darwin-x86_64
   - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
