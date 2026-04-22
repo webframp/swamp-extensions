@@ -1,5 +1,14 @@
-// SRE Health Check Report
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * SRE Health Check Report
+ *
+ * Aggregates network probe and system health data produced by the
+ * `@webframp/sre-health-check` workflow into a unified health report.
+ * Each check is assigned a severity (ok, warn, critical, error) and
+ * the report derives an overall status with actionable recommendations.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ * @module
+ */
 
 interface DataHandle {
   name: string;
@@ -56,7 +65,8 @@ const DNS_TOOL_FAILURE_STATUSES = ["COMMAND_FAILED"];
 
 /**
  * Parse a human-readable size string (e.g., "3.2Gi", "456Mi", "27Gi") into
- * megabytes for comparison. Returns null if unparseable.
+ * megabytes for comparison. Supports binary (Ki, Mi, Gi, Ti) and decimal
+ * (K, M, G, T) suffixes. Returns `null` if the input cannot be parsed.
  */
 export function parseSizeToMB(size: string): number | null {
   const match = size.match(/^([\d.]+)\s*(B|Ki|Mi|Gi|Ti|K|M|G|T)?/i);
@@ -88,6 +98,11 @@ interface Finding {
   detail?: string;
 }
 
+/**
+ * Workflow-scoped report that processes step execution data from the
+ * SRE health check workflow and produces a Markdown summary with a
+ * structured JSON payload of all findings and recommendations.
+ */
 export const report = {
   name: "@webframp/sre-health-report",
   description:
