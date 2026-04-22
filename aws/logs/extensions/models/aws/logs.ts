@@ -1,4 +1,13 @@
-// AWS CloudWatch Logs Operations Model
+/**
+ * AWS CloudWatch Logs operations model for swamp.
+ *
+ * Provides methods to query and analyze CloudWatch Logs, including log group
+ * discovery, Logs Insights queries, error pattern analysis, and recent event
+ * filtering. Uses the AWS SDK v3 CloudWatch Logs client with the default
+ * credential chain.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -167,6 +176,14 @@ async function waitForQueryCompletion(
 // Model Definition
 // =============================================================================
 
+/**
+ * CloudWatch Logs model definition.
+ *
+ * Exposes four methods -- `list_log_groups`, `query`, `find_errors`, and
+ * `get_recent_events` -- backed by the AWS CloudWatch Logs SDK. Each method
+ * writes its results to a typed swamp resource for downstream consumption in
+ * workflows and reports.
+ */
 export const model = {
   type: "@webframp/aws/logs",
   version: "2026.03.30.1",
