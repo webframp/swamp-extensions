@@ -1,12 +1,24 @@
-// AWS Incident Investigation Report
+/**
+ * AWS Incident Investigation Report.
+ *
+ * Aggregates findings from the investigate-outage workflow into an actionable
+ * incident report covering alarms, metrics, traces, logs, infrastructure, and
+ * networking. The report produces both human-readable Markdown and structured
+ * JSON output suitable for downstream automation.
+ *
+ * @module
+ */
+
 // SPDX-License-Identifier: Apache-2.0
 
+/** Handle referencing a versioned data artifact produced by a workflow step. */
 interface DataHandle {
   name: string;
   dataId: string;
   version: number;
 }
 
+/** Metadata for a single step execution within a workflow run. */
 interface StepExecution {
   jobName: string;
   stepName: string;
@@ -18,6 +30,7 @@ interface StepExecution {
   dataHandles: DataHandle[];
 }
 
+/** Context provided to a workflow-scoped report at execution time. */
 interface WorkflowReportContext {
   workflowId: string;
   workflowRunId: string;
@@ -30,6 +43,13 @@ interface WorkflowReportContext {
   };
 }
 
+/**
+ * Incident report definition.
+ *
+ * Scoped to the `investigate-outage` workflow, this report reads step execution
+ * data from CloudWatch, X-Ray, EC2, Lambda, and networking models, then
+ * produces a consolidated Markdown report with actionable recommendations.
+ */
 export const report = {
   name: "@webframp/incident-report",
   description:
@@ -63,6 +83,7 @@ export const report = {
       }
     }
 
+    /** Coordinates that locate a specific data artifact on the filesystem. */
     interface DataLocation {
       modelType: string;
       modelId: string;
