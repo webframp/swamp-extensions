@@ -117,6 +117,7 @@ jobs:
           - { dir: gitlab, models: gitlab }
           - { dir: system, models: system }
           - { dir: network, models: network }
+          - { dir: twitch, models: twitch }
         task: [check, lint, fmt]
     defaults:
       run:
@@ -210,6 +211,20 @@ jobs:
           deno-version: v2.x
       - name: deno test
         run: deno test --allow-run extensions/models/
+
+  twitch-test:
+    name: twitch - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: twitch
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/
 
   cloudflare-audit-check:
     name: cloudflare-audit - ${{ matrix.task }}

@@ -1,0 +1,18 @@
+{
+  "tasks": {
+    "check": "deno check extensions/models/twitch/*.ts extensions/models/twitch/_lib/*.ts extensions/reports/*.ts",
+    "lint": "deno lint extensions/models/ extensions/reports/",
+    "fmt": "deno fmt extensions/models/ extensions/reports/",
+    "fmt:check": "deno fmt --check extensions/models/ extensions/reports/",
+    "test": "deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/models/ extensions/reports/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "imports": {
+    "zod": "npm:zod@4.3.6",
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
+  }
+}
