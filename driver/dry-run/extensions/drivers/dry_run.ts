@@ -5,40 +5,79 @@
  * returning it as a pending resource for inspection. Useful for
  * debugging workflows, auditing method arguments, and validating
  * pipeline configuration before hitting real APIs.
+ *
+ * @module
  */
 
+/** Request envelope passed to the driver's execute method. */
+export interface DryRunRequest {
+  protocolVersion: number;
+  modelType: string;
+  modelId: string;
+  methodName: string;
+  globalArgs: Record<string, unknown>;
+  methodArgs: Record<string, unknown>;
+  definitionMeta: {
+    id: string;
+    name: string;
+    version: number;
+    tags: Record<string, string>;
+  };
+  resourceSpecs?: Record<string, unknown>;
+  fileSpecs?: Record<string, unknown>;
+  bundle?: Uint8Array;
+  traceHeaders?: Record<string, string>;
+}
+
+/** Optional callbacks provided during driver execution. */
+export interface DryRunCallbacks {
+  onLog?: (line: string) => void;
+}
+
+/** A single pending output produced by the dry-run capture. */
+export interface DryRunOutput {
+  kind: "pending";
+  specName: string;
+  name: string;
+  type: "resource";
+  content: Uint8Array;
+  tags: Record<string, string>;
+}
+
+/** Result returned after a dry-run execution completes. */
+export interface DryRunResult {
+  status: "success";
+  outputs: DryRunOutput[];
+  logs: string[];
+  durationMs: number;
+}
+
+/**
+ * The dry-run execution driver definition.
+ *
+ * Exposes {@linkcode driver.createDriver} to instantiate a driver that
+ * captures method execution requests as pending resources without
+ * performing any real work.
+ */
 export const driver = {
   type: "@webframp/dry-run",
   name: "Dry Run",
   description:
     "Captures method execution requests without running them. Returns the request envelope as a resource for debugging and auditing.",
 
-  createDriver: (_config?: Record<string, unknown>) => ({
+  createDriver: (_config?: Record<string, unknown>): {
+    type: string;
+    execute: (
+      request: DryRunRequest,
+      callbacks?: DryRunCallbacks,
+    ) => Promise<DryRunResult>;
+  } => ({
     type: "@webframp/dry-run",
 
     execute(
-      request: {
-        protocolVersion: number;
-        modelType: string;
-        modelId: string;
-        methodName: string;
-        globalArgs: Record<string, unknown>;
-        methodArgs: Record<string, unknown>;
-        definitionMeta: {
-          id: string;
-          name: string;
-          version: number;
-          tags: Record<string, string>;
-        };
-        resourceSpecs?: Record<string, unknown>;
-        fileSpecs?: Record<string, unknown>;
-        bundle?: Uint8Array;
-        traceHeaders?: Record<string, string>;
-      },
-      callbacks?: {
-        onLog?: (line: string) => void;
-      },
-    ) {
+      request: DryRunRequest,
+      callbacks?: DryRunCallbacks,
+    ): Promise<DryRunResult> {
       const start = performance.now();
       const log = callbacks?.onLog ?? (() => {});
 
