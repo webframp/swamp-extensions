@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/alarms"
-version: "2026.04.14.1"
+version: "2026.04.22.1"
 description: |
   Query and analyze CloudWatch Alarms for operational visibility and incident response.
 
@@ -53,6 +53,14 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/alarms.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
 labels:
   - aws
   - cloudwatch

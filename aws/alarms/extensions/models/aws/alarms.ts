@@ -1,4 +1,12 @@
-// AWS CloudWatch Alarms Operations Model
+/**
+ * AWS CloudWatch Alarms operations model for swamp.
+ *
+ * Provides methods to list, filter, and summarize CloudWatch Alarms,
+ * retrieve alarm state-change history, and identify active alerts
+ * for operational visibility and incident response.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -121,6 +129,13 @@ interface AwsDimension {
 // Model Definition
 // =============================================================================
 
+/**
+ * CloudWatch Alarms model definition.
+ *
+ * Exposes four methods: `list_alarms`, `get_active`, `get_history`,
+ * and `get_summary` for querying and analyzing alarm state across
+ * an AWS account.
+ */
 export const model = {
   type: "@webframp/aws/alarms",
   version: "2026.03.30.1",
