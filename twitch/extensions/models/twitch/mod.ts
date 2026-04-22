@@ -258,7 +258,9 @@ export const model = {
           user_name: string;
         }>(
           creds,
-          `/chat/chatters?broadcaster_id=${broadcasterId}&moderator_id=${moderatorId}`,
+          `/chat/chatters?broadcaster_id=${broadcasterId}&moderator_id=${
+            encodeURIComponent(moderatorId)
+          }`,
         );
 
         const chatters = raw.map((c) => ({
@@ -394,7 +396,9 @@ export const model = {
 
         await helixApi(
           creds,
-          `/moderation/bans?broadcaster_id=${broadcasterId}&moderator_id=${moderatorId}`,
+          `/moderation/bans?broadcaster_id=${broadcasterId}&moderator_id=${
+            encodeURIComponent(moderatorId)
+          }`,
           "POST",
           { data: banData },
         );
@@ -430,7 +434,9 @@ export const model = {
 
         await helixApi(
           creds,
-          `/moderation/bans?broadcaster_id=${broadcasterId}&moderator_id=${moderatorId}&user_id=${args.userId}`,
+          `/moderation/bans?broadcaster_id=${broadcasterId}&moderator_id=${
+            encodeURIComponent(moderatorId)
+          }&user_id=${args.userId}`,
           "DELETE",
         );
 

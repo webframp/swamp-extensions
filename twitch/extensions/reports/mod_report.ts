@@ -422,8 +422,8 @@ export const report = {
       findings.push("No users banned across multiple channels.\n");
     }
 
-    // === SECTION 4: Recent Moderation Activity ===
-    findings.push("## Recent Moderation Activity\n");
+    // === SECTION 4: Moderator Changes ===
+    findings.push("## Moderator Changes\n");
 
     if (allModEvents.length > 0) {
       // Sort by timestamp descending
@@ -447,7 +447,7 @@ export const report = {
       }
       findings.push("");
     } else {
-      findings.push("No moderation event data available.\n");
+      findings.push("No moderator change data available.\n");
     }
 
     // === BUILD JSON OUTPUT ===

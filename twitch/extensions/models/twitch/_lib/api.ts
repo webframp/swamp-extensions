@@ -97,10 +97,18 @@ export async function helixApi<T>(
     );
   }
 
-  // Rate-limit awareness: pause if close to the limit
+  // Rate-limit awareness: sleep until reset if running low
   const remaining = response.headers.get("Ratelimit-Remaining");
   if (remaining !== null && parseInt(remaining, 10) < 20) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const resetEpoch = response.headers.get("Ratelimit-Reset");
+    let waitMs = 1000;
+    if (resetEpoch !== null) {
+      waitMs = Math.min(
+        Math.max(parseInt(resetEpoch, 10) * 1000 - Date.now(), 0),
+        60000,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
   return (await response.json()) as HelixResponse<T>;
@@ -112,6 +120,8 @@ export async function helixApi<T>(
  * Twitch uses `first` (page size) and `after` (cursor) query parameters.
  * The path may already contain query parameters.
  */
+const MAX_PAGINATED_RESULTS = 50_000;
+
 export async function helixApiPaginated<T>(
   creds: TwitchCredentials,
   path: string,
@@ -127,6 +137,10 @@ export async function helixApiPaginated<T>(
 
     const response = await helixApi<T>(creds, paginatedPath);
     allResults.push(...response.data);
+
+    if (allResults.length >= MAX_PAGINATED_RESULTS) {
+      break;
+    }
 
     cursor = response.pagination?.cursor;
     if (!cursor) {
