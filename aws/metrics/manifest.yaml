@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/metrics"
-version: "2026.04.13.1"
+version: "2026.04.22.1"
 description: |
   Query and analyze CloudWatch Metrics for operational visibility and performance monitoring.
 
@@ -67,4 +67,11 @@ labels:
   - observability
   - ops
   - monitoring
-
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md

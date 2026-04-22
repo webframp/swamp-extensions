@@ -1,4 +1,13 @@
-// AWS CloudWatch Metrics Operations Model
+/**
+ * AWS CloudWatch Metrics operations model for swamp.
+ *
+ * Provides methods to list, retrieve, and analyze CloudWatch metrics across
+ * AWS namespaces. Supports configurable statistics, automatic period
+ * calculation, trend detection via linear regression, and anomaly
+ * identification using standard-deviation thresholds.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -11,16 +20,17 @@ import {
   ListMetricsCommand,
 } from "npm:@aws-sdk/client-cloudwatch@3.1010.0";
 
-// Local type for SDK dimension responses (Name/Value optional in list responses)
+/** Local type for SDK dimension responses where Name and Value are optional in list responses. */
 interface AwsDimension {
   Name?: string;
   Value?: string;
 }
 
-// =============================================================================
+// ---------------------------------------------------------------------------
 // Schemas
-// =============================================================================
+// ---------------------------------------------------------------------------
 
+/** Schema for global arguments accepted by the metrics model. */
 const GlobalArgsSchema = z.object({
   region: z
     .string()
@@ -28,17 +38,20 @@ const GlobalArgsSchema = z.object({
     .describe("AWS region for CloudWatch Metrics"),
 });
 
+/** Schema describing a single CloudWatch dimension (name/value pair). */
 const DimensionSchema = z.object({
   name: z.string(),
   value: z.string(),
 });
 
+/** Schema describing a CloudWatch metric identifier. */
 const MetricSchema = z.object({
   namespace: z.string(),
   metricName: z.string(),
   dimensions: z.array(DimensionSchema),
 });
 
+/** Schema for the metric list resource. */
 const MetricListSchema = z.object({
   namespace: z.string().nullable(),
   metrics: z.array(MetricSchema),
@@ -46,12 +59,14 @@ const MetricListSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for a single metric data point. */
 const DatapointSchema = z.object({
   timestamp: z.string(),
   value: z.number(),
   unit: z.string().nullable(),
 });
 
+/** Schema for the metric data resource. */
 const MetricDataSchema = z.object({
   metric: MetricSchema,
   statistic: z.string(),
@@ -64,6 +79,7 @@ const MetricDataSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for the metric analysis resource including trend and anomalies. */
 const MetricAnalysisSchema = z.object({
   metric: MetricSchema,
   statistic: z.string(),
@@ -87,10 +103,19 @@ const MetricAnalysisSchema = z.object({
   fetchedAt: z.string(),
 });
 
-// =============================================================================
+// ---------------------------------------------------------------------------
 // Helper Functions
-// =============================================================================
+// ---------------------------------------------------------------------------
 
+/**
+ * Parse a time string into a {@link Date}.
+ *
+ * Accepts relative durations (`30m`, `1h`, `2d`) and ISO 8601 timestamps.
+ * Falls back to one hour ago when the input cannot be parsed.
+ *
+ * @param timeStr - Relative duration or ISO 8601 date string.
+ * @returns Resolved {@link Date} instance.
+ */
 function parseRelativeTime(timeStr: string): Date {
   const now = new Date();
 
@@ -117,6 +142,16 @@ function parseRelativeTime(timeStr: string): Date {
   return new Date(now.getTime() - 60 * 60 * 1000);
 }
 
+/**
+ * Calculate an appropriate CloudWatch period in seconds for the given time range.
+ *
+ * Targets roughly 60 data points by choosing a period that scales with the
+ * duration between {@link startTime} and {@link endTime}.
+ *
+ * @param startTime - Beginning of the time range.
+ * @param endTime - End of the time range.
+ * @returns Period in seconds.
+ */
 function calculatePeriod(startTime: Date, endTime: Date): number {
   const durationMs = endTime.getTime() - startTime.getTime();
   const durationHours = durationMs / (1000 * 60 * 60);
@@ -129,6 +164,16 @@ function calculatePeriod(startTime: Date, endTime: Date): number {
   return 86400; // 1 day
 }
 
+/**
+ * Determine the directional trend of a series of data points using simple
+ * linear regression.
+ *
+ * The slope is normalized against the mean value so that comparisons are
+ * scale-independent. A normalized slope below 0.01 is considered stable.
+ *
+ * @param datapoints - Time-ordered metric data points.
+ * @returns One of `"increasing"`, `"decreasing"`, `"stable"`, or `"insufficient_data"`.
+ */
 function calculateTrend(
   datapoints: Array<{ timestamp: string; value: number }>,
 ): "increasing" | "decreasing" | "stable" | "insufficient_data" {
@@ -159,6 +204,16 @@ function calculateTrend(
   return normalizedSlope > 0 ? "increasing" : "decreasing";
 }
 
+/**
+ * Identify anomalous data points whose values exceed a given number of
+ * standard deviations from the mean.
+ *
+ * Returns at most 10 anomalies, sorted by descending deviation magnitude.
+ *
+ * @param datapoints - Time-ordered metric data points.
+ * @param threshold - Number of standard deviations above which a value is anomalous.
+ * @returns Array of anomalous data points with their deviation scores.
+ */
 function findAnomalies(
   datapoints: Array<{ timestamp: string; value: number }>,
   threshold: number = 2,
@@ -184,10 +239,18 @@ function findAnomalies(
     .slice(0, 10);
 }
 
-// =============================================================================
+// ---------------------------------------------------------------------------
 // Model Definition
-// =============================================================================
+// ---------------------------------------------------------------------------
 
+/**
+ * CloudWatch Metrics model definition.
+ *
+ * Exposes five methods -- `list_metrics`, `get_data`, `analyze`,
+ * `get_ec2_cpu`, and `get_lambda_metrics` -- that query and analyze
+ * CloudWatch metric data. Resources are written with one-hour lifetimes
+ * for caching.
+ */
 export const model = {
   type: "@webframp/aws/metrics",
   version: "2026.03.30.1",
