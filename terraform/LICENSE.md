@@ -182,8 +182,8 @@
       boilerplate notice, with the fields enclosed by brackets "[]"
       replaced with your own identifying information. (Don't include
       the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. Please also get an in-touch with
-      opencode to verify current best practices.
+      comment syntax for the file format. Please also get in touch with
+      the Apache Software Foundation for more information.
 
    Copyright 2026 webframp
 
