@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/networking"
-version: "2026.04.13.1"
+version: "2026.04.22.1"
 description: |
   Inspect VPC networking resources that commonly generate hidden costs:
   NAT Gateways, Load Balancers, and Elastic IPs.
@@ -47,3 +47,11 @@ labels:
   - load-balancer
   - cost
   - finops
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
