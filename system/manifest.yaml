@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/system"
-version: "2026.04.13.1"
+version: "2026.04.22.1"
 description: |
   Query local system diagnostics via shell commands for operational visibility.
 
@@ -45,3 +45,11 @@ labels:
   - linux
   - diagnostics
   - ops
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
