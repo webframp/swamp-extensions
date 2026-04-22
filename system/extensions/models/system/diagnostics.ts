@@ -1,4 +1,12 @@
-// System Diagnostics Operations Model
+/**
+ * System diagnostics model for swamp.
+ *
+ * Queries local host health through standard Unix shell commands --
+ * disk usage, memory, processes, uptime, network interfaces, and OS info.
+ *
+ * @module
+ */
+
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -99,6 +107,7 @@ type MethodContext = {
 // Helper Functions
 // =============================================================================
 
+/** Execute a shell command and return its trimmed stdout, or throw on failure. */
 async function runCommand(
   cmd: string[],
 ): Promise<string> {
@@ -119,6 +128,7 @@ async function runCommand(
 // Model Definition
 // =============================================================================
 
+/** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
   version: "2026.04.12.1",
