@@ -1,7 +1,23 @@
-// gopass Vault Provider (gopass.pw)
+/**
+ * gopass Vault Provider for swamp.
+ *
+ * Integrates with the gopass password manager (gopass.pw) to provide
+ * secret storage and retrieval. Supports multiple stores/mounts and
+ * password-only mode that returns just the first line of a secret.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4";
+
+/** The shape returned by {@linkcode vault.createProvider}. */
+interface GopassVaultProvider {
+  get(key: string): Promise<string>;
+  put(key: string, value: string): Promise<void>;
+  list(): Promise<string[]>;
+  getName(): string;
+}
 
 const ConfigSchema = z.object({
   store: z.string().optional().describe(
@@ -12,6 +28,7 @@ const ConfigSchema = z.object({
   ),
 });
 
+/** gopass vault extension -- exposes get, put, list, and getName operations via the gopass CLI. */
 export const vault = {
   type: "@webframp/gopass",
   name: "gopass",
@@ -19,7 +36,10 @@ export const vault = {
     "gopass password manager (gopass.pw) - pass compatible with extra features",
   configSchema: ConfigSchema,
 
-  createProvider: (name: string, config: Record<string, unknown>) => {
+  createProvider: (
+    name: string,
+    config: Record<string, unknown>,
+  ): GopassVaultProvider => {
     const parsed = ConfigSchema.parse(config);
 
     // Build secret path with optional store prefix
