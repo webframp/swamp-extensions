@@ -1,5 +1,13 @@
-// Cloudflare Audit Report
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * Cloudflare security and configuration audit report.
+ *
+ * Analyzes zone settings, DNS records, WAF rules, Workers, and cache
+ * configuration collected by the cloudflare-audit workflow. Produces a
+ * severity-rated Markdown report with findings and recommendations.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ * @module
+ */
 
 interface DataHandle {
   name: string;
@@ -49,10 +57,10 @@ interface Finding {
   detail?: string;
 }
 
-// Thresholds
+/** Cache hit-rate percentage below which a warning finding is emitted. */
 export const CACHE_HIT_RATE_WARN = 50;
 
-// Known subdomain takeover targets
+/** Regular expressions matching CNAME targets known to be vulnerable to subdomain takeover. */
 export const DANGLING_CNAME_PATTERNS: RegExp[] = [
   /\.herokuapp\.com$/i,
   /\.herokudns\.com$/i,
@@ -75,6 +83,7 @@ export const DANGLING_CNAME_PATTERNS: RegExp[] = [
 // deno-lint-ignore no-explicit-any
 type AnyRecord = Record<string, any>;
 
+/** Check zone-level settings: SSL mode, Always Use HTTPS, development mode, and zone status. */
 export function checkZone(
   zoneListData: AnyRecord[] | null,
   settingsData: AnyRecord | null,
@@ -164,6 +173,7 @@ export function checkZone(
   return findings;
 }
 
+/** Check WAF configuration: rule count, paused rules, and managed rulesets. */
 export function checkWaf(
   rulesData: AnyRecord[] | null,
   packagesData: AnyRecord[] | null,
@@ -232,6 +242,7 @@ export function checkWaf(
   return findings;
 }
 
+/** Check DNS records: unproxied records, dangling CNAMEs, and CAA presence. */
 export function checkDns(recordsData: AnyRecord[] | null): Finding[] {
   const findings: Finding[] = [];
 
@@ -311,6 +322,7 @@ export function checkDns(recordsData: AnyRecord[] | null): Finding[] {
   return findings;
 }
 
+/** Check Workers: detect orphaned scripts that have no associated routes. */
 export function checkWorkers(
   scriptsData: AnyRecord[] | null,
   routesData: AnyRecord[] | null,
@@ -354,6 +366,7 @@ export function checkWorkers(
   return findings;
 }
 
+/** Check cache configuration: cache level and hit rate against threshold. */
 export function checkCache(
   settingsData: AnyRecord | null,
   analyticsData: AnyRecord | null,
@@ -402,6 +415,7 @@ export function checkCache(
   return findings;
 }
 
+/** Workflow-scoped report that aggregates all audit check results into a Markdown summary with JSON data. */
 export const report = {
   name: "@webframp/cloudflare-audit-report",
   description:
