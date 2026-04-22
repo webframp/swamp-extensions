@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "check": "deno check extensions/models/aws/alarm_investigation.ts",
+    "lint": "deno lint extensions/models/",
+    "fmt": "deno fmt extensions/models/",
+    "fmt:check": "deno fmt --check extensions/models/",
+    "test": "deno test --allow-env --allow-net --allow-sys extensions/models/"
+  },
+  "lint": { "rules": { "exclude": ["no-import-prefix"] } },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
+  }
+}
