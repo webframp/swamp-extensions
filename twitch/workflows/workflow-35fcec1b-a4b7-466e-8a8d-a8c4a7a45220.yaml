@@ -4,6 +4,10 @@ description: |
   Cross-channel Twitch moderation audit. Gathers chatters, bans, and channel
   info from all channel instances in parallel, then flags suspicious users
   (new accounts, cross-channel ban overlap, multi-channel presence).
+
+  NOTE: Steps use modelIdOrName: "*" to target all @webframp/twitch model
+  instances. Create one model instance per channel before running this
+  workflow (e.g. swamp model create --type @webframp/twitch --name channel1).
 tags:
   twitch: "true"
   moderation: "true"

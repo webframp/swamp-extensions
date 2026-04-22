@@ -436,7 +436,7 @@ export const model = {
           creds,
           `/moderation/bans?broadcaster_id=${broadcasterId}&moderator_id=${
             encodeURIComponent(moderatorId)
-          }&user_id=${args.userId}`,
+          }&user_id=${encodeURIComponent(args.userId)}`,
           "DELETE",
         );
 
