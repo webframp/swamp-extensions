@@ -1,12 +1,24 @@
-// AWS Cost Audit Report
+/**
+ * AWS Cost Audit Report
+ *
+ * Aggregates cost, inventory, and networking data collected by the
+ * cost-audit workflow and produces a Markdown savings report with
+ * prioritized recommendations. The report covers month-over-month
+ * comparisons, per-service deep dives, networking waste analysis,
+ * infrastructure inventory, and actionable cost-reduction steps.
+ *
+ * @module cost_audit_report
+ */
 // SPDX-License-Identifier: Apache-2.0
 
+/** Handle referencing a versioned data artifact produced by a workflow step. */
 interface DataHandle {
   name: string;
   dataId: string;
   version: number;
 }
 
+/** Metadata for a single step execution within a workflow run. */
 interface StepExecution {
   jobName: string;
   stepName: string;
@@ -18,6 +30,7 @@ interface StepExecution {
   dataHandles: DataHandle[];
 }
 
+/** Context provided to a workflow-scoped report by the swamp runtime. */
 interface WorkflowReportContext {
   workflowId: string;
   workflowRunId: string;
@@ -30,6 +43,14 @@ interface WorkflowReportContext {
   };
 }
 
+/**
+ * Cost audit report definition.
+ *
+ * Scoped to the `@webframp/cost-audit` workflow. After the workflow
+ * completes, swamp invokes `execute()` with the workflow context so
+ * the report can read each step's data artifacts and compile them
+ * into a unified Markdown document with a companion JSON payload.
+ */
 export const report = {
   name: "@webframp/cost-audit-report",
   description:
@@ -37,7 +58,9 @@ export const report = {
   scope: "workflow" as const,
   labels: ["aws", "cost", "finops", "audit"],
 
-  execute: async (context: WorkflowReportContext) => {
+  execute: async (
+    context: WorkflowReportContext,
+  ): Promise<{ markdown: string; json: Record<string, unknown> }> => {
     const findings: string[] = [];
     const jsonFindings: Record<string, unknown> = {
       workflowName: context.workflowName,
@@ -45,7 +68,15 @@ export const report = {
       timestamp: new Date().toISOString(),
     };
 
-    // Helper to get data from filesystem
+    /** Coordinates that locate a data artifact on disk. */
+    interface DataLocation {
+      modelType: string;
+      modelId: string;
+      dataName: string;
+      version: number;
+    }
+
+    /** Read and parse a data artifact from the swamp data directory. */
     async function getData(
       modelType: string,
       modelId: string,
@@ -63,14 +94,7 @@ export const report = {
       }
     }
 
-    interface DataLocation {
-      modelType: string;
-      modelId: string;
-      dataName: string;
-      version: number;
-    }
-
-    // Helper to find step data by model and method
+    /** Find the first data location for a given model name and method. */
     function findStepData(
       modelName: string,
       methodName: string,
@@ -93,7 +117,7 @@ export const report = {
       return null;
     }
 
-    // Helper to find all data for a model/method
+    /** Find all data locations for a model, optionally filtered by method. */
     function findAllStepData(
       modelName: string,
       methodName?: string,
@@ -120,7 +144,7 @@ export const report = {
       return results;
     }
 
-    // Convenience: get data for a model/method
+    /** Convenience wrapper: locate then read data for a model/method pair. */
     async function getStepData(
       modelName: string,
       methodName: string,
@@ -415,8 +439,12 @@ export const report = {
 
       if (natGateways.length > 0) {
         findings.push("### NAT Gateways\n");
-        findings.push("| NAT Gateway | VPC | Bytes Processed (7d) | Status |");
-        findings.push("| ----------- | --- | -------------------: | ------ |");
+        findings.push(
+          "| NAT Gateway | VPC | Bytes Processed (7d) | Status |",
+        );
+        findings.push(
+          "| ----------- | --- | -------------------: | ------ |",
+        );
 
         for (const nat of natGateways) {
           const bytes = metricsMap.get(nat.natGatewayId) ?? 0;
