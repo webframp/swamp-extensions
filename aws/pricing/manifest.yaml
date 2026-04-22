@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/pricing"
-version: "2026.04.13.1"
+version: "2026.04.22.1"
 description: |
   AWS Pricing API model for looking up service costs.
 
@@ -53,4 +53,12 @@ labels:
   - cost
   - finops
   - cloud
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
 
