@@ -6,3 +6,6 @@
 **/AGENTS.md
 # But keep the root-level symlink
 !/AGENTS.md
+
+# Git worktrees for isolated development
+.worktrees/
