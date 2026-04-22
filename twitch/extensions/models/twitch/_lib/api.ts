@@ -21,7 +21,10 @@ export const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
  * This is necessary because MethodContext.globalArgs is a fresh copy per method
  * call — mutations to creds in one method are invisible to the next.
  */
-const tokenCache = new Map<string, { accessToken: string; refreshToken: string }>();
+const tokenCache = new Map<
+  string,
+  { accessToken: string; refreshToken: string }
+>();
 
 /** Exported for testing — clears the in-process token cache. */
 export function clearTokenCache(): void {
