@@ -4,7 +4,7 @@
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",
-    "test": "deno test --allow-run extensions/models/"
+    "test": "deno test --allow-run --allow-env extensions/models/"
   },
   "lint": {
     "rules": {

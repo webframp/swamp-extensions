@@ -128,7 +128,7 @@ const PipelineListSchema = z.object({
 // =============================================================================
 
 function buildEnv(host: string): Record<string, string> {
-  const env: Record<string, string> = {};
+  const env: Record<string, string> = { ...Deno.env.toObject() };
   if (host) {
     env["GITLAB_HOST"] = host;
   }
@@ -139,12 +139,11 @@ async function runGlab(
   args: string[],
   host: string,
 ): Promise<unknown> {
-  const env = buildEnv(host);
   const cmd = new Deno.Command("glab", {
     args,
     stdout: "piped",
     stderr: "piped",
-    env: Object.keys(env).length > 0 ? env : undefined,
+    env: buildEnv(host),
   });
   const output = await cmd.output();
   if (!output.success) {
@@ -152,7 +151,9 @@ async function runGlab(
     throw new Error(`glab command failed: ${err}`);
   }
   const text = new TextDecoder().decode(output.stdout).trim();
-  if (!text) return [];
+  if (!text) {
+    throw new Error(`glab returned empty output for: glab ${args.join(" ")}`);
+  }
   return JSON.parse(text);
 }
 

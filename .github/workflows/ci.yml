@@ -195,7 +195,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: deno test
-        run: deno test --allow-run extensions/models/
+        run: deno test --allow-run --allow-env extensions/models/
 
   github-test:
     name: github - test
