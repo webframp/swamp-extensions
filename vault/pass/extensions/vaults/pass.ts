@@ -7,6 +7,9 @@ const ConfigSchema = z.object({
   storeDir: z.string().optional().describe(
     "PASSWORD_STORE_DIR override (defaults to ~/.password-store)",
   ),
+  prefix: z.string().optional().default("swamp").describe(
+    "Key prefix for namespacing secrets (defaults to 'swamp')",
+  ),
 });
 
 export const vault = {
@@ -19,6 +22,7 @@ export const vault = {
     const parsed = ConfigSchema.parse(config);
     const storeDir = parsed.storeDir ||
       `${Deno.env.get("HOME")}/.password-store`;
+    const prefix = parsed.prefix;
 
     const runPass = async (
       args: string[],
@@ -55,20 +59,35 @@ export const vault = {
       return new TextDecoder().decode(stdout).trim();
     };
 
+    const prefixKey = (key: string): string =>
+      prefix ? `${prefix}/${key}` : key;
+
     return {
       get: async (key: string): Promise<string> => {
-        return await runPass(["show", key]);
+        return await runPass(["show", prefixKey(key)]);
       },
 
       put: async (key: string, value: string): Promise<void> => {
         // Use -m for multiline and -f to force overwrite
-        await runPass(["insert", "-m", "-f", key], value);
+        await runPass(["insert", "-m", "-f", prefixKey(key)], value);
       },
 
       list: async (): Promise<string[]> => {
         // Find all .gpg files and convert to key names
         const cmd = new Deno.Command("find", {
-          args: [storeDir, "-name", "*.gpg", "-type", "f"],
+          args: [
+            storeDir,
+            "-not",
+            "-path",
+            "*/.git/*",
+            "-not",
+            "-path",
+            "*/.extensions/*",
+            "-name",
+            "*.gpg",
+            "-type",
+            "f",
+          ],
           stdout: "piped",
           stderr: "piped",
         });
@@ -83,13 +102,16 @@ export const vault = {
         if (!output) return [];
 
         // Convert file paths to pass key names
-        // e.g., /home/user/.password-store/foo/bar.gpg -> foo/bar
-        const prefix = storeDir.endsWith("/") ? storeDir : `${storeDir}/`;
+        // e.g., /home/user/.password-store/swamp/foo.gpg -> foo
+        const dirPrefix = storeDir.endsWith("/") ? storeDir : `${storeDir}/`;
+        const keyPrefix = prefix ? `${prefix}/` : "";
 
         return output
           .split("\n")
           .filter(Boolean)
-          .map((path) => path.replace(prefix, "").replace(/\.gpg$/, ""))
+          .map((path) => path.replace(dirPrefix, "").replace(/\.gpg$/, ""))
+          .filter((key) => key.startsWith(keyPrefix))
+          .map((key) => key.slice(keyPrefix.length))
           .sort();
       },
 
