@@ -1,5 +1,12 @@
-// AWS Networking Model - Inspect VPC resources that generate hidden costs
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * AWS Networking Model - Inspect VPC resources that generate hidden costs.
+ *
+ * Queries NAT Gateways, ALB/NLB Load Balancers, Elastic IPs, and CloudWatch
+ * data-transfer metrics to surface networking waste in an AWS account.
+ *
+ * @module
+ * @license Apache-2.0
+ */
 
 import { z } from "npm:zod@4.3.6";
 import {
@@ -94,6 +101,15 @@ type MethodContext = {
 // Model Definition
 // =============================================================================
 
+/**
+ * AWS Networking model definition.
+ *
+ * Provides four methods for inspecting VPC networking resources:
+ * - `list_nat_gateways` - enumerate active NAT Gateways with Elastic IPs
+ * - `list_load_balancers` - enumerate ALBs/NLBs with target-group health
+ * - `list_elastic_ips` - list Elastic IPs and flag unattached ones
+ * - `get_data_transfer_metrics` - pull CloudWatch byte/request metrics
+ */
 export const model = {
   type: "@webframp/aws/networking",
   version: "2026.04.12.1",
