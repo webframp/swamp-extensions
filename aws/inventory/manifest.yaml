@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/inventory"
-version: "2026.04.14.1"
+version: "2026.04.22.1"
 description: |
   Discover running AWS resources for cost estimation and inventory management.
 
@@ -44,6 +44,14 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/inventory.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
 labels:
   - aws
   - inventory

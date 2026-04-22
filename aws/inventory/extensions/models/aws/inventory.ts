@@ -1,4 +1,13 @@
-// AWS Inventory Model - Discover Running Resources
+/**
+ * AWS Inventory Model - Discover running resources across multiple AWS services.
+ *
+ * Queries EC2, RDS, DynamoDB, Lambda, S3, and EBS to build a unified
+ * inventory of cloud infrastructure in a given region. Each method
+ * paginates through the full result set and writes typed inventory
+ * resources for downstream cost estimation and analysis.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -109,6 +118,13 @@ const InventoryResultSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/**
+ * AWS inventory model definition.
+ *
+ * Provides methods to list EC2 instances, RDS databases, DynamoDB tables,
+ * Lambda functions, S3 buckets, and EBS volumes. Results are persisted as
+ * typed inventory resources with a one-hour lifetime.
+ */
 export const model = {
   type: "@webframp/aws/inventory",
   version: "2026.03.30.1",
