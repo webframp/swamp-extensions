@@ -122,7 +122,7 @@ export async function helixApiPaginated<T>(
   while (true) {
     const separator = path.includes("?") ? "&" : "?";
     const paginatedPath = cursor
-      ? `${path}${separator}first=100&after=${cursor}`
+      ? `${path}${separator}first=100&after=${encodeURIComponent(cursor)}`
       : `${path}${separator}first=100`;
 
     const response = await helixApi<T>(creds, paginatedPath);
