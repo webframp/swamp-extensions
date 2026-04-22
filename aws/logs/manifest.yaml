@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/logs"
-version: "2026.04.13.1"
+version: "2026.04.22.1"
 description: |
   Query and analyze CloudWatch Logs for operational visibility and incident investigation.
 
@@ -56,6 +56,14 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/logs.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
 labels:
   - aws
   - cloudwatch
@@ -63,4 +71,3 @@ labels:
   - observability
   - ops
   - incident-response
-
