@@ -1,4 +1,11 @@
-// Cloudflare Zone Management
+/**
+ * Cloudflare Zone Management model for swamp.
+ *
+ * Provides methods to list, inspect, pause, unpause, and configure
+ * Cloudflare zones through the Cloudflare REST API.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4";
@@ -51,6 +58,7 @@ const ZoneSettingsSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/** Cloudflare Zone model definition with methods for listing, inspecting, pausing, and configuring zones. */
 export const model = {
   type: "@webframp/cloudflare/zone",
   version: "2026.03.28.1",

@@ -1,4 +1,13 @@
-// Cloudflare Cache / CDN Management
+/**
+ * Cloudflare Cache and CDN Management model for swamp.
+ *
+ * Provides methods to purge cached content (all, by URL, by tag, or by
+ * prefix), inspect and update cache-related zone settings, and retrieve
+ * cache analytics including hit rates and bandwidth via the Cloudflare
+ * GraphQL Analytics API.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4";
@@ -59,6 +68,7 @@ const AnalyticsSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
   version: "2026.03.28.1",

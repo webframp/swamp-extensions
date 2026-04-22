@@ -1,4 +1,12 @@
-// Cloudflare WAF / Firewall Rules Management
+/**
+ * Cloudflare WAF and Firewall Rules Management model for swamp.
+ *
+ * Provides methods to list, create, delete, and toggle firewall rules,
+ * inspect WAF managed-ruleset packages, and retrieve recent security
+ * events via the Cloudflare GraphQL Analytics API.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4";
@@ -76,6 +84,7 @@ const SecurityEventsSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/** Cloudflare WAF model definition with methods for firewall rules, WAF packages, and security events. */
 export const model = {
   type: "@webframp/cloudflare/waf",
   version: "2026.03.28.1",

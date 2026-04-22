@@ -1,4 +1,11 @@
-// Cloudflare Workers Management
+/**
+ * Cloudflare Workers Management model for swamp.
+ *
+ * Provides methods to list, inspect, deploy, and delete Worker scripts,
+ * manage Worker routes for zones, and toggle workers.dev subdomain access.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4";
@@ -53,6 +60,7 @@ const WorkerDeploymentSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/** Cloudflare Workers model definition with methods for script lifecycle, route management, and subdomain toggling. */
 export const model = {
   type: "@webframp/cloudflare/worker",
   version: "2026.03.28.1",
