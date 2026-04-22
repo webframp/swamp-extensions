@@ -79,7 +79,11 @@ export const driver = {
       callbacks?: DryRunCallbacks,
     ): Promise<DryRunResult> {
       const start = performance.now();
-      const log = callbacks?.onLog ?? (() => {});
+      const logs: string[] = [];
+      const log = (line: string): void => {
+        logs.push(line);
+        callbacks?.onLog?.(line);
+      };
 
       log(
         `[dry-run] Captured request for ${request.modelType}::${request.methodName}`,
@@ -88,10 +92,14 @@ export const driver = {
         `[dry-run] Model: ${request.definitionMeta.name} (v${request.definitionMeta.version})`,
       );
       log(
-        `[dry-run] Global args: ${JSON.stringify(request.globalArgs)}`,
+        `[dry-run] Global args keys: ${
+          Object.keys(request.globalArgs).join(", ") || "(none)"
+        }`,
       );
       log(
-        `[dry-run] Method args: ${JSON.stringify(request.methodArgs)}`,
+        `[dry-run] Method args keys: ${
+          Object.keys(request.methodArgs).join(", ") || "(none)"
+        }`,
       );
 
       if (request.resourceSpecs) {
@@ -153,7 +161,7 @@ export const driver = {
             },
           },
         ],
-        logs: [] as string[],
+        logs,
         durationMs,
       });
     },

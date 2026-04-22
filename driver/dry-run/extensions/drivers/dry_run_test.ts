@@ -62,6 +62,10 @@ Deno.test("dry-run: captures request without executing", async () => {
     logs[0].line,
     "[dry-run] Captured request for @webframp/aws/inventory::describe_instances",
   );
+
+  // result.logs should also contain the same lines
+  assertEquals(result.logs.length >= 4, true);
+  assertStringIncludes(result.logs[0], "[dry-run] Captured request for");
 });
 
 Deno.test("dry-run: logs resource and file specs", async () => {
