@@ -1,7 +1,22 @@
-// ABOUTME: macOS Keychain vault provider using the security CLI
-// ABOUTME: Stores secrets as generic passwords with configurable service name
+/**
+ * macOS Keychain vault provider for swamp.
+ *
+ * Stores and retrieves secrets as generic password items in the macOS
+ * Keychain using the `security` command-line tool. Each item is scoped
+ * by a configurable service name (defaults to "swamp").
+ *
+ * @module
+ */
 
 import { z } from "zod";
+
+/** The shape returned by {@linkcode vault.createProvider}. */
+interface KeychainVaultProvider {
+  get(key: string): Promise<string>;
+  put(key: string, value: string): Promise<void>;
+  list(): Promise<string[]>;
+  getName(): string;
+}
 
 const ConfigSchema = z.object({
   service: z.string().min(1).default("swamp").describe(
@@ -9,13 +24,17 @@ const ConfigSchema = z.object({
   ),
 });
 
+/** macOS Keychain vault provider definition. */
 export const vault = {
   type: "@webframp/macos-keychain",
   name: "macos-keychain",
   description: "macOS Keychain vault using the security CLI",
   configSchema: ConfigSchema,
 
-  createProvider: (name: string, config: Record<string, unknown>) => {
+  createProvider: (
+    name: string,
+    config: Record<string, unknown>,
+  ): KeychainVaultProvider => {
     const parsed = ConfigSchema.parse(config);
 
     const runSecurity = async (args: string[]): Promise<string> => {
