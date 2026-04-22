@@ -389,18 +389,18 @@ Deno.test({
         channel: "ch1",
         events: [
           {
-            eventType: "moderation.user.ban",
+            eventType: "channel.moderator.add",
             eventTimestamp: "2026-04-22T10:00:00Z",
             userId: "888",
-            userLogin: "bad_user",
-            channelLogin: "mod1",
+            userLogin: "new_mod",
+            channelLogin: "ch1",
           },
           {
-            eventType: "moderation.user.timeout",
+            eventType: "channel.moderator.remove",
             eventTimestamp: "2026-04-22T09:00:00Z",
             userId: "889",
-            userLogin: "annoying_user",
-            channelLogin: "mod1",
+            userLogin: "former_mod",
+            channelLogin: "ch1",
           },
         ],
         count: 2,
@@ -429,12 +429,12 @@ Deno.test({
       const context = makeContext(tmpDir, steps);
       const result = await report.execute(context);
 
-      assertStringIncludes(result.markdown, "bad_user");
-      assertStringIncludes(result.markdown, "moderation.user.ban");
+      assertStringIncludes(result.markdown, "new_mod");
+      assertStringIncludes(result.markdown, "channel.moderator.add");
       // Verify descending sort: 10:00 event appears before 09:00 event
-      const banIdx = result.markdown.indexOf("bad_user");
-      const timeoutIdx = result.markdown.indexOf("annoying_user");
-      assertEquals(banIdx < timeoutIdx, true);
+      const addIdx = result.markdown.indexOf("new_mod");
+      const removeIdx = result.markdown.indexOf("former_mod");
+      assertEquals(addIdx < removeIdx, true);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }

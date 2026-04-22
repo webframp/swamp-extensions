@@ -14,16 +14,23 @@ export const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 /**
  * In-process credential cache keyed by clientId.
  *
- * When helixApi refreshes an expired token, it stores the new tokens here.
- * Subsequent calls with the same clientId reuse the refreshed tokens instead
- * of retrying with the original (possibly-revoked) refresh token.
+ * When helixApi refreshes an expired token, it stores the new tokens here
+ * along with the original expired token that triggered the refresh. Subsequent
+ * calls with the same clientId only use the cached tokens when the caller still
+ * holds the same expired token — if the caller supplies a different token
+ * (e.g., after a manual credential rotation in vault), the cache is bypassed
+ * so fresh credentials take effect immediately.
  *
  * This is necessary because MethodContext.globalArgs is a fresh copy per method
  * call — mutations to creds in one method are invisible to the next.
  */
 const tokenCache = new Map<
   string,
-  { accessToken: string; refreshToken: string }
+  {
+    expiredToken: string;
+    accessToken: string;
+    refreshToken: string;
+  }
 >();
 
 /** Exported for testing — clears the in-process token cache. */
@@ -80,9 +87,11 @@ export async function helixApi<T>(
   method: string = "GET",
   body?: unknown,
 ): Promise<HelixResponse<T>> {
-  // Apply cached tokens if a previous call already refreshed for this client
+  // Apply cached tokens only if the caller still holds the same expired token
+  // that triggered the original refresh. If the caller has a different token
+  // (e.g., manually rotated via vault), skip the cache so new creds take effect.
   const cached = tokenCache.get(creds.clientId);
-  if (cached) {
+  if (cached && creds.accessToken === cached.expiredToken) {
     creds.accessToken = cached.accessToken;
     creds.refreshToken = cached.refreshToken;
   }
@@ -108,6 +117,7 @@ export async function helixApi<T>(
   // On 401, refresh the token and retry once
   if (response.status === 401) {
     await response.body?.cancel();
+    const expiredToken = creds.accessToken;
     const tokens = await refreshAccessToken(
       creds.clientId,
       creds.clientSecret,
@@ -116,6 +126,7 @@ export async function helixApi<T>(
     creds.accessToken = tokens.access_token;
     creds.refreshToken = tokens.refresh_token;
     tokenCache.set(creds.clientId, {
+      expiredToken,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
     });

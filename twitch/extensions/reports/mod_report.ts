@@ -110,7 +110,12 @@ export const report = {
       version: number,
     ): Promise<Record<string, unknown> | null> {
       try {
-        if ([modelType, modelId, dataName].some((s) => s.includes(".."))) {
+        const pathSegments = [modelType, modelId, dataName];
+        if (
+          pathSegments.some((s) =>
+            s.includes("..") || s.startsWith("/") || s.includes("\0")
+          )
+        ) {
           return null;
         }
         const dataPath =
@@ -192,7 +197,9 @@ export const report = {
       for (const chatter of chatters.chatters) {
         const existing = allChatters.get(chatter.userId);
         if (existing) {
-          existing.channels.push(chatters.channel);
+          if (!existing.channels.includes(chatters.channel)) {
+            existing.channels.push(chatters.channel);
+          }
         } else {
           allChatters.set(chatter.userId, {
             login: chatter.login,
@@ -217,7 +224,9 @@ export const report = {
       for (const ban of banned.bans) {
         const existing = allBans.get(ban.userId);
         if (existing) {
-          existing.channels.push(banned.channel);
+          if (!existing.channels.includes(banned.channel)) {
+            existing.channels.push(banned.channel);
+          }
           existing.reasons[banned.channel] = ban.reason;
         } else {
           allBans.set(ban.userId, {
