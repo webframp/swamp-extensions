@@ -1,11 +1,21 @@
-// AWS Cost Report Extension
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * AWS Cost Report Extension
+ *
+ * Formats AWS cost estimates into readable markdown reports with resource
+ * tables, tag-based cost breakdowns, and actionable optimization
+ * recommendations. Produces both markdown and JSON output.
+ *
+ * @module
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
+/** Handle referencing a data artifact produced during method execution. */
 interface DataHandle {
   name: string;
   kind: string;
 }
 
+/** Context provided by swamp when executing a method-scoped report. */
 interface MethodReportContext {
   modelType: string;
   modelId: string;
@@ -24,10 +34,12 @@ interface MethodReportContext {
   };
 }
 
+/** Format a numeric amount as a USD currency string (e.g. `$12.50`). */
 function formatCurrency(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+/** Render a markdown table from headers, rows, and optional column alignments. */
 function formatTable(
   headers: string[],
   rows: string[][],
@@ -49,6 +61,7 @@ function formatTable(
   return lines.join("\n");
 }
 
+/** A single line item in a cost estimate (EC2, RDS, or generic resource). */
 interface CostItem {
   name?: string;
   type?: string;
@@ -59,6 +72,7 @@ interface CostItem {
   monthlyTotal?: number;
 }
 
+/** Generate a formatted markdown cost table from an array of cost items. */
 function generateCostTable(items: CostItem[]): string {
   const headers = ["Name", "Type", "Spec", "Count", "Per Unit", "Total"];
   const rows = items.map((item) => [
@@ -80,6 +94,13 @@ function generateCostTable(items: CostItem[]): string {
   ]);
 }
 
+/**
+ * Cost report extension definition.
+ *
+ * Scoped to `method` -- executes after cost-estimate model methods and produces
+ * a markdown summary with resource tables and optimization recommendations,
+ * plus a structured JSON payload for programmatic consumption.
+ */
 export const report = {
   name: "@webframp/aws/cost-report",
   description:
