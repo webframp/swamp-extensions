@@ -1,4 +1,14 @@
-// AWS Pricing API Model
+/**
+ * AWS Pricing API model for querying service costs, attribute values,
+ * and on-demand pricing from the AWS Price List Service.
+ *
+ * Provides four methods: list_services, get_attribute_values, get_price,
+ * and get_ec2_price. The Pricing API is available only in us-east-1 and
+ * ap-south-1 and requires valid AWS credentials.
+ *
+ * @module
+ */
+
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -57,6 +67,12 @@ const PriceResultSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/**
+ * AWS Pricing model definition.
+ *
+ * Exposes resources for caching service lists, attribute values, and price
+ * data, along with methods that query the AWS Price List Service API.
+ */
 export const model = {
   type: "@webframp/aws/pricing",
   version: "2026.03.30.1",
