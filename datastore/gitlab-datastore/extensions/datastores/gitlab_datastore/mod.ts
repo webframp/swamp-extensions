@@ -1,5 +1,13 @@
-// GitLab Datastore Extension
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * GitLab Datastore Extension
+ *
+ * Stores swamp runtime data in GitLab using the Terraform state HTTP API.
+ * Provides distributed locking via GitLab's native state locking mechanism
+ * and bidirectional sync between a local cache and GitLab-hosted state.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ * @module
+ */
 
 import { z } from "npm:zod@4";
 
@@ -678,7 +686,7 @@ class GitLabSyncService implements DatastoreSyncService {
   }
 }
 
-// Configuration schema
+/** Zod schema that validates and supplies defaults for GitLab datastore configuration. */
 const ConfigSchema = z.object({
   projectId: z.string().describe(
     "GitLab project ID (numeric) or URL-encoded path (e.g., 'mygroup/myproject')",
@@ -697,6 +705,12 @@ const ConfigSchema = z.object({
   ),
 });
 
+/**
+ * Exported datastore provider for the GitLab Terraform state backend.
+ *
+ * Consumers call `datastore.createProvider(config)` to obtain lock,
+ * verifier, sync, and path-resolution capabilities backed by GitLab.
+ */
 export const datastore = {
   type: "@webframp/gitlab-datastore",
   name: "GitLab Datastore",
