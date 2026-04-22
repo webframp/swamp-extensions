@@ -228,6 +228,7 @@ Deno.test({
       assertEquals(creds.accessToken, "new-access-token");
       assertEquals(creds.refreshToken, "new-refresh-token");
     } finally {
+      clearTokenCache();
       uninstall();
       await server.shutdown();
     }
@@ -344,12 +345,17 @@ Deno.test({
       await helixApi<{ id: string }>(creds1, "/users");
       assertEquals(refreshCount, 1);
 
-      // Second call with a fresh creds copy (same clientId) should use cache
-      // and never need to refresh
+      // Second call with a fresh creds copy (same expired token) uses cache
       const creds2 = makeCreds({ accessToken: "expired-token" });
       await helixApi<{ id: string }>(creds2, "/users");
       assertEquals(refreshCount, 1); // Still 1 — no second refresh
       assertEquals(creds2.accessToken, "cached-access-token");
+
+      // Third call with a manually rotated token bypasses the cache
+      const creds3 = makeCreds({ accessToken: "manually-rotated-token" });
+      await helixApi<{ id: string }>(creds3, "/users");
+      assertEquals(refreshCount, 1); // Still 1 — rotated token works, no refresh
+      assertEquals(creds3.accessToken, "manually-rotated-token"); // Unchanged
     } finally {
       clearTokenCache();
       uninstall();
