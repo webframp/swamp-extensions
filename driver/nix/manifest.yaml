@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/nix"
-version: "2026.04.13.1"
+version: "2026.04.22.1"
 description: "Nix shell execution driver that runs model methods inside a nix shell with declarative package dependencies. Provides reproducible execution environments without containers."
 repository: "https://github.com/webframp/swamp-extensions"
 drivers:
@@ -10,6 +10,9 @@ platforms:
   - linux-aarch64
   - darwin-x86_64
   - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
 labels:
   - driver
   - nix
