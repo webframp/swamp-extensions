@@ -1,4 +1,12 @@
-// Cloudflare DNS Record Management
+/**
+ * Cloudflare DNS Record Management model for swamp.
+ *
+ * Provides full CRUD operations for DNS records within a Cloudflare zone,
+ * including listing, creating, updating, deleting, and exporting records
+ * in BIND zone-file format.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4";
@@ -43,6 +51,7 @@ const DnsRecordListSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/** Cloudflare DNS model definition with full CRUD methods and BIND-format export. */
 export const model = {
   type: "@webframp/cloudflare/dns",
   version: "2026.03.28.1",
