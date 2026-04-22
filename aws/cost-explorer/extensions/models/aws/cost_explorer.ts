@@ -1,4 +1,12 @@
-// AWS Cost Explorer Model - Query spend by service, usage type, and trend
+/**
+ * AWS Cost Explorer model for swamp.
+ *
+ * Queries AWS Cost Explorer to analyze actual cloud spend by service, usage
+ * type, and time period. Provides methods to identify top cost drivers, track
+ * daily spend trends, and compare costs between periods.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -59,6 +67,7 @@ const CostResultSchema = z.object({
 // Helpers
 // =============================================================================
 
+/** Build a date range ending today and spanning the given number of days. */
 function formatPeriod(days: number): { Start: string; End: string } {
   const end = new Date();
   const start = new Date();
@@ -72,6 +81,7 @@ function formatPeriod(days: number): { Start: string; End: string } {
 // Context type (inline, matching existing pattern)
 // =============================================================================
 
+/** Execution context provided by swamp to each model method. */
 type MethodContext = {
   globalArgs: { region: string };
   writeResource: (
@@ -88,6 +98,16 @@ type MethodContext = {
 // Model Definition
 // =============================================================================
 
+/**
+ * AWS Cost Explorer model definition.
+ *
+ * Exposes five methods for querying AWS Cost Explorer:
+ * - `get_cost_by_service` -- breakdown by AWS service
+ * - `get_cost_by_usage_type` -- drill into a service's usage types
+ * - `get_cost_trend` -- daily trend with direction detection
+ * - `get_top_cost_drivers` -- top service/usage-type combinations
+ * - `get_cost_comparison` -- period-over-period comparison
+ */
 export const model = {
   type: "@webframp/aws/cost-explorer",
   version: "2026.04.12.1",
@@ -115,7 +135,7 @@ export const model = {
       execute: async (
         args: { days: number },
         context: MethodContext,
-      ) => {
+      ): Promise<{ dataHandles: { name: string }[] }> => {
         const client = new CostExplorerClient({
           region: context.globalArgs.region,
         });
@@ -190,7 +210,7 @@ export const model = {
       execute: async (
         args: { service: string; days: number },
         context: MethodContext,
-      ) => {
+      ): Promise<{ dataHandles: { name: string }[] }> => {
         const client = new CostExplorerClient({
           region: context.globalArgs.region,
         });
@@ -264,7 +284,7 @@ export const model = {
       execute: async (
         args: { days: number },
         context: MethodContext,
-      ) => {
+      ): Promise<{ dataHandles: { name: string }[] }> => {
         const client = new CostExplorerClient({
           region: context.globalArgs.region,
         });
@@ -349,7 +369,7 @@ export const model = {
       execute: async (
         args: { days: number; limit: number },
         context: MethodContext,
-      ) => {
+      ): Promise<{ dataHandles: { name: string }[] }> => {
         const client = new CostExplorerClient({
           region: context.globalArgs.region,
         });
@@ -434,7 +454,7 @@ export const model = {
       execute: async (
         args: { days: number },
         context: MethodContext,
-      ) => {
+      ): Promise<{ dataHandles: { name: string }[] }> => {
         const client = new CostExplorerClient({
           region: context.globalArgs.region,
         });
@@ -447,7 +467,10 @@ export const model = {
 
         const fmt = (d: Date): string => d.toISOString().slice(0, 10);
 
-        const queryPeriod = async (start: Date, end: Date) => {
+        const queryPeriod = async (
+          start: Date,
+          end: Date,
+        ): Promise<Map<string, number>> => {
           const command = new GetCostAndUsageCommand({
             TimePeriod: { Start: fmt(start), End: fmt(end) },
             Granularity: "MONTHLY",
