@@ -1,4 +1,11 @@
-// GitHub Repository Operations Model
+/**
+ * GitHub Repository Operations Model for swamp.
+ *
+ * Queries GitHub data using the `gh` CLI, providing methods for listing
+ * repositories, pull requests, issues, releases, and workflow runs.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -111,6 +118,7 @@ const WorkflowRunListSchema = z.object({
 // Helper Functions
 // =============================================================================
 
+/** Execute a `gh` CLI command and return its parsed JSON output. */
 async function runGh(
   args: string[],
 ): Promise<unknown> {
@@ -147,6 +155,7 @@ type ModelContext = {
 // Model Definition
 // =============================================================================
 
+/** GitHub model definition exposing repository query methods. */
 export const model = {
   type: "@webframp/github",
   version: "2026.04.12.1",
