@@ -733,7 +733,7 @@ export const report = {
           "Review cache rules and page rules to improve cache hit rate",
         );
       }
-      if (f.check === "Cache" && f.message.includes("cache level")) {
+      if (f.check === "Cache" && f.message.includes("Cache level")) {
         addRec(
           "Upgrade cache level for better performance and reduced origin load",
         );
