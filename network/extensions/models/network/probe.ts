@@ -1,4 +1,14 @@
-// Network Probing Operations Model
+/**
+ * Network probing operations model for swamp.
+ *
+ * Wraps standard network utilities (dig, whois, openssl, traceroute) and
+ * native Deno APIs to produce structured diagnostic resources for DNS
+ * lookups, HTTP checks, WHOIS queries, TLS certificate inspection,
+ * traceroute, and TCP port scanning.
+ *
+ * @module
+ */
+
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -114,6 +124,7 @@ const PortScanSchema = z.object({
 // Helper: Run a shell command
 // =============================================================================
 
+/** Execute a shell command with an optional timeout and return its output. */
 async function runCommand(
   cmd: string[],
   timeoutMs = 30000,
@@ -156,6 +167,7 @@ interface DigAnswer {
   data?: string;
 }
 
+/** Parse dig JSON output into structured DNS records. */
 function parseDigJson(
   stdout: string,
 ): {
@@ -190,6 +202,7 @@ function parseDigJson(
   }
 }
 
+/** Parse standard dig text output as a fallback when JSON is unavailable. */
 function parseDigText(
   stdout: string,
 ): {
@@ -256,6 +269,7 @@ function parseDigText(
   return { records, server, queryTime, status };
 }
 
+/** Extract structured registration fields from raw WHOIS text. */
 function parseWhoisText(
   text: string,
 ): {
@@ -320,6 +334,7 @@ function parseWhoisText(
   };
 }
 
+/** Parse traceroute text output into structured hop entries. */
 function parseTracerouteOutput(
   stdout: string,
 ): { hops: z.infer<typeof TracerouteHopSchema>[]; reachedTarget: boolean } {
@@ -370,6 +385,7 @@ function parseTracerouteOutput(
   return { hops, reachedTarget };
 }
 
+/** Extract certificate fields from openssl x509 text output. */
 function parseCertOutput(
   stdout: string,
 ): {
@@ -403,6 +419,7 @@ function parseCertOutput(
   return { subject, issuer, notBefore, notAfter, serialNumber };
 }
 
+/** Compute the number of days between now and a certificate expiry date. */
 function computeDaysUntilExpiry(notAfter: string | null): number | null {
   if (!notAfter) return null;
   try {
@@ -421,6 +438,13 @@ function computeDaysUntilExpiry(notAfter: string | null): number | null {
 // Model Definition
 // =============================================================================
 
+/**
+ * Network probing model definition.
+ *
+ * Exposes six diagnostic methods -- dns_lookup, http_check, whois_lookup,
+ * cert_check, traceroute, and port_check -- each of which writes a typed
+ * resource with structured results.
+ */
 export const model = {
   type: "@webframp/network",
   version: "2026.04.12.1",
