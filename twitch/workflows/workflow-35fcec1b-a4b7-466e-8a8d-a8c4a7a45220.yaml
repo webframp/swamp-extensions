@@ -1,0 +1,56 @@
+id: 35fcec1b-a4b7-466e-8a8d-a8c4a7a45220
+name: "@webframp/twitch-mod-audit"
+description: |
+  Cross-channel Twitch moderation audit. Gathers chatters, bans, and channel
+  info from all channel instances in parallel, then flags suspicious users
+  (new accounts, cross-channel ban overlap, multi-channel presence).
+tags:
+  twitch: "true"
+  moderation: "true"
+reports:
+  require:
+    - "@webframp/twitch-mod-report"
+inputs:
+  properties:
+    suspiciousAgeDays:
+      type: number
+      default: 7
+      description: Flag accounts younger than this many days
+  required: []
+jobs:
+  - name: gather-channel-data
+    description: Collect chatters, bans, and channel info from each channel instance
+    steps:
+      - name: get-chatters
+        description: Get current chatters in the channel
+        task:
+          type: model_method
+          modelIdOrName: "*"
+          methodName: get_chatters
+        allowFailure: true
+
+      - name: get-banned-users
+        description: Get current bans and timeouts
+        task:
+          type: model_method
+          modelIdOrName: "*"
+          methodName: get_banned_users
+        allowFailure: true
+
+      - name: get-channel-info
+        description: Get channel metadata (title, game, tags)
+        task:
+          type: model_method
+          modelIdOrName: "*"
+          methodName: get_channel
+        allowFailure: true
+
+      - name: get-mod-events
+        description: Get recent moderation actions
+        task:
+          type: model_method
+          modelIdOrName: "*"
+          methodName: get_mod_events
+        allowFailure: true
+
+version: 1
