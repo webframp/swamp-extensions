@@ -450,20 +450,6 @@ export const report = {
     }
 
     // === BUILD JSON OUTPUT ===
-    // Collect raw mod events per channel for JSON
-    const rawModEvents: ModEventsData[] = [];
-    for (const { loc } of modEventSteps) {
-      const data = await getData(
-        loc.modelType,
-        loc.modelId,
-        loc.dataName,
-        loc.version,
-      );
-      if (data) {
-        rawModEvents.push(data as unknown as ModEventsData);
-      }
-    }
-
     const jsonOutput = {
       workflowName: context.workflowName,
       workflowStatus: context.workflowStatus,
@@ -471,7 +457,7 @@ export const report = {
       channels: allChannels,
       suspiciousUsers,
       banOverlap,
-      modEvents: rawModEvents,
+      modEvents: allModEvents.slice(0, 50),
     };
 
     // === BUILD FINAL REPORT ===

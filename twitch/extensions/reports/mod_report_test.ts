@@ -95,6 +95,15 @@ Deno.test({
       assertEquals(typeof result.json, "object");
       assertStringIncludes(result.markdown, "Channel Overview");
       assertStringIncludes(result.markdown, "No channel data available.");
+      assertStringIncludes(result.markdown, "No suspicious users detected.");
+      assertStringIncludes(
+        result.markdown,
+        "No users banned across multiple channels.",
+      );
+      assertStringIncludes(
+        result.markdown,
+        "No moderation event data available.",
+      );
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
@@ -422,6 +431,10 @@ Deno.test({
 
       assertStringIncludes(result.markdown, "bad_user");
       assertStringIncludes(result.markdown, "moderation.user.ban");
+      // Verify descending sort: 10:00 event appears before 09:00 event
+      const banIdx = result.markdown.indexOf("bad_user");
+      const timeoutIdx = result.markdown.indexOf("annoying_user");
+      assertEquals(banIdx < timeoutIdx, true);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }
