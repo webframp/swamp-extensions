@@ -64,7 +64,7 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - twitch/mod.ts
 workflows:
-  - twitch-mod-audit.yaml
+  - workflow-35fcec1b-a4b7-466e-8a8d-a8c4a7a45220.yaml
 reports:
   - mod_report.ts
 labels:
