@@ -3,7 +3,12 @@
 
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import type { TwitchCredentials } from "./types.ts";
-import { helixApi, helixApiPaginated, refreshAccessToken } from "./api.ts";
+import {
+  clearTokenCache,
+  helixApi,
+  helixApiPaginated,
+  refreshAccessToken,
+} from "./api.ts";
 
 // ---------------------------------------------------------------------------
 // Test Helpers
@@ -292,6 +297,61 @@ Deno.test({
       assertEquals(result.expires_in, 7200);
       assertEquals(result.scope.length, 2);
     } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "helixApi: token cache shares refreshed tokens across separate creds copies",
+  sanitizeResources: false,
+  fn: async () => {
+    clearTokenCache();
+    let refreshCount = 0;
+
+    const { url, server } = startMockTwitchServer((req) => {
+      const reqUrl = new URL(req.url);
+
+      if (reqUrl.pathname === "/oauth2/token") {
+        refreshCount++;
+        return Response.json({
+          access_token: "cached-access-token",
+          refresh_token: "cached-refresh-token",
+          expires_in: 3600,
+          scope: ["moderation:read"],
+          token_type: "bearer",
+        });
+      }
+
+      const auth = req.headers.get("Authorization") ?? "";
+      if (auth === "Bearer expired-token") {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
+      return Response.json({
+        data: [{ id: "ok" }],
+      }, {
+        headers: { "Ratelimit-Remaining": "100" },
+      });
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      // First call with expired token triggers refresh and caches
+      const creds1 = makeCreds({ accessToken: "expired-token" });
+      await helixApi<{ id: string }>(creds1, "/users");
+      assertEquals(refreshCount, 1);
+
+      // Second call with a fresh creds copy (same clientId) should use cache
+      // and never need to refresh
+      const creds2 = makeCreds({ accessToken: "expired-token" });
+      await helixApi<{ id: string }>(creds2, "/users");
+      assertEquals(refreshCount, 1); // Still 1 — no second refresh
+      assertEquals(creds2.accessToken, "cached-access-token");
+    } finally {
+      clearTokenCache();
       uninstall();
       await server.shutdown();
     }

@@ -12,6 +12,23 @@ export const HELIX_BASE = "https://api.twitch.tv/helix";
 export const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 
 /**
+ * In-process credential cache keyed by clientId.
+ *
+ * When helixApi refreshes an expired token, it stores the new tokens here.
+ * Subsequent calls with the same clientId reuse the refreshed tokens instead
+ * of retrying with the original (possibly-revoked) refresh token.
+ *
+ * This is necessary because MethodContext.globalArgs is a fresh copy per method
+ * call — mutations to creds in one method are invisible to the next.
+ */
+const tokenCache = new Map<string, { accessToken: string; refreshToken: string }>();
+
+/** Exported for testing — clears the in-process token cache. */
+export function clearTokenCache(): void {
+  tokenCache.clear();
+}
+
+/**
  * Refresh an expired OAuth2 access token using the refresh token grant.
  * Throws with a helpful message (including re-authorization hint) on failure.
  */
@@ -60,6 +77,13 @@ export async function helixApi<T>(
   method: string = "GET",
   body?: unknown,
 ): Promise<HelixResponse<T>> {
+  // Apply cached tokens if a previous call already refreshed for this client
+  const cached = tokenCache.get(creds.clientId);
+  if (cached) {
+    creds.accessToken = cached.accessToken;
+    creds.refreshToken = cached.refreshToken;
+  }
+
   const doRequest = async (): Promise<Response> => {
     const url = `${HELIX_BASE}${path}`;
     const headers: Record<string, string> = {
@@ -88,6 +112,10 @@ export async function helixApi<T>(
     );
     creds.accessToken = tokens.access_token;
     creds.refreshToken = tokens.refresh_token;
+    tokenCache.set(creds.clientId, {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+    });
     response = await doRequest();
   }
 
@@ -96,6 +124,10 @@ export async function helixApi<T>(
       `Twitch Helix API error ${response.status}: ${await response.text()}`,
     );
   }
+
+  // Read the response body before any rate-limit sleep to avoid holding the
+  // connection open or risking a server-side timeout on the stream.
+  const data = (await response.json()) as HelixResponse<T>;
 
   // Rate-limit awareness: sleep until reset if running low
   const remaining = response.headers.get("Ratelimit-Remaining");
@@ -111,7 +143,7 @@ export async function helixApi<T>(
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
-  return (await response.json()) as HelixResponse<T>;
+  return data;
 }
 
 /**
