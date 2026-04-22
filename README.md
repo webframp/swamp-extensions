@@ -21,6 +21,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
 | [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
 | [`@webframp/terraform`](terraform/) | Terraform/OpenTofu state reader — resource inventory, full state, and outputs | None (shells out to `terraform` or `tofu`) |
+| [`@webframp/twitch`](twitch/) | Twitch Moderation — cross-channel moderation visibility, suspicious user detection, ban overlap analysis | None (uses fetch) |
 
 ## Workflow + Report Extensions
 
@@ -33,6 +34,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/terraform-drift`](aws/terraform-drift/) | Terraform drift detection — compares TF state against live AWS resources | `@webframp/terraform`, `@webframp/aws/inventory`, `@webframp/aws/networking` |
 | [`@webframp/aws/cost-report`](aws/cost-report/) | AWS cost report formatting (standalone report extension) | None |
 | [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — CRUD operations on issues, projects, users, and custom fields, plus flow metrics and sprint summary reports with a scaffold-story workflow | None |
+| [`@webframp/twitch`](twitch/) | Twitch cross-channel moderation audit — gathers chatters, bans, and mod events across channels, then generates a report highlighting ban overlap and suspicious users | None (uses fetch) |
 
 ## Vault Extensions
 
@@ -70,6 +72,7 @@ swamp extension pull @webframp/gitlab
 swamp extension pull @webframp/system
 swamp extension pull @webframp/network
 swamp extension pull @webframp/terraform
+swamp extension pull @webframp/twitch
 
 # Workflow + report extensions (auto-pull model dependencies)
 swamp extension pull @webframp/sre
@@ -78,6 +81,7 @@ swamp extension pull @webframp/aws-ops
 swamp extension pull @webframp/aws-cost-audit
 swamp extension pull @webframp/aws/terraform-drift
 swamp extension pull @webframp/redmine
+swamp extension pull @webframp/twitch
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing
