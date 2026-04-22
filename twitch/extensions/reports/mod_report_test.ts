@@ -102,7 +102,7 @@ Deno.test({
       );
       assertStringIncludes(
         result.markdown,
-        "No moderation event data available.",
+        "No moderator change data available.",
       );
     } finally {
       await Deno.remove(tmpDir, { recursive: true });

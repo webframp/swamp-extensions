@@ -509,12 +509,14 @@ Deno.test({
           eventType: string;
           userId: string;
           userLogin: string;
+          channelLogin: string;
         }[];
         count: number;
       };
       assertEquals(data.count, 1);
       assertEquals(data.events[0].eventType, "moderation.moderator.add");
       assertEquals(data.events[0].userLogin, "newmod");
+      assertEquals(data.events[0].channelLogin, "testchannel");
     } finally {
       uninstall();
       await server.shutdown();
