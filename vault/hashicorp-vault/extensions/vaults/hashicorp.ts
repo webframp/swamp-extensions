@@ -1,7 +1,23 @@
-// HashiCorp Vault Provider
+/**
+ * HashiCorp Vault secrets provider for swamp.
+ *
+ * Connects to a HashiCorp Vault server via the HTTP API and exposes
+ * KV v1 and KV v2 secrets engines through the standard swamp vault
+ * interface. Supports custom mount paths and Vault Enterprise namespaces.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4";
+
+/** Shape returned by {@link vault.createProvider}. */
+interface VaultProviderInstance {
+  get(key: string): Promise<string>;
+  put(key: string, value: string): Promise<void>;
+  list(): Promise<string[]>;
+  getName(): string;
+}
 
 const ConfigSchema = z.object({
   address: z.string().url().describe(
@@ -17,13 +33,22 @@ const ConfigSchema = z.object({
   ),
 });
 
+/**
+ * Vault provider definition for HashiCorp Vault.
+ *
+ * Implements the swamp `VaultProvider` contract with `get`, `put`, `list`,
+ * and `getName` operations backed by the Vault KV secrets engine.
+ */
 export const vault = {
   type: "@webframp/hashicorp-vault",
   name: "HashiCorp Vault",
   description: "HashiCorp Vault secrets management via REST API",
   configSchema: ConfigSchema,
 
-  createProvider: (name: string, config: Record<string, unknown>) => {
+  createProvider: (
+    name: string,
+    config: Record<string, unknown>,
+  ): VaultProviderInstance => {
     const parsed = ConfigSchema.parse(config);
     const baseUrl = parsed.address.replace(/\/$/, "");
 
