@@ -1,4 +1,14 @@
-// Terraform / OpenTofu State Reader Model
+/**
+ * Terraform / OpenTofu State Reader Model
+ *
+ * Reads Terraform and OpenTofu state via the CLI (`terraform show -json` or
+ * `tofu show -json`) and marshals it into swamp resources keyed by resource
+ * address. Supports workspace selection and binary switching between Terraform
+ * and OpenTofu via global arguments.
+ *
+ * @module
+ */
+
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "zod";
@@ -169,6 +179,14 @@ type MethodContext = {
 // Model
 // =============================================================================
 
+/**
+ * The Terraform/OpenTofu state reader model definition.
+ *
+ * Provides three methods:
+ * - `list_resources` -- enumerate all managed resources in state
+ * - `read_state` -- write full resource attributes keyed by address
+ * - `get_outputs` -- extract Terraform outputs (redacting sensitive values)
+ */
 export const model = {
   type: "@webframp/terraform",
   version: "2026.04.14.1",
