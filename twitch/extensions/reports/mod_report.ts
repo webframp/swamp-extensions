@@ -110,6 +110,9 @@ export const report = {
       version: number,
     ): Promise<Record<string, unknown> | null> {
       try {
+        if ([modelType, modelId, dataName].some((s) => s.includes(".."))) {
+          return null;
+        }
         const dataPath =
           `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
         const content = await Deno.readTextFile(dataPath);

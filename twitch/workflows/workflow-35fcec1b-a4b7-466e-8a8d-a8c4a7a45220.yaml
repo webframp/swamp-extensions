@@ -10,13 +10,6 @@ tags:
 reports:
   require:
     - "@webframp/twitch-mod-report"
-inputs:
-  properties:
-    suspiciousAgeDays:
-      type: number
-      default: 7
-      description: Flag accounts younger than this many days
-  required: []
 jobs:
   - name: gather-channel-data
     description: Collect chatters, bans, and channel info from each channel instance

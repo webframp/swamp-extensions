@@ -81,7 +81,6 @@ swamp extension pull @webframp/aws-ops
 swamp extension pull @webframp/aws-cost-audit
 swamp extension pull @webframp/aws/terraform-drift
 swamp extension pull @webframp/redmine
-swamp extension pull @webframp/twitch
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing

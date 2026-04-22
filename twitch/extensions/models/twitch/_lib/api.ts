@@ -80,6 +80,7 @@ export async function helixApi<T>(
 
   // On 401, refresh the token and retry once
   if (response.status === 401) {
+    await response.body?.cancel();
     const tokens = await refreshAccessToken(
       creds.clientId,
       creds.clientSecret,
