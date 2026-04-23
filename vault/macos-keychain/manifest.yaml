@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/macos-keychain"
-version: "2026.04.22.1"
+version: "2026.04.22.2"
 description: "macOS Keychain vault using the security CLI"
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:
