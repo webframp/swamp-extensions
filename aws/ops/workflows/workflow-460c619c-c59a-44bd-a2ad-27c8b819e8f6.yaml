@@ -1,0 +1,130 @@
+id: 460c619c-c59a-44bd-a2ad-27c8b819e8f6
+name: "@webframp/morning-pulse"
+description: |
+  Daily morning infrastructure pulse check.
+  Gathers alarm state, alarm health verdicts, cost trend, and open PRs
+  across both us-east-1 and us-west-2 regions, then generates a concise
+  morning-pulse report you can skim in two minutes.
+tags:
+  ops: "true"
+  daily: "true"
+  aws: "true"
+reports:
+  require:
+    - "@webframp/morning-pulse-report"
+inputs:
+  properties:
+    repo:
+      type: string
+      default: "webframp/swamp-extensions"
+      description: GitHub repo (owner/name) to check for open PRs
+    costDays:
+      type: integer
+      default: 7
+      description: Number of days for cost trend lookback
+  required: []
+jobs:
+  - name: alarms-east
+    description: Alarm summary and active alarms in us-east-1
+    steps:
+      - name: summary
+        description: Get alarm state counts and recent changes
+        task:
+          type: model_method
+          modelIdOrName: aws-alarms
+          methodName: get_summary
+          inputs:
+            historyHours: 24
+        allowFailure: true
+
+      - name: active
+        description: Get alarms currently in ALARM state
+        task:
+          type: model_method
+          modelIdOrName: aws-alarms
+          methodName: get_active
+          inputs:
+            limit: 50
+        allowFailure: true
+
+  - name: alarms-west
+    description: Alarm summary and active alarms in us-west-2
+    steps:
+      - name: summary
+        description: Get alarm state counts and recent changes
+        task:
+          type: model_method
+          modelIdOrName: aws-alarms-west
+          methodName: get_summary
+          inputs:
+            historyHours: 24
+        allowFailure: true
+
+      - name: active
+        description: Get alarms currently in ALARM state
+        task:
+          type: model_method
+          modelIdOrName: aws-alarms-west
+          methodName: get_active
+          inputs:
+            limit: 50
+        allowFailure: true
+
+  - name: alarm-triage
+    description: Triage active alarms with verdicts
+    dependsOn:
+      - job: alarms-east
+        condition:
+          type: completed
+      - job: alarms-west
+        condition:
+          type: completed
+    steps:
+      - name: triage-east
+        description: Enrich alarms in us-east-1 with verdicts
+        task:
+          type: model_method
+          modelIdOrName: alarm-investigation
+          methodName: triage
+          inputs:
+            limit: 100
+        allowFailure: true
+
+  - name: costs
+    description: Cost trend for the last N days
+    steps:
+      - name: trend
+        description: Daily cost trend and direction
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_trend
+          inputs:
+            days: ${{ inputs.costDays }}
+        allowFailure: true
+
+      - name: by-service
+        description: Cost breakdown by service
+        task:
+          type: model_method
+          modelIdOrName: aws-costs
+          methodName: get_cost_by_service
+          inputs:
+            days: ${{ inputs.costDays }}
+        allowFailure: true
+
+  - name: github
+    description: Check for open pull requests
+    steps:
+      - name: open-prs
+        description: List open PRs on the target repo
+        task:
+          type: model_method
+          modelIdOrName: github
+          methodName: list_prs
+          inputs:
+            repo: ${{ inputs.repo }}
+            state: open
+        allowFailure: true
+
+version: 1
