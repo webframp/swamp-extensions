@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/terraform"
-version: "2026.04.22.1"
+version: "2026.04.22.2"
 description: |
   Read Terraform and OpenTofu state via CLI and marshal into swamp data.
 
