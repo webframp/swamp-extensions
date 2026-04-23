@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare-audit"
-version: "2026.04.22.1"
+version: "2026.04.22.2"
 description: |
   Cloudflare security and configuration audit workflow.
   Inspects zone settings, DNS records, WAF rules, Workers, and cache
