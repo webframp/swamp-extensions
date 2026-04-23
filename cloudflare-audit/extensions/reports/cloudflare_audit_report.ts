@@ -48,12 +48,18 @@ interface WorkflowReportContext {
   };
 }
 
-type Severity = "ok" | "warn" | "critical" | "error";
+/** Severity level for an audit finding. */
+export type Severity = "ok" | "warn" | "critical" | "error";
 
-interface Finding {
+/** A single audit finding produced by a check function. */
+export interface Finding {
+  /** Short name of the check that produced this finding. */
   check: string;
+  /** Severity level. */
   severity: Severity;
+  /** Human-readable summary. */
   message: string;
+  /** Optional extended detail. */
   detail?: string;
 }
 
@@ -80,8 +86,9 @@ export const DANGLING_CNAME_PATTERNS: RegExp[] = [
   /\.vercel\.app$/i,
 ];
 
+/** Generic record type for untyped Cloudflare API responses. */
 // deno-lint-ignore no-explicit-any
-type AnyRecord = Record<string, any>;
+export type AnyRecord = Record<string, any>;
 
 /** Check zone-level settings: SSL mode, Always Use HTTPS, development mode, and zone status. */
 export function checkZone(
