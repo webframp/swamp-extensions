@@ -49,9 +49,13 @@ async function readData(
   version: number,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const path =
-      `${repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
-    return JSON.parse(await Deno.readTextFile(path));
+    const base = `${repoDir}/.swamp/data/`;
+    const resolved = new URL(
+      `${modelType}/${modelId}/${dataName}/${version}/raw`,
+      `file://${base}`,
+    ).pathname;
+    if (!resolved.startsWith(base)) return null;
+    return JSON.parse(await Deno.readTextFile(resolved));
   } catch {
     return null;
   }
@@ -122,6 +126,14 @@ export const report = {
       workflowName: ctx.workflowName,
       timestamp: new Date().toISOString(),
     };
+
+    // Escape values for safe markdown table/list rendering
+    function esc(val: string): string {
+      return val.replace(/\|/g, "\\|").replace(/[`*_~]/g, "\\$&").replace(
+        /\n/g,
+        " ",
+      );
+    }
 
     // Helper to get step data
     async function get(
@@ -203,7 +215,9 @@ export const report = {
       md.push("| ------ | ----- | ---- | -- | ---- |");
       for (const c of allChanges.slice(0, 10)) {
         md.push(
-          `| ${c.region} | ${c.alarmName} | ${c.from} | ${c.to} | ${c.time} |`,
+          `| ${esc(c.region)} | ${esc(c.alarmName)} | ${esc(c.from)} | ${
+            esc(c.to)
+          } | ${esc(c.time)} |`,
         );
       }
     }
@@ -277,13 +291,14 @@ export const report = {
 
     const costTrend = await get("aws-costs", "get_cost_trend");
     const costByService = await get("aws-costs", "get_cost_by_service");
+    const costsJson: Record<string, unknown> = {};
 
     if (costTrend) {
       const d = costTrend.data as {
         trend?: string;
         dailyCosts?: Array<{ date: string; amount: number }>;
-        totalCost?: number;
-        averageDailyCost?: number;
+        totalCost?: number | null;
+        averageDailyCost?: number | null;
       } | undefined;
       if (d) {
         const trendEmoji: Record<string, string> = {
@@ -295,17 +310,15 @@ export const report = {
         md.push(
           `**Trend**: ${trendEmoji[trend] ?? ""} ${trend}`,
         );
-        if (d.totalCost !== undefined) {
+        if (typeof d.totalCost === "number") {
           md.push(`**Total (period)**: $${d.totalCost.toFixed(2)}`);
         }
-        if (d.averageDailyCost !== undefined) {
+        if (typeof d.averageDailyCost === "number") {
           md.push(`**Daily average**: $${d.averageDailyCost.toFixed(2)}`);
         }
-        json.costs = {
-          trend,
-          total: d.totalCost,
-          dailyAvg: d.averageDailyCost,
-        };
+        costsJson.trend = trend;
+        costsJson.total = d.totalCost;
+        costsJson.dailyAvg = d.averageDailyCost;
       }
     }
 
@@ -319,13 +332,14 @@ export const report = {
         md.push("| ------- | ---- |");
         const sorted = [...d.services].sort((a, b) => b.amount - a.amount);
         for (const s of sorted.slice(0, 5)) {
-          md.push(`| ${s.service} | $${s.amount.toFixed(2)} |`);
+          md.push(`| ${esc(s.service)} | $${s.amount.toFixed(2)} |`);
         }
-        (json.costs as Record<string, unknown>).topServices = sorted.slice(
-          0,
-          5,
-        );
+        costsJson.topServices = sorted.slice(0, 5);
       }
+    }
+
+    if (Object.keys(costsJson).length > 0) {
+      json.costs = costsJson;
     }
 
     if (!costTrend && !costByService) {
@@ -358,7 +372,11 @@ export const report = {
         ) {
           const author = pr.user ?? pr.author ?? "unknown";
           const created = pr.createdAt ?? pr.created_at ?? "";
-          md.push(`- **#${pr.number}** ${pr.title} _(${author}, ${created})_`);
+          md.push(
+            `- **#${pr.number}** ${esc(pr.title ?? "")} _(${esc(author)}, ${
+              esc(created)
+            })_`,
+          );
         }
       }
       json.pullRequests = { count: prs.length };
