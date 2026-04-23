@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.04.22.2"
+version: "2026.04.22.3"
 description: |
   Query GitLab data using the glab CLI for project, merge request, issue, release, and pipeline visibility.
 
@@ -51,7 +51,11 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gitlab/projects.ts
-platforms: []
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
 additionalFiles:
   - README.md
   - LICENSE.md
