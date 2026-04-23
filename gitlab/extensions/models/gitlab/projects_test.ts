@@ -319,7 +319,7 @@ Deno.test("list_merge_requests writes mergeRequests resource", async () => {
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
     assertEquals(resources[0].specName, "mergeRequests");
-    assertEquals(resources[0].name, "group-repo-opened");
+    assertEquals(resources[0].name, "group~repo-opened");
 
     const data = resources[0].data as {
       count: number;
@@ -373,12 +373,172 @@ Deno.test("list_pipelines writes pipelines resource", async () => {
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
     assertEquals(resources[0].specName, "pipelines");
-    assertEquals(resources[0].name, "group-repo");
+    assertEquals(resources[0].name, "group~repo");
 
     const data = resources[0].data as {
       pipelines: { status: string }[];
     };
     assertEquals(data.pipelines[0].status, "success");
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
+
+Deno.test("get_project_info writes projectInfo resource", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "" },
+  });
+
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_cmd: string, _opts: unknown) {}
+    async output() {
+      await Promise.resolve();
+      return {
+        success: true,
+        stdout: new TextEncoder().encode(JSON.stringify({
+          name: "MyRepo",
+          path_with_namespace: "org/myrepo",
+          description: "Desc",
+          visibility: "private",
+          default_branch: "main",
+          star_count: 1,
+          forks_count: 0,
+          open_issues_count: 5,
+          archived: false,
+          topics: ["go"],
+          web_url: "https://gitlab.com/org/myrepo",
+          created_at: "2025-01-01T00:00:00Z",
+          last_activity_at: "2026-04-01T00:00:00Z",
+        })),
+        stderr: new Uint8Array(),
+      };
+    }
+  };
+
+  try {
+    await model.methods.get_project_info.execute(
+      { project: "org/myrepo" },
+      // deno-lint-ignore no-explicit-any
+      context as any,
+    );
+
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals(resources[0].specName, "projectInfo");
+    assertEquals(resources[0].name, "org~myrepo");
+
+    const data = resources[0].data as { name: string; webUrl: string };
+    assertEquals(data.name, "MyRepo");
+    assertEquals(data.webUrl, "https://gitlab.com/org/myrepo");
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
+
+Deno.test("list_issues writes issues resource", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "" },
+  });
+
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_cmd: string, _opts: unknown) {}
+    async output() {
+      await Promise.resolve();
+      return {
+        success: true,
+        stdout: new TextEncoder().encode(JSON.stringify([
+          {
+            iid: 7,
+            title: "Bug report",
+            state: "opened",
+            author: { username: "tester" },
+            created_at: "2026-04-01T00:00:00Z",
+            updated_at: "2026-04-02T00:00:00Z",
+            labels: ["bug"],
+          },
+        ])),
+        stderr: new Uint8Array(),
+      };
+    }
+  };
+
+  try {
+    await model.methods.list_issues.execute(
+      { project: "org/repo", state: "opened" },
+      // deno-lint-ignore no-explicit-any
+      context as any,
+    );
+
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals(resources[0].specName, "issues");
+    assertEquals(resources[0].name, "org~repo-opened");
+
+    const data = resources[0].data as {
+      count: number;
+      issues: { iid: number; title: string }[];
+    };
+    assertEquals(data.count, 1);
+    assertEquals(data.issues[0].iid, 7);
+    assertEquals(data.issues[0].title, "Bug report");
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
+
+Deno.test("list_releases writes releases resource", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "" },
+  });
+
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_cmd: string, _opts: unknown) {}
+    async output() {
+      await Promise.resolve();
+      return {
+        success: true,
+        stdout: new TextEncoder().encode(JSON.stringify([
+          {
+            tag_name: "v1.0.0",
+            name: "First Release",
+            created_at: "2026-03-01T00:00:00Z",
+            released_at: "2026-03-01T00:00:00Z",
+            upcoming_release: false,
+          },
+        ])),
+        stderr: new Uint8Array(),
+      };
+    }
+  };
+
+  try {
+    await model.methods.list_releases.execute(
+      { project: "org/repo" },
+      // deno-lint-ignore no-explicit-any
+      context as any,
+    );
+
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals(resources[0].specName, "releases");
+    assertEquals(resources[0].name, "org~repo");
+
+    const data = resources[0].data as {
+      count: number;
+      releases: { tagName: string; name: string }[];
+    };
+    assertEquals(data.count, 1);
+    assertEquals(data.releases[0].tagName, "v1.0.0");
+    assertEquals(data.releases[0].name, "First Release");
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
