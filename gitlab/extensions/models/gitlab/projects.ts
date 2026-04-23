@@ -1,4 +1,12 @@
-// GitLab Project Operations Model
+/**
+ * GitLab project operations model for swamp.
+ *
+ * Queries GitLab data via the `glab` CLI for projects, merge requests,
+ * issues, releases, and CI/CD pipelines. Supports self-hosted instances
+ * through the `host` global argument.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -250,6 +258,7 @@ type ModelContext = {
 // Model Definition
 // =============================================================================
 
+/** GitLab projects model — queries project, MR, issue, release, and pipeline data via glab CLI. */
 export const model = {
   type: "@webframp/gitlab",
   version: "2026.04.13.1",
