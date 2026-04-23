@@ -198,7 +198,7 @@ function classify(
 ): { verdict: Verdict; verdictReason: string } {
   const state = alarm.StateValue;
   const hasActions = (alarm.AlarmActions ?? []).length > 0 &&
-    (alarm.ActionsEnabled ?? true);
+    (alarm.ActionsEnabled ?? false);
 
   // Orphaned: INSUFFICIENT_DATA for > 365 days (metric almost certainly dead)
   if (state === "INSUFFICIENT_DATA" && daysInState > 365) {
@@ -228,10 +228,13 @@ function classify(
 
   // Noisy: state changed > 5 times in last 7 days
   if (stateChanges7d > 5) {
+    const capNote = stateChanges7d >= 100
+      ? " (capped at 100 per API page)"
+      : "";
     return {
       verdict: "noisy",
       verdictReason:
-        `${stateChanges7d} state changes in the last 7 days — threshold may need tuning`,
+        `${stateChanges7d}${capNote} state changes in the last 7 days — threshold may need tuning`,
     };
   }
 
@@ -279,7 +282,7 @@ async function enrichAlarm(
   ]);
 
   const hasAlarmActions = (alarm.AlarmActions ?? []).length > 0 &&
-    (alarm.ActionsEnabled ?? true);
+    (alarm.ActionsEnabled ?? false);
 
   const { verdict, verdictReason } = classify(
     alarm,
@@ -483,7 +486,8 @@ export const model = {
         const verdictCounts: Record<string, number> = {};
         const stateCounts: Record<string, number> = {};
 
-        for (const alarm of alarms) {
+        for (let i = 0; i < alarms.length; i++) {
+          const alarm = alarms[i];
           context.logger.info("Enriching {alarmName}", {
             alarmName: alarm.AlarmName ?? "",
           });
@@ -510,7 +514,7 @@ export const model = {
                 | "INSUFFICIENT_DATA") ?? "INSUFFICIENT_DATA",
               daysInCurrentState: 0,
               hasAlarmActions: (alarm.AlarmActions ?? []).length > 0 &&
-                (alarm.ActionsEnabled ?? true),
+                (alarm.ActionsEnabled ?? false),
               sns_topics: [],
               recentDataPoints: null,
               lastMetricTimestamp: null,
@@ -526,7 +530,7 @@ export const model = {
 
           const handle = await context.writeResource(
             "alarm_detail",
-            sanitize(alarm.AlarmName ?? "unknown"),
+            `${sanitize(alarm.AlarmName ?? "unknown")}-${i}`,
             detail,
           );
           handles.push(handle);
