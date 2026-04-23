@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "zod";
+import { z } from "npm:zod@4.3.6";
 import { redmineApi, redmineApiPaginated } from "./_lib/api.ts";
 
 // =============================================================================
