@@ -1,4 +1,12 @@
-// GitLab Project Operations Model
+/**
+ * GitLab project operations model for swamp.
+ *
+ * Queries GitLab data via the `glab` CLI for projects, merge requests,
+ * issues, releases, and CI/CD pipelines. Supports self-hosted instances
+ * through the `host` global argument.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
@@ -226,8 +234,17 @@ function mapPipeline(raw: any): z.infer<typeof PipelineSchema> {
   };
 }
 
+function assertArray(data: unknown): unknown[] {
+  if (!Array.isArray(data)) {
+    throw new Error(
+      `Expected array from glab but got: ${JSON.stringify(data).slice(0, 200)}`,
+    );
+  }
+  return data;
+}
+
 function sanitizeName(project: string): string {
-  return project.replace(/\//g, "-");
+  return project.replace(/\//g, "~");
 }
 
 // =============================================================================
@@ -250,9 +267,10 @@ type ModelContext = {
 // Model Definition
 // =============================================================================
 
+/** GitLab projects model — queries project, MR, issue, release, and pipeline data via glab CLI. */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.04.13.1",
+  version: "2026.04.22.3",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -308,8 +326,7 @@ export const model = {
           context.globalArgs.host,
         );
 
-        // deno-lint-ignore no-explicit-any
-        const projects = (data as any[]).map(mapProject);
+        const projects = assertArray(data).map(mapProject);
 
         const handle = await context.writeResource("projects", "all", {
           projects,
@@ -413,8 +430,7 @@ export const model = {
           context.globalArgs.host,
         );
 
-        // deno-lint-ignore no-explicit-any
-        const mrs = (data as any[]).map(mapMR);
+        const mrs = assertArray(data).map(mapMR);
         const instanceName = `${sanitizeName(args.project)}-${args.state}`;
 
         const handle = await context.writeResource(
@@ -473,8 +489,7 @@ export const model = {
           context.globalArgs.host,
         );
 
-        // deno-lint-ignore no-explicit-any
-        const issues = (data as any[]).map(mapIssue);
+        const issues = assertArray(data).map(mapIssue);
         const instanceName = `${sanitizeName(args.project)}-${args.state}`;
 
         const handle = await context.writeResource(
@@ -524,8 +539,7 @@ export const model = {
           context.globalArgs.host,
         );
 
-        // deno-lint-ignore no-explicit-any
-        const releases = (data as any[]).map(mapRelease);
+        const releases = assertArray(data).map(mapRelease);
 
         const handle = await context.writeResource(
           "releases",
@@ -573,8 +587,7 @@ export const model = {
           context.globalArgs.host,
         );
 
-        // deno-lint-ignore no-explicit-any
-        const pipelines = (data as any[]).map(mapPipeline);
+        const pipelines = assertArray(data).map(mapPipeline);
 
         const handle = await context.writeResource(
           "pipelines",
