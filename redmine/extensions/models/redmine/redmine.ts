@@ -61,32 +61,53 @@ interface RawCustomField {
   trackers: Array<{ id: number; name: string }>;
 }
 
-interface RawIssue {
+/** Raw Redmine issue shape (snake_case) as returned by the API. */
+export interface RawIssue {
+  /** Issue ID. */
   id: number;
+  /** Project reference. */
   project: { id: number; name: string };
+  /** Tracker reference. */
   tracker: { id: number; name: string };
+  /** Status reference. */
   status: { id: number; name: string; is_closed?: boolean };
+  /** Priority reference. */
   priority: { id: number; name: string };
+  /** Author reference. */
   author: { id: number; name: string };
+  /** Assignee reference (absent when unassigned). */
   assigned_to?: { id: number; name: string };
+  /** Issue subject line. */
   subject: string;
+  /** Issue description body. */
   description: string;
+  /** Planned start date (ISO 8601 or null). */
   start_date: string | null;
+  /** Planned due date (ISO 8601 or null). */
   due_date: string | null;
+  /** Percent done (0–100). */
   done_ratio: number;
+  /** Whether the issue is private. */
   is_private: boolean;
+  /** Estimated hours (null if unset). */
   estimated_hours: number | null;
+  /** Hours spent (present when include=spent_hours). */
   spent_hours?: number;
+  /** Creation timestamp (ISO 8601). */
   created_on: string;
+  /** Last-updated timestamp (ISO 8601). */
   updated_on: string;
+  /** Closed timestamp (ISO 8601 or null). */
   closed_on: string | null;
+  /** Parent issue reference. */
   parent?: { id: number };
+  /** Custom field values. */
   custom_fields?: Array<{
     id: number;
     name: string;
     value: string | string[];
   }>;
-  // Present in detail responses
+  /** Journal entries (present in detail responses). */
   journals?: Array<{
     id: number;
     user: { id: number; name: string };
@@ -99,6 +120,7 @@ interface RawIssue {
       new_value: string | null;
     }>;
   }>;
+  /** Child issue references. */
   children?: Array<
     { id: number; tracker: { id: number; name: string }; subject: string }
   >;
