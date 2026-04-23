@@ -16,6 +16,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/logs`](aws/logs/) | CloudWatch Logs queries and analysis | `@aws-sdk/client-cloudwatch-logs` |
 | [`@webframp/aws/metrics`](aws/metrics/) | CloudWatch Metrics retrieval and anomaly analysis | `@aws-sdk/client-cloudwatch` |
 | [`@webframp/aws/alarms`](aws/alarms/) | CloudWatch Alarms status, history, and active alerts | `@aws-sdk/client-cloudwatch` |
+| [`@webframp/aws/alarm-investigation`](aws/alarm-investigation/) | CloudWatch alarm investigation and triage — enriches alarms with metric activity, SNS subscriptions, and verdict classification | `@aws-sdk/client-cloudwatch`, `@aws-sdk/client-sns` |
 | [`@webframp/aws/traces`](aws/traces/) | X-Ray distributed tracing and error analysis | `@aws-sdk/client-xray` |
 | [`@webframp/aws/cost-estimate`](aws/cost-estimate/) | Cost estimation from inventory specs | `@aws-sdk/client-pricing` |
 | [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
