@@ -11,7 +11,7 @@
 import { z } from "zod";
 
 /** The shape returned by {@linkcode vault.createProvider}. */
-interface KeychainVaultProvider {
+export interface KeychainVaultProvider {
   get(key: string): Promise<string>;
   put(key: string, value: string): Promise<void>;
   list(): Promise<string[]>;
