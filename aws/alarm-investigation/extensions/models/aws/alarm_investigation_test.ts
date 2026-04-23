@@ -653,3 +653,25 @@ Deno.test({
     }
   },
 });
+
+// =============================================================================
+// triage: limit validation
+// =============================================================================
+
+Deno.test("triage: rejects limit=0 via Zod schema", () => {
+  const schema = model.methods.triage.arguments;
+  const result = schema.safeParse({ limit: 0 });
+  assertEquals(result.success, false);
+});
+
+Deno.test("triage: rejects negative limit via Zod schema", () => {
+  const schema = model.methods.triage.arguments;
+  const result = schema.safeParse({ limit: -1 });
+  assertEquals(result.success, false);
+});
+
+Deno.test("triage: rejects non-integer limit via Zod schema", () => {
+  const schema = model.methods.triage.arguments;
+  const result = schema.safeParse({ limit: 3.5 });
+  assertEquals(result.success, false);
+});

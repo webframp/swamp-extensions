@@ -170,11 +170,22 @@ async function resolveSnsTopics(
 
   for (const arn of snsArns) {
     try {
-      const command = new ListSubscriptionsByTopicCommand({ TopicArn: arn });
-      const response = await snsClient.send(command);
-      const subscriptions = response.Subscriptions ?? [];
+      const subscriptions: { Protocol?: string }[] = [];
+      let nextToken: string | undefined;
+      do {
+        const response = await snsClient.send(
+          new ListSubscriptionsByTopicCommand({
+            TopicArn: arn,
+            NextToken: nextToken,
+          }),
+        );
+        subscriptions.push(...(response.Subscriptions ?? []));
+        nextToken = response.NextToken;
+      } while (nextToken);
       const protocols = [
-        ...new Set(subscriptions.map((s) => s.Protocol ?? "")),
+        ...new Set(
+          subscriptions.map((s) => s.Protocol).filter(Boolean) as string[],
+        ),
       ];
       results.push({
         arn,
@@ -418,6 +429,8 @@ export const model = {
       arguments: z.object({
         limit: z
           .number()
+          .int()
+          .min(1)
           .default(100)
           .describe("Maximum number of alarms to process"),
         stateFilter: z
