@@ -1,13 +1,12 @@
 manifestVersion: 1
 name: "@webframp/aws-ops"
-version: "2026.04.22.1"
+version: "2026.04.23.1"
 description: |
-  AWS Operations Toolkit - Unified incident investigation and operational visibility.
+  AWS Operations Toolkit - Unified incident investigation and daily operational visibility.
 
-  This extension provides a complete workflow for investigating AWS outages by
-  gathering data from CloudWatch Logs, Metrics, Alarms, X-Ray Traces,
-  resource inventory (EC2, Lambda), and networking (load balancers, NAT gateways),
-  plus an incident report that summarizes all findings.
+  This extension provides workflows for investigating AWS outages and running
+  daily infrastructure pulse checks. Gathers data from CloudWatch Logs, Metrics,
+  Alarms, X-Ray Traces, resource inventory, networking, Cost Explorer, and GitHub.
 
   ## Quick Start
 
@@ -78,8 +77,10 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 workflows:
   - workflow-c3866eb0-6190-4154-b8e1-304624aba93e.yaml
+  - workflow-460c619c-c59a-44bd-a2ad-27c8b819e8f6.yaml
 reports:
   - incident_report.ts
+  - morning_pulse_report.ts
 labels:
   - aws
   - cloudwatch
@@ -87,6 +88,7 @@ labels:
   - observability
   - ops
   - incident-response
+  - daily
   - workflow
 platforms:
   - linux-x86_64
@@ -103,4 +105,7 @@ dependencies:
   - "@webframp/aws/traces@2026.03.30.1"
   - "@webframp/aws/inventory@2026.03.31.1"
   - "@webframp/aws/networking@2026.04.12.1"
+  - "@webframp/aws/alarm-investigation@2026.04.22.1"
+  - "@webframp/aws/cost-explorer@2026.03.30.1"
+  - "@webframp/github@2026.03.30.1"
 

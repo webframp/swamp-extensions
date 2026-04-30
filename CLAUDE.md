@@ -156,3 +156,9 @@ These swamp skills are available for guidance when working on extensions (invoke
 - `swamp-workflow` - Create and edit workflows
 - `swamp-model` - Work with swamp models (creating instances, running methods)
 - `swamp-data` - Manage model data lifecycle with CEL expressions
+
+## Project Skills
+
+Project-level skills in `skills/` at the repo root:
+
+- `skills/pr-workflow.md` - End-to-end PR workflow: branch, develop, push, respond to adversarial review, iterate until CI passes, merge
