@@ -90,6 +90,16 @@ jobs:
             limit: 100
         allowFailure: true
 
+      - name: triage-west
+        description: Enrich alarms in us-west-2 with verdicts
+        task:
+          type: model_method
+          modelIdOrName: alarm-investigation-west
+          methodName: triage
+          inputs:
+            limit: 100
+        allowFailure: true
+
   - name: costs
     description: Cost trend for the last N days
     steps:

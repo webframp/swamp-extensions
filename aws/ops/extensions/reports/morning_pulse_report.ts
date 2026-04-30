@@ -128,11 +128,9 @@ export const report = {
     };
 
     // Escape values for safe markdown table/list rendering
-    function esc(val: string): string {
-      return val.replace(/\|/g, "\\|").replace(/[`*_~]/g, "\\$&").replace(
-        /\n/g,
-        " ",
-      );
+    function esc(val: string | undefined | null): string {
+      return (val ?? "").replace(/\|/g, "\\|").replace(/[`*_~]/g, "\\$&")
+        .replace(/\n/g, " ");
     }
 
     // Helper to get step data
@@ -310,11 +308,11 @@ export const report = {
         md.push(
           `**Trend**: ${trendEmoji[trend] ?? ""} ${trend}`,
         );
-        if (typeof d.totalCost === "number") {
-          md.push(`**Total (period)**: $${d.totalCost.toFixed(2)}`);
+        if (Number.isFinite(d.totalCost)) {
+          md.push(`**Total (period)**: $${d.totalCost!.toFixed(2)}`);
         }
-        if (typeof d.averageDailyCost === "number") {
-          md.push(`**Daily average**: $${d.averageDailyCost.toFixed(2)}`);
+        if (Number.isFinite(d.averageDailyCost)) {
+          md.push(`**Daily average**: $${d.averageDailyCost!.toFixed(2)}`);
         }
         costsJson.trend = trend;
         costsJson.total = d.totalCost;
@@ -332,7 +330,12 @@ export const report = {
         md.push("| ------- | ---- |");
         const sorted = [...d.services].sort((a, b) => b.amount - a.amount);
         for (const s of sorted.slice(0, 5)) {
-          md.push(`| ${esc(s.service)} | $${s.amount.toFixed(2)} |`);
+          const amt = Number(s.amount);
+          md.push(
+            `| ${esc(s.service)} | $${
+              Number.isFinite(amt) ? amt.toFixed(2) : "0.00"
+            } |`,
+          );
         }
         costsJson.topServices = sorted.slice(0, 5);
       }
