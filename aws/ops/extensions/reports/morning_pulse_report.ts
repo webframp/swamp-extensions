@@ -49,12 +49,12 @@ async function readData(
   version: number,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const base = `${repoDir}/.swamp/data/`;
+    const baseUrl = new URL(`file://${repoDir}/.swamp/data/`);
     const resolved = new URL(
       `${modelType}/${modelId}/${dataName}/${version}/raw`,
-      `file://${base}`,
+      baseUrl,
     ).pathname;
-    if (!resolved.startsWith(base)) return null;
+    if (!resolved.startsWith(baseUrl.pathname)) return null;
     return JSON.parse(await Deno.readTextFile(resolved));
   } catch {
     return null;
@@ -129,7 +129,7 @@ export const report = {
 
     // Escape values for safe markdown table/list rendering
     function esc(val: string | undefined | null): string {
-      return (val ?? "").replace(/\|/g, "\\|").replace(/[`*_~]/g, "\\$&")
+      return (val ?? "").replace(/\|/g, "\\|").replace(/[`*_~<>]/g, "\\$&")
         .replace(/\n/g, " ");
     }
 
@@ -224,17 +224,13 @@ export const report = {
     json.alarms = { totalAlarms, totalInAlarm, recentChanges: allChanges };
 
     // === ALARM TRIAGE ===
-    // Find triage_summary data handle specifically
-    const triageHandles = findAllSteps(
-      ctx.stepExecutions,
-      "alarm-investigation",
-      "triage",
-    );
-    let triageSummary: {
-      total: number;
-      byVerdict: Record<string, number>;
-      byState: Record<string, number>;
-    } | null = null;
+    // Find triage data from both regional alarm-investigation instances
+    const triageHandles = [
+      ...findAllSteps(ctx.stepExecutions, "alarm-investigation", "triage"),
+      ...findAllSteps(ctx.stepExecutions, "alarm-investigation-west", "triage"),
+    ];
+    const aggregatedVerdict: Record<string, number> = {};
+    let triageTotal = 0;
 
     for (const h of triageHandles) {
       const data = await readData(
@@ -245,18 +241,20 @@ export const report = {
         h.version,
       );
       if (data && "byVerdict" in data) {
-        triageSummary = data as unknown as {
+        const d = data as unknown as {
           total: number;
           byVerdict: Record<string, number>;
-          byState: Record<string, number>;
         };
-        break;
+        triageTotal += d.total ?? 0;
+        for (const [k, v] of Object.entries(d.byVerdict)) {
+          aggregatedVerdict[k] = (aggregatedVerdict[k] ?? 0) + v;
+        }
       }
     }
 
-    if (triageSummary) {
+    if (triageTotal > 0) {
       md.push("## Alarm Health Verdicts\n");
-      const v = triageSummary.byVerdict;
+      const v = aggregatedVerdict;
       const verdictOrder = [
         "healthy",
         "noisy",
@@ -281,7 +279,10 @@ export const report = {
         }
       }
       md.push(parts.join(" · ") + "\n");
-      json.alarmTriage = triageSummary;
+      json.alarmTriage = {
+        total: triageTotal,
+        byVerdict: aggregatedVerdict,
+      };
     }
 
     // === COSTS ===
