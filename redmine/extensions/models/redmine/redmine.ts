@@ -212,7 +212,17 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.04.22.1",
+  version: "2026.04.30.1",
+
+  upgrades: [
+    {
+      toVersion: "2026.04.30.1",
+      description:
+        "Add Zod schemas to all resource specs — no globalArguments changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
+
   globalArguments: z.object({
     host: z.string().describe(
       "Redmine instance URL (e.g. https://redmine.example.com)",
@@ -233,37 +243,173 @@ export const model = {
   resources: {
     issues: {
       description: "List of issues matching query filters",
+      schema: z.object({
+        issues: z.array(z.object({
+          id: z.number(),
+          project: z.object({ id: z.number(), name: z.string() }),
+          tracker: z.object({ id: z.number(), name: z.string() }),
+          status: z.object({
+            id: z.number(),
+            name: z.string(),
+            is_closed: z.boolean().optional(),
+          }),
+          priority: z.object({ id: z.number(), name: z.string() }),
+          author: z.object({ id: z.number(), name: z.string() }),
+          assignedTo: z.object({ id: z.number(), name: z.string() }).nullable(),
+          subject: z.string(),
+          description: z.string(),
+          startDate: z.string().nullable(),
+          dueDate: z.string().nullable(),
+          doneRatio: z.number(),
+          isPrivate: z.boolean(),
+          estimatedHours: z.number().nullable(),
+          spentHours: z.number().nullable(),
+          createdOn: z.string(),
+          updatedOn: z.string(),
+          closedOn: z.string().nullable(),
+          parent: z.object({ id: z.number() }).nullable(),
+          customFields: z.array(z.object({
+            id: z.number(),
+            name: z.string(),
+            value: z.union([z.string(), z.array(z.string())]),
+          })),
+        })),
+        totalCount: z.number(),
+        fetchedAt: z.string(),
+      }),
       lifetime: "30m" as const,
       garbageCollection: 5,
     },
     issue_detail: {
       description: "Single issue with journals and children",
+      schema: z.object({
+        id: z.number(),
+        project: z.object({ id: z.number(), name: z.string() }),
+        tracker: z.object({ id: z.number(), name: z.string() }),
+        status: z.object({
+          id: z.number(),
+          name: z.string(),
+          is_closed: z.boolean().optional(),
+        }),
+        priority: z.object({ id: z.number(), name: z.string() }),
+        author: z.object({ id: z.number(), name: z.string() }),
+        assignedTo: z.object({ id: z.number(), name: z.string() }).nullable(),
+        subject: z.string(),
+        description: z.string(),
+        startDate: z.string().nullable(),
+        dueDate: z.string().nullable(),
+        doneRatio: z.number(),
+        isPrivate: z.boolean(),
+        estimatedHours: z.number().nullable(),
+        spentHours: z.number().nullable(),
+        createdOn: z.string(),
+        updatedOn: z.string(),
+        closedOn: z.string().nullable(),
+        parent: z.object({ id: z.number() }).nullable(),
+        customFields: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+          value: z.union([z.string(), z.array(z.string())]),
+        })),
+        journals: z.array(z.object({
+          id: z.number(),
+          user: z.object({ id: z.number(), name: z.string() }),
+          notes: z.string(),
+          createdOn: z.string(),
+          details: z.array(z.object({
+            property: z.string(),
+            name: z.string(),
+            oldValue: z.string().nullable(),
+            newValue: z.string().nullable(),
+          })),
+        })),
+        children: z.array(z.object({
+          id: z.number(),
+          tracker: z.object({ id: z.number(), name: z.string() }),
+          subject: z.string(),
+        })),
+      }),
       lifetime: "30m" as const,
       garbageCollection: 10,
     },
     projects: {
       description: "List of accessible projects",
+      schema: z.object({
+        projects: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+          identifier: z.string(),
+          description: z.string(),
+          status: z.number(),
+          isPublic: z.boolean(),
+          createdOn: z.string(),
+          updatedOn: z.string(),
+        })),
+        fetchedAt: z.string(),
+      }),
       lifetime: "1h" as const,
       garbageCollection: 3,
     },
     statuses: {
       description: "Issue statuses (id, name, isClosed)",
+      schema: z.object({
+        statuses: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+          isClosed: z.boolean(),
+        })),
+        fetchedAt: z.string(),
+      }),
       lifetime: "infinite" as const,
       garbageCollection: 1,
     },
     trackers: {
       description: "Trackers (id, name, defaultStatus, description)",
+      schema: z.object({
+        trackers: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+          defaultStatus: z.object({ id: z.number(), name: z.string() }),
+          description: z.string(),
+        })),
+        fetchedAt: z.string(),
+      }),
       lifetime: "infinite" as const,
       garbageCollection: 1,
     },
     users: {
       description: "Project memberships (users and groups with roles)",
+      schema: z.object({
+        members: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+          type: z.enum(["user", "group"]),
+          roles: z.array(z.object({ id: z.number(), name: z.string() })),
+        })),
+        project: z.string(),
+        fetchedAt: z.string(),
+      }),
       lifetime: "1h" as const,
       garbageCollection: 3,
     },
     custom_fields: {
       description:
         "Custom field definitions (id, name, fieldFormat, possibleValues, ...)",
+      schema: z.object({
+        customFields: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+          customizedType: z.string(),
+          fieldFormat: z.string(),
+          isRequired: z.boolean(),
+          isFilter: z.boolean(),
+          multiple: z.boolean(),
+          defaultValue: z.string(),
+          possibleValues: z.array(z.object({ value: z.string() })),
+          trackers: z.array(z.object({ id: z.number(), name: z.string() })),
+        })),
+        fetchedAt: z.string(),
+      }),
       lifetime: "infinite" as const,
       garbageCollection: 1,
     },
