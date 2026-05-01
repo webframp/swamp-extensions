@@ -81,7 +81,7 @@ Deno.test("redmine model: has all 7 resources", () => {
 Deno.test("redmine model: has all 9 methods", () => {
   assertExists(model.methods);
   const names = Object.keys(model.methods);
-  assertEquals(names.length, 25);
+  assertEquals(names.length, 26);
   assertExists(model.methods.list_statuses);
   assertExists(model.methods.list_trackers);
   assertExists(model.methods.list_projects);

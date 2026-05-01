@@ -1917,5 +1917,87 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+
+    upload_file: {
+      description:
+        "Upload a file and attach it to an issue (two-step: upload binary, then attach token)",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID to attach the file to"),
+        filePath: z.string().describe("Local file path to upload"),
+        filename: z.string().optional().describe(
+          "Filename for the attachment (defaults to basename of filePath)",
+        ),
+        description: z.string().optional().describe(
+          "Attachment description",
+        ),
+        contentType: z.string().optional().describe(
+          "MIME type (auto-detected from filename if omitted)",
+        ),
+      }),
+      execute: async (
+        args: {
+          issueId: number;
+          filePath: string;
+          filename?: string;
+          description?: string;
+          contentType?: string;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const fileName = args.filename ??
+          args.filePath.split("/").pop() ??
+          "attachment";
+
+        // Step 1: Upload binary
+        const fileData = await Deno.readFile(args.filePath);
+        const params = new URLSearchParams();
+        params.set("filename", fileName);
+        if (args.contentType) params.set("content_type", args.contentType);
+
+        const headers: Record<string, string> = {
+          "X-Redmine-API-Key": apiKey,
+          "Content-Type": "application/octet-stream",
+        };
+        if (username) headers["X-Redmine-Username"] = username;
+
+        const uploadResp = await fetch(
+          `${host}/uploads.json?${params}`,
+          { method: "POST", headers, body: fileData },
+        );
+
+        if (!uploadResp.ok) {
+          throw new Error(`Upload failed: ${uploadResp.status}`);
+        }
+
+        const uploadData = (await uploadResp.json()) as {
+          upload: { id: number; token: string };
+        };
+        const token = uploadData.upload.token;
+
+        // Step 2: Attach to issue
+        const attachment: Record<string, string> = {
+          token,
+          filename: fileName,
+        };
+        if (args.description) attachment.description = args.description;
+        if (args.contentType) attachment.content_type = args.contentType;
+
+        await redmineApi(
+          host,
+          apiKey,
+          "PUT",
+          `/issues/${args.issueId}.json`,
+          { issue: { uploads: [attachment] } },
+          username,
+        );
+
+        context.logger.info("Attached {filename} to issue {id}", {
+          filename: fileName,
+          id: args.issueId,
+        });
+        return { dataHandles: [] };
+      },
+    },
   },
 };
