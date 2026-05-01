@@ -1,10 +1,10 @@
 {
   "tasks": {
     "check": "deno check extensions/models/redmine/*.ts extensions/models/redmine/_lib/*.ts",
-    "lint": "deno lint extensions/models/ extensions/reports/",
-    "fmt": "deno fmt extensions/models/ extensions/reports/",
-    "fmt:check": "deno fmt --check extensions/models/ extensions/reports/",
-    "test": "deno test --allow-env --allow-net --allow-read --allow-write extensions/models/ extensions/reports/"
+    "lint": "deno lint extensions/models/",
+    "fmt": "deno fmt extensions/models/",
+    "fmt:check": "deno fmt --check extensions/models/",
+    "test": "deno test --allow-env --allow-net --allow-read --allow-write extensions/models/"
   },
   "lint": {
     "rules": {

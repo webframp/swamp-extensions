@@ -1,0 +1,3 @@
+version: 1
+name: redmine-kanban
+description: Kanban workflow reports and automation for Redmine
