@@ -661,7 +661,7 @@ export const model = {
         const rawMemberships = await redmineApiPaginated<RawMembership>(
           host,
           apiKey,
-          `/projects/${project}/memberships.json`,
+          `/projects/${encodeURIComponent(project)}/memberships.json`,
           "memberships",
           undefined,
           undefined,
@@ -1183,7 +1183,7 @@ export const model = {
         };
         if (args.delay !== undefined) payload.delay = args.delay;
 
-        const data = await redmineApi<{
+        await redmineApi<{
           relation: {
             id: number;
             issue_id: number;
@@ -1200,31 +1200,12 @@ export const model = {
           username,
         );
 
-        const r = data.relation;
-        const relation = {
-          id: r.id,
-          issueId: r.issue_id,
-          issueToId: r.issue_to_id,
-          relationType: r.relation_type,
-          delay: r.delay,
-        };
-
-        const handle = await context.writeResource(
-          "relations",
-          String(args.issueId),
-          {
-            relations: [relation],
-            issueId: args.issueId,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
         context.logger.info("Created {type} relation from {from} to {to}", {
           type: args.relationType,
           from: args.issueId,
           to: args.issueToId,
         });
-        return { dataHandles: [handle] };
+        return { dataHandles: [] };
       },
     },
 
@@ -1282,7 +1263,7 @@ export const model = {
           host,
           apiKey,
           "GET",
-          `/projects/${project}/versions.json`,
+          `/projects/${encodeURIComponent(project)}/versions.json`,
           undefined,
           username,
         );
@@ -1384,7 +1365,7 @@ export const model = {
 
         const instanceName = args.issueId
           ? String(args.issueId)
-          : args.project ?? context.globalArgs.project;
+          : args.project ?? "all";
 
         const handle = await context.writeResource(
           "time_entries",
@@ -1563,7 +1544,7 @@ export const model = {
         }
 
         const basePath = args.project
-          ? `/projects/${args.project}/search.json`
+          ? `/projects/${encodeURIComponent(args.project)}/search.json`
           : "/search.json";
 
         const data = await redmineApi<{
@@ -1726,7 +1707,7 @@ export const model = {
           host,
           apiKey,
           "POST",
-          `/projects/${project}/versions.json`,
+          `/projects/${encodeURIComponent(project)}/versions.json`,
           { version: payload },
           username,
         );
@@ -1897,7 +1878,7 @@ export const model = {
           host,
           apiKey,
           "GET",
-          `/projects/${project}/issue_categories.json`,
+          `/projects/${encodeURIComponent(project)}/issue_categories.json`,
           undefined,
           username,
         );
@@ -1923,7 +1904,10 @@ export const model = {
         "Upload a file and attach it to an issue (two-step: upload binary, then attach token)",
       arguments: z.object({
         issueId: z.number().describe("Issue ID to attach the file to"),
-        filePath: z.string().describe("Local file path to upload"),
+        filePath: z.string().refine(
+          (p) => !p.startsWith("/") && !p.includes(".."),
+          "Only relative paths without '..' are allowed",
+        ).describe("Local file path to upload (relative)"),
         filename: z.string().optional().describe(
           "Filename for the attachment (defaults to basename of filePath)",
         ),
