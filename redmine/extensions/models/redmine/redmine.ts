@@ -517,6 +517,20 @@ export const model = {
       lifetime: "15m" as const,
       garbageCollection: 3,
     },
+    issue_categories: {
+      description: "Issue categories for a project",
+      schema: z.object({
+        categories: z.array(z.object({
+          id: z.number(),
+          project: z.object({ id: z.number(), name: z.string() }),
+          name: z.string(),
+        })),
+        project: z.string(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "1h" as const,
+      garbageCollection: 3,
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -1585,6 +1599,320 @@ export const model = {
         context.logger.info("Search for '{query}' returned {count} results", {
           query: args.query,
           count: data.total_count,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_version: {
+      description: "Get a single version by ID",
+      arguments: z.object({
+        versionId: z.number().describe("Version ID"),
+      }),
+      execute: async (
+        args: { versionId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+
+        interface RawVersion {
+          id: number;
+          project: { id: number; name: string };
+          name: string;
+          description: string;
+          status: string;
+          due_date: string | null;
+          sharing: string;
+          wiki_page_title: string | null;
+          created_on: string;
+          updated_on: string;
+        }
+
+        const data = await redmineApi<{ version: RawVersion }>(
+          host,
+          apiKey,
+          "GET",
+          `/versions/${args.versionId}.json`,
+          undefined,
+          username,
+        );
+
+        const v = data.version;
+        const version = {
+          id: v.id,
+          project: v.project,
+          name: v.name,
+          description: v.description,
+          status: v.status,
+          dueDate: v.due_date,
+          sharing: v.sharing,
+          wikiPageTitle: v.wiki_page_title,
+          createdOn: v.created_on,
+          updatedOn: v.updated_on,
+        };
+
+        const handle = await context.writeResource(
+          "versions",
+          String(args.versionId),
+          { versions: [version], fetchedAt: new Date().toISOString() },
+        );
+
+        context.logger.info("Fetched version {id}", { id: args.versionId });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_version: {
+      description: "Create a project version (milestone/sprint)",
+      arguments: z.object({
+        project: z.string().optional().describe(
+          "Project identifier (defaults to global project arg)",
+        ),
+        name: z.string().describe("Version name"),
+        description: z.string().optional().describe("Description"),
+        status: z.enum(["open", "locked", "closed"]).optional().describe(
+          "Version status",
+        ),
+        dueDate: z.string().optional().describe("Due date (YYYY-MM-DD)"),
+        sharing: z.enum([
+          "none",
+          "descendants",
+          "hierarchy",
+          "tree",
+          "system",
+        ]).optional().describe("Sharing scope"),
+        wikiPageTitle: z.string().optional().describe("Wiki page title"),
+      }),
+      execute: async (
+        args: {
+          project?: string;
+          name: string;
+          description?: string;
+          status?: string;
+          dueDate?: string;
+          sharing?: string;
+          wikiPageTitle?: string;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const project = args.project ?? context.globalArgs.project;
+
+        const payload: Record<string, unknown> = { name: args.name };
+        if (args.description !== undefined) {
+          payload.description = args.description;
+        }
+        if (args.status !== undefined) payload.status = args.status;
+        if (args.dueDate !== undefined) payload.due_date = args.dueDate;
+        if (args.sharing !== undefined) payload.sharing = args.sharing;
+        if (args.wikiPageTitle !== undefined) {
+          payload.wiki_page_title = args.wikiPageTitle;
+        }
+
+        const data = await redmineApi<{
+          version: {
+            id: number;
+            project: { id: number; name: string };
+            name: string;
+            description: string;
+            status: string;
+            due_date: string | null;
+            sharing: string;
+            wiki_page_title: string | null;
+            created_on: string;
+            updated_on: string;
+          };
+        }>(
+          host,
+          apiKey,
+          "POST",
+          `/projects/${project}/versions.json`,
+          { version: payload },
+          username,
+        );
+
+        const v = data.version;
+        const version = {
+          id: v.id,
+          project: v.project,
+          name: v.name,
+          description: v.description,
+          status: v.status,
+          dueDate: v.due_date,
+          sharing: v.sharing,
+          wikiPageTitle: v.wiki_page_title,
+          createdOn: v.created_on,
+          updatedOn: v.updated_on,
+        };
+
+        const handle = await context.writeResource(
+          "versions",
+          String(v.id),
+          { versions: [version], fetchedAt: new Date().toISOString() },
+        );
+
+        context.logger.info("Created version {name} ({id})", {
+          name: v.name,
+          id: v.id,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    update_version: {
+      description: "Update a version",
+      arguments: z.object({
+        versionId: z.number().describe("Version ID"),
+        name: z.string().optional().describe("New name"),
+        description: z.string().optional().describe("New description"),
+        status: z.enum(["open", "locked", "closed"]).optional().describe(
+          "New status",
+        ),
+        dueDate: z.string().optional().describe("New due date (YYYY-MM-DD)"),
+        sharing: z.enum([
+          "none",
+          "descendants",
+          "hierarchy",
+          "tree",
+          "system",
+        ]).optional().describe("New sharing scope"),
+        wikiPageTitle: z.string().optional().describe("New wiki page title"),
+      }),
+      execute: async (
+        args: {
+          versionId: number;
+          name?: string;
+          description?: string;
+          status?: string;
+          dueDate?: string;
+          sharing?: string;
+          wikiPageTitle?: string;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const payload: Record<string, unknown> = {};
+        if (args.name !== undefined) payload.name = args.name;
+        if (args.description !== undefined) {
+          payload.description = args.description;
+        }
+        if (args.status !== undefined) payload.status = args.status;
+        if (args.dueDate !== undefined) payload.due_date = args.dueDate;
+        if (args.sharing !== undefined) payload.sharing = args.sharing;
+        if (args.wikiPageTitle !== undefined) {
+          payload.wiki_page_title = args.wikiPageTitle;
+        }
+
+        await redmineApi(
+          host,
+          apiKey,
+          "PUT",
+          `/versions/${args.versionId}.json`,
+          { version: payload },
+          username,
+        );
+
+        context.logger.info("Updated version {id}", { id: args.versionId });
+        return { dataHandles: [] };
+      },
+    },
+
+    delete_version: {
+      description: "Delete a version",
+      arguments: z.object({
+        versionId: z.number().describe("Version ID to delete"),
+      }),
+      execute: async (
+        args: { versionId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        await redmineApi(
+          host,
+          apiKey,
+          "DELETE",
+          `/versions/${args.versionId}.json`,
+          undefined,
+          username,
+        );
+        context.logger.info("Deleted version {id}", { id: args.versionId });
+        return { dataHandles: [] };
+      },
+    },
+
+    update_journal: {
+      description: "Update a journal entry's notes",
+      arguments: z.object({
+        journalId: z.number().describe("Journal ID"),
+        notes: z.string().describe("Updated notes content"),
+        privateNotes: z.boolean().optional().describe(
+          "Mark notes as private",
+        ),
+      }),
+      execute: async (
+        args: { journalId: number; notes: string; privateNotes?: boolean },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const payload: Record<string, unknown> = { notes: args.notes };
+        if (args.privateNotes !== undefined) {
+          payload.private_notes = args.privateNotes;
+        }
+
+        await redmineApi(
+          host,
+          apiKey,
+          "PUT",
+          `/journals/${args.journalId}.json`,
+          { journal: payload },
+          username,
+        );
+
+        context.logger.info("Updated journal {id}", { id: args.journalId });
+        return { dataHandles: [] };
+      },
+    },
+
+    list_issue_categories: {
+      description: "List issue categories for a project",
+      arguments: z.object({
+        project: z.string().optional().describe(
+          "Project identifier (defaults to global project arg)",
+        ),
+      }),
+      execute: async (
+        args: { project?: string },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const project = args.project ?? context.globalArgs.project;
+
+        const data = await redmineApi<{
+          issue_categories: Array<{
+            id: number;
+            project: { id: number; name: string };
+            name: string;
+          }>;
+        }>(
+          host,
+          apiKey,
+          "GET",
+          `/projects/${project}/issue_categories.json`,
+          undefined,
+          username,
+        );
+
+        const categories = data.issue_categories;
+
+        const handle = await context.writeResource(
+          "issue_categories",
+          project,
+          { categories, project, fetchedAt: new Date().toISOString() },
+        );
+
+        context.logger.info("Found {count} categories in project {project}", {
+          count: categories.length,
+          project,
         });
         return { dataHandles: [handle] };
       },
