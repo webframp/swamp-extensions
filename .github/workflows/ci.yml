@@ -307,11 +307,11 @@ jobs:
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/ extensions/reports/
+            deno fmt --check extensions/models/
           elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/ extensions/reports/
+            deno lint extensions/models/
           else
-            deno check extensions/models/redmine/*.ts extensions/models/redmine/_lib/*.ts extensions/reports/*.ts
+            deno check extensions/models/redmine/*.ts extensions/models/redmine/_lib/*.ts
           fi
 
   redmine-test:
@@ -326,7 +326,46 @@ jobs:
         with:
           deno-version: v2.x
       - name: deno test
-        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/models/ extensions/reports/
+        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/models/
+
+  redmine-kanban-check:
+    name: redmine-kanban - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [check, lint, fmt]
+    defaults:
+      run:
+        working-directory: redmine-kanban
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/reports/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/reports/
+          else
+            deno check extensions/reports/*.ts
+          fi
+
+  redmine-kanban-test:
+    name: redmine-kanban - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: redmine-kanban
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/reports/
 
   terraform-check:
     name: terraform - ${{ matrix.task }}
