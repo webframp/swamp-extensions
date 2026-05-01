@@ -1416,7 +1416,7 @@ export const model = {
         if (args.comments !== undefined) payload.comments = args.comments;
         if (args.spentOn !== undefined) payload.spent_on = args.spentOn;
 
-        const data = await redmineApi<{
+        await redmineApi<{
           time_entry: {
             id: number;
             project: { id: number; name: string };
@@ -1438,35 +1438,11 @@ export const model = {
           username,
         );
 
-        const e = data.time_entry;
-        const entry = {
-          id: e.id,
-          project: e.project,
-          issue: e.issue,
-          user: e.user,
-          activity: e.activity,
-          hours: e.hours,
-          comments: e.comments,
-          spentOn: e.spent_on,
-          createdOn: e.created_on,
-          updatedOn: e.updated_on,
-        };
-
-        const handle = await context.writeResource(
-          "time_entries",
-          String(args.issueId),
-          {
-            timeEntries: [entry],
-            totalCount: 1,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
         context.logger.info("Logged {hours}h on issue {id}", {
           hours: args.hours,
           id: args.issueId,
         });
-        return { dataHandles: [handle] };
+        return { dataHandles: [] };
       },
     },
 
