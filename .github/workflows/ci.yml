@@ -20,7 +20,7 @@ jobs:
         working-directory: vault/${{ matrix.vault }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -54,7 +54,7 @@ jobs:
         working-directory: aws/${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -86,7 +86,7 @@ jobs:
         working-directory: aws/${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -123,7 +123,7 @@ jobs:
         working-directory: ${{ matrix.extension.dir }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -144,7 +144,7 @@ jobs:
         working-directory: cloudflare
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -163,7 +163,7 @@ jobs:
         working-directory: network
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -177,7 +177,7 @@ jobs:
         working-directory: system
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -191,7 +191,7 @@ jobs:
         working-directory: gitlab
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -205,7 +205,7 @@ jobs:
         working-directory: github
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -223,7 +223,7 @@ jobs:
         working-directory: cloudflare-audit
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -244,7 +244,7 @@ jobs:
         working-directory: cloudflare-audit
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -262,7 +262,7 @@ jobs:
         working-directory: sre
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -283,7 +283,7 @@ jobs:
         working-directory: sre
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -301,17 +301,17 @@ jobs:
         working-directory: redmine
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/ extensions/reports/
+            deno fmt --check extensions/models/
           elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/ extensions/reports/
+            deno lint extensions/models/
           else
-            deno check extensions/models/redmine/*.ts extensions/models/redmine/_lib/*.ts extensions/reports/*.ts
+            deno check extensions/models/redmine/*.ts extensions/models/redmine/_lib/*.ts
           fi
 
   redmine-test:
@@ -322,11 +322,50 @@ jobs:
         working-directory: redmine
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
-        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/models/ extensions/reports/
+        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/models/
+
+  redmine-kanban-check:
+    name: redmine-kanban - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [check, lint, fmt]
+    defaults:
+      run:
+        working-directory: redmine-kanban
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/reports/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/reports/
+          else
+            deno check extensions/reports/*.ts
+          fi
+
+  redmine-kanban-test:
+    name: redmine-kanban - test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: redmine-kanban
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+      - name: deno test
+        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/reports/
 
   terraform-check:
     name: terraform - ${{ matrix.task }}
@@ -340,7 +379,7 @@ jobs:
         working-directory: terraform
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -361,7 +400,7 @@ jobs:
         working-directory: terraform
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -379,7 +418,7 @@ jobs:
         working-directory: aws/terraform-drift
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}
@@ -400,7 +439,7 @@ jobs:
         working-directory: aws/terraform-drift
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno test
@@ -419,7 +458,7 @@ jobs:
         working-directory: datastore/${{ matrix.datastore }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
       - name: deno ${{ matrix.task }}

@@ -1,13 +1,16 @@
 manifestVersion: 1
 name: "@webframp/redmine"
-version: "2026.04.30.1"
+version: "2026.04.30.2"
 description: |
-  Redmine issue tracker integration - manage issues, projects, and workflows.
+  Redmine issue tracker integration — workflow-agnostic CRUD model.
 
-  Provides model methods for CRUD operations on Redmine issues (themes, stories,
-  tasks), project queries, status/tracker/user lookups, and custom field access.
-  Includes reports for flow metrics and sprint summaries, plus a scaffold-story
-  workflow for creating stories with child tasks.
+  Provides 26 model methods covering issues, projects, statuses, trackers,
+  users, custom fields, relations, versions, time entries, watchers, search,
+  issue categories, journal editing, and file uploads. Designed as composable
+  primitives for building any workflow on top of Redmine.
+
+  For opinionated Kanban workflows, flow metrics, and sprint reports, see
+  @webframp/redmine-kanban.
 
   ## Quick Start
 
@@ -21,17 +24,10 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - redmine/redmine.ts
-reports:
-  - flow_metrics_report.ts
-  - sprint_summary_report.ts
-workflows:
-  - scaffold-story.yaml
 labels:
   - redmine
   - issue-tracker
-  - workflow
-  - kanban
-  - project-management
+  - api
 platforms:
   - linux-x86_64
   - linux-aarch64

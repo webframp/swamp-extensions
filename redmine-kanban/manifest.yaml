@@ -1,0 +1,47 @@
+manifestVersion: 1
+name: "@webframp/redmine-kanban"
+version: "2026.04.30.1"
+description: |
+  Kanban workflow reports and automation for Redmine.
+
+  Provides opinionated flow metrics, sprint summaries, and story scaffolding
+  workflows built on top of the @webframp/redmine model. Designed for teams
+  using Kanban-style pull-based workflows with Redmine issue tracking.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/redmine-kanban
+
+  # Requires a @webframp/redmine model instance named "tracker"
+  swamp model create @webframp/redmine tracker \
+    --global-arg host=https://your-redmine.example.org \
+    --global-arg apiKey=YOUR_API_KEY \
+    --global-arg project=your-project
+
+  # Run the scaffold-story workflow
+  swamp workflow run @webframp/scaffold-story \
+    --input subject="ADDS | LDAP | Implement Geographic Redundancy"
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+reports:
+  - flow_metrics_report.ts
+  - sprint_summary_report.ts
+workflows:
+  - scaffold-story.yaml
+labels:
+  - redmine
+  - kanban
+  - workflow
+  - flow-metrics
+  - agile
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+dependencies:
+  - "@webframp/redmine@2026.04.30.2"

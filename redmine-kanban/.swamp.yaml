@@ -1,0 +1,4 @@
+version: 1
+name: redmine-kanban
+description: Kanban workflow reports and automation for Redmine
+repoId: bdea5d8b-792d-48da-a86f-92d93ead9104
