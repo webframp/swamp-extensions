@@ -124,6 +124,16 @@ export interface RawIssue {
   children?: Array<
     { id: number; tracker: { id: number; name: string }; subject: string }
   >;
+  /** Issue relations (present when include=relations). */
+  relations?: Array<{
+    id: number;
+    issue_id: number;
+    issue_to_id: number;
+    relation_type: string;
+    delay: number | null;
+  }>;
+  /** Watchers (present when include=watchers). */
+  watchers?: Array<{ id: number; name: string }>;
 }
 
 // =============================================================================
@@ -181,6 +191,14 @@ export function mapIssueDetail(raw: RawIssue): Record<string, unknown> {
       tracker: c.tracker,
       subject: c.subject,
     })),
+    relations: (raw.relations ?? []).map((r) => ({
+      id: r.id,
+      issueId: r.issue_id,
+      issueToId: r.issue_to_id,
+      relationType: r.relation_type,
+      delay: r.delay,
+    })),
+    watchers: raw.watchers ?? [],
   };
 }
 
@@ -328,6 +346,17 @@ export const model = {
           tracker: z.object({ id: z.number(), name: z.string() }),
           subject: z.string(),
         })),
+        relations: z.array(z.object({
+          id: z.number(),
+          issueId: z.number(),
+          issueToId: z.number(),
+          relationType: z.string(),
+          delay: z.number().nullable(),
+        })),
+        watchers: z.array(z.object({
+          id: z.number(),
+          name: z.string(),
+        })),
       }),
       lifetime: "30m" as const,
       garbageCollection: 10,
@@ -412,6 +441,42 @@ export const model = {
       }),
       lifetime: "infinite" as const,
       garbageCollection: 1,
+    },
+    relations: {
+      description: "Issue relations (blocks, precedes, relates, etc.)",
+      schema: z.object({
+        relations: z.array(z.object({
+          id: z.number(),
+          issueId: z.number(),
+          issueToId: z.number(),
+          relationType: z.string(),
+          delay: z.number().nullable(),
+        })),
+        issueId: z.number(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "30m" as const,
+      garbageCollection: 5,
+    },
+    versions: {
+      description: "Project versions (milestones/sprints)",
+      schema: z.object({
+        versions: z.array(z.object({
+          id: z.number(),
+          project: z.object({ id: z.number(), name: z.string() }),
+          name: z.string(),
+          description: z.string(),
+          status: z.string(),
+          dueDate: z.string().nullable(),
+          sharing: z.string(),
+          wikiPageTitle: z.string().nullable(),
+          createdOn: z.string(),
+          updatedOn: z.string(),
+        })),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "1h" as const,
+      garbageCollection: 3,
     },
   },
 
@@ -729,7 +794,7 @@ export const model = {
           host,
           apiKey,
           "GET",
-          `/issues/${args.issueId}.json?include=journals,children`,
+          `/issues/${args.issueId}.json?include=journals,children,relations,watchers`,
           undefined,
           username,
         );
@@ -935,7 +1000,7 @@ export const model = {
           host,
           apiKey,
           "GET",
-          `/issues/${args.issueId}.json?include=journals,children`,
+          `/issues/${args.issueId}.json?include=journals,children,relations,watchers`,
           undefined,
           username,
         );
@@ -949,6 +1014,248 @@ export const model = {
         );
 
         context.logger.info("Updated issue {id}", { id: args.issueId });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    delete_issue: {
+      description: "Delete an issue",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID to delete"),
+      }),
+      execute: async (
+        args: { issueId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        await redmineApi(
+          host,
+          apiKey,
+          "DELETE",
+          `/issues/${args.issueId}.json`,
+          undefined,
+          username,
+        );
+        context.logger.info("Deleted issue {id}", { id: args.issueId });
+        return { dataHandles: [] };
+      },
+    },
+
+    list_relations: {
+      description: "List relations for an issue",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID"),
+      }),
+      execute: async (
+        args: { issueId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const data = await redmineApi<{
+          relations: Array<{
+            id: number;
+            issue_id: number;
+            issue_to_id: number;
+            relation_type: string;
+            delay: number | null;
+          }>;
+        }>(
+          host,
+          apiKey,
+          "GET",
+          `/issues/${args.issueId}/relations.json`,
+          undefined,
+          username,
+        );
+
+        const relations = data.relations.map((r) => ({
+          id: r.id,
+          issueId: r.issue_id,
+          issueToId: r.issue_to_id,
+          relationType: r.relation_type,
+          delay: r.delay,
+        }));
+
+        const handle = await context.writeResource(
+          "relations",
+          String(args.issueId),
+          {
+            relations,
+            issueId: args.issueId,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info("Found {count} relations for issue {id}", {
+          count: relations.length,
+          id: args.issueId,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_relation: {
+      description: "Create a relation between two issues",
+      arguments: z.object({
+        issueId: z.number().describe("Source issue ID"),
+        issueToId: z.number().describe("Target issue ID"),
+        relationType: z.enum([
+          "relates",
+          "duplicates",
+          "duplicated",
+          "blocks",
+          "blocked",
+          "precedes",
+          "follows",
+          "copied_to",
+          "copied_from",
+        ]).describe("Relation type"),
+        delay: z.number().optional().describe(
+          "Delay in days (for precedes/follows)",
+        ),
+      }),
+      execute: async (
+        args: {
+          issueId: number;
+          issueToId: number;
+          relationType: string;
+          delay?: number;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const payload: Record<string, unknown> = {
+          issue_to_id: args.issueToId,
+          relation_type: args.relationType,
+        };
+        if (args.delay !== undefined) payload.delay = args.delay;
+
+        const data = await redmineApi<{
+          relation: {
+            id: number;
+            issue_id: number;
+            issue_to_id: number;
+            relation_type: string;
+            delay: number | null;
+          };
+        }>(
+          host,
+          apiKey,
+          "POST",
+          `/issues/${args.issueId}/relations.json`,
+          { relation: payload },
+          username,
+        );
+
+        const r = data.relation;
+        const relation = {
+          id: r.id,
+          issueId: r.issue_id,
+          issueToId: r.issue_to_id,
+          relationType: r.relation_type,
+          delay: r.delay,
+        };
+
+        const handle = await context.writeResource(
+          "relations",
+          String(args.issueId),
+          {
+            relations: [relation],
+            issueId: args.issueId,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info("Created {type} relation from {from} to {to}", {
+          type: args.relationType,
+          from: args.issueId,
+          to: args.issueToId,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    delete_relation: {
+      description: "Delete a relation",
+      arguments: z.object({
+        relationId: z.number().describe("Relation ID to delete"),
+      }),
+      execute: async (
+        args: { relationId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        await redmineApi(
+          host,
+          apiKey,
+          "DELETE",
+          `/relations/${args.relationId}.json`,
+          undefined,
+          username,
+        );
+        context.logger.info("Deleted relation {id}", { id: args.relationId });
+        return { dataHandles: [] };
+      },
+    },
+
+    list_versions: {
+      description: "List project versions (milestones/sprints)",
+      arguments: z.object({
+        project: z.string().optional().describe(
+          "Project identifier (defaults to global project arg)",
+        ),
+      }),
+      execute: async (
+        args: { project?: string },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const project = args.project ?? context.globalArgs.project;
+
+        interface RawVersion {
+          id: number;
+          project: { id: number; name: string };
+          name: string;
+          description: string;
+          status: string;
+          due_date: string | null;
+          sharing: string;
+          wiki_page_title: string | null;
+          created_on: string;
+          updated_on: string;
+        }
+
+        const data = await redmineApi<{ versions: RawVersion[] }>(
+          host,
+          apiKey,
+          "GET",
+          `/projects/${project}/versions.json`,
+          undefined,
+          username,
+        );
+
+        const versions = data.versions.map((v) => ({
+          id: v.id,
+          project: v.project,
+          name: v.name,
+          description: v.description,
+          status: v.status,
+          dueDate: v.due_date,
+          sharing: v.sharing,
+          wikiPageTitle: v.wiki_page_title,
+          createdOn: v.created_on,
+          updatedOn: v.updated_on,
+        }));
+
+        const handle = await context.writeResource("versions", project, {
+          versions,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        context.logger.info("Found {count} versions in project {project}", {
+          count: versions.length,
+          project,
+        });
         return { dataHandles: [handle] };
       },
     },
