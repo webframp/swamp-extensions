@@ -9,3 +9,7 @@
 
 # Git worktrees for isolated development
 .worktrees/
+
+# Swamp runtime state (databases, telemetry, caches, outputs)
+# .swamp.yaml repo markers are NOT ignored — only the .swamp/ directory
+**/.swamp/
