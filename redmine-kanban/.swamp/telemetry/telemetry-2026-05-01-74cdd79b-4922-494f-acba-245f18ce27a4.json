@@ -1,0 +1,26 @@
+{
+  "id": "74cdd79b-4922-494f-acba-245f18ce27a4",
+  "invocation": {
+    "command": "extension",
+    "args": [
+      "<REDACTED>"
+    ],
+    "optionKeys": [
+      "--check"
+    ],
+    "globalOptions": [],
+    "subcommand": "fmt"
+  },
+  "result": {
+    "status": "user_error",
+    "exitCode": 1,
+    "errorType": "UserError",
+    "errorMessage": "Additional file not found: README.md (expected at /home/sme/src/webframp/swamp-extensions/redmine-kanban/README.md)"
+  },
+  "startedAt": "2026-05-01T01:31:59.891Z",
+  "completedAt": "2026-05-01T01:31:59.983Z",
+  "durationMs": 92,
+  "swampVersion": "20260428.142235.0-sha.a4bae133",
+  "denoVersion": "2.7.13",
+  "platform": "linux"
+}

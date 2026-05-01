@@ -49,12 +49,12 @@ interface RedmineJournal {
   id: number;
   user?: { id: number; name: string };
   notes?: string;
-  created_on: string;
+  createdOn: string;
   details: Array<{
     property: string;
     name: string;
-    old_value?: string;
-    new_value?: string;
+    oldValue?: string;
+    newValue?: string;
   }>;
 }
 
@@ -62,9 +62,9 @@ interface RedmineIssue {
   id: number;
   subject: string;
   status: { id: number; name: string };
-  created_on: string;
-  updated_on: string;
-  closed_on?: string;
+  createdOn: string;
+  updatedOn: string;
+  closedOn?: string;
   journals?: RedmineJournal[];
 }
 
@@ -151,11 +151,11 @@ function findFirstInProgressDate(journals: RedmineJournal[]): string | null {
         // into an in-progress-like status. We rely on convention:
         // the detail records a status_id change, but the raw value is
         // an ID. We cannot map IDs to names from journal data alone,
-        // so we also check the created_on as the transition timestamp.
-        // A heuristic: if old_value exists and new_value exists, this
+        // so we also check the createdOn as the transition timestamp.
+        // A heuristic: if oldValue exists and newValue exists, this
         // is a status transition. We return the first one as the
         // "started work" marker unless we can match names.
-        return journal.created_on;
+        return journal.createdOn;
       }
     }
   }
@@ -170,11 +170,11 @@ function findFirstInProgressDateByName(
   for (const journal of journals) {
     for (const detail of journal.details) {
       if (detail.property === "attr" && detail.name === "status_id") {
-        // If we have a new_value that looks like a status name, check it
-        if (detail.new_value) {
-          const nv = detail.new_value.toLowerCase();
+        // If we have a newValue that looks like a status name, check it
+        if (detail.newValue) {
+          const nv = detail.newValue.toLowerCase();
           if (IN_PROGRESS_PATTERNS.some((p) => nv.includes(p))) {
-            return journal.created_on;
+            return journal.createdOn;
           }
         }
       }
@@ -308,7 +308,7 @@ export const report = {
 
     // Compute metrics for closed issues
     const closedIssues = issueList.filter((i) =>
-      i.closed_on || i.status.name.toLowerCase() === "closed" ||
+      i.closedOn || i.status.name.toLowerCase() === "closed" ||
       i.status.name.toLowerCase() === "resolved"
     );
 
@@ -318,10 +318,10 @@ export const report = {
 
     for (const issue of closedIssues) {
       const detail = issueDetails.get(issue.id);
-      const closedOn = issue.closed_on || detail?.closed_on;
+      const closedOn = issue.closedOn || detail?.closedOn;
       if (!closedOn) continue;
 
-      const leadTime = daysBetween(issue.created_on, closedOn);
+      const leadTime = daysBetween(issue.createdOn, closedOn);
       leadTimes.push(leadTime);
 
       let cycleTime = leadTime;
@@ -351,13 +351,13 @@ export const report = {
 
     // Compute WIP items (open issues in progress)
     const wipIssues = issueList.filter((i) =>
-      !i.closed_on && isInProgressStatus(i.status.name)
+      !i.closedOn && isInProgressStatus(i.status.name)
     );
 
     const wipItems: Array<{ id: number; subject: string; ageDays: number }> =
       [];
     for (const issue of wipIssues) {
-      const ageDays = daysBetween(issue.updated_on, now);
+      const ageDays = daysBetween(issue.updatedOn, now);
       wipItems.push({
         id: issue.id,
         subject: issue.subject,

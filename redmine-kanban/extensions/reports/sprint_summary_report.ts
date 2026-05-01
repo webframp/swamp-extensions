@@ -49,7 +49,7 @@ interface RedmineIssue {
   id: number;
   subject: string;
   tracker: { id: number; name: string };
-  status: { id: number; name: string; isClosed: boolean };
+  status: { id: number; name: string; is_closed?: boolean };
   assignedTo: { id: number; name: string } | null;
   createdOn: string;
   closedOn: string | null;
@@ -203,7 +203,7 @@ export const report = {
       if (isInProgressStatus(issue.status.name)) {
         entry.inProgress++;
       }
-      if (issue.status.isClosed) {
+      if (issue.status.is_closed) {
         entry.completed++;
       }
     }
@@ -218,7 +218,7 @@ export const report = {
     const blocked = blockedIssues.length;
 
     // Completed items
-    const completedIssues = issues.filter((i) => i.status.isClosed === true);
+    const completedIssues = issues.filter((i) => i.status.is_closed === true);
     const completed = completedIssues.length;
 
     // In progress count

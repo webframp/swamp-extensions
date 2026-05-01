@@ -44,4 +44,4 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/redmine@2026.04.30.1"
+  - "@webframp/redmine@2026.04.30.2"
