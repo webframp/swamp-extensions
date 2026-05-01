@@ -851,3 +851,576 @@ Deno.test({
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Tier 1 Method Tests
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "redmine model: delete_issue sends DELETE request",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedMethod = "";
+    const { url, server } = startMockRedmine((req) => {
+      capturedMethod = req.method;
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      const result = await model.methods.delete_issue.execute(
+        { issueId: 123 },
+        context as unknown as Parameters<
+          typeof model.methods.delete_issue.execute
+        >[1],
+      );
+      assertEquals(capturedMethod, "DELETE");
+      assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: list_relations fetches and writes relations resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname.includes("/relations.json")) {
+        return Response.json({
+          relations: [
+            {
+              id: 1,
+              issue_id: 100,
+              issue_to_id: 200,
+              relation_type: "blocks",
+              delay: null,
+            },
+          ],
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_relations.execute(
+        { issueId: 100 },
+        context as unknown as Parameters<
+          typeof model.methods.list_relations.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "relations");
+      assertEquals(resources[0].name, "100");
+      const data = resources[0].data as {
+        relations: Array<{ relationType: string }>;
+      };
+      assertEquals(data.relations[0].relationType, "blocks");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: create_relation sends POST and returns empty handles",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedBody = "";
+    const { url, server } = startMockRedmine(async (req) => {
+      if (req.method === "POST") {
+        capturedBody = await req.text();
+        return Response.json({
+          relation: {
+            id: 5,
+            issue_id: 100,
+            issue_to_id: 200,
+            relation_type: "blocks",
+            delay: null,
+          },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      const result = await model.methods.create_relation.execute(
+        { issueId: 100, issueToId: 200, relationType: "blocks" },
+        context as unknown as Parameters<
+          typeof model.methods.create_relation.execute
+        >[1],
+      );
+      assertEquals(result.dataHandles.length, 0);
+      const body = JSON.parse(capturedBody);
+      assertEquals(body.relation.issue_to_id, 200);
+      assertEquals(body.relation.relation_type, "blocks");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: delete_relation sends DELETE request",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedPath = "";
+    const { url, server } = startMockRedmine((req) => {
+      capturedPath = new URL(req.url).pathname;
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      await model.methods.delete_relation.execute(
+        { relationId: 42 },
+        context as unknown as Parameters<
+          typeof model.methods.delete_relation.execute
+        >[1],
+      );
+      assertEquals(capturedPath, "/relations/42.json");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: list_versions fetches and writes versions resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname.includes("/versions.json")) {
+        return Response.json({
+          versions: [
+            {
+              id: 10,
+              project: { id: 1, name: "Test" },
+              name: "Sprint 1",
+              description: "",
+              status: "open",
+              due_date: "2026-05-01",
+              sharing: "none",
+              wiki_page_title: null,
+              created_on: "2026-04-01T00:00:00Z",
+              updated_on: "2026-04-01T00:00:00Z",
+            },
+          ],
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_versions.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.list_versions.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "versions");
+      const data = resources[0].data as {
+        versions: Array<{ name: string }>;
+      };
+      assertEquals(data.versions[0].name, "Sprint 1");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Tier 2 Method Tests
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "redmine model: list_time_entries fetches time entries",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((_req) => {
+      return Response.json({
+        time_entries: [
+          {
+            id: 1,
+            project: { id: 1, name: "Test" },
+            issue: { id: 100 },
+            user: { id: 1, name: "User" },
+            activity: { id: 9, name: "Dev" },
+            hours: 2.0,
+            comments: "",
+            spent_on: "2026-04-30",
+            created_on: "2026-04-30T00:00:00Z",
+            updated_on: "2026-04-30T00:00:00Z",
+          },
+        ],
+        total_count: 1,
+        offset: 0,
+        limit: 100,
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_time_entries.execute(
+        { issueId: 100 },
+        context as unknown as Parameters<
+          typeof model.methods.list_time_entries.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "time_entries");
+      assertEquals(resources[0].name, "100");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: log_time sends POST and returns empty handles",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedBody = "";
+    const { url, server } = startMockRedmine(async (req) => {
+      capturedBody = await req.text();
+      return Response.json({
+        time_entry: {
+          id: 99,
+          project: { id: 1, name: "Test" },
+          issue: { id: 100 },
+          user: { id: 1, name: "User" },
+          activity: { id: 9, name: "Dev" },
+          hours: 1.5,
+          comments: "test",
+          spent_on: "2026-04-30",
+          created_on: "2026-04-30T00:00:00Z",
+          updated_on: "2026-04-30T00:00:00Z",
+        },
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      const result = await model.methods.log_time.execute(
+        { issueId: 100, hours: 1.5, comments: "test" },
+        context as unknown as Parameters<
+          typeof model.methods.log_time.execute
+        >[1],
+      );
+      assertEquals(result.dataHandles.length, 0);
+      const body = JSON.parse(capturedBody);
+      assertEquals(body.time_entry.hours, 1.5);
+      assertEquals(body.time_entry.issue_id, 100);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: add_watcher sends POST with user_id",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedBody = "";
+    const { url, server } = startMockRedmine(async (req) => {
+      capturedBody = await req.text();
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      const result = await model.methods.add_watcher.execute(
+        { issueId: 100, userId: 42 },
+        context as unknown as Parameters<
+          typeof model.methods.add_watcher.execute
+        >[1],
+      );
+      assertEquals(result.dataHandles.length, 0);
+      const body = JSON.parse(capturedBody);
+      assertEquals(body.user_id, 42);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: remove_watcher sends DELETE to correct path",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedPath = "";
+    const { url, server } = startMockRedmine((req) => {
+      capturedPath = new URL(req.url).pathname;
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      await model.methods.remove_watcher.execute(
+        { issueId: 100, userId: 42 },
+        context as unknown as Parameters<
+          typeof model.methods.remove_watcher.execute
+        >[1],
+      );
+      assertEquals(capturedPath, "/issues/100/watchers/42.json");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: search returns results and encodes project in URL",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedPath = "";
+    const { url, server } = startMockRedmine((req) => {
+      capturedPath = new URL(req.url).pathname;
+      return Response.json({
+        results: [
+          {
+            id: 1,
+            title: "Test issue",
+            type: "issue",
+            url: "https://example.com/issues/1",
+            description: "desc",
+            datetime: "2026-04-30T00:00:00Z",
+          },
+        ],
+        total_count: 1,
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.search.execute(
+        { query: "test", project: "my project" },
+        context as unknown as Parameters<
+          typeof model.methods.search.execute
+        >[1],
+      );
+      assertEquals(capturedPath, "/projects/my%20project/search.json");
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "search_results");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Tier 3 Method Tests
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "redmine model: get_version fetches and writes version resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((_req) => {
+      return Response.json({
+        version: {
+          id: 10,
+          project: { id: 1, name: "Test" },
+          name: "Sprint 1",
+          description: "",
+          status: "open",
+          due_date: null,
+          sharing: "none",
+          wiki_page_title: null,
+          created_on: "2026-04-01T00:00:00Z",
+          updated_on: "2026-04-01T00:00:00Z",
+        },
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.get_version.execute(
+        { versionId: 10 },
+        context as unknown as Parameters<
+          typeof model.methods.get_version.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "versions");
+      assertEquals(resources[0].name, "10");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: create_version sends POST and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedBody = "";
+    const { url, server } = startMockRedmine(async (req) => {
+      capturedBody = await req.text();
+      return Response.json({
+        version: {
+          id: 99,
+          project: { id: 1, name: "Test" },
+          name: "New Sprint",
+          description: "",
+          status: "open",
+          due_date: null,
+          sharing: "none",
+          wiki_page_title: null,
+          created_on: "2026-04-30T00:00:00Z",
+          updated_on: "2026-04-30T00:00:00Z",
+        },
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.create_version.execute(
+        { name: "New Sprint" },
+        context as unknown as Parameters<
+          typeof model.methods.create_version.execute
+        >[1],
+      );
+      const body = JSON.parse(capturedBody);
+      assertEquals(body.version.name, "New Sprint");
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "versions");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: update_version sends PUT",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedMethod = "";
+    const { url, server } = startMockRedmine((req) => {
+      capturedMethod = req.method;
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      const result = await model.methods.update_version.execute(
+        { versionId: 10, status: "locked" },
+        context as unknown as Parameters<
+          typeof model.methods.update_version.execute
+        >[1],
+      );
+      assertEquals(capturedMethod, "PUT");
+      assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: delete_version sends DELETE",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedPath = "";
+    const { url, server } = startMockRedmine((req) => {
+      capturedPath = new URL(req.url).pathname;
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      await model.methods.delete_version.execute(
+        { versionId: 10 },
+        context as unknown as Parameters<
+          typeof model.methods.delete_version.execute
+        >[1],
+      );
+      assertEquals(capturedPath, "/versions/10.json");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: update_journal sends PUT with notes",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedBody = "";
+    const { url, server } = startMockRedmine(async (req) => {
+      capturedBody = await req.text();
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      const result = await model.methods.update_journal.execute(
+        { journalId: 55, notes: "updated note" },
+        context as unknown as Parameters<
+          typeof model.methods.update_journal.execute
+        >[1],
+      );
+      assertEquals(result.dataHandles.length, 0);
+      const body = JSON.parse(capturedBody);
+      assertEquals(body.journal.notes, "updated note");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: list_issue_categories fetches and writes categories resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((_req) => {
+      return Response.json({
+        issue_categories: [
+          { id: 1, project: { id: 1, name: "Test" }, name: "Fires" },
+        ],
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_issue_categories.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.list_issue_categories.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "issue_categories");
+      const data = resources[0].data as {
+        categories: Array<{ name: string }>;
+      };
+      assertEquals(data.categories[0].name, "Fires");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});

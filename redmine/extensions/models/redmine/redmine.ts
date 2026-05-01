@@ -57,7 +57,7 @@ interface RawCustomField {
   is_filter: boolean;
   multiple: boolean;
   default_value: string;
-  possible_values: Array<{ value: string }>;
+  possible_values: Array<{ value: string }> | null;
   trackers: Array<{ id: number; name: string }>;
 }
 
@@ -434,7 +434,7 @@ export const model = {
           isFilter: z.boolean(),
           multiple: z.boolean(),
           defaultValue: z.string(),
-          possibleValues: z.array(z.object({ value: z.string() })),
+          possibleValues: z.array(z.object({ value: z.string() })).nullable(),
           trackers: z.array(z.object({ id: z.number(), name: z.string() })),
         })),
         fetchedAt: z.string(),
@@ -722,7 +722,7 @@ export const model = {
           isFilter: cf.is_filter,
           multiple: cf.multiple,
           defaultValue: cf.default_value,
-          possibleValues: cf.possible_values,
+          possibleValues: cf.possible_values ?? [],
           trackers: cf.trackers,
         }));
 
@@ -1363,7 +1363,7 @@ export const model = {
           updatedOn: e.updated_on,
         }));
 
-        const instanceName = args.issueId
+        const instanceName = args.issueId !== undefined
           ? String(args.issueId)
           : args.project ?? "all";
 
@@ -1880,10 +1880,10 @@ export const model = {
         "Upload a file and attach it to an issue (two-step: upload binary, then attach token)",
       arguments: z.object({
         issueId: z.number().describe("Issue ID to attach the file to"),
-        filePath: z.string().refine(
-          (p) => !p.startsWith("/") && !p.includes(".."),
-          "Only relative paths without '..' are allowed",
-        ).describe("Local file path to upload (relative)"),
+        filePath: z.string().min(1).refine(
+          (p) => !p.startsWith("/") && !p.startsWith("~") && !p.includes(".."),
+          "Only relative paths without '..', '~', or absolute prefixes are allowed",
+        ).describe("Local file path to upload (relative to working directory)"),
         filename: z.string().optional().describe(
           "Filename for the attachment (defaults to basename of filePath)",
         ),
