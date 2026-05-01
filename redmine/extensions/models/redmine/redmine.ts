@@ -478,6 +478,45 @@ export const model = {
       lifetime: "1h" as const,
       garbageCollection: 3,
     },
+    time_entries: {
+      description: "Time entries for issues or projects",
+      schema: z.object({
+        timeEntries: z.array(z.object({
+          id: z.number(),
+          project: z.object({ id: z.number(), name: z.string() }),
+          issue: z.object({ id: z.number() }).optional(),
+          user: z.object({ id: z.number(), name: z.string() }),
+          activity: z.object({ id: z.number(), name: z.string() }),
+          hours: z.number(),
+          comments: z.string(),
+          spentOn: z.string(),
+          createdOn: z.string(),
+          updatedOn: z.string(),
+        })),
+        totalCount: z.number(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "30m" as const,
+      garbageCollection: 5,
+    },
+    search_results: {
+      description: "Search results across issues, projects, and wiki",
+      schema: z.object({
+        results: z.array(z.object({
+          id: z.number(),
+          title: z.string(),
+          type: z.string(),
+          url: z.string(),
+          description: z.string(),
+          datetime: z.string(),
+        })),
+        totalCount: z.number(),
+        query: z.string(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "15m" as const,
+      garbageCollection: 3,
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -1255,6 +1294,297 @@ export const model = {
         context.logger.info("Found {count} versions in project {project}", {
           count: versions.length,
           project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_time_entries: {
+      description: "List time entries, optionally filtered by issue or project",
+      arguments: z.object({
+        issueId: z.number().optional().describe("Filter by issue ID"),
+        project: z.string().optional().describe(
+          "Filter by project identifier",
+        ),
+        userId: z.number().optional().describe("Filter by user ID"),
+        from: z.string().optional().describe("Start date (YYYY-MM-DD)"),
+        to: z.string().optional().describe("End date (YYYY-MM-DD)"),
+        limit: z.number().optional().describe("Max results (default 25)"),
+      }),
+      execute: async (
+        args: {
+          issueId?: number;
+          project?: string;
+          userId?: number;
+          from?: string;
+          to?: string;
+          limit?: number;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const params: Record<string, string> = {};
+        if (args.issueId !== undefined) {
+          params.issue_id = String(args.issueId);
+        }
+        if (args.project !== undefined) {
+          params.project_id = args.project;
+        }
+        if (args.userId !== undefined) params.user_id = String(args.userId);
+        if (args.from !== undefined) params.from = args.from;
+        if (args.to !== undefined) params.to = args.to;
+
+        const rawEntries = await redmineApiPaginated<{
+          id: number;
+          project: { id: number; name: string };
+          issue?: { id: number };
+          user: { id: number; name: string };
+          activity: { id: number; name: string };
+          hours: number;
+          comments: string;
+          spent_on: string;
+          created_on: string;
+          updated_on: string;
+        }>(
+          host,
+          apiKey,
+          "/time_entries.json",
+          "time_entries",
+          params,
+          args.limit ?? 100,
+          username,
+        );
+
+        const timeEntries = rawEntries.map((e) => ({
+          id: e.id,
+          project: e.project,
+          issue: e.issue,
+          user: e.user,
+          activity: e.activity,
+          hours: e.hours,
+          comments: e.comments,
+          spentOn: e.spent_on,
+          createdOn: e.created_on,
+          updatedOn: e.updated_on,
+        }));
+
+        const instanceName = args.issueId
+          ? String(args.issueId)
+          : args.project ?? context.globalArgs.project;
+
+        const handle = await context.writeResource(
+          "time_entries",
+          instanceName,
+          {
+            timeEntries,
+            totalCount: timeEntries.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info("Found {count} time entries", {
+          count: timeEntries.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    log_time: {
+      description: "Log time spent on an issue",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID"),
+        hours: z.number().describe("Hours spent"),
+        activityId: z.number().optional().describe("Activity ID"),
+        comments: z.string().optional().describe("Comment"),
+        spentOn: z.string().optional().describe(
+          "Date spent (YYYY-MM-DD, defaults to today)",
+        ),
+      }),
+      execute: async (
+        args: {
+          issueId: number;
+          hours: number;
+          activityId?: number;
+          comments?: string;
+          spentOn?: string;
+        },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const payload: Record<string, unknown> = {
+          issue_id: args.issueId,
+          hours: args.hours,
+        };
+        if (args.activityId !== undefined) {
+          payload.activity_id = args.activityId;
+        }
+        if (args.comments !== undefined) payload.comments = args.comments;
+        if (args.spentOn !== undefined) payload.spent_on = args.spentOn;
+
+        const data = await redmineApi<{
+          time_entry: {
+            id: number;
+            project: { id: number; name: string };
+            issue: { id: number };
+            user: { id: number; name: string };
+            activity: { id: number; name: string };
+            hours: number;
+            comments: string;
+            spent_on: string;
+            created_on: string;
+            updated_on: string;
+          };
+        }>(
+          host,
+          apiKey,
+          "POST",
+          "/time_entries.json",
+          { time_entry: payload },
+          username,
+        );
+
+        const e = data.time_entry;
+        const entry = {
+          id: e.id,
+          project: e.project,
+          issue: e.issue,
+          user: e.user,
+          activity: e.activity,
+          hours: e.hours,
+          comments: e.comments,
+          spentOn: e.spent_on,
+          createdOn: e.created_on,
+          updatedOn: e.updated_on,
+        };
+
+        const handle = await context.writeResource(
+          "time_entries",
+          String(args.issueId),
+          {
+            timeEntries: [entry],
+            totalCount: 1,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info("Logged {hours}h on issue {id}", {
+          hours: args.hours,
+          id: args.issueId,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    add_watcher: {
+      description: "Add a watcher to an issue",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID"),
+        userId: z.number().describe("User ID to add as watcher"),
+      }),
+      execute: async (
+        args: { issueId: number; userId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        await redmineApi(
+          host,
+          apiKey,
+          "POST",
+          `/issues/${args.issueId}/watchers.json`,
+          { user_id: args.userId },
+          username,
+        );
+        context.logger.info("Added watcher {userId} to issue {issueId}", {
+          userId: args.userId,
+          issueId: args.issueId,
+        });
+        return { dataHandles: [] };
+      },
+    },
+
+    remove_watcher: {
+      description: "Remove a watcher from an issue",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID"),
+        userId: z.number().describe("User ID to remove as watcher"),
+      }),
+      execute: async (
+        args: { issueId: number; userId: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        await redmineApi(
+          host,
+          apiKey,
+          "DELETE",
+          `/issues/${args.issueId}/watchers/${args.userId}.json`,
+          undefined,
+          username,
+        );
+        context.logger.info("Removed watcher {userId} from issue {issueId}", {
+          userId: args.userId,
+          issueId: args.issueId,
+        });
+        return { dataHandles: [] };
+      },
+    },
+
+    search: {
+      description: "Search across issues, projects, and wiki pages",
+      arguments: z.object({
+        query: z.string().describe("Search query"),
+        project: z.string().optional().describe(
+          "Scope search to project identifier",
+        ),
+        limit: z.number().optional().describe("Max results (default 25)"),
+      }),
+      execute: async (
+        args: { query: string; project?: string; limit?: number },
+        context: MethodContext,
+      ) => {
+        const { host, apiKey, username } = context.globalArgs;
+        const params = new URLSearchParams({ q: args.query });
+        if (args.limit !== undefined) {
+          params.set("limit", String(args.limit));
+        }
+
+        const basePath = args.project
+          ? `/projects/${args.project}/search.json`
+          : "/search.json";
+
+        const data = await redmineApi<{
+          results: Array<{
+            id: number;
+            title: string;
+            type: string;
+            url: string;
+            description: string;
+            datetime: string;
+          }>;
+          total_count: number;
+        }>(
+          host,
+          apiKey,
+          "GET",
+          `${basePath}?${params}`,
+          undefined,
+          username,
+        );
+
+        const handle = await context.writeResource(
+          "search_results",
+          args.query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50),
+          {
+            results: data.results,
+            totalCount: data.total_count,
+            query: args.query,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info("Search for '{query}' returned {count} results", {
+          query: args.query,
+          count: data.total_count,
         });
         return { dataHandles: [handle] };
       },

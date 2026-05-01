@@ -68,7 +68,7 @@ Deno.test("redmine model: globalArguments validates host, apiKey, project", () =
 Deno.test("redmine model: has all 7 resources", () => {
   assertExists(model.resources);
   const names = Object.keys(model.resources);
-  assertEquals(names.length, 9);
+  assertEquals(names.length, 11);
   assertExists(model.resources.issues);
   assertExists(model.resources.issue_detail);
   assertExists(model.resources.projects);
@@ -81,7 +81,7 @@ Deno.test("redmine model: has all 7 resources", () => {
 Deno.test("redmine model: has all 9 methods", () => {
   assertExists(model.methods);
   const names = Object.keys(model.methods);
-  assertEquals(names.length, 14);
+  assertEquals(names.length, 19);
   assertExists(model.methods.list_statuses);
   assertExists(model.methods.list_trackers);
   assertExists(model.methods.list_projects);
