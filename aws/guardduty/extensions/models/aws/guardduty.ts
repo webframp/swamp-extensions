@@ -111,6 +111,8 @@ function parseRelativeTime(timeStr: string): Date {
         return new Date(now.getTime() - value * 60 * 60 * 1000);
       case "d":
         return new Date(now.getTime() - value * 24 * 60 * 60 * 1000);
+      default:
+        throw new Error(`Unknown time unit: ${unit}`);
     }
   }
   const parsed = new Date(timeStr);
@@ -167,8 +169,8 @@ function mapMember(m: Member): z.infer<typeof MemberSchema> {
     accountId: m.AccountId || "",
     email: m.Email || "",
     relationshipStatus: m.RelationshipStatus || "",
-    invitedAt: m.InvitedAt || null,
-    updatedAt: m.UpdatedAt || null,
+    invitedAt: m.InvitedAt ? String(m.InvitedAt) : null,
+    updatedAt: m.UpdatedAt ? String(m.UpdatedAt) : null,
     detectorId: m.DetectorId || null,
   };
 }
