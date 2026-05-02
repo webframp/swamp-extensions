@@ -102,6 +102,20 @@ import { createReportTestContext } from "@systeminit/swamp-testing";
 - Model (HTTP mock): `cloudflare/extensions/models/cloudflare/zone_test.ts`
 - Datastore: `datastore/gitlab-datastore/extensions/datastores/gitlab_datastore/mod_test.ts`
 
+## API Integration Patterns
+
+When building models that wrap external APIs:
+
+- **Client-side filtering changes pagination semantics.** If you move a filter from server-side (API criterion) to client-side (post-fetch), the pagination loop must over-fetch to compensate. A `limit` applied before client-side filtering produces fewer results than requested. Either keep filtering server-side, or paginate until `filtered.length >= limit`.
+- **Zod schemas are the contract.** Add `.min()`, `.max()`, and other constraints that match the API's actual limits. Don't rely on runtime slicing to enforce bounds — fail fast at validation.
+- **Null safety on SDK responses.** AWS SDK types are often `T | undefined`. Use `?? defaultValue` (not `|| defaultValue`) to handle both `null` and `undefined` without masking falsy values like `0` or `""`.
+- **Deterministic resource instance names.** Use filter parameters or entity IDs, not timestamps. `Date.now()` in instance names causes unbounded data accumulation.
+- **Run `swamp extension quality manifest.yaml` before pushing.** Aim for 12/12 on the quality rubric.
+- **Bounded pagination is mandatory.** Never use `Infinity` or unbounded loops for API pagination. Cap fetch limits to a practical multiple (e.g., `limit * 20`) and set a `truncated: boolean` field in the output when results may be incomplete. Unbounded pagination can trigger API throttling and OOM on large accounts.
+- **`truncated` must be honest.** If results are sliced, capped, or filtered after fetching, the `truncated` field must reflect whether more data exists. Hardcoding `false` is a data integrity bug.
+- **SDK timestamp fields may be `Date` or `string`.** Use `String(field)` or `field?.toISOString?.() ?? String(field)` to normalize. Don't assume the SDK returns strings — some versions return `Date` objects.
+- **Instance names must be collision-resistant.** For variable-length ID lists, hash the sorted IDs (e.g., SHA-1 prefix) rather than joining/truncating. Truncated joins produce collisions.
+
 ## Commands
 
 Run from extension directory (e.g., `cd vault/macos-keychain`):
@@ -134,11 +148,14 @@ All changes go through pull requests — no direct pushes to main.
    - `chore(terraform): bump AWS SDK to 3.1020.0`
    - `test(vault/gopass): add edge case for empty store`
 4. **Push and open PR** — Push the branch and open a PR against main. CI runs check/lint/fmt/test. The adversarial code review runs automatically on PRs.
+5. **Run local adversarial review** — Before pushing, run `./scripts/adversarial-review.sh` to catch issues without waiting for CI. Fix findings before pushing to avoid slow review cycles.
 5. **Address review** — Fix any issues raised by CI or the adversarial review. Push additional commits (do not force-push over review comments).
 6. **Merge** — Comment `/lgtm`, `/approve`, or `/shipit` on the PR. The merge workflow squash-merges after verifying CI passed, then deletes the branch.
 7. **Publish** — After merge to main, CI runs again. Only after CI passes does the publish workflow run, auto-publishing any extensions with bumped `manifest.yaml` versions.
 
 **Version bumps**: Bump `version` in `manifest.yaml` (CalVer `YYYY.MM.DD.N`) in the same PR as the code change. Do not bump versions in separate commits or PRs.
+
+**New extensions**: When adding a new extension, update the root `README.md` — add it to the appropriate table, the install commands section, and any relevant usage examples.
 
 ## Publishing
 
