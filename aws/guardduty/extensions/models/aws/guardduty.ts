@@ -278,8 +278,9 @@ export const model = {
           },
         };
         if (args.typePrefix) {
-          // GuardDuty API only supports exact match on type; prefix
-          // filtering is applied client-side after fetching.
+          // GuardDuty Eq matches full type strings; for prefix matching
+          // we fetch more and filter client-side, paginating until we
+          // have enough matches or exhaust results.
         }
         if (args.severityMin !== undefined) {
           criterion["severity"] = { GreaterThanOrEqual: args.severityMin };
@@ -288,7 +289,9 @@ export const model = {
           criterion["accountId"] = { Eq: [args.accountId] };
         }
 
-        // List finding IDs
+        // List finding IDs — when using typePrefix, over-fetch to ensure
+        // enough matches after client-side filtering
+        const fetchLimit = args.typePrefix ? args.limit * 10 : args.limit;
         const allIds: string[] = [];
         let nextToken: string | undefined;
         do {
@@ -296,7 +299,7 @@ export const model = {
             new ListFindingsCommand({
               DetectorId: detectorId,
               FindingCriteria: { Criterion: criterion },
-              MaxResults: Math.min(50, args.limit - allIds.length),
+              MaxResults: Math.min(50, fetchLimit - allIds.length),
               NextToken: nextToken,
             }),
           );
@@ -304,14 +307,12 @@ export const model = {
             allIds.push(...resp.FindingIds);
           }
           nextToken = resp.NextToken;
-        } while (nextToken && allIds.length < args.limit);
+        } while (nextToken && allIds.length < fetchLimit);
 
-        const ids = allIds.slice(0, args.limit);
-
-        // Fetch summaries in batches of 50
+        // Fetch details in batches of 50
         const findings: z.infer<typeof FindingSummarySchema>[] = [];
-        for (let i = 0; i < ids.length; i += 50) {
-          const batch = ids.slice(i, i + 50);
+        for (let i = 0; i < allIds.length; i += 50) {
+          const batch = allIds.slice(i, i + 50);
           const resp = await client.send(
             new GetFindingsCommand({
               DetectorId: detectorId,
@@ -323,10 +324,11 @@ export const model = {
           }
         }
 
-        // Apply client-side prefix filter
-        const filtered = args.typePrefix
+        // Apply client-side prefix filter and enforce limit
+        const matched = args.typePrefix
           ? findings.filter((f) => f.type.startsWith(args.typePrefix!))
           : findings;
+        const filtered = matched.slice(0, args.limit);
 
         const instanceParts = [
           args.typePrefix || "all",
@@ -368,6 +370,7 @@ export const model = {
       arguments: z.object({
         findingIds: z
           .array(z.string())
+          .min(1, "at least one finding ID required")
           .max(50)
           .describe("Finding IDs to retrieve (max 50)"),
       }),
