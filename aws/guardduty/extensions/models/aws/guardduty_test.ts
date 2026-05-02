@@ -93,6 +93,7 @@ Deno.test({
   name:
     "list_findings returns findings and applies typePrefix filter client-side",
   // SDK client creates connection pool
+  // GuardDutyClient opens a connection pool that outlives the test
   sanitizeResources: false,
   fn: async () => {
     const restore = mockGuardDuty((command) => {
@@ -143,6 +144,7 @@ Deno.test({
 
 Deno.test({
   name: "list_findings returns all findings when no typePrefix",
+  // GuardDutyClient opens a connection pool that outlives the test
   sanitizeResources: false,
   fn: async () => {
     const restore = mockGuardDuty((command) => {
@@ -187,6 +189,7 @@ Deno.test({
 Deno.test({
   name:
     "get_finding_details returns full details with deterministic instance name",
+  // GuardDutyClient opens a connection pool that outlives the test
   sanitizeResources: false,
   fn: async () => {
     const restore = mockGuardDuty((command) => {
@@ -230,6 +233,7 @@ Deno.test({
 
 Deno.test({
   name: "get_finding_details uses count for multiple findings",
+  // GuardDutyClient opens a connection pool that outlives the test
   sanitizeResources: false,
   fn: async () => {
     const restore = mockGuardDuty((command) => {
@@ -269,6 +273,7 @@ Deno.test({
 
 Deno.test({
   name: "list_members returns member accounts",
+  // GuardDutyClient opens a connection pool that outlives the test
   sanitizeResources: false,
   fn: async () => {
     const restore = mockGuardDuty((command) => {

@@ -237,6 +237,7 @@ export const model = {
         limit: z
           .number()
           .min(1)
+          .max(500)
           .default(50)
           .describe("Maximum number of findings to return"),
       }),
@@ -278,11 +279,6 @@ export const model = {
             LessThanOrEqual: endTime.getTime(),
           },
         };
-        if (args.typePrefix) {
-          // GuardDuty Eq matches full type strings; for prefix matching
-          // we fetch more and filter client-side, paginating until we
-          // have enough matches or exhaust results.
-        }
         if (args.severityMin !== undefined) {
           criterion["severity"] = { GreaterThanOrEqual: args.severityMin };
         }
@@ -290,17 +286,20 @@ export const model = {
           criterion["accountId"] = { Eq: [args.accountId] };
         }
 
-        // List finding IDs — when using typePrefix, over-fetch to ensure
-        // enough matches after client-side filtering
-        const fetchLimit = args.typePrefix ? args.limit * 10 : args.limit;
+        // List finding IDs — when using typePrefix, paginate through all
+        // results since filtering happens client-side
         const allIds: string[] = [];
         let nextToken: string | undefined;
+        const maxIds = args.typePrefix ? Infinity : args.limit;
         do {
+          const batchSize = args.typePrefix
+            ? 50
+            : Math.min(50, args.limit - allIds.length);
           const resp = await client.send(
             new ListFindingsCommand({
               DetectorId: detectorId,
               FindingCriteria: { Criterion: criterion },
-              MaxResults: Math.min(50, fetchLimit - allIds.length),
+              MaxResults: batchSize,
               NextToken: nextToken,
             }),
           );
@@ -308,7 +307,7 @@ export const model = {
             allIds.push(...resp.FindingIds);
           }
           nextToken = resp.NextToken;
-        } while (nextToken && allIds.length < fetchLimit);
+        } while (nextToken && allIds.length < maxIds);
 
         // Fetch details in batches of 50
         const findings: z.infer<typeof FindingSummarySchema>[] = [];
@@ -347,8 +346,7 @@ export const model = {
           {
             findings: filtered,
             count: filtered.length,
-            truncated: matched.length < args.limit &&
-              allIds.length >= fetchLimit,
+            truncated: false,
             filters: {
               typePrefix: args.typePrefix || null,
               severityMin: args.severityMin ?? null,
@@ -408,7 +406,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "finding_details",
-          `details-${ids.length === 1 ? ids[0] : ids.join("-").slice(0, 64)}`,
+          `details-${ids.length === 1 ? ids[0] : ids.join("-").slice(0, 64)}`
+            .replace(/[^a-zA-Z0-9_-]/g, "-"),
           {
             findings,
             count: findings.length,
