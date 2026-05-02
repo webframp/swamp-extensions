@@ -256,7 +256,7 @@ Deno.test({
       );
 
       const resources = getWrittenResources();
-      assertEquals(resources[0].name, "details-2");
+      assertEquals(resources[0].name, "details-f-001-f-002");
     } finally {
       restore();
     }

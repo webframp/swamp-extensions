@@ -48,6 +48,7 @@ const FindingSummarySchema = z.object({
 const FindingListSchema = z.object({
   findings: z.array(FindingSummarySchema),
   count: z.number(),
+  truncated: z.boolean(),
   filters: z.object({
     typePrefix: z.string().nullable(),
     severityMin: z.number().nullable(),
@@ -346,6 +347,8 @@ export const model = {
           {
             findings: filtered,
             count: filtered.length,
+            truncated: matched.length < args.limit &&
+              allIds.length >= fetchLimit,
             filters: {
               typePrefix: args.typePrefix || null,
               severityMin: args.severityMin ?? null,
@@ -405,7 +408,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "finding_details",
-          `details-${ids.length === 1 ? ids[0] : ids.length}`,
+          `details-${ids.length === 1 ? ids[0] : ids.join("-").slice(0, 64)}`,
           {
             findings,
             count: findings.length,
