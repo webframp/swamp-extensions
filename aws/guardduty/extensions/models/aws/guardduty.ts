@@ -114,7 +114,7 @@ function parseRelativeTime(timeStr: string): Date {
   }
   const parsed = new Date(timeStr);
   if (!isNaN(parsed.getTime())) return parsed;
-  return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  throw new Error(`Cannot parse time: ${timeStr}`);
 }
 
 async function getDetectorId(client: GuardDutyClient): Promise<string> {
@@ -156,8 +156,8 @@ function mapFindingDetail(
     region: f.Region || "",
     createdAt: f.CreatedAt || "",
     updatedAt: f.UpdatedAt || "",
-    resource: f.Resource as Record<string, unknown> || {},
-    service: f.Service as Record<string, unknown> || {},
+    resource: (f.Resource as Record<string, unknown> | undefined) ?? {},
+    service: (f.Service as Record<string, unknown> | undefined) ?? {},
   };
 }
 
@@ -235,6 +235,7 @@ export const model = {
           .describe("End time (ISO date, defaults to now)"),
         limit: z
           .number()
+          .min(1)
           .default(50)
           .describe("Maximum number of findings to return"),
       }),
@@ -332,7 +333,10 @@ export const model = {
           args.severityMin !== undefined ? `sev${args.severityMin}` : null,
           args.accountId || null,
         ].filter(Boolean);
-        const instanceName = instanceParts.join("-").replace(/[\/\s:]/g, "-");
+        const instanceName = instanceParts.join("-").replace(
+          /[^a-zA-Z0-9_-]/g,
+          "-",
+        );
 
         const handle = await context.writeResource(
           "finding_list",
@@ -364,6 +368,7 @@ export const model = {
       arguments: z.object({
         findingIds: z
           .array(z.string())
+          .max(50)
           .describe("Finding IDs to retrieve (max 50)"),
       }),
       execute: async (
