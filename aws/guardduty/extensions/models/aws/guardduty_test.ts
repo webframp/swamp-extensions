@@ -260,7 +260,9 @@ Deno.test({
       );
 
       const resources = getWrittenResources();
-      assertEquals(resources[0].name, "details-f-001-f-002");
+      // Multi-finding: instance name is a SHA-1 hash prefix of sorted IDs
+      assertEquals(resources[0].name.startsWith("details-"), true);
+      assertEquals(resources[0].name.length > 10, true);
     } finally {
       restore();
     }

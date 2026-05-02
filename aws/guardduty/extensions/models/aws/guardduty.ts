@@ -139,8 +139,8 @@ function mapFindingSummary(
     accountId: f.AccountId || "",
     region: f.Region || "",
     resourceType: f.Resource?.ResourceType || null,
-    createdAt: f.CreatedAt || "",
-    updatedAt: f.UpdatedAt || "",
+    createdAt: f.CreatedAt ? String(f.CreatedAt) : "",
+    updatedAt: f.UpdatedAt ? String(f.UpdatedAt) : "",
   };
 }
 
@@ -155,8 +155,8 @@ function mapFindingDetail(
     description: f.Description || "",
     accountId: f.AccountId || "",
     region: f.Region || "",
-    createdAt: f.CreatedAt || "",
-    updatedAt: f.UpdatedAt || "",
+    createdAt: f.CreatedAt ? String(f.CreatedAt) : "",
+    updatedAt: f.UpdatedAt ? String(f.UpdatedAt) : "",
     resource: (f.Resource as Record<string, unknown> | undefined) ?? {},
     service: (f.Service as Record<string, unknown> | undefined) ?? {},
   };
@@ -286,15 +286,14 @@ export const model = {
           criterion["accountId"] = { Eq: [args.accountId] };
         }
 
-        // List finding IDs — when using typePrefix, paginate through all
-        // results since filtering happens client-side
+        // List finding IDs — when using typePrefix, fetch more to compensate
+        // for client-side filtering, but cap to avoid unbounded API calls
+        const maxIds = args.typePrefix ? args.limit * 20 : args.limit;
         const allIds: string[] = [];
         let nextToken: string | undefined;
-        const maxIds = args.typePrefix ? Infinity : args.limit;
         do {
-          const batchSize = args.typePrefix
-            ? 50
-            : Math.min(50, args.limit - allIds.length);
+          const batchSize = Math.min(50, maxIds - allIds.length);
+          if (batchSize <= 0) break;
           const resp = await client.send(
             new ListFindingsCommand({
               DetectorId: detectorId,
@@ -346,7 +345,7 @@ export const model = {
           {
             findings: filtered,
             count: filtered.length,
-            truncated: false,
+            truncated: nextToken !== undefined || matched.length > args.limit,
             filters: {
               typePrefix: args.typePrefix || null,
               severityMin: args.severityMin ?? null,
@@ -395,6 +394,17 @@ export const model = {
         const detectorId = await getDetectorId(client);
 
         const ids = args.findingIds.slice(0, 50);
+
+        // Build a stable, collision-resistant instance name
+        const instanceSuffix = ids.length === 1 ? ids[0] : Array.from(
+          new Uint8Array(
+            await crypto.subtle.digest(
+              "SHA-1",
+              new TextEncoder().encode(ids.slice().sort().join(",")),
+            ),
+          ),
+        ).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+
         const resp = await client.send(
           new GetFindingsCommand({
             DetectorId: detectorId,
@@ -406,8 +416,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "finding_details",
-          `details-${ids.length === 1 ? ids[0] : ids.join("-").slice(0, 64)}`
-            .replace(/[^a-zA-Z0-9_-]/g, "-"),
+          `details-${instanceSuffix}`.replace(/[^a-zA-Z0-9_-]/g, "-"),
           {
             findings,
             count: findings.length,

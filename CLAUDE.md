@@ -111,6 +111,10 @@ When building models that wrap external APIs:
 - **Null safety on SDK responses.** AWS SDK types are often `T | undefined`. Use `?? defaultValue` (not `|| defaultValue`) to handle both `null` and `undefined` without masking falsy values like `0` or `""`.
 - **Deterministic resource instance names.** Use filter parameters or entity IDs, not timestamps. `Date.now()` in instance names causes unbounded data accumulation.
 - **Run `swamp extension quality manifest.yaml` before pushing.** Aim for 12/12 on the quality rubric.
+- **Bounded pagination is mandatory.** Never use `Infinity` or unbounded loops for API pagination. Cap fetch limits to a practical multiple (e.g., `limit * 20`) and set a `truncated: boolean` field in the output when results may be incomplete. Unbounded pagination can trigger API throttling and OOM on large accounts.
+- **`truncated` must be honest.** If results are sliced, capped, or filtered after fetching, the `truncated` field must reflect whether more data exists. Hardcoding `false` is a data integrity bug.
+- **SDK timestamp fields may be `Date` or `string`.** Use `String(field)` or `field?.toISOString?.() ?? String(field)` to normalize. Don't assume the SDK returns strings — some versions return `Date` objects.
+- **Instance names must be collision-resistant.** For variable-length ID lists, hash the sorted IDs (e.g., SHA-1 prefix) rather than joining/truncating. Truncated joins produce collisions.
 
 ## Commands
 
