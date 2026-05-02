@@ -277,7 +277,8 @@ export const model = {
           },
         };
         if (args.typePrefix) {
-          criterion["type"] = { Eq: [args.typePrefix] };
+          // GuardDuty API only supports exact match on type; prefix
+          // filtering is applied client-side after fetching.
         }
         if (args.severityMin !== undefined) {
           criterion["severity"] = { GreaterThanOrEqual: args.severityMin };
@@ -321,6 +322,11 @@ export const model = {
           }
         }
 
+        // Apply client-side prefix filter
+        const filtered = args.typePrefix
+          ? findings.filter((f) => f.type.startsWith(args.typePrefix!))
+          : findings;
+
         const instanceParts = [
           args.typePrefix || "all",
           args.severityMin !== undefined ? `sev${args.severityMin}` : null,
@@ -332,8 +338,8 @@ export const model = {
           "finding_list",
           instanceName,
           {
-            findings,
-            count: findings.length,
+            findings: filtered,
+            count: filtered.length,
             filters: {
               typePrefix: args.typePrefix || null,
               severityMin: args.severityMin ?? null,
@@ -346,7 +352,7 @@ export const model = {
         );
 
         context.logger.info("Found {count} findings", {
-          count: findings.length,
+          count: filtered.length,
         });
         return { dataHandles: [handle] };
       },
@@ -391,7 +397,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "finding_details",
-          `details-${Date.now()}`,
+          `details-${ids.length === 1 ? ids[0] : ids.length}`,
           {
             findings,
             count: findings.length,
