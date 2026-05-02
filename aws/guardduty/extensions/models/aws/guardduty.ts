@@ -91,6 +91,7 @@ const MemberSchema = z.object({
 const MemberListSchema = z.object({
   members: z.array(MemberSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -171,7 +172,7 @@ function mapMember(m: Member): z.infer<typeof MemberSchema> {
     relationshipStatus: m.RelationshipStatus || "",
     invitedAt: m.InvitedAt ? String(m.InvitedAt) : null,
     updatedAt: m.UpdatedAt ? String(m.UpdatedAt) : null,
-    detectorId: m.DetectorId || null,
+    detectorId: m.DetectorId ?? null,
   };
 }
 
@@ -332,7 +333,7 @@ export const model = {
         const filtered = matched.slice(0, args.limit);
 
         const instanceParts = [
-          args.typePrefix || "all",
+          args.typePrefix ?? "_all",
           args.severityMin !== undefined ? `sev${args.severityMin}` : null,
           args.accountId || null,
         ].filter(Boolean);
@@ -440,9 +441,15 @@ export const model = {
           .boolean()
           .default(true)
           .describe("Only return associated (active) members"),
+        limit: z
+          .number()
+          .min(1)
+          .max(1000)
+          .default(500)
+          .describe("Maximum number of members to return"),
       }),
       execute: async (
-        args: { onlyAssociated: boolean },
+        args: { onlyAssociated: boolean; limit: number },
         context: {
           globalArgs: { region: string };
           writeResource: (
@@ -467,7 +474,7 @@ export const model = {
             new ListMembersCommand({
               DetectorId: detectorId,
               OnlyAssociated: args.onlyAssociated ? "true" : "false",
-              MaxResults: 50,
+              MaxResults: Math.min(50, args.limit - members.length),
               NextToken: nextToken,
             }),
           );
@@ -475,11 +482,16 @@ export const model = {
             members.push(...resp.Members.map(mapMember));
           }
           nextToken = resp.NextToken;
-        } while (nextToken);
+        } while (nextToken && members.length < args.limit);
+
+        const truncated = nextToken !== undefined ||
+          members.length > args.limit;
+        const result = members.slice(0, args.limit);
 
         const handle = await context.writeResource("member_list", "members", {
-          members,
-          count: members.length,
+          members: result,
+          count: result.length,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 
