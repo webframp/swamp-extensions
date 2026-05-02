@@ -101,7 +101,7 @@ const MemberListSchema = z.object({
 
 function parseRelativeTime(timeStr: string): Date {
   const now = new Date();
-  const match = timeStr.match(/^(\d+)([mhd])$/);
+  const match = timeStr.toLowerCase().match(/^(\d+)([mhd])$/);
   if (match) {
     const value = parseInt(match[1], 10);
     const unit = match[2];
@@ -121,11 +121,17 @@ function parseRelativeTime(timeStr: string): Date {
   throw new Error(`Cannot parse time: ${timeStr}`);
 }
 
-async function getDetectorId(client: GuardDutyClient): Promise<string> {
+async function getDetectorId(
+  client: GuardDutyClient,
+  logger?: { info: (msg: string, props: Record<string, unknown>) => void },
+): Promise<string> {
   const resp = await client.send(new ListDetectorsCommand({}));
   const ids = resp.DetectorIds || [];
   if (ids.length === 0) {
     throw new Error("No GuardDuty detector found in this region/account");
+  }
+  if (ids.length > 1 && logger) {
+    logger.info("Multiple detectors found, using {id}", { id: ids[0] });
   }
   return ids[0];
 }
@@ -268,7 +274,7 @@ export const model = {
         const client = new GuardDutyClient({
           region: context.globalArgs.region,
         });
-        const detectorId = await getDetectorId(client);
+        const detectorId = await getDetectorId(client, context.logger);
 
         const startTime = parseRelativeTime(args.startTime);
         const endTime = args.endTime
@@ -310,6 +316,7 @@ export const model = {
           }
           nextToken = resp.NextToken;
         } while (nextToken && allIds.length < maxIds);
+        const capReached = allIds.length >= maxIds;
 
         // Fetch details in batches of 50
         const findings: z.infer<typeof FindingSummarySchema>[] = [];
@@ -335,9 +342,9 @@ export const model = {
         const instanceParts = [
           args.typePrefix ?? "_all",
           args.severityMin !== undefined ? `sev${args.severityMin}` : null,
-          args.accountId || null,
+          args.accountId ?? null,
         ].filter(Boolean);
-        const instanceName = instanceParts.join("-").replace(
+        const instanceName = instanceParts.join("__").replace(
           /[^a-zA-Z0-9_-]/g,
           "-",
         );
@@ -348,7 +355,8 @@ export const model = {
           {
             findings: filtered,
             count: filtered.length,
-            truncated: nextToken !== undefined || matched.length > args.limit,
+            truncated: nextToken !== undefined || capReached ||
+              matched.length > args.limit,
             filters: {
               typePrefix: args.typePrefix || null,
               severityMin: args.severityMin ?? null,
@@ -394,7 +402,7 @@ export const model = {
         const client = new GuardDutyClient({
           region: context.globalArgs.region,
         });
-        const detectorId = await getDetectorId(client);
+        const detectorId = await getDetectorId(client, context.logger);
 
         const ids = args.findingIds.slice(0, 50);
 
@@ -465,7 +473,7 @@ export const model = {
         const client = new GuardDutyClient({
           region: context.globalArgs.region,
         });
-        const detectorId = await getDetectorId(client);
+        const detectorId = await getDetectorId(client, context.logger);
 
         const members: z.infer<typeof MemberSchema>[] = [];
         let nextToken: string | undefined;
@@ -496,7 +504,7 @@ export const model = {
         });
 
         context.logger.info("Found {count} member accounts", {
-          count: members.length,
+          count: result.length,
         });
         return { dataHandles: [handle] };
       },
