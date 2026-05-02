@@ -102,6 +102,16 @@ import { createReportTestContext } from "@systeminit/swamp-testing";
 - Model (HTTP mock): `cloudflare/extensions/models/cloudflare/zone_test.ts`
 - Datastore: `datastore/gitlab-datastore/extensions/datastores/gitlab_datastore/mod_test.ts`
 
+## API Integration Patterns
+
+When building models that wrap external APIs:
+
+- **Client-side filtering changes pagination semantics.** If you move a filter from server-side (API criterion) to client-side (post-fetch), the pagination loop must over-fetch to compensate. A `limit` applied before client-side filtering produces fewer results than requested. Either keep filtering server-side, or paginate until `filtered.length >= limit`.
+- **Zod schemas are the contract.** Add `.min()`, `.max()`, and other constraints that match the API's actual limits. Don't rely on runtime slicing to enforce bounds — fail fast at validation.
+- **Null safety on SDK responses.** AWS SDK types are often `T | undefined`. Use `?? defaultValue` (not `|| defaultValue`) to handle both `null` and `undefined` without masking falsy values like `0` or `""`.
+- **Deterministic resource instance names.** Use filter parameters or entity IDs, not timestamps. `Date.now()` in instance names causes unbounded data accumulation.
+- **Run `swamp extension quality manifest.yaml` before pushing.** Aim for 12/12 on the quality rubric.
+
 ## Commands
 
 Run from extension directory (e.g., `cd vault/macos-keychain`):
