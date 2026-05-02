@@ -20,6 +20,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/traces`](aws/traces/) | X-Ray distributed tracing and error analysis | `@aws-sdk/client-xray` |
 | [`@webframp/aws/cost-estimate`](aws/cost-estimate/) | Cost estimation from inventory specs | `@aws-sdk/client-pricing` |
 | [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
+| [`@webframp/aws/guardduty`](aws/guardduty/) | AWS GuardDuty findings and member account enrollment from delegated admin | `@aws-sdk/client-guardduty` |
 | [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
 | [`@webframp/terraform`](terraform/) | Terraform/OpenTofu state reader — resource inventory, full state, and outputs | None (shells out to `terraform` or `tofu`) |
 
@@ -33,7 +34,8 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws-cost-audit`](aws/cost-audit/) | AWS cost audit — analyzes spend, resource inventory, and networking waste, then generates savings recommendations | `@webframp/aws/cost-explorer`, `@webframp/aws/networking`, `@webframp/aws/inventory` |
 | [`@webframp/aws/terraform-drift`](aws/terraform-drift/) | Terraform drift detection — compares TF state against live AWS resources | `@webframp/terraform`, `@webframp/aws/inventory`, `@webframp/aws/networking` |
 | [`@webframp/aws/cost-report`](aws/cost-report/) | AWS cost report formatting (standalone report extension) | None |
-| [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — CRUD operations on issues, projects, users, and custom fields, plus flow metrics and sprint summary reports with a scaffold-story workflow | None |
+| [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — workflow-agnostic CRUD model for issues, projects, versions, relations, time entries, watchers, search, and more | None |
+| [`@webframp/redmine-kanban`](redmine-kanban/) | Kanban workflow reports and automation for Redmine — flow metrics, sprint summaries, and story scaffolding | `@webframp/redmine` |
 
 ## Vault Extensions
 
@@ -79,6 +81,7 @@ swamp extension pull @webframp/aws-ops
 swamp extension pull @webframp/aws-cost-audit
 swamp extension pull @webframp/aws/terraform-drift
 swamp extension pull @webframp/redmine
+swamp extension pull @webframp/redmine-kanban
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing
@@ -89,6 +92,7 @@ swamp extension pull @webframp/aws/alarms
 swamp extension pull @webframp/aws/traces
 swamp extension pull @webframp/aws/cost-estimate
 swamp extension pull @webframp/aws/cost-explorer
+swamp extension pull @webframp/aws/guardduty
 swamp extension pull @webframp/aws/networking
 swamp extension pull @webframp/aws/cost-report
 
