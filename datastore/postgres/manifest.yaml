@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/postgres-datastore"
+version: "2026.05.04.1"
+description: >
+  Stores swamp runtime data in PostgreSQL with row-based distributed locking.
+  Compatible with AWS RDS, Aurora, and Aurora Serverless v2. Uses fencing tokens
+  for split-brain safety across failover events.
+license: Apache-2.0
+repository: https://github.com/webframp/swamp-extensions
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels: [postgres, aws, rds, aurora, datastore]
+datastores:
+  - postgres_datastore/mod.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
