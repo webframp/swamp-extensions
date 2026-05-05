@@ -66,7 +66,7 @@ const ConfigSchema = z.object({
   (data) => data.ssl !== "verify-ca" || data.sslCaPath !== undefined,
   { message: "sslCaPath is required when ssl=verify-ca", path: ["sslCaPath"] },
 ).refine(
-  (data) => !data.sslCaPath || !data.sslCaPath.includes(".."),
+  (data) => !data.sslCaPath || !data.sslCaPath.split(/[/\\]/).includes(".."),
   {
     message: "sslCaPath must not contain '..' path segments",
     path: ["sslCaPath"],
@@ -104,13 +104,13 @@ function createPostgresLock(
   let nonce: string | undefined;
   let heartbeatId: number | undefined;
 
-  return {
-    acquire: async () => {
-      if (nonce !== undefined) {
-        throw new Error("Lock already acquired; call release() first");
-      }
-      const start = Date.now();
-      nonce = crypto.randomUUID();
+  const acquire = async () => {
+    if (nonce !== undefined) {
+      throw new Error("Lock already acquired; call release() first");
+    }
+    const start = Date.now();
+    nonce = crypto.randomUUID();
+    try {
       const holder = `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`;
       const hostname = Deno.hostname();
       const pid = Deno.pid;
@@ -147,40 +147,42 @@ function createPostgresLock(
         }
         await new Promise((r) => setTimeout(r, retryIntervalMs));
       }
+    } catch (e) {
       nonce = undefined;
-      throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
-    },
+      throw e;
+    }
+    nonce = undefined;
+    throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
+  };
 
-    release: async () => {
-      if (heartbeatId !== undefined) {
-        clearInterval(heartbeatId);
-        heartbeatId = undefined;
+  const release = async () => {
+    if (heartbeatId !== undefined) {
+      clearInterval(heartbeatId);
+      heartbeatId = undefined;
+    }
+    if (nonce) {
+      try {
+        await sql.unsafe(
+          `DELETE FROM ${locksTable} WHERE key = $1 AND nonce = $2`,
+          [key, nonce],
+        );
+      } catch {
+        // Connection may be dead — lock will expire via TTL
       }
-      if (nonce) {
-        try {
-          await sql.unsafe(
-            `DELETE FROM ${locksTable} WHERE key = $1 AND nonce = $2`,
-            [key, nonce],
-          );
-        } catch {
-          // Connection may be dead — lock will expire via TTL
-        }
-        nonce = undefined;
-      }
-    },
+      nonce = undefined;
+    }
+  };
+
+  return {
+    acquire,
+    release,
 
     withLock: async <T>(fn: () => Promise<T>): Promise<T> => {
-      const lockInstance = createPostgresLock(
-        sql,
-        locksTable,
-        datastorePath,
-        options,
-      );
-      await lockInstance.acquire();
+      await acquire();
       try {
         return await fn();
       } finally {
-        await lockInstance.release();
+        await release();
       }
     },
 
