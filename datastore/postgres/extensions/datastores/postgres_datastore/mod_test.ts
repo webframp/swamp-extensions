@@ -85,6 +85,46 @@ Deno.test("config schema rejects invalid ssl mode", () => {
   assertEquals(threw, true);
 });
 
+Deno.test("config schema rejects sql injection in schema name", () => {
+  let threw = false;
+  try {
+    datastore.configSchema.parse({
+      connectionString: "postgres://localhost/db",
+      schema: "swamp; DROP TABLE swamp.locks --",
+    });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("config schema rejects verify-ca without sslCaPath", () => {
+  let threw = false;
+  try {
+    datastore.configSchema.parse({
+      connectionString: "postgres://localhost/db",
+      ssl: "verify-ca",
+    });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("config schema rejects path traversal in sslCaPath", () => {
+  let threw = false;
+  try {
+    datastore.configSchema.parse({
+      connectionString: "postgres://localhost/db",
+      ssl: "verify-ca",
+      sslCaPath: "/etc/../../proc/self/environ",
+    });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
 Deno.test("createProvider returns DatastoreProvider interface", () => {
   const provider = datastore.createProvider({
     connectionString: "postgres://user:pass@localhost:5432/swamp",

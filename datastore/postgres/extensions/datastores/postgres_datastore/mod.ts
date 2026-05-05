@@ -50,7 +50,10 @@ const ConfigSchema = z.object({
   connectionString: z.string().min(1).describe(
     "PostgreSQL connection URI (supports RDS, Aurora, Aurora Serverless v2)",
   ),
-  schema: z.string().default("swamp").describe(
+  schema: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
+    message:
+      "Schema must be a valid SQL identifier (letters, digits, underscores)",
+  }).default("swamp").describe(
     "PostgreSQL schema for swamp tables",
   ),
   ssl: z.enum(["disable", "require", "verify-ca"]).default("require").describe(
@@ -59,15 +62,27 @@ const ConfigSchema = z.object({
   sslCaPath: z.string().optional().describe(
     "Path to CA certificate bundle (e.g., RDS global-bundle.pem). Required when ssl=verify-ca.",
   ),
-});
+}).refine(
+  (data) => data.ssl !== "verify-ca" || data.sslCaPath !== undefined,
+  { message: "sslCaPath is required when ssl=verify-ca", path: ["sslCaPath"] },
+).refine(
+  (data) => !data.sslCaPath || !data.sslCaPath.includes(".."),
+  {
+    message: "sslCaPath must not contain '..' path segments",
+    path: ["sslCaPath"],
+  },
+);
 
-type PostgresConfig = z.infer<typeof ConfigSchema>;
+type PostgresConfig = z.output<typeof ConfigSchema>;
 
 function buildSslConfig(
   parsed: PostgresConfig,
 ): boolean | "require" | "prefer" | object {
   if (parsed.ssl === "disable") return false;
-  if (parsed.ssl === "verify-ca" && parsed.sslCaPath) {
+  if (parsed.ssl === "verify-ca") {
+    if (!parsed.sslCaPath) {
+      throw new Error("sslCaPath is required when ssl=verify-ca");
+    }
     return {
       rejectUnauthorized: true,
       ca: Deno.readTextFileSync(parsed.sslCaPath),
@@ -91,6 +106,9 @@ function createPostgresLock(
 
   return {
     acquire: async () => {
+      if (nonce !== undefined) {
+        throw new Error("Lock already acquired; call release() first");
+      }
       const start = Date.now();
       nonce = crypto.randomUUID();
       const holder = `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`;
@@ -188,7 +206,7 @@ function createPostgresLock(
         `DELETE FROM ${locksTable} WHERE key = $1 AND nonce = $2`,
         [key, expectedNonce],
       );
-      return (result as unknown as { count: number }).count > 0;
+      return Number(result.count) > 0;
     },
   };
 }
