@@ -51,6 +51,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | Extension | Description | Dependencies |
 |-----------|-------------|--------------|
 | [`@webframp/gitlab-datastore`](datastore/gitlab-datastore/) | Stores swamp runtime data in GitLab using the Terraform state HTTP API. Provides distributed locking and bidirectional sync. | None (uses fetch) |
+| [`@webframp/postgres-datastore`](datastore/postgres/) | Stores swamp runtime data in PostgreSQL with row-based distributed locking. Compatible with AWS RDS, Aurora, and Aurora Serverless v2. | `postgres` (npm) |
 
 ## Driver Extensions
 
@@ -104,6 +105,7 @@ swamp extension pull @webframp/macos-keychain
 
 # Datastore extensions
 swamp extension pull @webframp/gitlab-datastore
+swamp extension pull @webframp/postgres-datastore
 
 # Driver extensions
 swamp extension pull @webframp/nix
