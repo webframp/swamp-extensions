@@ -451,7 +451,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        datastore: [gitlab-datastore]
+        datastore: [gitlab-datastore, postgres]
         task: [check, lint, fmt, test]
     defaults:
       run:
@@ -470,7 +470,7 @@ jobs:
           elif [ "${{ matrix.task }}" = "test" ]; then
             deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/
           else
-            deno check extensions/datastores/gitlab_datastore/mod.ts
+            deno task check
           fi
 
   manifest-validate:
