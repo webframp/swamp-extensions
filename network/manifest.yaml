@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/network"
-version: "2026.04.22.1"
+version: "2026.05.06.1"
 description: |
   DNS and network probing model that generates diverse diagnostic events.
 
@@ -54,6 +54,12 @@ labels:
   - http
   - diagnostics
   - ops
+  - tls
+  - certificate
+  - whois
+  - traceroute
+  - port-scan
+  - probe
 platforms:
   - linux-x86_64
   - linux-aarch64
