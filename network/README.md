@@ -7,12 +7,14 @@ workflows.
 
 ## Prerequisites
 
+- swamp CLI version `20260505` or later. Run `swamp update` to get the latest version.
+
 The following command-line utilities must be available on the host:
 
-- `dig` -- DNS lookups (usually provided by `bind-utils` or `dnsutils`)
-- `whois` -- domain registration queries
-- `openssl` -- TLS certificate inspection
-- `traceroute` -- network path tracing
+- `dig` -- DNS lookups, used by `dns_lookup` (usually provided by `bind-utils` or `dnsutils`)
+- `whois` -- domain registration queries, used by `whois_lookup`
+- `openssl` -- TLS certificate inspection, used by `cert_check`
+- `traceroute` -- network path tracing, used by `traceroute`
 
 No cloud credentials or API keys are required.
 

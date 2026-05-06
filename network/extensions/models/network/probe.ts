@@ -885,7 +885,8 @@ export const model = {
         host: z.string().describe("Target host to scan"),
         ports: z
           .array(z.number())
-          .describe("List of TCP ports to check"),
+          .default([80, 443])
+          .describe("List of TCP ports to check (defaults to 80, 443)"),
       }),
       execute: async (
         args: { host: string; ports: number[] },
