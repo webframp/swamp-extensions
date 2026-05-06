@@ -196,6 +196,7 @@ if (POSTGRES_TEST_URL) {
   Deno.test({
     name: "integration: verifier reports healthy on real postgres",
     sanitizeResources: false,
+    sanitizeOps: false,
     fn: async () => {
       const provider = datastore.createProvider({
         connectionString: POSTGRES_TEST_URL,
