@@ -3,8 +3,12 @@ name: "@webframp/morning-pulse"
 description: |
   Daily morning infrastructure pulse check.
   Gathers alarm state, alarm health verdicts, cost trend, and open PRs
-  across both us-east-1 and us-west-2 regions, then generates a concise
-  morning-pulse report you can skim in two minutes.
+  across user-specified regions, then generates a concise morning-pulse
+  report you can skim in two minutes.
+
+  Region-flexible via forEach — pass any combination of regions as input.
+  Model instances must follow the naming convention:
+    aws-alarms-{region}, alarm-investigation-{region}
 tags:
   ops: "true"
   daily: "true"
@@ -14,6 +18,11 @@ reports:
     - "@webframp/morning-pulse-report"
 inputs:
   properties:
+    regions:
+      type: array
+      items: { type: string }
+      default: ["us-east-1"]
+      description: AWS regions to check (requires aws-alarms-{region} and alarm-investigation-{region} model instances)
     repo:
       type: string
       default: "webframp/swamp-extensions"
@@ -24,47 +33,30 @@ inputs:
       description: Number of days for cost trend lookback
   required: []
 jobs:
-  - name: alarms-east
-    description: Alarm summary and active alarms in us-east-1
+  - name: alarms
+    description: Alarm summary and active alarms across all regions
     steps:
-      - name: summary
+      - name: summary-${{ self.region }}
         description: Get alarm state counts and recent changes
+        forEach:
+          item: region
+          in: ${{ inputs.regions }}
         task:
           type: model_method
-          modelIdOrName: aws-alarms
+          modelIdOrName: aws-alarms-${{ self.region }}
           methodName: get_summary
           inputs:
             historyHours: 24
         allowFailure: true
 
-      - name: active
+      - name: active-${{ self.region }}
         description: Get alarms currently in ALARM state
+        forEach:
+          item: region
+          in: ${{ inputs.regions }}
         task:
           type: model_method
-          modelIdOrName: aws-alarms
-          methodName: get_active
-          inputs:
-            limit: 50
-        allowFailure: true
-
-  - name: alarms-west
-    description: Alarm summary and active alarms in us-west-2
-    steps:
-      - name: summary
-        description: Get alarm state counts and recent changes
-        task:
-          type: model_method
-          modelIdOrName: aws-alarms-west
-          methodName: get_summary
-          inputs:
-            historyHours: 24
-        allowFailure: true
-
-      - name: active
-        description: Get alarms currently in ALARM state
-        task:
-          type: model_method
-          modelIdOrName: aws-alarms-west
+          modelIdOrName: aws-alarms-${{ self.region }}
           methodName: get_active
           inputs:
             limit: 50
@@ -73,28 +65,18 @@ jobs:
   - name: alarm-triage
     description: Triage active alarms with verdicts
     dependsOn:
-      - job: alarms-east
-        condition:
-          type: completed
-      - job: alarms-west
+      - job: alarms
         condition:
           type: completed
     steps:
-      - name: triage-east
-        description: Enrich alarms in us-east-1 with verdicts
+      - name: triage-${{ self.region }}
+        description: Enrich alarms with health verdicts
+        forEach:
+          item: region
+          in: ${{ inputs.regions }}
         task:
           type: model_method
-          modelIdOrName: alarm-investigation
-          methodName: triage
-          inputs:
-            limit: 100
-        allowFailure: true
-
-      - name: triage-west
-        description: Enrich alarms in us-west-2 with verdicts
-        task:
-          type: model_method
-          modelIdOrName: alarm-investigation-west
+          modelIdOrName: alarm-investigation-${{ self.region }}
           methodName: triage
           inputs:
             limit: 100

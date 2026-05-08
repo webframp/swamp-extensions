@@ -85,34 +85,6 @@ function findStep(
   return null;
 }
 
-/** Find all non-report data handles for a model+method. */
-function findAllSteps(
-  steps: StepExecution[],
-  modelName: string,
-  methodName: string,
-): Array<
-  { modelType: string; modelId: string; name: string; version: number }
-> {
-  const results: Array<
-    { modelType: string; modelId: string; name: string; version: number }
-  > = [];
-  for (const s of steps) {
-    if (s.modelName === modelName && s.methodName === methodName) {
-      for (const h of s.dataHandles) {
-        if (!h.name.startsWith("report-")) {
-          results.push({
-            modelType: s.modelType,
-            modelId: s.modelId,
-            name: h.name,
-            version: h.version,
-          });
-        }
-      }
-    }
-  }
-  return results;
-}
-
 export const report = {
   name: "@webframp/morning-pulse-report",
   description:
@@ -165,10 +137,13 @@ export const report = {
       }>;
     }
 
-    const regions: Array<{ label: string; model: string }> = [
-      { label: "us-east-1", model: "aws-alarms" },
-      { label: "us-west-2", model: "aws-alarms-west" },
-    ];
+    // Dynamically discover alarm models from step executions
+    // Matches any model following the aws-alarms-{region} naming convention
+    const alarmSteps = ctx.stepExecutions.filter(
+      (s) =>
+        s.modelName.startsWith("aws-alarms-") &&
+        s.methodName === "get_summary",
+    );
 
     let totalInAlarm = 0;
     let totalAlarms = 0;
@@ -180,12 +155,13 @@ export const report = {
       time: string;
     }> = [];
 
-    for (const r of regions) {
-      const summary = (await get(r.model, "get_summary")) as
+    for (const step of alarmSteps) {
+      const region = step.modelName.replace("aws-alarms-", "");
+      const summary = (await get(step.modelName, "get_summary")) as
         | AlarmSummary
         | null;
       if (!summary) {
-        md.push(`**${r.label}**: _no data_\n`);
+        md.push(`**${esc(region)}**: _no data_\n`);
         continue;
       }
       totalInAlarm += summary.inAlarm;
@@ -194,11 +170,13 @@ export const report = {
         ? `🔴 ${summary.inAlarm} in ALARM`
         : `🟢 all clear`;
       md.push(
-        `**${r.label}**: ${status} (${summary.total} total, ${summary.ok} OK, ${summary.insufficientData} insufficient data)`,
+        `**${
+          esc(region)
+        }**: ${status} (${summary.total} total, ${summary.ok} OK, ${summary.insufficientData} insufficient data)`,
       );
       for (const c of (summary.recentStateChanges ?? []).slice(0, 5)) {
         allChanges.push({
-          region: r.label,
+          region,
           alarmName: c.alarmName,
           from: c.previousState,
           to: c.currentState,
@@ -224,11 +202,27 @@ export const report = {
     json.alarms = { totalAlarms, totalInAlarm, recentChanges: allChanges };
 
     // === ALARM TRIAGE ===
-    // Find triage data from both regional alarm-investigation instances
-    const triageHandles = [
-      ...findAllSteps(ctx.stepExecutions, "alarm-investigation", "triage"),
-      ...findAllSteps(ctx.stepExecutions, "alarm-investigation-west", "triage"),
-    ];
+    // Dynamically discover triage data from all alarm-investigation-{region} models
+    const triageSteps = ctx.stepExecutions.filter(
+      (s) =>
+        s.modelName.startsWith("alarm-investigation-") &&
+        s.methodName === "triage",
+    );
+    const triageHandles: Array<
+      { modelType: string; modelId: string; name: string; version: number }
+    > = [];
+    for (const s of triageSteps) {
+      for (const h of s.dataHandles) {
+        if (!h.name.startsWith("report-")) {
+          triageHandles.push({
+            modelType: s.modelType,
+            modelId: s.modelId,
+            name: h.name,
+            version: h.version,
+          });
+        }
+      }
+    }
     const aggregatedVerdict: Record<string, number> = {};
     let triageTotal = 0;
 
