@@ -100,7 +100,9 @@ async function queryTokenMetrics(
   token: string,
   startTime: string,
   endTime: string,
+  days: number,
 ): Promise<TokenData[]> {
+  const alignPeriod = Math.min(days * 24 * 3600, 30 * 24 * 3600);
   const filter = encodeURIComponent(
     'metric.type = "aiplatform.googleapis.com/publisher/online_serving/token_count"',
   );
@@ -109,7 +111,7 @@ async function queryTokenMetrics(
     `?filter=${filter}` +
     `&interval.startTime=${startTime}` +
     `&interval.endTime=${endTime}` +
-    `&aggregation.alignmentPeriod=${30 * 24 * 3600}s` +
+    `&aggregation.alignmentPeriod=${alignPeriod}s` +
     `&aggregation.perSeriesAligner=ALIGN_SUM`;
 
   const resp = await fetch(url, {
@@ -189,16 +191,17 @@ export const model = {
           endTime.getTime() - args.days * 24 * 60 * 60 * 1000,
         );
         const periodMinutes = args.days * 24 * 60;
-        const token = await getAccessToken();
         const projects: z.infer<typeof ProjectUsageSchema>[] = [];
 
         for (const project of context.globalArgs.projects) {
           try {
+            const token = await getAccessToken();
             const data = await queryTokenMetrics(
               project,
               token,
               startTime.toISOString(),
               endTime.toISOString(),
+              args.days,
             );
 
             if (data.length === 0) continue;
@@ -325,6 +328,7 @@ export const model = {
           token,
           startTime.toISOString(),
           endTime.toISOString(),
+          args.days,
         );
 
         const modelMap = new Map<

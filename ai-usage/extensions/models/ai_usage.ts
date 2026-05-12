@@ -170,8 +170,8 @@ export const model = {
             if (data.length > 0) {
               configured = true;
               const latest = data[0];
-              lastScanned = (latest.attributes.scannedAt as string) ||
-                latest.updatedAt ||
+              lastScanned = (latest.attributes.scannedAt as string) ??
+                latest.updatedAt ??
                 null;
               const totals = latest.attributes.totals as {
                 totalTokens?: number;
@@ -240,9 +240,6 @@ export const model = {
         const providerResults: z.infer<typeof ReportSchema>["providers"] = [];
         const highlights: string[] = [];
 
-        let grandInput = 0;
-        let grandOutput = 0;
-
         // --- AWS Bedrock ---
         try {
           const data = await context.dataRepository.findBySpec(
@@ -264,9 +261,6 @@ export const model = {
                 models: Array<{ modelId: string; totalTokens: number }>;
               }>;
             };
-
-            grandInput += attrs.totals.inputTokens;
-            grandOutput += attrs.totals.outputTokens;
 
             const topAccounts = (attrs.accounts || [])
               .slice(0, 5)
@@ -371,9 +365,6 @@ export const model = {
               }>;
             };
 
-            grandInput += attrs.totals.inputTokens;
-            grandOutput += attrs.totals.outputTokens;
-
             const topAccounts = (attrs.projects || [])
               .slice(0, 5)
               .map((p) => ({
@@ -465,9 +456,6 @@ export const model = {
               }>;
             };
 
-            grandInput += attrs.totals.promptTokens;
-            grandOutput += attrs.totals.generatedTokens;
-
             const topAccounts = (attrs.resources || [])
               .slice(0, 5)
               .map((r) => ({
@@ -534,8 +522,19 @@ export const model = {
           });
         }
 
-        // Grand totals
-        const grandTotal = grandInput + grandOutput;
+        // Grand totals — sum from providerResults to avoid mismatch
+        const grandTotal = providerResults.reduce(
+          (s, p) => s + p.totalTokens,
+          0,
+        );
+        const grandInput = providerResults.reduce(
+          (s, p) => s + p.inputTokens,
+          0,
+        );
+        const grandOutput = providerResults.reduce(
+          (s, p) => s + p.outputTokens,
+          0,
+        );
         if (grandTotal > 0 && providerResults.length > 1) {
           const sorted = [...providerResults].sort(
             (a, b) => b.totalTokens - a.totalTokens,

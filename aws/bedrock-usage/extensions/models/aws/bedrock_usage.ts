@@ -304,20 +304,25 @@ export const model = {
               const modelIds = await listBedrockModels(client);
               const models: z.infer<typeof ModelUsageSchema>[] = [];
 
-              for (const modelId of modelIds) {
-                const usage = await getTokenCounts(
-                  client,
-                  startTime,
-                  endTime,
-                  modelId,
+              // Query models in parallel batches of 5 to avoid throttling
+              const batchSize = 5;
+              for (let i = 0; i < modelIds.length; i += batchSize) {
+                const batch = modelIds.slice(i, i + batchSize);
+                const results = await Promise.all(
+                  batch.map((modelId) =>
+                    getTokenCounts(client, startTime, endTime, modelId)
+                      .then((usage) => ({ modelId, ...usage }))
+                  ),
                 );
-                if (usage.inputTokens > 0 || usage.outputTokens > 0) {
-                  models.push({
-                    modelId,
-                    inputTokens: usage.inputTokens,
-                    outputTokens: usage.outputTokens,
-                    totalTokens: usage.inputTokens + usage.outputTokens,
-                  });
+                for (const r of results) {
+                  if (r.inputTokens > 0 || r.outputTokens > 0) {
+                    models.push({
+                      modelId: r.modelId,
+                      inputTokens: r.inputTokens,
+                      outputTokens: r.outputTokens,
+                      totalTokens: r.inputTokens + r.outputTokens,
+                    });
+                  }
                 }
               }
 
@@ -487,20 +492,24 @@ export const model = {
         const modelIds = await listBedrockModels(client);
         const models: z.infer<typeof ModelUsageSchema>[] = [];
 
-        for (const modelId of modelIds) {
-          const usage = await getTokenCounts(
-            client,
-            startTime,
-            endTime,
-            modelId,
+        const batchSize = 5;
+        for (let i = 0; i < modelIds.length; i += batchSize) {
+          const batch = modelIds.slice(i, i + batchSize);
+          const results = await Promise.all(
+            batch.map((modelId) =>
+              getTokenCounts(client, startTime, endTime, modelId)
+                .then((usage) => ({ modelId, ...usage }))
+            ),
           );
-          if (usage.inputTokens > 0 || usage.outputTokens > 0) {
-            models.push({
-              modelId,
-              inputTokens: usage.inputTokens,
-              outputTokens: usage.outputTokens,
-              totalTokens: usage.inputTokens + usage.outputTokens,
-            });
+          for (const r of results) {
+            if (r.inputTokens > 0 || r.outputTokens > 0) {
+              models.push({
+                modelId: r.modelId,
+                inputTokens: r.inputTokens,
+                outputTokens: r.outputTokens,
+                totalTokens: r.inputTokens + r.outputTokens,
+              });
+            }
           }
         }
 
