@@ -212,7 +212,9 @@ export const model = {
       description:
         "Generate a unified cross-provider AI usage report from collected scan data. Shows coverage status with setup hints for unconfigured providers.",
       arguments: z.object({
-        days: z.number().default(30).describe("Expected lookback period"),
+        days: z.number().min(1).default(30).describe(
+          "Expected lookback period",
+        ),
       }),
       execute: async (
         args: { days: number },
@@ -262,13 +264,22 @@ export const model = {
               }>;
             };
 
-            const topAccounts = (attrs.accounts || [])
+            // Consolidate accounts by profile before top-5
+            const profileMap = new Map<string, number>();
+            for (const a of attrs.accounts || []) {
+              profileMap.set(
+                a.profile,
+                (profileMap.get(a.profile) || 0) + a.totalTokens,
+              );
+            }
+            const topAccounts = [...profileMap.entries()]
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 5)
-              .map((a) => ({
-                name: a.profile,
-                totalTokens: a.totalTokens,
+              .map(([name, totalTokens]) => ({
+                name,
+                totalTokens,
                 percentage: attrs.totals.totalTokens > 0
-                  ? (a.totalTokens / attrs.totals.totalTokens) * 100
+                  ? (totalTokens / attrs.totals.totalTokens) * 100
                   : 0,
               }));
 

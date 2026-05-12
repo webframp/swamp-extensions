@@ -107,6 +107,8 @@ function createClient(profile: string, region: string): CloudWatchClient {
 async function listBedrockModels(client: CloudWatchClient): Promise<string[]> {
   const models = new Set<string>();
   let nextToken: string | undefined;
+  const MAX_PAGES = 50;
+  let pages = 0;
   do {
     const resp = await client.send(
       new ListMetricsCommand({
@@ -121,7 +123,8 @@ async function listBedrockModels(client: CloudWatchClient): Promise<string[]> {
       }
     }
     nextToken = resp.NextToken;
-  } while (nextToken);
+    pages++;
+  } while (nextToken && pages < MAX_PAGES);
   return [...models].sort();
 }
 
@@ -140,8 +143,9 @@ async function getTokenCounts(
   endTime: Date,
   modelId?: string,
 ): Promise<{ inputTokens: number; outputTokens: number }> {
-  const period = Math.ceil(
-    (endTime.getTime() - startTime.getTime()) / 1000,
+  const period = Math.min(
+    Math.ceil((endTime.getTime() - startTime.getTime()) / 1000),
+    86400,
   );
   const dimensions = modelId
     ? [{ Name: "ModelId", Value: modelId }]
@@ -185,9 +189,9 @@ async function getTokenCounts(
   let inputTokens = 0;
   let outputTokens = 0;
   for (const r of resp.MetricDataResults || []) {
-    const val = r.Values?.[0] ?? 0;
-    if (r.Id === "input_tokens") inputTokens = val;
-    if (r.Id === "output_tokens") outputTokens = val;
+    const sum = (r.Values || []).reduce((a, b) => a + b, 0);
+    if (r.Id === "input_tokens") inputTokens = sum;
+    if (r.Id === "output_tokens") outputTokens = sum;
   }
   return { inputTokens, outputTokens };
 }
@@ -205,8 +209,9 @@ async function getInvocations(
   startTime: Date,
   endTime: Date,
 ): Promise<number | null> {
-  const period = Math.ceil(
-    (endTime.getTime() - startTime.getTime()) / 1000,
+  const period = Math.min(
+    Math.ceil((endTime.getTime() - startTime.getTime()) / 1000),
+    86400,
   );
   const resp = await client.send(
     new GetMetricDataCommand({
@@ -227,8 +232,8 @@ async function getInvocations(
       ],
     }),
   );
-  const val = resp.MetricDataResults?.[0]?.Values?.[0];
-  return val !== undefined ? val : null;
+  const values = resp.MetricDataResults?.[0]?.Values || [];
+  return values.length > 0 ? values.reduce((a, b) => a + b, 0) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +266,7 @@ export const model = {
       description:
         "Fan-out scan across all configured profiles and regions. Returns per-account token usage with model-level breakdown.",
       arguments: z.object({
-        days: z.number().default(30).describe("Lookback period in days"),
+        days: z.number().min(1).default(30).describe("Lookback period in days"),
       }),
       execute: async (
         args: { days: number },
@@ -461,7 +466,7 @@ export const model = {
           .string()
           .optional()
           .describe("AWS region (defaults to first in regions list)"),
-        days: z.number().default(30).describe("Lookback period in days"),
+        days: z.number().min(1).default(30).describe("Lookback period in days"),
       }),
       execute: async (
         args: { profile?: string; region?: string; days: number },

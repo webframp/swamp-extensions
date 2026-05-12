@@ -292,7 +292,7 @@ export const model = {
       description:
         "Fan-out scan across all configured Azure subscriptions. Discovers OpenAI/AIServices resources and returns per-resource token usage with deployment breakdown.",
       arguments: z.object({
-        days: z.number().default(30).describe("Lookback period in days"),
+        days: z.number().min(1).default(30).describe("Lookback period in days"),
       }),
       execute: async (
         args: { days: number },
