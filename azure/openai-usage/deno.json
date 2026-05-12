@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "imports": {
+    "zod": "npm:zod@4.3.6"
+  }
+}
