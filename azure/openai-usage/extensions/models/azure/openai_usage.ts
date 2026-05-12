@@ -19,7 +19,9 @@ import { z } from "npm:zod@4.3.6";
 const GlobalArgsSchema = z.object({
   subscriptions: z
     .array(z.string())
-    .describe("Azure subscription IDs to scan for OpenAI/AI Services resources"),
+    .describe(
+      "Azure subscription IDs to scan for OpenAI/AI Services resources",
+    ),
 });
 
 /** Schema for a single deployment's token usage. */
@@ -343,8 +345,7 @@ export const model = {
                   kind: res.kind,
                   promptTokens: metrics.promptTokens,
                   generatedTokens: metrics.generatedTokens,
-                  totalTokens:
-                    metrics.promptTokens + metrics.generatedTokens,
+                  totalTokens: metrics.promptTokens + metrics.generatedTokens,
                   deployments: metrics.deployments.map((d) => ({
                     deploymentName: d.name,
                     promptTokens: d.promptTokens,
@@ -352,17 +353,15 @@ export const model = {
                     totalTokens: d.promptTokens + d.generatedTokens,
                   })),
                   periodMinutes,
-                  promptTokensPerMinute:
-                    metrics.promptTokens / periodMinutes,
-                  generatedTokensPerMinute:
-                    metrics.generatedTokens / periodMinutes,
+                  promptTokensPerMinute: metrics.promptTokens / periodMinutes,
+                  generatedTokensPerMinute: metrics.generatedTokens /
+                    periodMinutes,
                 });
 
                 context.logger.info("Scanned resource", {
                   subscription,
                   resource: res.name,
-                  totalTokens:
-                    metrics.promptTokens + metrics.generatedTokens,
+                  totalTokens: metrics.promptTokens + metrics.generatedTokens,
                 });
               } catch (err) {
                 context.logger.warn("Failed to get metrics for resource", {
@@ -432,8 +431,7 @@ export const model = {
           };
         },
       ) => {
-        const allResources: Array<AiResource & { subscription: string }> =
-          [];
+        const allResources: Array<AiResource & { subscription: string }> = [];
 
         for (const subscription of context.globalArgs.subscriptions) {
           try {

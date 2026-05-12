@@ -92,14 +92,14 @@ const PROVIDERS = [
     modelName: "vertex-usage",
     type: "@webframp/gcp/vertex-usage",
     hint:
-      'swamp model create @webframp/gcp/vertex-usage vertex-usage --global-arg \'projects=["my-project"]\'',
+      "swamp model create @webframp/gcp/vertex-usage vertex-usage --global-arg 'projects=[\"my-project\"]'",
   },
   {
     name: "Azure OpenAI",
     modelName: "azure-ai-usage",
     type: "@webframp/azure/openai-usage",
     hint:
-      'swamp model create @webframp/azure/openai-usage azure-ai-usage --global-arg \'subscriptions=["sub-id"]\'',
+      "swamp model create @webframp/azure/openai-usage azure-ai-usage --global-arg 'subscriptions=[\"sub-id\"]'",
   },
 ];
 
@@ -146,7 +146,9 @@ export const model = {
             findBySpec: (
               modelName: string,
               specName: string,
-            ) => Promise<Array<{ attributes: Record<string, unknown>; updatedAt?: string }>>;
+            ) => Promise<
+              Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
+            >;
           };
           logger: {
             info: (msg: string, props: Record<string, unknown>) => void;
@@ -168,8 +170,7 @@ export const model = {
             if (data.length > 0) {
               configured = true;
               const latest = data[0];
-              lastScanned =
-                (latest.attributes.scannedAt as string) ||
+              lastScanned = (latest.attributes.scannedAt as string) ||
                 latest.updatedAt ||
                 null;
               const totals = latest.attributes.totals as {
@@ -236,8 +237,7 @@ export const model = {
       ) => {
         const periodMinutes = args.days * 24 * 60;
         const coverage: z.infer<typeof ProviderStatusSchema>[] = [];
-        const providerResults: z.infer<typeof ReportSchema>["providers"] =
-          [];
+        const providerResults: z.infer<typeof ReportSchema>["providers"] = [];
         const highlights: string[] = [];
 
         let grandInput = 0;
@@ -273,10 +273,9 @@ export const model = {
               .map((a) => ({
                 name: a.profile,
                 totalTokens: a.totalTokens,
-                percentage:
-                  attrs.totals.totalTokens > 0
-                    ? (a.totalTokens / attrs.totals.totalTokens) * 100
-                    : 0,
+                percentage: attrs.totals.totalTokens > 0
+                  ? (a.totalTokens / attrs.totals.totalTokens) * 100
+                  : 0,
               }));
 
             const allModels = (attrs.accounts || []).flatMap(
@@ -310,18 +309,23 @@ export const model = {
               configured: true,
               modelName: "bedrock-usage",
               hint: "",
-              lastScanned: (attrs as unknown as { scannedAt: string }).scannedAt || null,
+              lastScanned:
+                (attrs as unknown as { scannedAt: string }).scannedAt || null,
               totalTokens: attrs.totals.totalTokens,
             });
 
             if (topAccounts.length > 0) {
               highlights.push(
-                `Highest AWS account: ${topAccounts[0].name} (${topAccounts[0].totalTokens.toLocaleString()} tokens, ${topAccounts[0].percentage.toFixed(1)}%)`,
+                `Highest AWS account: ${topAccounts[0].name} (${
+                  topAccounts[0].totalTokens.toLocaleString()
+                } tokens, ${topAccounts[0].percentage.toFixed(1)}%)`,
               );
             }
             if (topModels.length > 0) {
               highlights.push(
-                `Top AWS model: ${topModels[0].modelId} (${topModels[0].totalTokens.toLocaleString()} tokens)`,
+                `Top AWS model: ${topModels[0].modelId} (${
+                  topModels[0].totalTokens.toLocaleString()
+                } tokens)`,
               );
             }
           } else {
@@ -375,10 +379,9 @@ export const model = {
               .map((p) => ({
                 name: p.project,
                 totalTokens: p.totalTokens,
-                percentage:
-                  attrs.totals.totalTokens > 0
-                    ? (p.totalTokens / attrs.totals.totalTokens) * 100
-                    : 0,
+                percentage: attrs.totals.totalTokens > 0
+                  ? (p.totalTokens / attrs.totals.totalTokens) * 100
+                  : 0,
               }));
 
             const allModels = (attrs.projects || []).flatMap(
@@ -412,7 +415,8 @@ export const model = {
               configured: true,
               modelName: "vertex-usage",
               hint: "",
-              lastScanned: (attrs as unknown as { scannedAt: string }).scannedAt || null,
+              lastScanned:
+                (attrs as unknown as { scannedAt: string }).scannedAt || null,
               totalTokens: attrs.totals.totalTokens,
             });
           } else {
@@ -469,10 +473,9 @@ export const model = {
               .map((r) => ({
                 name: r.resourceName,
                 totalTokens: r.totalTokens,
-                percentage:
-                  attrs.totals.totalTokens > 0
-                    ? (r.totalTokens / attrs.totals.totalTokens) * 100
-                    : 0,
+                percentage: attrs.totals.totalTokens > 0
+                  ? (r.totalTokens / attrs.totals.totalTokens) * 100
+                  : 0,
               }));
 
             const allDeployments = (attrs.resources || []).flatMap(
@@ -506,7 +509,8 @@ export const model = {
               configured: true,
               modelName: "azure-ai-usage",
               hint: "",
-              lastScanned: (attrs as unknown as { scannedAt: string }).scannedAt || null,
+              lastScanned:
+                (attrs as unknown as { scannedAt: string }).scannedAt || null,
               totalTokens: attrs.totals.totalTokens,
             });
           } else {
@@ -537,7 +541,9 @@ export const model = {
             (a, b) => b.totalTokens - a.totalTokens,
           );
           highlights.push(
-            `Dominant provider: ${sorted[0].name} (${((sorted[0].totalTokens / grandTotal) * 100).toFixed(1)}% of all tokens)`,
+            `Dominant provider: ${sorted[0].name} (${
+              ((sorted[0].totalTokens / grandTotal) * 100).toFixed(1)
+            }% of all tokens)`,
           );
         }
 

@@ -421,8 +421,10 @@ export const model = {
           };
         },
       ) => {
-        const profile = args.profile ?? context.globalArgs.profiles[0] ?? "default";
-        const region = args.region ?? context.globalArgs.regions[0] ?? "us-east-1";
+        const profile = args.profile ?? context.globalArgs.profiles[0] ??
+          "default";
+        const region = args.region ?? context.globalArgs.regions[0] ??
+          "us-east-1";
         const client = createClient(profile, region);
         const models = await listBedrockModels(client);
 
@@ -470,8 +472,10 @@ export const model = {
           };
         },
       ) => {
-        const profile = args.profile ?? context.globalArgs.profiles[0] ?? "default";
-        const region = args.region ?? context.globalArgs.regions[0] ?? "us-east-1";
+        const profile = args.profile ?? context.globalArgs.profiles[0] ??
+          "default";
+        const region = args.region ?? context.globalArgs.regions[0] ??
+          "us-east-1";
         const endTime = new Date();
         const startTime = new Date(
           endTime.getTime() - args.days * 24 * 60 * 60 * 1000,

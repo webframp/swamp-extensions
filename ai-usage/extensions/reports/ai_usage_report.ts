@@ -69,19 +69,43 @@ export const report = {
       );
       if (data.length > 0) {
         const attrs = data[0].attributes as {
-          totals: { inputTokens: number; outputTokens: number; totalTokens: number; inputTokensPerMinute: number; outputTokensPerMinute: number };
-          accounts: Array<{ profile: string; totalTokens: number; inputTokens: number; outputTokens: number; models: Array<{ modelId: string; totalTokens: number }> }>;
+          totals: {
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            inputTokensPerMinute: number;
+            outputTokensPerMinute: number;
+          };
+          accounts: Array<
+            {
+              profile: string;
+              totalTokens: number;
+              inputTokens: number;
+              outputTokens: number;
+              models: Array<{ modelId: string; totalTokens: number }>;
+            }
+          >;
         };
         grandInput += attrs.totals.inputTokens;
         grandOutput += attrs.totals.outputTokens;
 
         sections.push("## AWS Bedrock\n");
-        sections.push(`**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${attrs.totals.inputTokensPerMinute.toFixed(1)} in/min, ${attrs.totals.outputTokensPerMinute.toFixed(1)} out/min)\n`);
+        sections.push(
+          `**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${
+            attrs.totals.inputTokensPerMinute.toFixed(1)
+          } in/min, ${
+            attrs.totals.outputTokensPerMinute.toFixed(1)
+          } out/min)\n`,
+        );
         sections.push("| Account | Input | Output | Total | % |");
         sections.push("|---------|-------|--------|-------|---|");
         for (const a of (attrs.accounts || []).slice(0, 10)) {
-          const pct = attrs.totals.totalTokens > 0 ? ((a.totalTokens / attrs.totals.totalTokens) * 100).toFixed(1) : "0";
-          sections.push(`| ${a.profile} | ${a.inputTokens.toLocaleString()} | ${a.outputTokens.toLocaleString()} | ${a.totalTokens.toLocaleString()} | ${pct}% |`);
+          const pct = attrs.totals.totalTokens > 0
+            ? ((a.totalTokens / attrs.totals.totalTokens) * 100).toFixed(1)
+            : "0";
+          sections.push(
+            `| ${a.profile} | ${a.inputTokens.toLocaleString()} | ${a.outputTokens.toLocaleString()} | ${a.totalTokens.toLocaleString()} | ${pct}% |`,
+          );
         }
         sections.push("");
         jsonData.aws = attrs;
@@ -96,18 +120,39 @@ export const report = {
       );
       if (data.length > 0) {
         const attrs = data[0].attributes as {
-          totals: { inputTokens: number; outputTokens: number; totalTokens: number; inputTokensPerMinute: number; outputTokensPerMinute: number };
-          projects: Array<{ project: string; totalTokens: number; inputTokens: number; outputTokens: number }>;
+          totals: {
+            inputTokens: number;
+            outputTokens: number;
+            totalTokens: number;
+            inputTokensPerMinute: number;
+            outputTokensPerMinute: number;
+          };
+          projects: Array<
+            {
+              project: string;
+              totalTokens: number;
+              inputTokens: number;
+              outputTokens: number;
+            }
+          >;
         };
         grandInput += attrs.totals.inputTokens;
         grandOutput += attrs.totals.outputTokens;
 
         sections.push("## GCP Vertex AI\n");
-        sections.push(`**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${attrs.totals.inputTokensPerMinute.toFixed(1)} in/min, ${attrs.totals.outputTokensPerMinute.toFixed(1)} out/min)\n`);
+        sections.push(
+          `**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${
+            attrs.totals.inputTokensPerMinute.toFixed(1)
+          } in/min, ${
+            attrs.totals.outputTokensPerMinute.toFixed(1)
+          } out/min)\n`,
+        );
         sections.push("| Project | Input | Output | Total |");
         sections.push("|---------|-------|--------|-------|");
         for (const p of (attrs.projects || []).slice(0, 10)) {
-          sections.push(`| ${p.project} | ${p.inputTokens.toLocaleString()} | ${p.outputTokens.toLocaleString()} | ${p.totalTokens.toLocaleString()} |`);
+          sections.push(
+            `| ${p.project} | ${p.inputTokens.toLocaleString()} | ${p.outputTokens.toLocaleString()} | ${p.totalTokens.toLocaleString()} |`,
+          );
         }
         sections.push("");
         jsonData.gcp = attrs;
@@ -122,18 +167,39 @@ export const report = {
       );
       if (data.length > 0) {
         const attrs = data[0].attributes as {
-          totals: { promptTokens: number; generatedTokens: number; totalTokens: number; promptTokensPerMinute: number; generatedTokensPerMinute: number };
-          resources: Array<{ resourceName: string; totalTokens: number; promptTokens: number; generatedTokens: number }>;
+          totals: {
+            promptTokens: number;
+            generatedTokens: number;
+            totalTokens: number;
+            promptTokensPerMinute: number;
+            generatedTokensPerMinute: number;
+          };
+          resources: Array<
+            {
+              resourceName: string;
+              totalTokens: number;
+              promptTokens: number;
+              generatedTokens: number;
+            }
+          >;
         };
         grandInput += attrs.totals.promptTokens;
         grandOutput += attrs.totals.generatedTokens;
 
         sections.push("## Azure OpenAI\n");
-        sections.push(`**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${attrs.totals.promptTokensPerMinute.toFixed(1)} in/min, ${attrs.totals.generatedTokensPerMinute.toFixed(1)} out/min)\n`);
+        sections.push(
+          `**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${
+            attrs.totals.promptTokensPerMinute.toFixed(1)
+          } in/min, ${
+            attrs.totals.generatedTokensPerMinute.toFixed(1)
+          } out/min)\n`,
+        );
         sections.push("| Resource | Prompt | Generated | Total |");
         sections.push("|----------|--------|-----------|-------|");
         for (const r of (attrs.resources || []).slice(0, 10)) {
-          sections.push(`| ${r.resourceName} | ${r.promptTokens.toLocaleString()} | ${r.generatedTokens.toLocaleString()} | ${r.totalTokens.toLocaleString()} |`);
+          sections.push(
+            `| ${r.resourceName} | ${r.promptTokens.toLocaleString()} | ${r.generatedTokens.toLocaleString()} | ${r.totalTokens.toLocaleString()} |`,
+          );
         }
         sections.push("");
         jsonData.azure = attrs;
@@ -146,11 +212,17 @@ export const report = {
     sections.push(`| Metric | Value |`);
     sections.push(`|--------|-------|`);
     sections.push(`| Total Input/Prompt | ${grandInput.toLocaleString()} |`);
-    sections.push(`| Total Output/Generated | ${grandOutput.toLocaleString()} |`);
+    sections.push(
+      `| Total Output/Generated | ${grandOutput.toLocaleString()} |`,
+    );
     sections.push(`| **Grand Total** | **${grandTotal.toLocaleString()}** |`);
     sections.push("");
 
-    jsonData.grandTotals = { inputTokens: grandInput, outputTokens: grandOutput, totalTokens: grandTotal };
+    jsonData.grandTotals = {
+      inputTokens: grandInput,
+      outputTokens: grandOutput,
+      totalTokens: grandTotal,
+    };
 
     return {
       markdown: sections.join("\n"),
