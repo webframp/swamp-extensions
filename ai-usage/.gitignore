@@ -7,9 +7,5 @@
 .swamp-sources.yaml
 
 # Claude Code configuration (managed by swamp)
-.claude/worktrees/
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
-.claude/scheduled_tasks.json
+.claude/
 # END swamp managed section
-.claude/skills/

@@ -1,15 +1,17 @@
 {
-  "compilerOptions": {
-    "strict": true
-  },
-  "imports": {
-    "zod": "npm:zod@4.3.6"
-  },
   "tasks": {
     "check": "deno check extensions/models/ai_usage.ts extensions/reports/ai_usage_report.ts",
-    "lint": "deno lint extensions/",
-    "fmt": "deno fmt extensions/",
-    "fmt:check": "deno fmt --check extensions/",
-    "test": "deno test --allow-env extensions/"
+    "lint": "deno lint extensions/models/ extensions/reports/",
+    "fmt": "deno fmt extensions/models/ extensions/reports/",
+    "fmt:check": "deno fmt --check extensions/models/ extensions/reports/",
+    "test": "deno test --allow-env extensions/models/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
   }
 }

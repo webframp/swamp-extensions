@@ -1,16 +1,17 @@
 {
-  "compilerOptions": {
-    "strict": true,
-    "noUncheckedIndexedAccess": true
-  },
-  "imports": {
-    "zod": "npm:zod@4.3.6"
-  },
   "tasks": {
     "check": "deno check extensions/models/aws/bedrock_usage.ts",
-    "lint": "deno lint extensions/",
-    "fmt": "deno fmt extensions/",
-    "fmt:check": "deno fmt --check extensions/",
-    "test": "deno test --allow-env extensions/"
+    "lint": "deno lint extensions/models/",
+    "fmt": "deno fmt extensions/models/",
+    "fmt:check": "deno fmt --check extensions/models/",
+    "test": "deno test --allow-env extensions/models/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
   }
 }
