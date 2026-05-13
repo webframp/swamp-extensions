@@ -287,7 +287,9 @@ export const model = {
       description:
         "Fan-out scan across all configured profiles and regions. Returns per-account token usage with model-level breakdown.",
       arguments: z.object({
-        days: z.number().min(1).default(30).describe("Lookback period in days"),
+        days: z.number().min(1).max(90).default(30).describe(
+          "Lookback period in days",
+        ),
       }),
       execute: async (
         args: { days: number },
@@ -504,7 +506,9 @@ export const model = {
           .string()
           .optional()
           .describe("AWS region (defaults to first in regions list)"),
-        days: z.number().min(1).default(30).describe("Lookback period in days"),
+        days: z.number().min(1).max(90).default(30).describe(
+          "Lookback period in days",
+        ),
       }),
       execute: async (
         args: { profile?: string; region?: string; days: number },
@@ -535,6 +539,7 @@ export const model = {
         const { models: modelIds, truncated: modelsTruncated } =
           await listBedrockModels(client);
         const models: z.infer<typeof ModelUsageSchema>[] = [];
+        let anyTruncated = modelsTruncated;
 
         const batchSize = 5;
         for (let i = 0; i < modelIds.length; i += batchSize) {
@@ -542,10 +547,20 @@ export const model = {
           const results = await Promise.all(
             batch.map((modelId) =>
               getTokenCounts(client, startTime, endTime, modelId)
-                .then((usage) => ({ modelId, ...usage }))
+                .then((usage) => ({ modelId, ...usage, failed: false }))
+                .catch(() => ({
+                  modelId,
+                  inputTokens: 0,
+                  outputTokens: 0,
+                  failed: true,
+                }))
             ),
           );
           for (const r of results) {
+            if (r.failed) {
+              anyTruncated = true;
+              continue;
+            }
             if (r.inputTokens > 0 || r.outputTokens > 0) {
               models.push({
                 modelId: r.modelId,
@@ -561,7 +576,7 @@ export const model = {
 
         const result = {
           scannedAt: new Date().toISOString(),
-          truncated: modelsTruncated,
+          truncated: anyTruncated,
           days: args.days,
           periodMinutes,
           accounts: [
