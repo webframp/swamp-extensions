@@ -446,6 +446,21 @@ export const model = {
                 (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
               totalTokens: attrs.totals.totalTokens,
             });
+
+            if (topAccounts.length > 0) {
+              highlights.push(
+                `Highest GCP project: ${topAccounts[0].name} (${
+                  topAccounts[0].totalTokens.toLocaleString()
+                } tokens, ${topAccounts[0].percentage.toFixed(1)}%)`,
+              );
+            }
+            if (topModels.length > 0) {
+              highlights.push(
+                `Top GCP model: ${topModels[0].modelId} (${
+                  topModels[0].totalTokens.toLocaleString()
+                } tokens)`,
+              );
+            }
           } else {
             coverage.push({
               provider: "GCP Vertex AI",
@@ -545,6 +560,21 @@ export const model = {
                 (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
               totalTokens: attrs.totals.totalTokens,
             });
+
+            if (topAccounts.length > 0) {
+              highlights.push(
+                `Highest Azure resource: ${topAccounts[0].name} (${
+                  topAccounts[0].totalTokens.toLocaleString()
+                } tokens, ${topAccounts[0].percentage.toFixed(1)}%)`,
+              );
+            }
+            if (topModels.length > 0) {
+              highlights.push(
+                `Top Azure deployment: ${topModels[0].modelId} (${
+                  topModels[0].totalTokens.toLocaleString()
+                } tokens)`,
+              );
+            }
           } else {
             coverage.push({
               provider: "Azure OpenAI",

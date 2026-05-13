@@ -246,7 +246,7 @@ export const model = {
                 output: 0,
               };
               if (d.direction === "input") existing.input += d.tokens;
-              else existing.output += d.tokens;
+              else if (d.direction === "output") existing.output += d.tokens;
               modelMap.set(d.model, existing);
             }
 
@@ -368,7 +368,7 @@ export const model = {
         for (const d of data) {
           const existing = modelMap.get(d.model) || { input: 0, output: 0 };
           if (d.direction === "input") existing.input += d.tokens;
-          else existing.output += d.tokens;
+          else if (d.direction === "output") existing.output += d.tokens;
           modelMap.set(d.model, existing);
         }
 
