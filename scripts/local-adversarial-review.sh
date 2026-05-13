@@ -55,7 +55,7 @@ fi
 
 DIFF_FILE=$(mktemp)
 echo "$DIFF" > "$DIFF_FILE"
-trap "rm -f $DIFF_FILE" EXIT
+trap 'rm -f "$DIFF_FILE"' EXIT
 
 echo "Diff size: $(wc -l < "$DIFF_FILE") lines"
 
@@ -185,20 +185,22 @@ echo ""
 echo "=== Running Adversarial Review ==="
 echo ""
 
-case "$TOOL" in
-  claude)
-    echo "$PROMPT" | claude --print --model claude-sonnet-4-6 --allowedTools Read,Glob,Grep -p -
-    ;;
-  kiro)
-    echo "$PROMPT" | kiro-cli chat --no-interactive --trust-all-tools -
-    ;;
-  *)
-    echo "ERROR: Unknown tool '$TOOL'" >&2
-    exit 1
-    ;;
-esac
+run_review() {
+  case "$TOOL" in
+    claude)
+      echo "$PROMPT" | claude --print --model claude-sonnet-4-6 --allowedTools Read,Glob,Grep -p -
+      ;;
+    kiro)
+      echo "$PROMPT" | kiro-cli chat --no-interactive --trust-all-tools -
+      ;;
+    *)
+      echo "ERROR: Unknown tool '$TOOL'" >&2
+      return 1
+      ;;
+  esac
+}
 
-if [ $? -ne 0 ]; then
+if ! run_review; then
   echo ""
   echo "Review tool exited non-zero"
   exit 1
