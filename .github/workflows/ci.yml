@@ -551,7 +551,7 @@ jobs:
           elif [ "${{ matrix.task }}" = "lint" ]; then
             deno lint extensions/models/ extensions/reports/
           elif [ "${{ matrix.task }}" = "test" ]; then
-            deno test --allow-env extensions/models/
+            deno test --allow-env extensions/models/ extensions/reports/
           else
             deno task check
           fi

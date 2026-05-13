@@ -74,9 +74,9 @@ Deno.test("model globalArguments requires subscriptions array", () => {
 
 Deno.test("model globalArguments accepts subscriptions array", () => {
   const parsed = model.globalArguments.parse({
-    subscriptions: ["sub-123"],
+    subscriptions: ["a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"],
   });
-  assertEquals(parsed.subscriptions, ["sub-123"]);
+  assertEquals(parsed.subscriptions, ["a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"]);
 });
 
 Deno.test("model defines expected resources", () => {

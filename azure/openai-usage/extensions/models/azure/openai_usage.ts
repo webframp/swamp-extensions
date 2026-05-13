@@ -18,7 +18,7 @@ import { z } from "npm:zod@4.3.6";
 /** Global arguments for the azure openai-usage model. */
 const GlobalArgsSchema = z.object({
   subscriptions: z
-    .array(z.string())
+    .array(z.string().uuid())
     .describe(
       "Azure subscription IDs to scan for OpenAI/AI Services resources",
     ),
@@ -311,7 +311,9 @@ export const model = {
       description:
         "Fan-out scan across all configured Azure subscriptions. Discovers OpenAI/AIServices resources and returns per-resource token usage with deployment breakdown.",
       arguments: z.object({
-        days: z.number().min(1).default(30).describe("Lookback period in days"),
+        days: z.number().min(1).max(90).default(30).describe(
+          "Lookback period in days",
+        ),
       }),
       execute: async (
         args: { days: number },
@@ -334,6 +336,7 @@ export const model = {
         );
         const periodMinutes = args.days * 24 * 60;
         const resources: z.infer<typeof ResourceUsageSchema>[] = [];
+        let anyFailed = false;
 
         for (const subscription of context.globalArgs.subscriptions) {
           try {
@@ -383,6 +386,7 @@ export const model = {
                   totalTokens: metrics.promptTokens + metrics.generatedTokens,
                 });
               } catch (err) {
+                anyFailed = true;
                 context.logger.warn("Failed to get metrics for resource", {
                   resource: res.name,
                   error: String(err),
@@ -390,6 +394,7 @@ export const model = {
               }
             }
           } catch (err) {
+            anyFailed = true;
             context.logger.warn("Failed to scan subscription", {
               subscription,
               error: String(err),
@@ -412,7 +417,7 @@ export const model = {
           scannedAt: new Date().toISOString(),
           days: args.days,
           periodMinutes,
-          truncated: false,
+          truncated: anyFailed,
           resources,
           totals: {
             promptTokens: totalPrompt,

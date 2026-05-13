@@ -196,7 +196,9 @@ export const model = {
       description:
         "Fan-out scan across all configured GCP projects. Returns per-project token usage with model-level breakdown.",
       arguments: z.object({
-        days: z.number().min(1).default(30).describe("Lookback period in days"),
+        days: z.number().min(1).max(90).default(30).describe(
+          "Lookback period in days",
+        ),
       }),
       execute: async (
         args: { days: number },
@@ -330,7 +332,9 @@ export const model = {
         "Get token usage for a single GCP project with model breakdown.",
       arguments: z.object({
         project: z.string().describe("GCP project ID"),
-        days: z.number().min(1).default(30).describe("Lookback period in days"),
+        days: z.number().min(1).max(90).default(30).describe(
+          "Lookback period in days",
+        ),
       }),
       execute: async (
         args: { project: string; days: number },
