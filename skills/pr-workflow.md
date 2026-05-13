@@ -93,7 +93,14 @@ Work through findings by severity — Critical/High first, then Medium, then Low
    # For workflows:
    swamp workflow validate <name> --json
    ```
-4. **Commit with a descriptive message** referencing what was fixed:
+4. **Run local adversarial review** before pushing to avoid round-trips:
+   ```bash
+   ./scripts/local-adversarial-review.sh
+   ```
+   This auto-detects `claude` or `kiro-cli`, runs a fast pattern-symmetry check,
+   then a full adversarial review matching the CI prompt. Fix any HIGH findings
+   before pushing.
+5. **Commit with a descriptive message** referencing what was fixed:
    ```bash
    git add <specific files>
    git commit -m "fix(aws/my-ext): address adversarial review findings
@@ -101,7 +108,7 @@ Work through findings by severity — Critical/High first, then Medium, then Low
    1. Fix X — description
    2. Fix Y — description"
    ```
-5. **Push** — this triggers a new CI + adversarial review run:
+6. **Push** — this triggers a new CI + adversarial review run:
    ```bash
    git push
    ```

@@ -148,7 +148,7 @@ All changes go through pull requests — no direct pushes to main.
    - `chore(terraform): bump AWS SDK to 3.1020.0`
    - `test(vault/gopass): add edge case for empty store`
 4. **Push and open PR** — Push the branch and open a PR against main. CI runs check/lint/fmt/test. The adversarial code review runs automatically on PRs.
-5. **Run local adversarial review** — Before pushing, run `./scripts/adversarial-review.sh` to catch issues without waiting for CI. Fix findings before pushing to avoid slow review cycles.
+5. **Run local adversarial review** — Before pushing, run `./scripts/local-adversarial-review.sh` to catch issues without waiting for CI. It auto-detects `claude` or `kiro-cli` (override with `--claude`/`--kiro`), runs a fast pattern-symmetry pre-check, then a full adversarial review matching the CI prompt. Fix findings before pushing to avoid slow review cycles.
 5. **Address review** — Fix any issues raised by CI or the adversarial review. Push additional commits (do not force-push over review comments).
 6. **Merge** — Comment `/lgtm`, `/approve`, or `/shipit` on the PR. The merge workflow squash-merges after verifying CI passed, then deletes the branch.
 7. **Publish** — After merge to main, CI runs again. Only after CI passes does the publish workflow run, auto-publishing any extensions with bumped `manifest.yaml` versions.
