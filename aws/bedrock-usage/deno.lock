@@ -2,7 +2,9 @@
   "version": "5",
   "specifiers": {
     "jsr:@std/assert@1": "1.0.19",
+    "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.12",
+    "jsr:@systeminit/swamp-testing@0.20260331.5": "0.20260331.5",
     "npm:@aws-sdk/client-cloudwatch@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/credential-providers@3.1010.0": "3.1010.0",
     "npm:zod@4.3.6": "4.3.6"
@@ -16,6 +18,12 @@
     },
     "@std/internal@1.0.12": {
       "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
+    },
+    "@systeminit/swamp-testing@0.20260331.5": {
+      "integrity": "7f336df3a10433f2218c998b1b9757cba134585f44d53776ed82420b12b04df7",
+      "dependencies": [
+        "jsr:@std/assert@1.0.19"
+      ]
     }
   },
   "npm": {
@@ -814,7 +822,7 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:zod@4.3.6"
+      "jsr:@systeminit/swamp-testing@0.20260331.5"
     ]
   }
 }

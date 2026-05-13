@@ -152,6 +152,7 @@ export const model = {
           };
           logger: {
             info: (msg: string, props: Record<string, unknown>) => void;
+            warn: (msg: string, props: Record<string, unknown>) => void;
           };
         },
       ) => {
@@ -169,7 +170,11 @@ export const model = {
             );
             if (data.length > 0) {
               configured = true;
-              const latest = data[0];
+              const sorted = data.filter((d) => d.updatedAt).sort((a, b) =>
+                new Date(b.updatedAt!).getTime() -
+                new Date(a.updatedAt!).getTime()
+              );
+              const latest = sorted[0] ?? data[0];
               lastScanned = (latest.attributes.scannedAt as string) ??
                 latest.updatedAt ??
                 null;
@@ -178,8 +183,11 @@ export const model = {
               } | undefined;
               totalTokens = totals?.totalTokens ?? null;
             }
-          } catch {
-            // Model doesn't exist — not configured
+          } catch (err) {
+            context.logger.warn("Failed to query provider data", {
+              provider: p.name,
+              error: String(err),
+            });
           }
 
           providers.push({
@@ -229,7 +237,9 @@ export const model = {
             findBySpec: (
               modelName: string,
               specName: string,
-            ) => Promise<Array<{ attributes: Record<string, unknown> }>>;
+            ) => Promise<
+              Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
+            >;
           };
           logger: {
             info: (msg: string, props: Record<string, unknown>) => void;
@@ -249,7 +259,14 @@ export const model = {
             "scan_results",
           );
           if (data.length > 0) {
-            const attrs = data[0].attributes as {
+            const sorted = data.filter((d) =>
+              (d as { updatedAt?: string }).updatedAt
+            ).sort((a, b) =>
+              new Date((b as { updatedAt?: string }).updatedAt!).getTime() -
+              new Date((a as { updatedAt?: string }).updatedAt!).getTime()
+            );
+            const latest = sorted[0] ?? data[0];
+            const attrs = latest.attributes as {
               totals: {
                 inputTokens: number;
                 outputTokens: number;
@@ -361,7 +378,14 @@ export const model = {
             "scan_results",
           );
           if (data.length > 0) {
-            const attrs = data[0].attributes as {
+            const sorted = data.filter((d) =>
+              (d as { updatedAt?: string }).updatedAt
+            ).sort((a, b) =>
+              new Date((b as { updatedAt?: string }).updatedAt!).getTime() -
+              new Date((a as { updatedAt?: string }).updatedAt!).getTime()
+            );
+            const latest = sorted[0] ?? data[0];
+            const attrs = latest.attributes as {
               totals: {
                 inputTokens: number;
                 outputTokens: number;
@@ -449,7 +473,14 @@ export const model = {
             "scan_results",
           );
           if (data.length > 0) {
-            const attrs = data[0].attributes as {
+            const sorted = data.filter((d) =>
+              (d as { updatedAt?: string }).updatedAt
+            ).sort((a, b) =>
+              new Date((b as { updatedAt?: string }).updatedAt!).getTime() -
+              new Date((a as { updatedAt?: string }).updatedAt!).getTime()
+            );
+            const latest = sorted[0] ?? data[0];
+            const attrs = latest.attributes as {
               totals: {
                 promptTokens: number;
                 generatedTokens: number;

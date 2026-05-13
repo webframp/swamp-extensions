@@ -74,7 +74,11 @@ async function getAccessToken(): Promise<string> {
   });
   const output = await cmd.output();
   if (!output.success) {
-    throw new Error("Failed to get gcloud access token");
+    throw new Error(
+      `Failed to get gcloud access token: ${
+        new TextDecoder().decode(output.stderr).trim()
+      }`,
+    );
   }
   return new TextDecoder().decode(output.stdout).trim();
 }
@@ -102,45 +106,59 @@ async function queryTokenMetrics(
   endTime: string,
   days: number,
 ): Promise<TokenData[]> {
+  const MAX_PAGES = 50;
   const alignPeriod = Math.min(days * 24 * 3600, 30 * 24 * 3600);
   const filter = encodeURIComponent(
     'metric.type = "aiplatform.googleapis.com/publisher/online_serving/token_count"',
   );
-  const url =
-    `https://monitoring.googleapis.com/v3/projects/${project}/timeSeries` +
+  const baseUrl =
+    `https://monitoring.googleapis.com/v3/projects/${
+      encodeURIComponent(project)
+    }/timeSeries` +
     `?filter=${filter}` +
     `&interval.startTime=${startTime}` +
     `&interval.endTime=${endTime}` +
     `&aggregation.alignmentPeriod=${alignPeriod}s` +
     `&aggregation.perSeriesAligner=ALIGN_SUM`;
 
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    if (body.includes("Cannot find metric")) return [];
-    throw new Error(`Monitoring API error for ${project}: ${resp.status}`);
-  }
-
-  const data = await resp.json();
   const results: TokenData[] = [];
+  let pageToken: string | undefined;
+  let pages = 0;
 
-  for (const ts of data.timeSeries || []) {
-    const labels = ts.metric?.labels || {};
-    const resourceLabels = ts.resource?.labels || {};
-    const model = resourceLabels.model_user_id || "unknown";
-    const direction = labels.type || "unknown";
-    let tokens = 0;
-    for (const point of ts.points || []) {
-      tokens += parseInt(
-        point.value?.int64Value || point.value?.doubleValue || "0",
-        10,
-      );
+  do {
+    const url = pageToken
+      ? `${baseUrl}&pageToken=${encodeURIComponent(pageToken)}`
+      : baseUrl;
+
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      if (body.includes("Cannot find metric")) return [];
+      throw new Error(`Monitoring API error for ${project}: ${resp.status}`);
     }
-    results.push({ model, direction, tokens });
-  }
+
+    const data = await resp.json();
+
+    for (const ts of data.timeSeries || []) {
+      const labels = ts.metric?.labels || {};
+      const resourceLabels = ts.resource?.labels || {};
+      const model = resourceLabels.model_user_id || "unknown";
+      const direction = labels.type || "unknown";
+      let tokens = 0;
+      for (const point of ts.points || []) {
+        tokens += Number(
+          point.value?.int64Value ?? point.value?.doubleValue ?? 0,
+        );
+      }
+      results.push({ model, direction, tokens });
+    }
+
+    pageToken = data.nextPageToken;
+    pages++;
+  } while (pageToken && pages < MAX_PAGES);
 
   return results;
 }
@@ -192,10 +210,10 @@ export const model = {
         );
         const periodMinutes = args.days * 24 * 60;
         const projects: z.infer<typeof ProjectUsageSchema>[] = [];
+        const token = await getAccessToken();
 
         for (const project of context.globalArgs.projects) {
           try {
-            const token = await getAccessToken();
             const data = await queryTokenMetrics(
               project,
               token,
