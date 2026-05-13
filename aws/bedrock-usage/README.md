@@ -41,3 +41,17 @@ swamp model method run bedrock-usage list_active_models
 - **scan_accounts** — Fan-out across all profiles/regions, per-model breakdown
 - **get_token_usage** — Single profile/region with model breakdown
 - **list_active_models** — Discover models with active metrics
+
+## Output
+
+```json
+{
+  "totals": {
+    "inputTokens": 1250000,
+    "outputTokens": 380000,
+    "totalTokens": 1630000,
+    "inputTokensPerMinute": 28.9,
+    "outputTokensPerMinute": 8.8
+  }
+}
+```

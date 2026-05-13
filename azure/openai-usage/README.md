@@ -32,3 +32,17 @@ swamp model method run azure-ai-usage list_ai_resources
 
 - **scan_subscriptions** — Fan-out across subscriptions, per-deployment breakdown
 - **list_ai_resources** — Discover OpenAI/AIServices resources
+
+## Output
+
+```json
+{
+  "totals": {
+    "promptTokens": 800000,
+    "generatedTokens": 250000,
+    "totalTokens": 1050000,
+    "promptTokensPerMinute": 18.5,
+    "generatedTokensPerMinute": 5.8
+  }
+}
+```

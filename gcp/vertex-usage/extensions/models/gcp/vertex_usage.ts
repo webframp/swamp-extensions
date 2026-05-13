@@ -183,6 +183,12 @@ export const model = {
       lifetime: "6h" as const,
       garbageCollection: 5,
     },
+    single_scan: {
+      description: "Single project Vertex AI token usage scan",
+      schema: ScanResultsSchema,
+      lifetime: "6h" as const,
+      garbageCollection: 5,
+    },
   },
 
   methods: {
@@ -214,10 +220,10 @@ export const model = {
         const periodMinutes = args.days * 24 * 60;
         const projects: z.infer<typeof ProjectUsageSchema>[] = [];
         let anyTruncated = false;
-        const token = await getAccessToken();
 
         for (const project of context.globalArgs.projects) {
           try {
+            const token = await getAccessToken();
             const { data, truncated: pageTruncated } = await queryTokenMetrics(
               project,
               token,
@@ -408,7 +414,7 @@ export const model = {
         };
 
         const handle = await context.writeResource(
-          "scan_results",
+          "single_scan",
           args.project,
           result,
         );

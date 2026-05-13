@@ -49,3 +49,17 @@ swamp model method run ai-usage generate
 ## Report
 
 - **@webframp/ai-usage-report** — Workflow-scope report for standalone use
+
+## Output
+
+```json
+{
+  "grandTotals": {
+    "inputTokens": 2550000,
+    "outputTokens": 750000,
+    "totalTokens": 3300000,
+    "inputTokensPerMinute": 59.0,
+    "outputTokensPerMinute": 17.4
+  }
+}
+```

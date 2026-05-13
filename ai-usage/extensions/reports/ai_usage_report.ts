@@ -20,7 +20,9 @@ export const report = {
       findBySpec: (
         modelName: string,
         specName: string,
-      ) => Promise<Array<{ attributes: Record<string, unknown> }>>;
+      ) => Promise<
+        Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
+      >;
     };
   }) => {
     const sections: string[] = [];
@@ -72,15 +74,14 @@ export const report = {
     {
       const data = cachedData["bedrock-usage"] ?? [];
       if (data.length > 0) {
-        const sorted = data.filter((d: Record<string, unknown>) =>
-          d.updatedAt as string
-        ).sort((
-          a: Record<string, unknown>,
-          b: Record<string, unknown>,
-        ) =>
-          new Date(b.updatedAt as string).getTime() -
-          new Date(a.updatedAt as string).getTime()
-        );
+        const sorted = data.filter((d: Record<string, unknown>) => d.updatedAt)
+          .sort((
+            a: Record<string, unknown>,
+            b: Record<string, unknown>,
+          ) =>
+            new Date(b.updatedAt as string).getTime() -
+            new Date(a.updatedAt as string).getTime()
+          );
         const latest = sorted[0] ?? data[0];
         const attrs = latest.attributes as {
           totals: {
@@ -130,15 +131,14 @@ export const report = {
     {
       const data = cachedData["vertex-usage"] ?? [];
       if (data.length > 0) {
-        const sorted = data.filter((d: Record<string, unknown>) =>
-          d.updatedAt as string
-        ).sort((
-          a: Record<string, unknown>,
-          b: Record<string, unknown>,
-        ) =>
-          new Date(b.updatedAt as string).getTime() -
-          new Date(a.updatedAt as string).getTime()
-        );
+        const sorted = data.filter((d: Record<string, unknown>) => d.updatedAt)
+          .sort((
+            a: Record<string, unknown>,
+            b: Record<string, unknown>,
+          ) =>
+            new Date(b.updatedAt as string).getTime() -
+            new Date(a.updatedAt as string).getTime()
+          );
         const latest = sorted[0] ?? data[0];
         const attrs = latest.attributes as {
           totals: {
@@ -184,15 +184,14 @@ export const report = {
     {
       const data = cachedData["azure-ai-usage"] ?? [];
       if (data.length > 0) {
-        const sorted = data.filter((d: Record<string, unknown>) =>
-          d.updatedAt as string
-        ).sort((
-          a: Record<string, unknown>,
-          b: Record<string, unknown>,
-        ) =>
-          new Date(b.updatedAt as string).getTime() -
-          new Date(a.updatedAt as string).getTime()
-        );
+        const sorted = data.filter((d: Record<string, unknown>) => d.updatedAt)
+          .sort((
+            a: Record<string, unknown>,
+            b: Record<string, unknown>,
+          ) =>
+            new Date(b.updatedAt as string).getTime() -
+            new Date(a.updatedAt as string).getTime()
+          );
         const latest = sorted[0] ?? data[0];
         const attrs = latest.attributes as {
           totals: {

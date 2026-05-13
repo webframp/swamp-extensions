@@ -30,3 +30,17 @@ swamp model method run vertex-usage get_token_usage --input project=jw-cd-apps-a
 
 - **scan_projects** — Fan-out across all configured projects, per-model breakdown
 - **get_token_usage** — Single project with model breakdown
+
+## Output
+
+```json
+{
+  "totals": {
+    "inputTokens": 500000,
+    "outputTokens": 120000,
+    "totalTokens": 620000,
+    "inputTokensPerMinute": 11.6,
+    "outputTokensPerMinute": 2.8
+  }
+}
+```

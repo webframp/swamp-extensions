@@ -257,6 +257,12 @@ export const model = {
       lifetime: "6h" as const,
       garbageCollection: 5,
     },
+    single_scan: {
+      description: "Single account/region Bedrock token usage scan",
+      schema: ScanResultsSchema,
+      lifetime: "6h" as const,
+      garbageCollection: 5,
+    },
     active_models: {
       description: "Active Bedrock models in an account/region",
       schema: ActiveModelsSchema,
@@ -562,7 +568,7 @@ export const model = {
         };
 
         const handle = await context.writeResource(
-          "scan_results",
+          "single_scan",
           `${profile}-${region}`,
           result,
         );

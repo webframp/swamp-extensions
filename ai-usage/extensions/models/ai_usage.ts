@@ -400,7 +400,7 @@ export const model = {
               }>;
             };
 
-            const topAccounts = (attrs.projects || [])
+            const topAccounts = [...(attrs.projects || [])]
               .sort((a, b) => b.totalTokens - a.totalTokens)
               .slice(0, 5)
               .map((p) => ({
@@ -499,7 +499,7 @@ export const model = {
               }>;
             };
 
-            const topAccounts = (attrs.resources || [])
+            const topAccounts = [...(attrs.resources || [])]
               .sort((a, b) => b.totalTokens - a.totalTokens)
               .slice(0, 5)
               .map((r) => ({
@@ -590,6 +590,15 @@ export const model = {
           );
         }
 
+        const grandInputPerMin = providerResults.reduce(
+          (s, p) => s + p.inputTokensPerMinute,
+          0,
+        );
+        const grandOutputPerMin = providerResults.reduce(
+          (s, p) => s + p.outputTokensPerMinute,
+          0,
+        );
+
         const result = {
           generatedAt: new Date().toISOString(),
           days: args.days,
@@ -600,14 +609,8 @@ export const model = {
             inputTokens: grandInput,
             outputTokens: grandOutput,
             totalTokens: grandTotal,
-            inputTokensPerMinute: providerResults.reduce(
-              (s, p) => s + p.inputTokensPerMinute,
-              0,
-            ),
-            outputTokensPerMinute: providerResults.reduce(
-              (s, p) => s + p.outputTokensPerMinute,
-              0,
-            ),
+            inputTokensPerMinute: grandInputPerMin,
+            outputTokensPerMinute: grandOutputPerMin,
           },
           highlights,
         };

@@ -191,7 +191,7 @@ async function getTokenMetrics(
     let total = 0;
     for (const ts of metric.timeseries || []) {
       for (const d of ts.data || []) {
-        if (d.total) total += d.total;
+        if (d.total != null) total += d.total;
       }
     }
     if (name === "ProcessedPromptTokens") promptTokens = total;
@@ -251,7 +251,7 @@ async function getTokenMetrics(
         }
         let total = 0;
         for (const d of ts.data || []) {
-          if (d.total) total += d.total;
+          if (d.total != null) total += d.total;
         }
         if (total > 0) {
           const existing = deploymentMap.get(deploymentName) || {
