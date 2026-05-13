@@ -7,6 +7,7 @@ Community extensions for swamp - models, vaults, datastores, drivers, reports, a
 - TypeScript strict mode, Deno runtime
 - Use named exports: `export const model = { ... }`, `export const vault = { ... }`, `export const report = { ... }`, etc.
 - All code must pass `deno check`, `deno lint`, and `deno fmt`
+- Shell scripts must pass `shellcheck` with no warnings before committing
 - Include test coverage for all extensions (`*_test.ts` files)
 
 ## Extension Structure
