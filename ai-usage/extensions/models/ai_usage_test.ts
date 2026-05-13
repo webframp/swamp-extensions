@@ -35,7 +35,9 @@ function createAiUsageContext(storedData: StoredData = {}) {
   patched.dataRepository = {
     findBySpec: (modelName: string, specName: string) => {
       const modelData = storedData[modelName];
-      if (!modelData) return Promise.reject(new Error(`Model ${modelName} not found`));
+      if (!modelData) {
+        return Promise.reject(new Error(`Model ${modelName} not found`));
+      }
       return Promise.resolve(modelData[specName] || []);
     },
   };
