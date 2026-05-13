@@ -133,6 +133,7 @@ interface TokenMetrics {
     promptTokens: number;
     generatedTokens: number;
   }>;
+  deploymentBreakdownFailed: boolean;
 }
 
 /**
@@ -275,10 +276,20 @@ async function getTokenMetrics(
       });
     }
   } catch {
-    // Dimension query may fail for some resource types
+    return {
+      promptTokens,
+      generatedTokens,
+      deployments,
+      deploymentBreakdownFailed: true,
+    };
   }
 
-  return { promptTokens, generatedTokens, deployments };
+  return {
+    promptTokens,
+    generatedTokens,
+    deployments,
+    deploymentBreakdownFailed: false,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +370,13 @@ export const model = {
                   continue;
                 }
 
+                if (metrics.deploymentBreakdownFailed) {
+                  context.logger.warn(
+                    "Deployment breakdown unavailable for resource",
+                    { resource: res.name, subscription },
+                  );
+                }
+
                 resources.push({
                   subscription,
                   resourceGroup: res.resourceGroup,
@@ -430,7 +448,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "scan_results",
-          "latest",
+          "current",
           result,
         );
         return { dataHandles: [handle] };

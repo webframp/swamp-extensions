@@ -209,7 +209,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "status",
-          "latest",
+          "current",
           result,
         );
         return { dataHandles: [handle] };
@@ -647,7 +647,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "report",
-          "latest",
+          "current",
           result,
         );
         return { dataHandles: [handle] };

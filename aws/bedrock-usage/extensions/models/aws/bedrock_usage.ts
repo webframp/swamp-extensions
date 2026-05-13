@@ -86,6 +86,17 @@ const ActiveModelsSchema = z.object({
 // ---------------------------------------------------------------------------
 
 /**
+ * Sanitize a string for use as a data instance name.
+ * Replaces characters forbidden in data names (/, \, ..) with safe delimiters.
+ *
+ * @param name - Raw instance name component.
+ * @returns Sanitized name safe for use as a data artifact identifier.
+ */
+function sanitizeInstanceName(name: string): string {
+  return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+}
+
+/**
  * Create a CloudWatch client for a given profile and region.
  *
  * @param profile - AWS CLI profile name.
@@ -329,10 +340,20 @@ export const model = {
                 const results = await Promise.all(
                   batch.map((modelId) =>
                     getTokenCounts(client, startTime, endTime, modelId)
-                      .then((usage) => ({ modelId, ...usage }))
+                      .then((usage) => ({ modelId, ...usage, failed: false }))
+                      .catch(() => ({
+                        modelId,
+                        inputTokens: 0,
+                        outputTokens: 0,
+                        failed: true,
+                      }))
                   ),
                 );
                 for (const r of results) {
+                  if (r.failed) {
+                    anyTruncated = true;
+                    continue;
+                  }
                   if (r.inputTokens > 0 || r.outputTokens > 0) {
                     models.push({
                       modelId: r.modelId,
@@ -411,7 +432,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "scan_results",
-          "latest",
+          "current",
           result,
         );
         return { dataHandles: [handle] };
@@ -464,7 +485,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "active_models",
-          `${profile}-${region}`,
+          sanitizeInstanceName(`${profile}-${region}`),
           result,
         );
         return { dataHandles: [handle] };
@@ -569,7 +590,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "single_scan",
-          `${profile}-${region}`,
+          sanitizeInstanceName(`${profile}-${region}`),
           result,
         );
         return { dataHandles: [handle] };

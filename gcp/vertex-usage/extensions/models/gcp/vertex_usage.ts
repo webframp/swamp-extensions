@@ -320,7 +320,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "scan_results",
-          "latest",
+          "current",
           result,
         );
         return { dataHandles: [handle] };
