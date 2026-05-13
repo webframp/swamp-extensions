@@ -68,7 +68,17 @@ export const report = {
         "scan_results",
       );
       if (data.length > 0) {
-        const attrs = data[0].attributes as {
+        const sorted = data.filter((d: Record<string, unknown>) =>
+          d.updatedAt as string
+        ).sort((
+          a: Record<string, unknown>,
+          b: Record<string, unknown>,
+        ) =>
+          new Date(b.updatedAt as string).getTime() -
+          new Date(a.updatedAt as string).getTime()
+        );
+        const latest = sorted[0] ?? data[0];
+        const attrs = latest.attributes as {
           totals: {
             inputTokens: number;
             outputTokens: number;
@@ -119,7 +129,17 @@ export const report = {
         "scan_results",
       );
       if (data.length > 0) {
-        const attrs = data[0].attributes as {
+        const sorted = data.filter((d: Record<string, unknown>) =>
+          d.updatedAt as string
+        ).sort((
+          a: Record<string, unknown>,
+          b: Record<string, unknown>,
+        ) =>
+          new Date(b.updatedAt as string).getTime() -
+          new Date(a.updatedAt as string).getTime()
+        );
+        const latest = sorted[0] ?? data[0];
+        const attrs = latest.attributes as {
           totals: {
             inputTokens: number;
             outputTokens: number;
@@ -166,7 +186,17 @@ export const report = {
         "scan_results",
       );
       if (data.length > 0) {
-        const attrs = data[0].attributes as {
+        const sorted = data.filter((d: Record<string, unknown>) =>
+          d.updatedAt as string
+        ).sort((
+          a: Record<string, unknown>,
+          b: Record<string, unknown>,
+        ) =>
+          new Date(b.updatedAt as string).getTime() -
+          new Date(a.updatedAt as string).getTime()
+        );
+        const latest = sorted[0] ?? data[0];
+        const attrs = latest.attributes as {
           totals: {
             promptTokens: number;
             generatedTokens: number;

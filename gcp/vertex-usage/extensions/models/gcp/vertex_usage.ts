@@ -47,6 +47,7 @@ const ScanResultsSchema = z.object({
   scannedAt: z.string(),
   days: z.number(),
   periodMinutes: z.number(),
+  truncated: z.boolean(),
   projects: z.array(ProjectUsageSchema),
   totals: z.object({
     inputTokens: z.number(),
@@ -105,7 +106,7 @@ async function queryTokenMetrics(
   startTime: string,
   endTime: string,
   days: number,
-): Promise<TokenData[]> {
+): Promise<{ data: TokenData[]; truncated: boolean }> {
   const MAX_PAGES = 50;
   const alignPeriod = Math.min(days * 24 * 3600, 30 * 24 * 3600);
   const filter = encodeURIComponent(
@@ -136,7 +137,9 @@ async function queryTokenMetrics(
 
     if (!resp.ok) {
       const body = await resp.text();
-      if (body.includes("Cannot find metric")) return [];
+      if (body.includes("Cannot find metric")) {
+        return { data: [], truncated: false };
+      }
       throw new Error(`Monitoring API error for ${project}: ${resp.status}`);
     }
 
@@ -160,7 +163,7 @@ async function queryTokenMetrics(
     pages++;
   } while (pageToken && pages < MAX_PAGES);
 
-  return results;
+  return { data: results, truncated: !!pageToken };
 }
 
 // ---------------------------------------------------------------------------
@@ -210,11 +213,12 @@ export const model = {
         );
         const periodMinutes = args.days * 24 * 60;
         const projects: z.infer<typeof ProjectUsageSchema>[] = [];
-        const token = await getAccessToken();
+        let anyTruncated = false;
 
         for (const project of context.globalArgs.projects) {
           try {
-            const data = await queryTokenMetrics(
+            const token = await getAccessToken();
+            const { data, truncated: pageTruncated } = await queryTokenMetrics(
               project,
               token,
               startTime.toISOString(),
@@ -223,6 +227,7 @@ export const model = {
             );
 
             if (data.length === 0) continue;
+            if (pageTruncated) anyTruncated = true;
 
             // Aggregate by model
             const modelMap = new Map<
@@ -292,6 +297,7 @@ export const model = {
 
         const result = {
           scannedAt: new Date().toISOString(),
+          truncated: anyTruncated,
           days: args.days,
           periodMinutes,
           projects,
@@ -341,7 +347,7 @@ export const model = {
         const periodMinutes = args.days * 24 * 60;
         const token = await getAccessToken();
 
-        const data = await queryTokenMetrics(
+        const { data, truncated: pageTruncated } = await queryTokenMetrics(
           args.project,
           token,
           startTime.toISOString(),
@@ -377,6 +383,7 @@ export const model = {
 
         const result = {
           scannedAt: new Date().toISOString(),
+          truncated: pageTruncated,
           days: args.days,
           periodMinutes,
           projects: [

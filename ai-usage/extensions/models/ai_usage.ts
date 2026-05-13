@@ -401,6 +401,7 @@ export const model = {
             };
 
             const topAccounts = (attrs.projects || [])
+              .sort((a, b) => b.totalTokens - a.totalTokens)
               .slice(0, 5)
               .map((p) => ({
                 name: p.project,
@@ -499,6 +500,7 @@ export const model = {
             };
 
             const topAccounts = (attrs.resources || [])
+              .sort((a, b) => b.totalTokens - a.totalTokens)
               .slice(0, 5)
               .map((r) => ({
                 name: r.resourceName,

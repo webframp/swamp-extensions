@@ -61,6 +61,7 @@ const ScanResultsSchema = z.object({
   scannedAt: z.string(),
   days: z.number(),
   periodMinutes: z.number(),
+  truncated: z.boolean(),
   accounts: z.array(AccountUsageSchema),
   totals: z.object({
     inputTokens: z.number(),
@@ -76,6 +77,7 @@ const ActiveModelsSchema = z.object({
   profile: z.string(),
   region: z.string(),
   models: z.array(z.string()),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -104,7 +106,9 @@ function createClient(profile: string, region: string): CloudWatchClient {
  * @param client - CloudWatch client.
  * @returns Array of model ID strings.
  */
-async function listBedrockModels(client: CloudWatchClient): Promise<string[]> {
+async function listBedrockModels(
+  client: CloudWatchClient,
+): Promise<{ models: string[]; truncated: boolean }> {
   const models = new Set<string>();
   let nextToken: string | undefined;
   const MAX_PAGES = 50;
@@ -125,7 +129,7 @@ async function listBedrockModels(client: CloudWatchClient): Promise<string[]> {
     nextToken = resp.NextToken;
     pages++;
   } while (nextToken && pages < MAX_PAGES);
-  return [...models].sort();
+  return { models: [...models].sort(), truncated: !!nextToken };
 }
 
 /**
@@ -289,6 +293,7 @@ export const model = {
         );
         const periodMinutes = args.days * 24 * 60;
         const accounts: z.infer<typeof AccountUsageSchema>[] = [];
+        let anyTruncated = false;
 
         for (const profile of context.globalArgs.profiles) {
           for (const region of context.globalArgs.regions) {
@@ -306,8 +311,10 @@ export const model = {
               }
 
               // Get per-model breakdown
-              const modelIds = await listBedrockModels(client);
+              const { models: modelIds, truncated: modelsTruncated } =
+                await listBedrockModels(client);
               const models: z.infer<typeof ModelUsageSchema>[] = [];
+              if (modelsTruncated) anyTruncated = true;
 
               // Query models in parallel batches of 5 to avoid throttling
               const batchSize = 5;
@@ -383,6 +390,7 @@ export const model = {
 
         const result = {
           scannedAt: new Date().toISOString(),
+          truncated: anyTruncated,
           days: args.days,
           periodMinutes,
           accounts,
@@ -436,12 +444,15 @@ export const model = {
         const region = args.region ?? context.globalArgs.regions[0] ??
           "us-east-1";
         const client = createClient(profile, region);
-        const models = await listBedrockModels(client);
+        const { models, truncated: modelsTruncated } = await listBedrockModels(
+          client,
+        );
 
         const result = {
           profile,
           region,
           models,
+          truncated: modelsTruncated,
           fetchedAt: new Date().toISOString(),
         };
 
@@ -494,7 +505,8 @@ export const model = {
         const client = createClient(profile, region);
 
         const totals = await getTokenCounts(client, startTime, endTime);
-        const modelIds = await listBedrockModels(client);
+        const { models: modelIds, truncated: modelsTruncated } =
+          await listBedrockModels(client);
         const models: z.infer<typeof ModelUsageSchema>[] = [];
 
         const batchSize = 5;
@@ -522,6 +534,7 @@ export const model = {
 
         const result = {
           scannedAt: new Date().toISOString(),
+          truncated: modelsTruncated,
           days: args.days,
           periodMinutes,
           accounts: [
