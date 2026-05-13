@@ -100,8 +100,9 @@ export const report = {
     };
 
     // Escape values for safe markdown table/list rendering
-    function esc(val: string | undefined | null): string {
-      return (val ?? "").replace(/\|/g, "\\|").replace(/[`*_~<>]/g, "\\$&")
+    function esc(val: unknown): string {
+      const s = val == null ? "" : String(val);
+      return s.replace(/\|/g, "\\|").replace(/[`*_~<>]/g, "\\$&")
         .replace(/\n/g, " ");
     }
 

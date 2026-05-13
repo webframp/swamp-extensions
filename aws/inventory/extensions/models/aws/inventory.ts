@@ -109,7 +109,10 @@ const EBSVolumeSchema = z.object({
 const InventoryResultSchema = z.object({
   region: z.string(),
   resourceType: z.string(),
-  resources: z.array(z.unknown()),
+  resources: z.union([
+    z.array(z.unknown()),
+    z.record(z.string(), z.array(z.unknown())),
+  ]),
   count: z.number(),
   fetchedAt: z.string(),
 });
