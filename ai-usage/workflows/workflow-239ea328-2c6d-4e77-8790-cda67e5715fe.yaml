@@ -1,0 +1,72 @@
+id: 239ea328-2c6d-4e77-8790-cda67e5715fe
+name: "@webframp/ai-usage-scan"
+description: |
+  Scan AI token usage across all configured cloud providers (AWS Bedrock,
+  GCP Vertex AI, Azure OpenAI) and generate a unified cross-provider report.
+
+  Gracefully handles missing providers — unconfigured provider steps fail
+  silently (allowFailure: true) and the report shows coverage gaps with
+  setup hints.
+tags:
+  ai: "true"
+  monitoring: "true"
+  finops: "true"
+reports:
+  require:
+    - "@webframp/ai-usage-report"
+inputs:
+  properties:
+    days:
+      type: integer
+      default: 30
+      description: Lookback period in days for token usage metrics
+  required: []
+jobs:
+  - name: scan
+    description: Collect token usage from each configured provider
+    steps:
+      - name: aws-bedrock
+        description: Scan AWS Bedrock token usage across profiles/regions
+        allowFailure: true
+        task:
+          type: model_method
+          modelIdOrName: bedrock-usage
+          methodName: scan_accounts
+          inputs:
+            days: ${{ inputs.days }}
+
+      - name: gcp-vertex
+        description: Scan GCP Vertex AI token usage across projects
+        allowFailure: true
+        task:
+          type: model_method
+          modelIdOrName: vertex-usage
+          methodName: scan_projects
+          inputs:
+            days: ${{ inputs.days }}
+
+      - name: azure-openai
+        description: Scan Azure OpenAI token usage across subscriptions
+        allowFailure: true
+        task:
+          type: model_method
+          modelIdOrName: azure-ai-usage
+          methodName: scan_subscriptions
+          inputs:
+            days: ${{ inputs.days }}
+
+  - name: report
+    description: Generate unified cross-provider usage report
+    dependsOn:
+      - job: scan
+        condition:
+          type: completed
+    steps:
+      - name: generate
+        description: Aggregate scan data into unified report with coverage hints
+        task:
+          type: model_method
+          modelIdOrName: ai-usage
+          methodName: generate
+          inputs:
+            days: ${{ inputs.days }}

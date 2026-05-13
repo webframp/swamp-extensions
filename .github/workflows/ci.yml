@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        extension: [pricing, inventory, logs, metrics, alarms, alarm-investigation, traces, cost-estimate, cost-explorer, networking, guardduty]
+        extension: [pricing, inventory, logs, metrics, alarms, alarm-investigation, traces, cost-estimate, cost-explorer, networking, guardduty, bedrock-usage]
         task: [check, lint, fmt, test]
     defaults:
       run:
@@ -469,6 +469,89 @@ jobs:
             deno lint extensions/
           elif [ "${{ matrix.task }}" = "test" ]; then
             deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/
+          else
+            deno task check
+          fi
+
+  gcp-extensions:
+    name: gcp/${{ matrix.extension }} - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extension: [vertex-usage]
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: gcp/${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/models/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/models/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            deno test --allow-run --allow-env extensions/models/
+          else
+            deno task check
+          fi
+
+  azure-extensions:
+    name: azure/${{ matrix.extension }} - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extension: [openai-usage]
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: azure/${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/models/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/models/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            deno test --allow-run --allow-env extensions/models/
+          else
+            deno task check
+          fi
+
+  ai-usage:
+    name: ai-usage - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: ai-usage
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/models/ extensions/reports/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/models/ extensions/reports/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            deno test --allow-env extensions/models/ extensions/reports/
           else
             deno task check
           fi
