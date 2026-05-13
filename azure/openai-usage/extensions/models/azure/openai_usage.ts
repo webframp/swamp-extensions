@@ -49,10 +49,23 @@ const ResourceUsageSchema = z.object({
 });
 
 /** Schema for the full scan results. */
+/** Schema for discovered AI resources (no metrics). */
+const ResourceListSchema = z.object({
+  discoveredAt: z.string(),
+  resources: z.array(z.object({
+    subscription: z.string(),
+    resourceGroup: z.string(),
+    resourceName: z.string(),
+    location: z.string(),
+    kind: z.string(),
+  })),
+});
+
 const ScanResultsSchema = z.object({
   scannedAt: z.string(),
   days: z.number(),
   periodMinutes: z.number(),
+  truncated: z.boolean(),
   resources: z.array(ResourceUsageSchema),
   totals: z.object({
     promptTokens: z.number(),
@@ -285,6 +298,12 @@ export const model = {
       lifetime: "6h" as const,
       garbageCollection: 5,
     },
+    resource_list: {
+      description: "Discovered AI resources (no metrics)",
+      schema: ResourceListSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 3,
+    },
   },
 
   methods: {
@@ -393,6 +412,7 @@ export const model = {
           scannedAt: new Date().toISOString(),
           days: args.days,
           periodMinutes,
+          truncated: false,
           resources,
           totals: {
             promptTokens: totalPrompt,
@@ -447,36 +467,19 @@ export const model = {
           }
         }
 
-        // Write as a simple scan_results with empty metrics
         const result = {
-          scannedAt: new Date().toISOString(),
-          days: 0,
-          periodMinutes: 0,
+          discoveredAt: new Date().toISOString(),
           resources: allResources.map((r) => ({
             subscription: r.subscription,
             resourceGroup: r.resourceGroup,
             resourceName: r.name,
             location: r.location,
             kind: r.kind,
-            promptTokens: 0,
-            generatedTokens: 0,
-            totalTokens: 0,
-            deployments: [],
-            periodMinutes: 0,
-            promptTokensPerMinute: 0,
-            generatedTokensPerMinute: 0,
           })),
-          totals: {
-            promptTokens: 0,
-            generatedTokens: 0,
-            totalTokens: 0,
-            promptTokensPerMinute: 0,
-            generatedTokensPerMinute: 0,
-          },
         };
 
         const handle = await context.writeResource(
-          "scan_results",
+          "resource_list",
           "discovery",
           result,
         );

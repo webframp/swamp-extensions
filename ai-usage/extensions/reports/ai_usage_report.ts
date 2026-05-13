@@ -38,9 +38,15 @@ export const report = {
       { name: "Azure OpenAI", model: "azure-ai-usage", spec: "scan_results" },
     ];
 
+    // Cache findBySpec results to avoid double-fetching
+    const cachedData: Record<string, Array<Record<string, unknown>>> = {};
+
     for (const p of providers) {
       try {
         const data = await context.dataRepository.findBySpec(p.model, p.spec);
+        cachedData[p.model] = data as unknown as Array<
+          Record<string, unknown>
+        >;
         if (data && data.length > 0) {
           coverageRows.push(`| ${p.name} | ✅ Active | — |`);
         } else {
@@ -49,6 +55,7 @@ export const report = {
           );
         }
       } catch {
+        cachedData[p.model] = [];
         coverageRows.push(
           `| ${p.name} | ⚠️ Not configured | Create \`${p.model}\` model instance |`,
         );
@@ -62,11 +69,8 @@ export const report = {
     sections.push("");
 
     // --- AWS ---
-    try {
-      const data = await context.dataRepository.findBySpec(
-        "bedrock-usage",
-        "scan_results",
-      );
+    {
+      const data = cachedData["bedrock-usage"] ?? [];
       if (data.length > 0) {
         const sorted = data.filter((d: Record<string, unknown>) =>
           d.updatedAt as string
@@ -120,14 +124,11 @@ export const report = {
         sections.push("");
         jsonData.aws = attrs;
       }
-    } catch { /* not configured */ }
+    }
 
     // --- GCP ---
-    try {
-      const data = await context.dataRepository.findBySpec(
-        "vertex-usage",
-        "scan_results",
-      );
+    {
+      const data = cachedData["vertex-usage"] ?? [];
       if (data.length > 0) {
         const sorted = data.filter((d: Record<string, unknown>) =>
           d.updatedAt as string
@@ -177,14 +178,11 @@ export const report = {
         sections.push("");
         jsonData.gcp = attrs;
       }
-    } catch { /* not configured */ }
+    }
 
     // --- Azure ---
-    try {
-      const data = await context.dataRepository.findBySpec(
-        "azure-ai-usage",
-        "scan_results",
-      );
+    {
+      const data = cachedData["azure-ai-usage"] ?? [];
       if (data.length > 0) {
         const sorted = data.filter((d: Record<string, unknown>) =>
           d.updatedAt as string
@@ -234,7 +232,7 @@ export const report = {
         sections.push("");
         jsonData.azure = attrs;
       }
-    } catch { /* not configured */ }
+    }
 
     // --- Grand Totals ---
     const grandTotal = grandInput + grandOutput;

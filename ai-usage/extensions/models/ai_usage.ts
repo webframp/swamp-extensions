@@ -332,7 +332,7 @@ export const model = {
               modelName: "bedrock-usage",
               hint: "",
               lastScanned:
-                (attrs as unknown as { scannedAt: string }).scannedAt || null,
+                (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
               totalTokens: attrs.totals.totalTokens,
             });
 
@@ -443,7 +443,7 @@ export const model = {
               modelName: "vertex-usage",
               hint: "",
               lastScanned:
-                (attrs as unknown as { scannedAt: string }).scannedAt || null,
+                (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
               totalTokens: attrs.totals.totalTokens,
             });
           } else {
@@ -542,7 +542,7 @@ export const model = {
               modelName: "azure-ai-usage",
               hint: "",
               lastScanned:
-                (attrs as unknown as { scannedAt: string }).scannedAt || null,
+                (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
               totalTokens: attrs.totals.totalTokens,
             });
           } else {
@@ -600,8 +600,14 @@ export const model = {
             inputTokens: grandInput,
             outputTokens: grandOutput,
             totalTokens: grandTotal,
-            inputTokensPerMinute: grandInput / periodMinutes,
-            outputTokensPerMinute: grandOutput / periodMinutes,
+            inputTokensPerMinute: providerResults.reduce(
+              (s, p) => s + p.inputTokensPerMinute,
+              0,
+            ),
+            outputTokensPerMinute: providerResults.reduce(
+              (s, p) => s + p.outputTokensPerMinute,
+              0,
+            ),
           },
           highlights,
         };

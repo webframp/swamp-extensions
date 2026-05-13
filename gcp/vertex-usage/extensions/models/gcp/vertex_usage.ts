@@ -214,10 +214,10 @@ export const model = {
         const periodMinutes = args.days * 24 * 60;
         const projects: z.infer<typeof ProjectUsageSchema>[] = [];
         let anyTruncated = false;
+        const token = await getAccessToken();
 
         for (const project of context.globalArgs.projects) {
           try {
-            const token = await getAccessToken();
             const { data, truncated: pageTruncated } = await queryTokenMetrics(
               project,
               token,
