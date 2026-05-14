@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/network"
-version: "2026.05.06.1"
+version: "2026.05.14.1"
 description: |
   DNS and network probing model that generates diverse diagnostic events.
 
