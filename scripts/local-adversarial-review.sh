@@ -89,7 +89,7 @@ while IFS= read -r file; do
 
     # Check truncated flag usage consistency
     truncated_writes=$(echo "$content" | grep -c "truncated:") || truncated_writes=0
-    truncated_vars=$(echo "$content" | grep -c "anyTruncated\|Truncated") || truncated_vars=0
+    truncated_vars=$(echo "$content" | grep -cE "anyTruncated|Truncated") || truncated_vars=0
     if [ "$truncated_writes" -gt 1 ] && [ "$truncated_vars" -eq 0 ]; then
       echo "  WARN: $file — multiple 'truncated:' fields but no tracking variable"
       SYMMETRY_WARNINGS=$((SYMMETRY_WARNINGS + 1))
@@ -226,10 +226,11 @@ if [ ! -s "$REVIEW_OUTPUT_FILE" ]; then
   echo "Review produced no output — cannot determine verdict." >&2
   exit 1
 fi
-if grep -qiE '^\*{0,2}FAIL' "$REVIEW_OUTPUT_FILE"; then
+VERDICT_LINES=$(tail -10 "$REVIEW_OUTPUT_FILE")
+if echo "$VERDICT_LINES" | grep -qiE '\bFAIL\b'; then
   echo "Review FAILED — blocking issues found." >&2
   exit 1
-elif grep -qiE '^\*{0,2}PASS' "$REVIEW_OUTPUT_FILE"; then
+elif echo "$VERDICT_LINES" | grep -qiE '\bPASS\b'; then
   echo "Review passed."
 else
   echo "Review produced no PASS/FAIL verdict — treating as failure." >&2
