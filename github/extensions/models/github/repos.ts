@@ -303,7 +303,9 @@ export const model = {
         ]);
 
         const prs = data as z.infer<typeof PullRequestSchema>[];
-        const instanceName = `${args.repo.replace(/\//g, "-")}-${args.state}`;
+        const instanceName = `prs-${
+          args.repo.replace(/\//g, "-")
+        }-${args.state}`;
 
         const handle = await context.writeResource(
           "pull_requests",
@@ -357,7 +359,9 @@ export const model = {
         ]);
 
         const issues = data as z.infer<typeof IssueSchema>[];
-        const instanceName = `${args.repo.replace(/\//g, "-")}-${args.state}`;
+        const instanceName = `issues-${
+          args.repo.replace(/\//g, "-")
+        }-${args.state}`;
 
         const handle = await context.writeResource(
           "issues",
