@@ -33,10 +33,6 @@ const GlobalArgsSchema = z.object({
     .string()
     .optional()
     .describe("Filter discovery to a specific VPC"),
-  tags: z
-    .record(z.string(), z.string())
-    .optional()
-    .describe("Filter resources by tags"),
 });
 
 const VpcSchema = z.object({
@@ -139,12 +135,14 @@ const PartialDiscoverySchema = z.object({
   resourceType: z.string(),
   resources: z.array(z.unknown()),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
 const DiscoveryResultSchema = z.object({
   region: z.string(),
   vpcId: z.string().optional(),
+  truncated: z.boolean(),
   discovered: z.object({
     vpcs: z.array(VpcSchema),
     subnets: z.array(SubnetSchema),
@@ -307,25 +305,26 @@ function generateSetupCommands(
 
   for (const cluster of discovered.rdsClusters) {
     commands.push(
-      `swamp model create @swamp/aws/rds/cluster ${prefix}-rds-${cluster.clusterIdentifier} --global-arg 'name=${prefix}-rds-${cluster.clusterIdentifier}' --global-arg 'Engine=${cluster.engine}' --global-arg 'EngineVersion=${cluster.engineVersion}'`,
+      `swamp model create @swamp/aws/rds/dbcluster ${prefix}-cluster-${cluster.clusterIdentifier} --global-arg 'name=${prefix}-cluster-${cluster.clusterIdentifier}' --global-arg 'Engine=${cluster.engine}' --global-arg 'EngineVersion=${cluster.engineVersion}'`,
     );
   }
 
   for (const instance of discovered.rdsInstances) {
     commands.push(
-      `swamp model create @swamp/aws/rds/instance ${prefix}-rds-${instance.dbInstanceIdentifier} --global-arg 'name=${prefix}-rds-${instance.dbInstanceIdentifier}' --global-arg 'DBInstanceClass=${instance.dbInstanceClass}' --global-arg 'Engine=${instance.engine}'`,
+      `swamp model create @swamp/aws/rds/dbinstance ${prefix}-instance-${instance.dbInstanceIdentifier} --global-arg 'name=${prefix}-instance-${instance.dbInstanceIdentifier}' --global-arg 'DBInstanceClass=${instance.dbInstanceClass}' --global-arg 'Engine=${instance.engine}'`,
     );
   }
 
   for (const dbsg of discovered.dbSubnetGroups) {
     commands.push(
-      `swamp model create @swamp/aws/rds/db-subnet-group ${prefix}-dbsg-${dbsg.name} --global-arg 'name=${prefix}-dbsg-${dbsg.name}' --global-arg 'VpcId=${dbsg.vpcId}'`,
+      `swamp model create @swamp/aws/rds/dbsubnet-group ${prefix}-dbsubnet-${dbsg.name} --global-arg 'name=${prefix}-dbsubnet-${dbsg.name}' --global-arg 'VpcId=${dbsg.vpcId}'`,
     );
   }
 
   for (const secret of discovered.secrets) {
+    const safeName = secret.name.replace(/\//g, "-");
     commands.push(
-      `swamp model create @swamp/aws/secrets-manager/secret ${prefix}-secret-${secret.name} --global-arg 'name=${prefix}-secret-${secret.name}'`,
+      `swamp model create @swamp/aws/secretsmanager/secret ${prefix}-secret-${safeName} --global-arg 'name=${prefix}-secret-${safeName}'`,
     );
   }
 
@@ -339,13 +338,12 @@ function generateSetupCommands(
 type GlobalArgs = {
   region: string;
   vpcId?: string;
-  tags?: Record<string, string>;
 };
 
 async function discoverVpcs(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
-): Promise<z.infer<typeof VpcSchema>[]> {
+): Promise<{ results: z.infer<typeof VpcSchema>[]; truncated: boolean }> {
   const filters: Array<{ Name: string; Values: string[] }> = [];
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
@@ -366,13 +364,13 @@ async function discoverVpcs(
       name: getTag(vpc.Tags, "Name"),
     });
   }
-  return vpcs;
+  return { results: vpcs, truncated: !!response.NextToken };
 }
 
 async function discoverSubnets(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
-): Promise<z.infer<typeof SubnetSchema>[]> {
+): Promise<{ results: z.infer<typeof SubnetSchema>[]; truncated: boolean }> {
   const filters: Array<{ Name: string; Values: string[] }> = [];
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
@@ -394,13 +392,15 @@ async function discoverSubnets(
       name: getTag(subnet.Tags, "Name"),
     });
   }
-  return subnets;
+  return { results: subnets, truncated: !!response.NextToken };
 }
 
 async function discoverInternetGateways(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
-): Promise<z.infer<typeof InternetGatewaySchema>[]> {
+): Promise<
+  { results: z.infer<typeof InternetGatewaySchema>[]; truncated: boolean }
+> {
   const filters: Array<{ Name: string; Values: string[] }> = [];
   if (globalArgs.vpcId) {
     filters.push({ Name: "attachment.vpc-id", Values: [globalArgs.vpcId] });
@@ -421,13 +421,15 @@ async function discoverInternetGateways(
       name: getTag(igw.Tags, "Name"),
     });
   }
-  return igws;
+  return { results: igws, truncated: !!response.NextToken };
 }
 
 async function discoverRouteTables(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
-): Promise<z.infer<typeof RouteTableSchema>[]> {
+): Promise<
+  { results: z.infer<typeof RouteTableSchema>[]; truncated: boolean }
+> {
   const filters: Array<{ Name: string; Values: string[] }> = [];
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
@@ -458,13 +460,15 @@ async function discoverRouteTables(
       name: getTag(rt.Tags, "Name"),
     });
   }
-  return tables;
+  return { results: tables, truncated: !!response.NextToken };
 }
 
 async function discoverSecurityGroups(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
-): Promise<z.infer<typeof SecurityGroupSchema>[]> {
+): Promise<
+  { results: z.infer<typeof SecurityGroupSchema>[]; truncated: boolean }
+> {
   const filters: Array<{ Name: string; Values: string[] }> = [];
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
@@ -487,12 +491,14 @@ async function discoverSecurityGroups(
       name: getTag(sg.Tags, "Name"),
     });
   }
-  return groups;
+  return { results: groups, truncated: !!response.NextToken };
 }
 
 async function discoverRdsClusters(
   rds: RDSClient,
-): Promise<z.infer<typeof RdsClusterSchema>[]> {
+): Promise<
+  { results: z.infer<typeof RdsClusterSchema>[]; truncated: boolean }
+> {
   const command = new DescribeDBClustersCommand({});
   const response = await rds.send(command);
   const clusters: z.infer<typeof RdsClusterSchema>[] = [];
@@ -515,12 +521,14 @@ async function discoverRdsClusters(
         .filter((id) => id !== ""),
     });
   }
-  return clusters;
+  return { results: clusters, truncated: !!response.Marker };
 }
 
 async function discoverRdsInstances(
   rds: RDSClient,
-): Promise<z.infer<typeof RdsInstanceSchema>[]> {
+): Promise<
+  { results: z.infer<typeof RdsInstanceSchema>[]; truncated: boolean }
+> {
   const command = new DescribeDBInstancesCommand({});
   const response = await rds.send(command);
   const instances: z.infer<typeof RdsInstanceSchema>[] = [];
@@ -540,12 +548,14 @@ async function discoverRdsInstances(
       dbSubnetGroup: db.DBSubnetGroup?.DBSubnetGroupName ?? "",
     });
   }
-  return instances;
+  return { results: instances, truncated: !!response.Marker };
 }
 
 async function discoverDbSubnetGroups(
   rds: RDSClient,
-): Promise<z.infer<typeof DbSubnetGroupSchema>[]> {
+): Promise<
+  { results: z.infer<typeof DbSubnetGroupSchema>[]; truncated: boolean }
+> {
   const command = new DescribeDBSubnetGroupsCommand({});
   const response = await rds.send(command);
   const groups: z.infer<typeof DbSubnetGroupSchema>[] = [];
@@ -561,12 +571,12 @@ async function discoverDbSubnetGroups(
       status: g.SubnetGroupStatus ?? "",
     });
   }
-  return groups;
+  return { results: groups, truncated: !!response.Marker };
 }
 
 async function discoverSecrets(
   sm: SecretsManagerClient,
-): Promise<z.infer<typeof SecretSchema>[]> {
+): Promise<{ results: z.infer<typeof SecretSchema>[]; truncated: boolean }> {
   const command = new ListSecretsCommand({});
   const response = await sm.send(command);
   const secrets: z.infer<typeof SecretSchema>[] = [];
@@ -580,7 +590,7 @@ async function discoverSecrets(
       tags: tagsToRecord(s.Tags),
     });
   }
-  return secrets;
+  return { results: secrets, truncated: !!response.NextToken };
 }
 
 // =============================================================================
@@ -630,24 +640,32 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
-        const vpcs = await discoverVpcs(ec2, context.globalArgs);
-        const handle = await context.writeResource(
-          "partial",
-          `vpcs-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            vpcId: context.globalArgs.vpcId,
-            resourceType: "vpc",
-            resources: vpcs,
+        try {
+          const { results: vpcs, truncated } = await discoverVpcs(
+            ec2,
+            context.globalArgs,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `vpcs-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              vpcId: context.globalArgs.vpcId,
+              resourceType: "vpc",
+              resources: vpcs,
+              count: vpcs.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info("Discovered {count} VPCs in {region}", {
             count: vpcs.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info("Discovered {count} VPCs in {region}", {
-          count: vpcs.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          ec2.destroy();
+        }
       },
     },
 
@@ -656,24 +674,32 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
-        const subnets = await discoverSubnets(ec2, context.globalArgs);
-        const handle = await context.writeResource(
-          "partial",
-          `subnets-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            vpcId: context.globalArgs.vpcId,
-            resourceType: "subnet",
-            resources: subnets,
+        try {
+          const { results: subnets, truncated } = await discoverSubnets(
+            ec2,
+            context.globalArgs,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `subnets-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              vpcId: context.globalArgs.vpcId,
+              resourceType: "subnet",
+              resources: subnets,
+              count: subnets.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info("Discovered {count} subnets in {region}", {
             count: subnets.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info("Discovered {count} subnets in {region}", {
-          count: subnets.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          ec2.destroy();
+        }
       },
     },
 
@@ -682,24 +708,32 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
-        const igws = await discoverInternetGateways(ec2, context.globalArgs);
-        const handle = await context.writeResource(
-          "partial",
-          `igws-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            vpcId: context.globalArgs.vpcId,
-            resourceType: "internet-gateway",
-            resources: igws,
-            count: igws.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info(
-          "Discovered {count} internet gateways in {region}",
-          { count: igws.length, region: context.globalArgs.region },
-        );
-        return { dataHandles: [handle] };
+        try {
+          const { results: igws, truncated } = await discoverInternetGateways(
+            ec2,
+            context.globalArgs,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `igws-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              vpcId: context.globalArgs.vpcId,
+              resourceType: "internet-gateway",
+              resources: igws,
+              count: igws.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info(
+            "Discovered {count} internet gateways in {region}",
+            { count: igws.length, region: context.globalArgs.region },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          ec2.destroy();
+        }
       },
     },
 
@@ -708,24 +742,32 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
-        const tables = await discoverRouteTables(ec2, context.globalArgs);
-        const handle = await context.writeResource(
-          "partial",
-          `route-tables-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            vpcId: context.globalArgs.vpcId,
-            resourceType: "route-table",
-            resources: tables,
+        try {
+          const { results: tables, truncated } = await discoverRouteTables(
+            ec2,
+            context.globalArgs,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `route-tables-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              vpcId: context.globalArgs.vpcId,
+              resourceType: "route-table",
+              resources: tables,
+              count: tables.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info("Discovered {count} route tables in {region}", {
             count: tables.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info("Discovered {count} route tables in {region}", {
-          count: tables.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          ec2.destroy();
+        }
       },
     },
 
@@ -734,24 +776,32 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
-        const groups = await discoverSecurityGroups(ec2, context.globalArgs);
-        const handle = await context.writeResource(
-          "partial",
-          `security-groups-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            vpcId: context.globalArgs.vpcId,
-            resourceType: "security-group",
-            resources: groups,
-            count: groups.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info("Discovered {count} security groups in {region}", {
-          count: groups.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+        try {
+          const { results: groups, truncated } = await discoverSecurityGroups(
+            ec2,
+            context.globalArgs,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `security-groups-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              vpcId: context.globalArgs.vpcId,
+              resourceType: "security-group",
+              resources: groups,
+              count: groups.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info(
+            "Discovered {count} security groups in {region}",
+            { count: groups.length, region: context.globalArgs.region },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          ec2.destroy();
+        }
       },
     },
 
@@ -760,23 +810,30 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const rds = new RDSClient({ region: context.globalArgs.region });
-        const clusters = await discoverRdsClusters(rds);
-        const handle = await context.writeResource(
-          "partial",
-          `rds-clusters-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "rds-cluster",
-            resources: clusters,
+        try {
+          const { results: clusters, truncated } = await discoverRdsClusters(
+            rds,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `rds-clusters-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "rds-cluster",
+              resources: clusters,
+              count: clusters.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info("Discovered {count} RDS clusters in {region}", {
             count: clusters.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info("Discovered {count} RDS clusters in {region}", {
-          count: clusters.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          rds.destroy();
+        }
       },
     },
 
@@ -785,23 +842,30 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const rds = new RDSClient({ region: context.globalArgs.region });
-        const instances = await discoverRdsInstances(rds);
-        const handle = await context.writeResource(
-          "partial",
-          `rds-instances-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "rds-instance",
-            resources: instances,
+        try {
+          const { results: instances, truncated } = await discoverRdsInstances(
+            rds,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `rds-instances-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "rds-instance",
+              resources: instances,
+              count: instances.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info("Discovered {count} RDS instances in {region}", {
             count: instances.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info("Discovered {count} RDS instances in {region}", {
-          count: instances.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          rds.destroy();
+        }
       },
     },
 
@@ -810,23 +874,30 @@ export const model = {
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const rds = new RDSClient({ region: context.globalArgs.region });
-        const groups = await discoverDbSubnetGroups(rds);
-        const handle = await context.writeResource(
-          "partial",
-          `db-subnet-groups-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "db-subnet-group",
-            resources: groups,
-            count: groups.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info(
-          "Discovered {count} DB subnet groups in {region}",
-          { count: groups.length, region: context.globalArgs.region },
-        );
-        return { dataHandles: [handle] };
+        try {
+          const { results: groups, truncated } = await discoverDbSubnetGroups(
+            rds,
+          );
+          const handle = await context.writeResource(
+            "partial",
+            `db-subnet-groups-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "db-subnet-group",
+              resources: groups,
+              count: groups.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info(
+            "Discovered {count} DB subnet groups in {region}",
+            { count: groups.length, region: context.globalArgs.region },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          rds.destroy();
+        }
       },
     },
 
@@ -837,23 +908,28 @@ export const model = {
         const sm = new SecretsManagerClient({
           region: context.globalArgs.region,
         });
-        const secrets = await discoverSecrets(sm);
-        const handle = await context.writeResource(
-          "partial",
-          `secrets-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "secret",
-            resources: secrets,
+        try {
+          const { results: secrets, truncated } = await discoverSecrets(sm);
+          const handle = await context.writeResource(
+            "partial",
+            `secrets-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "secret",
+              resources: secrets,
+              count: secrets.length,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          context.logger.info("Discovered {count} secrets in {region}", {
             count: secrets.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        context.logger.info("Discovered {count} secrets in {region}", {
-          count: secrets.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          sm.destroy();
+        }
       },
     },
 
@@ -875,128 +951,163 @@ export const model = {
         const rds = new RDSClient({ region });
         const sm = new SecretsManagerClient({ region });
 
-        context.logger.info("Starting full discovery in {region}", { region });
-
-        const vpcs = await discoverVpcs(ec2, context.globalArgs);
-        const subnets = await discoverSubnets(ec2, context.globalArgs);
-        const igws = await discoverInternetGateways(ec2, context.globalArgs);
-        const routeTables = await discoverRouteTables(ec2, context.globalArgs);
-        const securityGroups = await discoverSecurityGroups(
-          ec2,
-          context.globalArgs,
-        );
-        const rdsClusters = await discoverRdsClusters(rds);
-        const rdsInstances = await discoverRdsInstances(rds);
-        const dbSubnetGroups = await discoverDbSubnetGroups(rds);
-        const secrets = await discoverSecrets(sm);
-
-        const discovered: AllDiscovered = {
-          vpcs: vpcs.map((v) => ({
-            vpcId: v.vpcId,
-            cidrBlock: v.cidrBlock,
-            name: v.name,
-          })),
-          subnets: subnets.map((s) => ({
-            subnetId: s.subnetId,
-            vpcId: s.vpcId,
-            cidrBlock: s.cidrBlock,
-            availabilityZone: s.availabilityZone,
-            name: s.name,
-          })),
-          igws: igws.map((i) => ({
-            internetGatewayId: i.internetGatewayId,
-            name: i.name,
-          })),
-          routeTables: routeTables.map((r) => ({
-            routeTableId: r.routeTableId,
-            vpcId: r.vpcId,
-            name: r.name,
-          })),
-          securityGroups: securityGroups.map((sg) => ({
-            groupId: sg.groupId,
-            groupName: sg.groupName,
-            vpcId: sg.vpcId,
-            name: sg.name,
-          })),
-          rdsClusters: rdsClusters.map((c) => ({
-            clusterIdentifier: c.clusterIdentifier,
-            engine: c.engine,
-            engineVersion: c.engineVersion,
-            endpoint: c.endpoint,
-            port: c.port,
-          })),
-          rdsInstances: rdsInstances.map((i) => ({
-            dbInstanceIdentifier: i.dbInstanceIdentifier,
-            dbInstanceClass: i.dbInstanceClass,
-            engine: i.engine,
-            clusterIdentifier: i.clusterIdentifier,
-          })),
-          dbSubnetGroups: dbSubnetGroups.map((g) => ({
-            name: g.name,
-            vpcId: g.vpcId,
-            subnetIds: g.subnetIds,
-          })),
-          secrets: secrets.map((s) => ({ name: s.name, arn: s.arn })),
-        };
-
-        const setupCommands = generateSetupCommands(discovered, args.prefix);
-
-        const vpcId = context.globalArgs.vpcId ?? vpcs[0]?.vpcId ?? "";
-        const firstCluster = rdsClusters[0]?.clusterIdentifier ?? "";
-        let workflowCommand =
-          `swamp workflow run @webframp/adopt-stack --input vpcId=${vpcId}`;
-        if (firstCluster) {
-          workflowCommand += ` --input clusterIdentifier=${firstCluster}`;
-        }
-        if (args.prefix !== "adopt") {
-          workflowCommand += ` --input prefix=${args.prefix}`;
-        }
-
-        const totalCount = vpcs.length + subnets.length + igws.length +
-          routeTables.length + securityGroups.length + rdsClusters.length +
-          rdsInstances.length + dbSubnetGroups.length + secrets.length;
-
-        const handle = await context.writeResource(
-          "discovery",
-          `all-${region}`,
-          {
+        try {
+          context.logger.info("Starting full discovery in {region}", {
             region,
-            vpcId: context.globalArgs.vpcId,
-            discovered: {
-              vpcs,
-              subnets,
-              internetGateways: igws,
-              routeTables,
-              securityGroups,
-              rdsClusters,
-              rdsInstances,
-              dbSubnetGroups,
-              secrets,
-            },
-            setupCommands,
-            workflowCommand,
-            summary: {
-              totalResources: totalCount,
-              byType: {
-                vpcs: vpcs.length,
-                subnets: subnets.length,
-                internetGateways: igws.length,
-                routeTables: routeTables.length,
-                securityGroups: securityGroups.length,
-                rdsClusters: rdsClusters.length,
-                rdsInstances: rdsInstances.length,
-                dbSubnetGroups: dbSubnetGroups.length,
-                secrets: secrets.length,
+          });
+
+          const vpcsResult = await discoverVpcs(ec2, context.globalArgs);
+          const subnetsResult = await discoverSubnets(ec2, context.globalArgs);
+          const igwsResult = await discoverInternetGateways(
+            ec2,
+            context.globalArgs,
+          );
+          const routeTablesResult = await discoverRouteTables(
+            ec2,
+            context.globalArgs,
+          );
+          const securityGroupsResult = await discoverSecurityGroups(
+            ec2,
+            context.globalArgs,
+          );
+          const rdsClustersResult = await discoverRdsClusters(rds);
+          const rdsInstancesResult = await discoverRdsInstances(rds);
+          const dbSubnetGroupsResult = await discoverDbSubnetGroups(rds);
+          const secretsResult = await discoverSecrets(sm);
+
+          const vpcs = vpcsResult.results;
+          const subnets = subnetsResult.results;
+          const igws = igwsResult.results;
+          const routeTables = routeTablesResult.results;
+          const securityGroups = securityGroupsResult.results;
+          const rdsClusters = rdsClustersResult.results;
+          const rdsInstances = rdsInstancesResult.results;
+          const dbSubnetGroups = dbSubnetGroupsResult.results;
+          const secrets = secretsResult.results;
+
+          const truncated = vpcsResult.truncated ||
+            subnetsResult.truncated ||
+            igwsResult.truncated ||
+            routeTablesResult.truncated ||
+            securityGroupsResult.truncated ||
+            rdsClustersResult.truncated ||
+            rdsInstancesResult.truncated ||
+            dbSubnetGroupsResult.truncated ||
+            secretsResult.truncated;
+
+          const discovered: AllDiscovered = {
+            vpcs: vpcs.map((v) => ({
+              vpcId: v.vpcId,
+              cidrBlock: v.cidrBlock,
+              name: v.name,
+            })),
+            subnets: subnets.map((s) => ({
+              subnetId: s.subnetId,
+              vpcId: s.vpcId,
+              cidrBlock: s.cidrBlock,
+              availabilityZone: s.availabilityZone,
+              name: s.name,
+            })),
+            igws: igws.map((i) => ({
+              internetGatewayId: i.internetGatewayId,
+              name: i.name,
+            })),
+            routeTables: routeTables.map((r) => ({
+              routeTableId: r.routeTableId,
+              vpcId: r.vpcId,
+              name: r.name,
+            })),
+            securityGroups: securityGroups.map((sg) => ({
+              groupId: sg.groupId,
+              groupName: sg.groupName,
+              vpcId: sg.vpcId,
+              name: sg.name,
+            })),
+            rdsClusters: rdsClusters.map((c) => ({
+              clusterIdentifier: c.clusterIdentifier,
+              engine: c.engine,
+              engineVersion: c.engineVersion,
+              endpoint: c.endpoint,
+              port: c.port,
+            })),
+            rdsInstances: rdsInstances.map((i) => ({
+              dbInstanceIdentifier: i.dbInstanceIdentifier,
+              dbInstanceClass: i.dbInstanceClass,
+              engine: i.engine,
+              clusterIdentifier: i.clusterIdentifier,
+            })),
+            dbSubnetGroups: dbSubnetGroups.map((g) => ({
+              name: g.name,
+              vpcId: g.vpcId,
+              subnetIds: g.subnetIds,
+            })),
+            secrets: secrets.map((s) => ({ name: s.name, arn: s.arn })),
+          };
+
+          const setupCommands = generateSetupCommands(discovered, args.prefix);
+
+          const vpcId = context.globalArgs.vpcId ?? vpcs[0]?.vpcId ?? "";
+          const firstCluster = rdsClusters[0]?.clusterIdentifier ?? "";
+          let workflowCommand =
+            `swamp workflow run @webframp/adopt-stack --input vpcId=${vpcId}`;
+          if (firstCluster) {
+            workflowCommand += ` --input clusterIdentifier=${firstCluster}`;
+          }
+          if (args.prefix !== "adopt") {
+            workflowCommand += ` --input prefix=${args.prefix}`;
+          }
+
+          const totalCount = vpcs.length + subnets.length + igws.length +
+            routeTables.length + securityGroups.length + rdsClusters.length +
+            rdsInstances.length + dbSubnetGroups.length + secrets.length;
+
+          const handle = await context.writeResource(
+            "discovery",
+            `all-${region}`,
+            {
+              region,
+              vpcId: context.globalArgs.vpcId,
+              truncated,
+              discovered: {
+                vpcs,
+                subnets,
+                internetGateways: igws,
+                routeTables,
+                securityGroups,
+                rdsClusters,
+                rdsInstances,
+                dbSubnetGroups,
+                secrets,
+              },
+              setupCommands,
+              workflowCommand,
+              summary: {
+                totalResources: totalCount,
+                byType: {
+                  vpcs: vpcs.length,
+                  subnets: subnets.length,
+                  internetGateways: igws.length,
+                  routeTables: routeTables.length,
+                  securityGroups: securityGroups.length,
+                  rdsClusters: rdsClusters.length,
+                  rdsInstances: rdsInstances.length,
+                  dbSubnetGroups: dbSubnetGroups.length,
+                  secrets: secrets.length,
+                },
               },
             },
-          },
-        );
+          );
 
-        context.logger.info(
-          "Full discovery complete: {count} resources, {cmdCount} setup commands",
-          { count: totalCount, cmdCount: setupCommands.length, region },
-        );
-        return { dataHandles: [handle] };
+          context.logger.info(
+            "Full discovery complete: {count} resources, {cmdCount} setup commands",
+            { count: totalCount, cmdCount: setupCommands.length, region },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          ec2.destroy();
+          rds.destroy();
+          sm.destroy();
+        }
       },
     },
   },

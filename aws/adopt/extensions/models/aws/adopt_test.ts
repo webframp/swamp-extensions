@@ -17,32 +17,42 @@ function mockClients(overrides: {
   sm?: (cmd: unknown) => unknown;
 }): () => void {
   const originals = {
-    ec2: EC2Client.prototype.send,
-    rds: RDSClient.prototype.send,
-    sm: SecretsManagerClient.prototype.send,
+    ec2Send: EC2Client.prototype.send,
+    rdsSend: RDSClient.prototype.send,
+    smSend: SecretsManagerClient.prototype.send,
+    ec2Destroy: EC2Client.prototype.destroy,
+    rdsDestroy: RDSClient.prototype.destroy,
+    smDestroy: SecretsManagerClient.prototype.destroy,
   };
+  // Mock destroy to be a no-op
+  EC2Client.prototype.destroy = function () {};
+  RDSClient.prototype.destroy = function () {};
+  SecretsManagerClient.prototype.destroy = function () {};
   if (overrides.ec2) {
     // deno-lint-ignore no-explicit-any
     EC2Client.prototype.send = function (_c: any) {
       return Promise.resolve(overrides.ec2!(_c));
-    } as typeof originals.ec2;
+    } as typeof originals.ec2Send;
   }
   if (overrides.rds) {
     // deno-lint-ignore no-explicit-any
     RDSClient.prototype.send = function (_c: any) {
       return Promise.resolve(overrides.rds!(_c));
-    } as typeof originals.rds;
+    } as typeof originals.rdsSend;
   }
   if (overrides.sm) {
     // deno-lint-ignore no-explicit-any
     SecretsManagerClient.prototype.send = function (_c: any) {
       return Promise.resolve(overrides.sm!(_c));
-    } as typeof originals.sm;
+    } as typeof originals.smSend;
   }
   return () => {
-    EC2Client.prototype.send = originals.ec2;
-    RDSClient.prototype.send = originals.rds;
-    SecretsManagerClient.prototype.send = originals.sm;
+    EC2Client.prototype.send = originals.ec2Send;
+    RDSClient.prototype.send = originals.rdsSend;
+    SecretsManagerClient.prototype.send = originals.smSend;
+    EC2Client.prototype.destroy = originals.ec2Destroy;
+    RDSClient.prototype.destroy = originals.rdsDestroy;
+    SecretsManagerClient.prototype.destroy = originals.smDestroy;
   };
 }
 
@@ -115,11 +125,13 @@ Deno.test({
           name: string;
         }[];
         count: number;
+        truncated: boolean;
         fetchedAt: string;
       };
       assertEquals(data.region, "us-east-1");
       assertEquals(data.resourceType, "vpc");
       assertEquals(data.count, 1);
+      assertEquals(data.truncated, false);
       assertEquals(data.resources.length, 1);
       assertEquals(data.resources[0].vpcId, "vpc-abc123def");
       assertEquals(data.resources[0].cidrBlock, "10.99.0.0/16");
@@ -175,6 +187,7 @@ Deno.test({
       const data = resources[0].data as {
         resourceType: string;
         count: number;
+        truncated: boolean;
         resources: {
           subnetId: string;
           vpcId: string;
@@ -186,6 +199,7 @@ Deno.test({
       };
       assertEquals(data.resourceType, "subnet");
       assertEquals(data.count, 2);
+      assertEquals(data.truncated, false);
       assertEquals(data.resources[0].availabilityZone, "us-east-1a");
       assertEquals(data.resources[0].cidrBlock, "10.99.1.0/24");
       assertEquals(data.resources[0].mapPublicIpOnLaunch, true);
@@ -229,6 +243,7 @@ Deno.test({
       const data = resources[0].data as {
         resourceType: string;
         count: number;
+        truncated: boolean;
         resources: {
           internetGatewayId: string;
           attachedVpcIds: string[];
@@ -238,6 +253,7 @@ Deno.test({
       };
       assertEquals(data.resourceType, "internet-gateway");
       assertEquals(data.count, 1);
+      assertEquals(data.truncated, false);
       assertEquals(data.resources[0].internetGatewayId, "igw-12345abcd");
       assertEquals(data.resources[0].attachedVpcIds, ["vpc-abc123def"]);
       assertEquals(data.resources[0].name, "main-igw");
@@ -287,6 +303,7 @@ Deno.test({
       const data = resources[0].data as {
         resourceType: string;
         count: number;
+        truncated: boolean;
         resources: {
           groupId: string;
           groupName: string;
@@ -299,6 +316,7 @@ Deno.test({
       };
       assertEquals(data.resourceType, "security-group");
       assertEquals(data.count, 1);
+      assertEquals(data.truncated, false);
       assertEquals(data.resources[0].groupId, "sg-abc123def");
       assertEquals(data.resources[0].groupName, "web-sg");
       assertEquals(data.resources[0].vpcId, "vpc-abc123def");
@@ -350,6 +368,7 @@ Deno.test({
       const data = resources[0].data as {
         resourceType: string;
         count: number;
+        truncated: boolean;
         resources: {
           clusterIdentifier: string;
           engine: string;
@@ -363,6 +382,7 @@ Deno.test({
       };
       assertEquals(data.resourceType, "rds-cluster");
       assertEquals(data.count, 1);
+      assertEquals(data.truncated, false);
       assertEquals(data.resources[0].clusterIdentifier, "prod-aurora-cluster");
       assertEquals(data.resources[0].engine, "aurora-postgresql");
       assertEquals(data.resources[0].engineVersion, "15.4");
@@ -410,6 +430,7 @@ Deno.test({
       const data = resources[0].data as {
         resourceType: string;
         count: number;
+        truncated: boolean;
         resources: {
           name: string;
           arn: string;
@@ -420,6 +441,7 @@ Deno.test({
       };
       assertEquals(data.resourceType, "secret");
       assertEquals(data.count, 1);
+      assertEquals(data.truncated, false);
       assertEquals(data.resources[0].name, "prod/db/credentials");
       assertEquals(
         data.resources[0].arn,
@@ -653,10 +675,10 @@ Deno.test({
       assertEquals(cmdText.includes("@swamp/aws/ec2/internet-gateway"), true);
       assertEquals(cmdText.includes("@swamp/aws/ec2/route-table"), true);
       assertEquals(cmdText.includes("@swamp/aws/ec2/security-group"), true);
-      assertEquals(cmdText.includes("@swamp/aws/rds/cluster"), true);
-      assertEquals(cmdText.includes("@swamp/aws/rds/instance"), true);
-      assertEquals(cmdText.includes("@swamp/aws/rds/db-subnet-group"), true);
-      assertEquals(cmdText.includes("@swamp/aws/secrets-manager/secret"), true);
+      assertEquals(cmdText.includes("@swamp/aws/rds/dbcluster"), true);
+      assertEquals(cmdText.includes("@swamp/aws/rds/dbinstance"), true);
+      assertEquals(cmdText.includes("@swamp/aws/rds/dbsubnet-group"), true);
+      assertEquals(cmdText.includes("@swamp/aws/secretsmanager/secret"), true);
 
       // Verify workflow command contains adopt-stack and vpcId
       assertEquals(data.workflowCommand.includes("adopt-stack"), true);

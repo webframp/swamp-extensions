@@ -18,7 +18,7 @@ tags:
   brownfield: "true"
   infrastructure: "true"
 reports:
-  require: []
+  require: ["@webframp/adopt-report"]
 inputs:
   properties:
     vpcId:
@@ -27,6 +27,9 @@ inputs:
     clusterIdentifier:
       type: string
       description: RDS cluster identifier to adopt
+    dbSubnetGroupName:
+      type: string
+      description: DB subnet group name (optional, used for subnet group step)
     prefix:
       type: string
       default: adopt
@@ -56,10 +59,10 @@ jobs:
         description: Adopt the DB subnet group associated with the cluster
         task:
           type: model_method
-          modelIdOrName: "${inputs.prefix}-dbsubnet-${inputs.clusterIdentifier}"
+          modelIdOrName: "${inputs.prefix}-dbsubnet-${inputs.dbSubnetGroupName}"
           methodName: get
           inputs:
-            identifier: "${inputs.clusterIdentifier}"
+            identifier: "${inputs.dbSubnetGroupName}"
         allowFailure: true
 
       - name: get-rds-cluster
