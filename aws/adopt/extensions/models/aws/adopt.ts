@@ -136,12 +136,23 @@ const SecretSchema = z.object({
 const DiscoveryResultSchema = z.object({
   region: z.string(),
   vpcId: z.string().optional(),
-  resourceType: z.string(),
-  resources: z.array(z.unknown()),
-  count: z.number(),
-  setupCommands: z.array(z.string()).optional(),
-  workflowCommand: z.string().optional(),
-  fetchedAt: z.string(),
+  discovered: z.object({
+    vpcs: z.array(VpcSchema),
+    subnets: z.array(SubnetSchema),
+    internetGateways: z.array(InternetGatewaySchema),
+    routeTables: z.array(RouteTableSchema),
+    securityGroups: z.array(SecurityGroupSchema),
+    rdsClusters: z.array(RdsClusterSchema),
+    rdsInstances: z.array(RdsInstanceSchema),
+    dbSubnetGroups: z.array(DbSubnetGroupSchema),
+    secrets: z.array(SecretSchema),
+  }),
+  setupCommands: z.array(z.string()),
+  workflowCommand: z.string(),
+  summary: z.object({
+    totalResources: z.number(),
+    byType: z.record(z.string(), z.number()),
+  }),
 });
 
 // =============================================================================
@@ -244,65 +255,68 @@ interface AllDiscovered {
   secrets: DiscoveredSecret[];
 }
 
-function generateSetupCommands(discovered: AllDiscovered): string[] {
+function generateSetupCommands(
+  discovered: AllDiscovered,
+  prefix: string,
+): string[] {
   const commands: string[] = [];
 
   for (const vpc of discovered.vpcs) {
     const suffix = modelNameSuffix(vpc.vpcId);
     commands.push(
-      `swamp model create @swamp/aws/ec2/vpc adopt-vpc-${suffix} --global-arg 'name=adopt-vpc-${suffix}' --global-arg 'CidrBlock=${vpc.cidrBlock}'`,
+      `swamp model create @swamp/aws/ec2/vpc ${prefix}-vpc-${suffix} --global-arg 'name=${prefix}-vpc-${suffix}' --global-arg 'CidrBlock=${vpc.cidrBlock}'`,
     );
   }
 
   for (const subnet of discovered.subnets) {
     const suffix = modelNameSuffix(subnet.subnetId);
     commands.push(
-      `swamp model create @swamp/aws/ec2/subnet adopt-subnet-${suffix} --global-arg 'name=adopt-subnet-${suffix}' --global-arg 'VpcId=${subnet.vpcId}' --global-arg 'CidrBlock=${subnet.cidrBlock}' --global-arg 'AvailabilityZone=${subnet.availabilityZone}'`,
+      `swamp model create @swamp/aws/ec2/subnet ${prefix}-subnet-${suffix} --global-arg 'name=${prefix}-subnet-${suffix}' --global-arg 'VpcId=${subnet.vpcId}' --global-arg 'CidrBlock=${subnet.cidrBlock}' --global-arg 'AvailabilityZone=${subnet.availabilityZone}'`,
     );
   }
 
   for (const igw of discovered.igws) {
     const suffix = modelNameSuffix(igw.internetGatewayId);
     commands.push(
-      `swamp model create @swamp/aws/ec2/internet-gateway adopt-igw-${suffix} --global-arg 'name=adopt-igw-${suffix}'`,
+      `swamp model create @swamp/aws/ec2/internet-gateway ${prefix}-igw-${suffix} --global-arg 'name=${prefix}-igw-${suffix}'`,
     );
   }
 
   for (const rt of discovered.routeTables) {
     const suffix = modelNameSuffix(rt.routeTableId);
     commands.push(
-      `swamp model create @swamp/aws/ec2/route-table adopt-rt-${suffix} --global-arg 'name=adopt-rt-${suffix}' --global-arg 'VpcId=${rt.vpcId}'`,
+      `swamp model create @swamp/aws/ec2/route-table ${prefix}-rt-${suffix} --global-arg 'name=${prefix}-rt-${suffix}' --global-arg 'VpcId=${rt.vpcId}'`,
     );
   }
 
   for (const sg of discovered.securityGroups) {
     const suffix = modelNameSuffix(sg.groupId);
     commands.push(
-      `swamp model create @swamp/aws/ec2/security-group adopt-sg-${suffix} --global-arg 'name=adopt-sg-${suffix}' --global-arg 'VpcId=${sg.vpcId}' --global-arg 'GroupName=${sg.groupName}'`,
+      `swamp model create @swamp/aws/ec2/security-group ${prefix}-sg-${suffix} --global-arg 'name=${prefix}-sg-${suffix}' --global-arg 'VpcId=${sg.vpcId}' --global-arg 'GroupName=${sg.groupName}'`,
     );
   }
 
   for (const cluster of discovered.rdsClusters) {
     commands.push(
-      `swamp model create @swamp/aws/rds/cluster adopt-rds-${cluster.clusterIdentifier} --global-arg 'name=adopt-rds-${cluster.clusterIdentifier}' --global-arg 'Engine=${cluster.engine}' --global-arg 'EngineVersion=${cluster.engineVersion}'`,
+      `swamp model create @swamp/aws/rds/cluster ${prefix}-rds-${cluster.clusterIdentifier} --global-arg 'name=${prefix}-rds-${cluster.clusterIdentifier}' --global-arg 'Engine=${cluster.engine}' --global-arg 'EngineVersion=${cluster.engineVersion}'`,
     );
   }
 
   for (const instance of discovered.rdsInstances) {
     commands.push(
-      `swamp model create @swamp/aws/rds/instance adopt-rds-${instance.dbInstanceIdentifier} --global-arg 'name=adopt-rds-${instance.dbInstanceIdentifier}' --global-arg 'DBInstanceClass=${instance.dbInstanceClass}' --global-arg 'Engine=${instance.engine}'`,
+      `swamp model create @swamp/aws/rds/instance ${prefix}-rds-${instance.dbInstanceIdentifier} --global-arg 'name=${prefix}-rds-${instance.dbInstanceIdentifier}' --global-arg 'DBInstanceClass=${instance.dbInstanceClass}' --global-arg 'Engine=${instance.engine}'`,
     );
   }
 
   for (const dbsg of discovered.dbSubnetGroups) {
     commands.push(
-      `swamp model create @swamp/aws/rds/db-subnet-group adopt-dbsg-${dbsg.name} --global-arg 'name=adopt-dbsg-${dbsg.name}' --global-arg 'VpcId=${dbsg.vpcId}'`,
+      `swamp model create @swamp/aws/rds/db-subnet-group ${prefix}-dbsg-${dbsg.name} --global-arg 'name=${prefix}-dbsg-${dbsg.name}' --global-arg 'VpcId=${dbsg.vpcId}'`,
     );
   }
 
   for (const secret of discovered.secrets) {
     commands.push(
-      `swamp model create @swamp/aws/secrets-manager/secret adopt-secret-${secret.name} --global-arg 'name=adopt-secret-${secret.name}'`,
+      `swamp model create @swamp/aws/secrets-manager/secret ${prefix}-secret-${secret.name} --global-arg 'name=${prefix}-secret-${secret.name}'`,
     );
   }
 
@@ -909,7 +923,7 @@ export const model = {
           secrets: secrets.map((s) => ({ name: s.name, arn: s.arn })),
         };
 
-        const setupCommands = generateSetupCommands(discovered);
+        const setupCommands = generateSetupCommands(discovered, args.prefix);
 
         const vpcId = context.globalArgs.vpcId ?? vpcs[0]?.vpcId ?? "";
         const firstCluster = rdsClusters[0]?.clusterIdentifier ?? "";
@@ -932,8 +946,7 @@ export const model = {
           {
             region,
             vpcId: context.globalArgs.vpcId,
-            resourceType: "all",
-            resources: {
+            discovered: {
               vpcs,
               subnets,
               internetGateways: igws,
@@ -944,10 +957,22 @@ export const model = {
               dbSubnetGroups,
               secrets,
             },
-            count: totalCount,
             setupCommands,
             workflowCommand,
-            fetchedAt: new Date().toISOString(),
+            summary: {
+              totalResources: totalCount,
+              byType: {
+                vpcs: vpcs.length,
+                subnets: subnets.length,
+                internetGateways: igws.length,
+                routeTables: routeTables.length,
+                securityGroups: securityGroups.length,
+                rdsClusters: rdsClusters.length,
+                rdsInstances: rdsInstances.length,
+                dbSubnetGroups: dbSubnetGroups.length,
+                secrets: secrets.length,
+              },
+            },
           },
         );
 
