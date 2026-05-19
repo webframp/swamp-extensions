@@ -133,6 +133,15 @@ const SecretSchema = z.object({
   tags: z.record(z.string(), z.string()),
 });
 
+const PartialDiscoverySchema = z.object({
+  region: z.string(),
+  vpcId: z.string().optional(),
+  resourceType: z.string(),
+  resources: z.array(z.unknown()),
+  count: z.number(),
+  fetchedAt: z.string(),
+});
+
 const DiscoveryResultSchema = z.object({
   region: z.string(),
   vpcId: z.string().optional(),
@@ -601,10 +610,17 @@ export const model = {
 
   resources: {
     discovery: {
-      description: "Discovered AWS infrastructure for brownfield adoption",
+      description:
+        "Full discovery result with setup commands and workflow guidance",
       schema: DiscoveryResultSchema,
       lifetime: "24h" as const,
       garbageCollection: 5,
+    },
+    partial: {
+      description: "Single resource-type discovery result",
+      schema: PartialDiscoverySchema,
+      lifetime: "24h" as const,
+      garbageCollection: 10,
     },
   },
 
@@ -616,7 +632,7 @@ export const model = {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
         const vpcs = await discoverVpcs(ec2, context.globalArgs);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `vpcs-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -642,7 +658,7 @@ export const model = {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
         const subnets = await discoverSubnets(ec2, context.globalArgs);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `subnets-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -668,7 +684,7 @@ export const model = {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
         const igws = await discoverInternetGateways(ec2, context.globalArgs);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `igws-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -694,7 +710,7 @@ export const model = {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
         const tables = await discoverRouteTables(ec2, context.globalArgs);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `route-tables-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -720,7 +736,7 @@ export const model = {
         const ec2 = new EC2Client({ region: context.globalArgs.region });
         const groups = await discoverSecurityGroups(ec2, context.globalArgs);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `security-groups-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -746,7 +762,7 @@ export const model = {
         const rds = new RDSClient({ region: context.globalArgs.region });
         const clusters = await discoverRdsClusters(rds);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `rds-clusters-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -771,7 +787,7 @@ export const model = {
         const rds = new RDSClient({ region: context.globalArgs.region });
         const instances = await discoverRdsInstances(rds);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `rds-instances-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -796,7 +812,7 @@ export const model = {
         const rds = new RDSClient({ region: context.globalArgs.region });
         const groups = await discoverDbSubnetGroups(rds);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `db-subnet-groups-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
@@ -823,7 +839,7 @@ export const model = {
         });
         const secrets = await discoverSecrets(sm);
         const handle = await context.writeResource(
-          "discovery",
+          "partial",
           `secrets-${context.globalArgs.region}`,
           {
             region: context.globalArgs.region,
