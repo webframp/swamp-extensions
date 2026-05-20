@@ -1,0 +1,137 @@
+id: eb3aa3b7-04c5-4f62-81fb-f150fcf820dc
+name: "@webframp/adopt-stack"
+description: |
+  Orchestrate brownfield adoption of existing AWS infrastructure.
+  Runs get and sync on pre-created swamp models in dependency order:
+  networking first, then database, then secrets, then verification.
+
+  Models must be pre-created from discover_all output before running
+  this workflow. The workflow references models by deterministic names
+  derived from the prefix and resource identifiers.
+
+  Resources whose IDs cannot be derived from workflow inputs (subnets,
+  route tables, security groups) should be imported individually via
+  their respective model get methods.
+tags:
+  aws: "true"
+  adoption: "true"
+  brownfield: "true"
+  infrastructure: "true"
+reports:
+  require:
+    - "@webframp/adopt-report"
+inputs:
+  properties:
+    vpcId:
+      type: string
+      description: Full VPC ID (e.g., vpc-0b4f6dd0dfd8c5339)
+    vpcSuffix:
+      type: string
+      description: Last 9 characters of the VPC ID used in model names (e.g., 0dfd8c533)
+    clusterIdentifier:
+      type: string
+      description: RDS cluster identifier to adopt
+    dbSubnetGroupName:
+      type: string
+      description: DB subnet group name for adoption
+    secretName:
+      type: string
+      description: Sanitized secret name (slashes percent-encoded) used in model names
+    secretArn:
+      type: string
+      description: Full ARN of the secret for AWS API lookup
+    prefix:
+      type: string
+      default: adopt
+      description: Model name prefix used during creation
+  required:
+    - vpcId
+    - vpcSuffix
+jobs:
+  - name: adopt-networking
+    description: Import networking resources starting with the VPC
+    steps:
+      - name: get-vpc
+        description: Adopt the target VPC by running get with its identifier
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.prefix }}-vpc-${{ inputs.vpcSuffix }}
+          methodName: get
+          inputs:
+            identifier: ${{ inputs.vpcId }}
+        allowFailure: true
+
+  - name: adopt-database
+    description: Import RDS database resources that depend on networking
+    dependsOn:
+      - job: adopt-networking
+        condition:
+          type: completed
+    steps:
+      - name: get-db-subnet-group
+        description: Adopt the DB subnet group
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.prefix }}-dbsubnet-${{ inputs.dbSubnetGroupName }}
+          methodName: get
+          inputs:
+            identifier: ${{ inputs.dbSubnetGroupName }}
+        allowFailure: true
+
+      - name: get-rds-cluster
+        description: Adopt the RDS cluster by its identifier
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.prefix }}-cluster-${{ inputs.clusterIdentifier }}
+          methodName: get
+          inputs:
+            identifier: ${{ inputs.clusterIdentifier }}
+        allowFailure: true
+
+  - name: adopt-secrets
+    description: Import secrets associated with adopted resources
+    dependsOn:
+      - job: adopt-database
+        condition:
+          type: completed
+    steps:
+      - name: get-secret
+        description: Adopt the secret by its ARN
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.prefix }}-secret-${{ inputs.secretName }}
+          methodName: get
+          inputs:
+            identifier: ${{ inputs.secretArn }}
+        allowFailure: true
+
+  - name: verify-adoption
+    description: Verify adopted resources by syncing live state
+    dependsOn:
+      - job: adopt-networking
+        condition:
+          type: completed
+      - job: adopt-database
+        condition:
+          type: completed
+      - job: adopt-secrets
+        condition:
+          type: completed
+    steps:
+      - name: sync-vpc
+        description: Sync VPC model to confirm live state matches
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.prefix }}-vpc-${{ inputs.vpcSuffix }}
+          methodName: sync
+        allowFailure: true
+
+      - name: sync-rds-cluster
+        description: Sync RDS cluster model to confirm live state matches
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.prefix }}-cluster-${{ inputs.clusterIdentifier }}
+          methodName: sync
+        allowFailure: true
+
+version: 1

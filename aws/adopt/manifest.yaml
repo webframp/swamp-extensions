@@ -1,0 +1,49 @@
+manifestVersion: 1
+name: "@webframp/aws/adopt"
+version: "2026.05.18.1"
+description: |
+  Brownfield adoption of existing AWS infrastructure into swamp models.
+  Discovers resources via native SDK calls, generates setup commands,
+  and orchestrates import via a dependency-ordered workflow.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Requires appropriate IAM permissions
+  for discovery (ReadOnly access to EC2, RDS, SecretsManager).
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/aws/adopt
+  swamp model create @webframp/aws/adopt my-discovery \
+    --global-arg region=us-east-1 --global-arg vpcId=vpc-xxx
+  swamp model method run my-discovery discover_all
+  # Follow the setup commands in the output, then:
+  swamp workflow run @webframp/adopt-stack --input vpcId=vpc-xxx
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/adopt.ts
+workflows:
+  - adopt-stack.yaml
+reports:
+  - adopt_report.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - aws
+  - adoption
+  - brownfield
+  - import
+  - infrastructure
+  - iac
+dependencies:
+  - "@swamp/aws/ec2@2026.04.03.2"
+  - "@swamp/aws/rds@2026.04.23.2"
+  - "@swamp/aws/secretsmanager@2026.05.18.1"
