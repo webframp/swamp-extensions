@@ -188,7 +188,9 @@ export const report = {
       for (const r of jobResults) {
         const statusIcon = r.status === "succeeded" ? "✅" : "❌";
         sections.push(
-          `| ${escapeCell(r.modelName)} | ${escapeCell(r.modelType)} | ${escapeCell(r.method)} | ${statusIcon} ${r.status} |`,
+          `| ${escapeCell(r.modelName)} | ${escapeCell(r.modelType)} | ${
+            escapeCell(r.method)
+          } | ${statusIcon} ${r.status} |`,
         );
       }
       sections.push("");

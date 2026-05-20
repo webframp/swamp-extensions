@@ -51,22 +51,22 @@ swamp report get @webframp/adopt-report --latest
 
 ## Discovery Methods
 
-| Method | Description |
-|--------|-------------|
-| `discover_all` | Full discovery with setup commands and workflow guidance |
-| `discover_vpcs` | Discover existing VPCs |
-| `discover_subnets` | Discover existing subnets |
-| `discover_gateways` | Discover existing internet gateways |
-| `discover_route_tables` | Discover existing route tables |
-| `discover_security_groups` | Discover existing security groups |
-| `discover_rds_clusters` | Discover existing RDS clusters |
-| `discover_rds_instances` | Discover existing RDS instances |
-| `discover_db_subnet_groups` | Discover existing DB subnet groups |
-| `discover_secrets` | Discover existing Secrets Manager secrets |
+| Method                      | Description                                              |
+| --------------------------- | -------------------------------------------------------- |
+| `discover_all`              | Full discovery with setup commands and workflow guidance |
+| `discover_vpcs`             | Discover existing VPCs                                   |
+| `discover_subnets`          | Discover existing subnets                                |
+| `discover_gateways`         | Discover existing internet gateways                      |
+| `discover_route_tables`     | Discover existing route tables                           |
+| `discover_security_groups`  | Discover existing security groups                        |
+| `discover_rds_clusters`     | Discover existing RDS clusters                           |
+| `discover_rds_instances`    | Discover existing RDS instances                          |
+| `discover_db_subnet_groups` | Discover existing DB subnet groups                       |
+| `discover_secrets`          | Discover existing Secrets Manager secrets                |
 
-All methods respect the `vpcId` global argument for filtering EC2 resources.
-RDS and Secrets Manager methods discover all resources in the region regardless
-of VPC filter.
+All methods respect the `vpcId` global argument for filtering EC2 resources. RDS
+and Secrets Manager methods discover all resources in the region regardless of
+VPC filter.
 
 ## Model Naming Convention
 
@@ -77,6 +77,7 @@ Generated model names follow the pattern:
 ```
 
 Examples:
+
 - `swamp-pg-test-vpc-0dfd8c5339` (last 9 characters of the VPC ID)
 - `swamp-pg-test-subnet-0a1b2c3d4` (last 9 characters of the subnet ID)
 - `swamp-pg-test-rds-my-cluster` (full cluster identifier)

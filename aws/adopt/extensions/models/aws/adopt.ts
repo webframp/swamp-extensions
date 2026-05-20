@@ -280,7 +280,11 @@ function generateSetupCommands(
     const suffix = modelNameSuffix(vpc.vpcId);
     const name = `${prefix}-vpc-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/vpc ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg CidrBlock=${shellQuote(vpc.cidrBlock)}`,
+      `swamp model create @swamp/aws/ec2/vpc ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)} --global-arg CidrBlock=${
+        shellQuote(vpc.cidrBlock)
+      }`,
     );
   }
 
@@ -288,7 +292,13 @@ function generateSetupCommands(
     const suffix = modelNameSuffix(subnet.subnetId);
     const name = `${prefix}-subnet-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/subnet ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(subnet.vpcId)} --global-arg CidrBlock=${shellQuote(subnet.cidrBlock)} --global-arg AvailabilityZone=${shellQuote(subnet.availabilityZone)}`,
+      `swamp model create @swamp/aws/ec2/subnet ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)} --global-arg VpcId=${
+        shellQuote(subnet.vpcId)
+      } --global-arg CidrBlock=${
+        shellQuote(subnet.cidrBlock)
+      } --global-arg AvailabilityZone=${shellQuote(subnet.availabilityZone)}`,
     );
   }
 
@@ -296,7 +306,9 @@ function generateSetupCommands(
     const suffix = modelNameSuffix(igw.internetGatewayId);
     const name = `${prefix}-igw-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/internet-gateway ${shellQuote(name)} --global-arg name=${shellQuote(name)}`,
+      `swamp model create @swamp/aws/ec2/internet-gateway ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)}`,
     );
   }
 
@@ -304,7 +316,11 @@ function generateSetupCommands(
     const suffix = modelNameSuffix(rt.routeTableId);
     const name = `${prefix}-rt-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/route-table ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(rt.vpcId)}`,
+      `swamp model create @swamp/aws/ec2/route-table ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)} --global-arg VpcId=${
+        shellQuote(rt.vpcId)
+      }`,
     );
   }
 
@@ -312,28 +328,44 @@ function generateSetupCommands(
     const suffix = modelNameSuffix(sg.groupId);
     const name = `${prefix}-sg-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/security-group ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(sg.vpcId)} --global-arg GroupName=${shellQuote(sg.groupName)}`,
+      `swamp model create @swamp/aws/ec2/security-group ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)} --global-arg VpcId=${
+        shellQuote(sg.vpcId)
+      } --global-arg GroupName=${shellQuote(sg.groupName)}`,
     );
   }
 
   for (const cluster of discovered.rdsClusters) {
     const name = `${prefix}-cluster-${cluster.clusterIdentifier}`;
     commands.push(
-      `swamp model create @swamp/aws/rds/dbcluster ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg Engine=${shellQuote(cluster.engine)} --global-arg EngineVersion=${shellQuote(cluster.engineVersion)}`,
+      `swamp model create @swamp/aws/rds/dbcluster ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)} --global-arg Engine=${
+        shellQuote(cluster.engine)
+      } --global-arg EngineVersion=${shellQuote(cluster.engineVersion)}`,
     );
   }
 
   for (const instance of discovered.rdsInstances) {
     const name = `${prefix}-instance-${instance.dbInstanceIdentifier}`;
     commands.push(
-      `swamp model create @swamp/aws/rds/dbinstance ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg DBInstanceClass=${shellQuote(instance.dbInstanceClass)} --global-arg Engine=${shellQuote(instance.engine)}`,
+      `swamp model create @swamp/aws/rds/dbinstance ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)} --global-arg DBInstanceClass=${
+        shellQuote(instance.dbInstanceClass)
+      } --global-arg Engine=${shellQuote(instance.engine)}`,
     );
   }
 
   for (const dbsg of discovered.dbSubnetGroups) {
     const name = `${prefix}-dbsubnet-${dbsg.name}`;
     commands.push(
-      `swamp model create @swamp/aws/rds/dbsubnet-group ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(dbsg.vpcId)}`,
+      `swamp model create @swamp/aws/rds/dbsubnet-group ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)} --global-arg VpcId=${
+        shellQuote(dbsg.vpcId)
+      }`,
     );
   }
 
@@ -341,7 +373,9 @@ function generateSetupCommands(
     const safeName = secret.name.replace(/\//g, "%2F");
     const name = `${prefix}-secret-${safeName}`;
     commands.push(
-      `swamp model create @swamp/aws/secretsmanager/secret ${shellQuote(name)} --global-arg name=${shellQuote(name)}`,
+      `swamp model create @swamp/aws/secretsmanager/secret ${
+        shellQuote(name)
+      } --global-arg name=${shellQuote(name)}`,
     );
   }
 
@@ -756,7 +790,12 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `vpcs-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
+            `vpcs-${
+              instanceSuffix(
+                context.globalArgs.region,
+                context.globalArgs.vpcId,
+              )
+            }`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -790,7 +829,12 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `subnets-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
+            `subnets-${
+              instanceSuffix(
+                context.globalArgs.region,
+                context.globalArgs.vpcId,
+              )
+            }`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -824,7 +868,12 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `igws-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
+            `igws-${
+              instanceSuffix(
+                context.globalArgs.region,
+                context.globalArgs.vpcId,
+              )
+            }`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -858,7 +907,12 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `route-tables-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
+            `route-tables-${
+              instanceSuffix(
+                context.globalArgs.region,
+                context.globalArgs.vpcId,
+              )
+            }`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -892,7 +946,12 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `security-groups-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
+            `security-groups-${
+              instanceSuffix(
+                context.globalArgs.region,
+                context.globalArgs.vpcId,
+              )
+            }`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -1176,22 +1235,28 @@ export const model = {
           let workflowCommand = "";
           if (vpcId) {
             workflowCommand =
-              `swamp workflow run @webframp/adopt-stack --input vpcId=${shellQuote(vpcId)} --input vpcSuffix=${shellQuote(vpcSuffix)}`;
+              `swamp workflow run @webframp/adopt-stack --input vpcId=${
+                shellQuote(vpcId)
+              } --input vpcSuffix=${shellQuote(vpcSuffix)}`;
             if (firstCluster) {
-              workflowCommand +=
-                ` --input clusterIdentifier=${shellQuote(firstCluster)}`;
+              workflowCommand += ` --input clusterIdentifier=${
+                shellQuote(firstCluster)
+              }`;
             }
             if (firstDbSubnetGroup) {
-              workflowCommand +=
-                ` --input dbSubnetGroupName=${shellQuote(firstDbSubnetGroup)}`;
+              workflowCommand += ` --input dbSubnetGroupName=${
+                shellQuote(firstDbSubnetGroup)
+              }`;
             }
             if (safeSecretName) {
-              workflowCommand +=
-                ` --input secretName=${shellQuote(safeSecretName)}`;
+              workflowCommand += ` --input secretName=${
+                shellQuote(safeSecretName)
+              }`;
             }
             if (firstSecretArn) {
-              workflowCommand +=
-                ` --input secretArn=${shellQuote(firstSecretArn)}`;
+              workflowCommand += ` --input secretArn=${
+                shellQuote(firstSecretArn)
+              }`;
             }
             if (args.prefix !== "adopt") {
               workflowCommand += ` --input prefix=${shellQuote(args.prefix)}`;
