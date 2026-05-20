@@ -155,6 +155,7 @@ export const model = {
 
           const handle = await context.writeResource("services", "all", {
             services,
+            truncated: nextToken !== undefined,
             fetchedAt: new Date().toISOString(),
           });
 
@@ -223,6 +224,7 @@ export const model = {
               serviceCode: args.serviceCode,
               attributeName: args.attributeName,
               values: values.sort(),
+              truncated: nextToken !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );
@@ -335,6 +337,7 @@ export const model = {
             serviceCode: args.serviceCode,
             filters: args.filters || [],
             items,
+            truncated: nextToken !== undefined,
             fetchedAt: new Date().toISOString(),
           });
 
