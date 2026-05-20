@@ -494,34 +494,49 @@ async function discoverSecurityGroups(
   return { results: groups, truncated: !!response.NextToken };
 }
 
+const MAX_PAGES = 5;
+
 async function discoverRdsClusters(
   rds: RDSClient,
 ): Promise<
   { results: z.infer<typeof RdsClusterSchema>[]; truncated: boolean }
 > {
-  const command = new DescribeDBClustersCommand({});
-  const response = await rds.send(command);
   const clusters: z.infer<typeof RdsClusterSchema>[] = [];
-  for (const cluster of response.DBClusters ?? []) {
-    if (!cluster.DBClusterIdentifier) continue;
-    clusters.push({
-      clusterIdentifier: cluster.DBClusterIdentifier,
-      engine: cluster.Engine ?? "",
-      engineVersion: cluster.EngineVersion ?? "",
-      status: cluster.Status ?? "",
-      endpoint: cluster.Endpoint ?? "",
-      readerEndpoint: cluster.ReaderEndpoint ?? "",
-      port: cluster.Port ?? 0,
-      dbSubnetGroup: cluster.DBSubnetGroup ?? "",
-      vpcSecurityGroups: (cluster.VpcSecurityGroups ?? [])
-        .map((sg) => sg.VpcSecurityGroupId ?? "")
-        .filter((id) => id !== ""),
-      members: (cluster.DBClusterMembers ?? [])
-        .map((m) => m.DBInstanceIdentifier ?? "")
-        .filter((id) => id !== ""),
-    });
-  }
-  return { results: clusters, truncated: !!response.Marker };
+  let marker: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await rds.send(
+      new DescribeDBClustersCommand({ Marker: marker }),
+    );
+    for (const cluster of response.DBClusters ?? []) {
+      if (!cluster.DBClusterIdentifier) continue;
+      clusters.push({
+        clusterIdentifier: cluster.DBClusterIdentifier,
+        engine: cluster.Engine ?? "",
+        engineVersion: cluster.EngineVersion ?? "",
+        status: cluster.Status ?? "",
+        endpoint: cluster.Endpoint ?? "",
+        readerEndpoint: cluster.ReaderEndpoint ?? "",
+        port: cluster.Port ?? 0,
+        dbSubnetGroup: cluster.DBSubnetGroup ?? "",
+        vpcSecurityGroups: (cluster.VpcSecurityGroups ?? [])
+          .map((sg: { VpcSecurityGroupId?: string }) =>
+            sg.VpcSecurityGroupId ?? ""
+          )
+          .filter((id: string) => id !== ""),
+        members: (cluster.DBClusterMembers ?? [])
+          .map((m: { DBInstanceIdentifier?: string }) =>
+            m.DBInstanceIdentifier ?? ""
+          )
+          .filter((id: string) => id !== ""),
+      });
+    }
+    marker = response.Marker;
+    pages++;
+  } while (marker && pages < MAX_PAGES);
+
+  return { results: clusters, truncated: !!marker };
 }
 
 async function discoverRdsInstances(
@@ -529,26 +544,35 @@ async function discoverRdsInstances(
 ): Promise<
   { results: z.infer<typeof RdsInstanceSchema>[]; truncated: boolean }
 > {
-  const command = new DescribeDBInstancesCommand({});
-  const response = await rds.send(command);
   const instances: z.infer<typeof RdsInstanceSchema>[] = [];
-  for (const db of response.DBInstances ?? []) {
-    if (!db.DBInstanceIdentifier) continue;
-    instances.push({
-      dbInstanceIdentifier: db.DBInstanceIdentifier,
-      dbInstanceClass: db.DBInstanceClass ?? "",
-      engine: db.Engine ?? "",
-      engineVersion: db.EngineVersion ?? "",
-      status: db.DBInstanceStatus ?? "",
-      availabilityZone: db.AvailabilityZone ?? "",
-      multiAz: db.MultiAZ ?? false,
-      storageType: db.StorageType ?? "",
-      allocatedStorage: db.AllocatedStorage ?? 0,
-      clusterIdentifier: db.DBClusterIdentifier ?? "",
-      dbSubnetGroup: db.DBSubnetGroup?.DBSubnetGroupName ?? "",
-    });
-  }
-  return { results: instances, truncated: !!response.Marker };
+  let marker: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await rds.send(
+      new DescribeDBInstancesCommand({ Marker: marker }),
+    );
+    for (const db of response.DBInstances ?? []) {
+      if (!db.DBInstanceIdentifier) continue;
+      instances.push({
+        dbInstanceIdentifier: db.DBInstanceIdentifier,
+        dbInstanceClass: db.DBInstanceClass ?? "",
+        engine: db.Engine ?? "",
+        engineVersion: db.EngineVersion ?? "",
+        status: db.DBInstanceStatus ?? "",
+        availabilityZone: db.AvailabilityZone ?? "",
+        multiAz: db.MultiAZ ?? false,
+        storageType: db.StorageType ?? "",
+        allocatedStorage: db.AllocatedStorage ?? 0,
+        clusterIdentifier: db.DBClusterIdentifier ?? "",
+        dbSubnetGroup: db.DBSubnetGroup?.DBSubnetGroupName ?? "",
+      });
+    }
+    marker = response.Marker;
+    pages++;
+  } while (marker && pages < MAX_PAGES);
+
+  return { results: instances, truncated: !!marker };
 }
 
 async function discoverDbSubnetGroups(
@@ -556,41 +580,59 @@ async function discoverDbSubnetGroups(
 ): Promise<
   { results: z.infer<typeof DbSubnetGroupSchema>[]; truncated: boolean }
 > {
-  const command = new DescribeDBSubnetGroupsCommand({});
-  const response = await rds.send(command);
   const groups: z.infer<typeof DbSubnetGroupSchema>[] = [];
-  for (const g of response.DBSubnetGroups ?? []) {
-    if (!g.DBSubnetGroupName) continue;
-    groups.push({
-      name: g.DBSubnetGroupName,
-      description: g.DBSubnetGroupDescription ?? "",
-      vpcId: g.VpcId ?? "",
-      subnetIds: (g.Subnets ?? [])
-        .map((s) => s.SubnetIdentifier ?? "")
-        .filter((id) => id !== ""),
-      status: g.SubnetGroupStatus ?? "",
-    });
-  }
-  return { results: groups, truncated: !!response.Marker };
+  let marker: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await rds.send(
+      new DescribeDBSubnetGroupsCommand({ Marker: marker }),
+    );
+    for (const g of response.DBSubnetGroups ?? []) {
+      if (!g.DBSubnetGroupName) continue;
+      groups.push({
+        name: g.DBSubnetGroupName,
+        description: g.DBSubnetGroupDescription ?? "",
+        vpcId: g.VpcId ?? "",
+        subnetIds: (g.Subnets ?? [])
+          .map((s: { SubnetIdentifier?: string }) => s.SubnetIdentifier ?? "")
+          .filter((id: string) => id !== ""),
+        status: g.SubnetGroupStatus ?? "",
+      });
+    }
+    marker = response.Marker;
+    pages++;
+  } while (marker && pages < MAX_PAGES);
+
+  return { results: groups, truncated: !!marker };
 }
 
 async function discoverSecrets(
   sm: SecretsManagerClient,
 ): Promise<{ results: z.infer<typeof SecretSchema>[]; truncated: boolean }> {
-  const command = new ListSecretsCommand({});
-  const response = await sm.send(command);
   const secrets: z.infer<typeof SecretSchema>[] = [];
-  for (const s of response.SecretList ?? []) {
-    if (!s.Name) continue;
-    secrets.push({
-      name: s.Name,
-      arn: s.ARN ?? "",
-      description: s.Description ?? "",
-      lastChangedDate: s.LastChangedDate?.toISOString() ?? null,
-      tags: tagsToRecord(s.Tags),
-    });
-  }
-  return { results: secrets, truncated: !!response.NextToken };
+  let nextToken: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await sm.send(
+      new ListSecretsCommand({ NextToken: nextToken }),
+    );
+    for (const s of response.SecretList ?? []) {
+      if (!s.Name) continue;
+      secrets.push({
+        name: s.Name,
+        arn: s.ARN ?? "",
+        description: s.Description ?? "",
+        lastChangedDate: s.LastChangedDate?.toISOString() ?? null,
+        tags: tagsToRecord(s.Tags),
+      });
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < MAX_PAGES);
+
+  return { results: secrets, truncated: !!nextToken };
 }
 
 // =============================================================================
@@ -1047,14 +1089,35 @@ export const model = {
           const setupCommands = generateSetupCommands(discovered, args.prefix);
 
           const vpcId = context.globalArgs.vpcId ?? vpcs[0]?.vpcId ?? "";
-          const firstCluster = rdsClusters[0]?.clusterIdentifier ?? "";
-          let workflowCommand =
-            `swamp workflow run @webframp/adopt-stack --input vpcId=${vpcId}`;
-          if (firstCluster) {
-            workflowCommand += ` --input clusterIdentifier=${firstCluster}`;
+          if (!vpcId) {
+            context.logger.info(
+              "No VPC found — workflow command omitted",
+              {},
+            );
           }
-          if (args.prefix !== "adopt") {
-            workflowCommand += ` --input prefix=${args.prefix}`;
+          const vpcSuffix = vpcId ? modelNameSuffix(vpcId) : "";
+          const firstCluster = rdsClusters[0]?.clusterIdentifier ?? "";
+          const firstDbSubnetGroup = dbSubnetGroups[0]?.name ?? "";
+          const firstSecret = secrets[0]?.name ?? "";
+          const safeSecretName = firstSecret.replace(/\//g, "-");
+
+          let workflowCommand = "";
+          if (vpcId) {
+            workflowCommand =
+              `swamp workflow run @webframp/adopt-stack --input vpcId=${vpcId} --input vpcSuffix=${vpcSuffix}`;
+            if (firstCluster) {
+              workflowCommand += ` --input clusterIdentifier=${firstCluster}`;
+            }
+            if (firstDbSubnetGroup) {
+              workflowCommand +=
+                ` --input dbSubnetGroupName=${firstDbSubnetGroup}`;
+            }
+            if (safeSecretName) {
+              workflowCommand += ` --input secretName=${safeSecretName}`;
+            }
+            if (args.prefix !== "adopt") {
+              workflowCommand += ` --input prefix=${args.prefix}`;
+            }
           }
 
           const totalCount = vpcs.length + subnets.length + igws.length +
