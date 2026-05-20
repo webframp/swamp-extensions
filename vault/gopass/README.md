@@ -1,10 +1,10 @@
 # @webframp/gopass
 
 A swamp vault extension that integrates with [gopass](https://gopass.pw), the
-pass-compatible password manager with extra features. This extension allows swamp
-to retrieve, store, and list secrets managed by gopass, supporting multiple
-stores/mounts and optional password-only mode that returns just the first line of
-a secret entry.
+pass-compatible password manager with extra features. This extension allows
+swamp to retrieve, store, and list secrets managed by gopass, supporting
+multiple stores/mounts and optional password-only mode that returns just the
+first line of a secret entry.
 
 ## Prerequisites
 
@@ -27,13 +27,13 @@ vaults:
   - name: default
     type: "@webframp/gopass"
     config:
-      store: ""            # Optional: mount/store name (omit or leave empty for default store)
-      passwordOnly: true   # Return only the first line (password) of the secret
+      store: "" # Optional: mount/store name (omit or leave empty for default store)
+      passwordOnly: true # Return only the first line (password) of the secret
   - name: team-secrets
     type: "@webframp/gopass"
     config:
-      store: "team"        # Use the "team" mounted store
-      passwordOnly: false  # Return the full secret entry including metadata
+      store: "team" # Use the "team" mounted store
+      passwordOnly: false # Return the full secret entry including metadata
 ```
 
 ## Usage

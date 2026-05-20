@@ -1,10 +1,13 @@
 # @webframp/pass
 
-GPG-encrypted password store vault provider for [swamp](https://github.com/systeminit/swamp), backed by the [pass](https://www.passwordstore.org/) CLI.
+GPG-encrypted password store vault provider for
+[swamp](https://github.com/systeminit/swamp), backed by the
+[pass](https://www.passwordstore.org/) CLI.
 
 ## Prerequisites
 
-- [pass](https://www.passwordstore.org/) installed and initialized (`pass init <gpg-id>`)
+- [pass](https://www.passwordstore.org/) installed and initialized
+  (`pass init <gpg-id>`)
 - A GPG key configured for encryption/decryption
 
 ## Installation
@@ -22,17 +25,17 @@ vaults:
   my-secrets:
     type: "@webframp/pass"
     config:
-      # Optional: override the default password store directory
-      # storeDir: "/path/to/custom/.password-store"
+# Optional: override the default password store directory
+# storeDir: "/path/to/custom/.password-store"
 
-      # Optional: key prefix for namespacing (defaults to "swamp")
-      # Set to "" to disable prefixing
-      # prefix: "myproject"
+# Optional: key prefix for namespacing (defaults to "swamp")
+# Set to "" to disable prefixing
+# prefix: "myproject"
 ```
 
 With the default `prefix: "swamp"`, a secret named `db/password` is stored as
-`swamp/db/password` in the pass store. Set `prefix: ""` to store keys without
-a namespace.
+`swamp/db/password` in the pass store. Set `prefix: ""` to store keys without a
+namespace.
 
 ## Usage
 
@@ -62,8 +65,8 @@ globalArgs:
 ## Upgrading from 2026.04.13.1
 
 Version 2026.04.22.1 introduces key prefixing (default `"swamp"`). Secrets
-stored by earlier versions have no prefix. To access them without migration,
-set `prefix: ""` in your vault config.
+stored by earlier versions have no prefix. To access them without migration, set
+`prefix: ""` in your vault config.
 
 ## License
 

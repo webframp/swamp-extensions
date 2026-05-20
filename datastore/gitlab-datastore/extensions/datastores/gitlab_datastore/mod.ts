@@ -9,7 +9,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.3.6";
 
 /**
  * Domain interfaces mirrored from swamp core.

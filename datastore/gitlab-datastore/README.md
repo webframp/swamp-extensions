@@ -7,8 +7,8 @@ a local cache and GitLab-hosted state.
 
 Data is wrapped in a Terraform state envelope so that GitLab treats each piece
 of swamp data as a first-class Terraform state object. The extension encodes
-file paths into state names, handles serial-number management automatically,
-and detects stale locks to recover from crashes.
+file paths into state names, handles serial-number management automatically, and
+detects stale locks to recover from crashes.
 
 ## Prerequisites
 
@@ -31,11 +31,11 @@ this extension and supplies the required credentials.
 datastore:
   type: "@webframp/gitlab-datastore"
   config:
-    projectId: "12345"                          # numeric ID or "group/project"
-    baseUrl: "https://gitlab.com"               # optional, defaults to gitlab.com
-    token: "glpat-xxxxxxxxxxxxxxxxxxxx"         # API-scoped personal access token
-    username: "my-user"                         # optional
-    statePrefix: "swamp"                        # optional namespace prefix
+    projectId: "12345" # numeric ID or "group/project"
+    baseUrl: "https://gitlab.com" # optional, defaults to gitlab.com
+    token: "glpat-xxxxxxxxxxxxxxxxxxxx" # API-scoped personal access token
+    username: "my-user" # optional
+    statePrefix: "swamp" # optional namespace prefix
 ```
 
 ## Usage
@@ -56,10 +56,13 @@ swamp datastore push
 
 The extension exposes the standard swamp datastore provider interface:
 
-- **createLock** -- acquire and release distributed locks via GitLab state locking
+- **createLock** -- acquire and release distributed locks via GitLab state
+  locking
 - **createVerifier** -- run a health check against the GitLab API
-- **createSyncService** -- pull and push changed files between local cache and GitLab
-- **resolveDatastorePath / resolveCachePath** -- resolve the local cache directory
+- **createSyncService** -- pull and push changed files between local cache and
+  GitLab
+- **resolveDatastorePath / resolveCachePath** -- resolve the local cache
+  directory
 
 ## License
 

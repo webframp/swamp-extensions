@@ -311,51 +311,57 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
-        const metrics: z.infer<typeof MetricSchema>[] = [];
-        let nextToken: string | undefined;
+        try {
+          const metrics: z.infer<typeof MetricSchema>[] = [];
+          let nextToken: string | undefined;
 
-        do {
-          const command = new ListMetricsCommand({
-            Namespace: args.namespace,
-            MetricName: args.metricName,
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
+          do {
+            const command = new ListMetricsCommand({
+              Namespace: args.namespace,
+              MetricName: args.metricName,
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-          if (response.Metrics) {
-            for (const m of response.Metrics) {
-              if (metrics.length >= args.limit) break;
-              metrics.push({
-                namespace: m.Namespace || "",
-                metricName: m.MetricName || "",
-                dimensions: (m.Dimensions || []).map((d: AwsDimension) => ({
-                  name: d.Name || "",
-                  value: d.Value || "",
-                })),
-              });
+            if (response.Metrics) {
+              for (const m of response.Metrics) {
+                if (metrics.length >= args.limit) break;
+                metrics.push({
+                  namespace: m.Namespace || "",
+                  metricName: m.MetricName || "",
+                  dimensions: (m.Dimensions || []).map((d: AwsDimension) => ({
+                    name: d.Name || "",
+                    value: d.Value || "",
+                  })),
+                });
+              }
             }
-          }
 
-          nextToken = response.NextToken;
-        } while (nextToken && metrics.length < args.limit);
+            nextToken = response.NextToken;
+          } while (nextToken && metrics.length < args.limit);
 
-        const instanceName = args.namespace
-          ? `ns-${args.namespace.replace(/\//g, "-")}`
-          : "all";
+          const instanceName = args.namespace
+            ? `ns-${args.namespace.replace(/\//g, "-")}`
+            : "all";
 
-        const handle = await context.writeResource(
-          "metric_list",
-          instanceName,
-          {
-            namespace: args.namespace || null,
-            metrics,
+          const handle = await context.writeResource(
+            "metric_list",
+            instanceName,
+            {
+              namespace: args.namespace || null,
+              metrics,
+              count: metrics.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} metrics", {
             count: metrics.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Found {count} metrics", { count: metrics.length });
-        return { dataHandles: [handle] };
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -415,76 +421,80 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
+          const period = args.period || calculatePeriod(startTime, endTime);
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
-        const period = args.period || calculatePeriod(startTime, endTime);
+          const dimensions: Dimension[] = args.dimensions.map((d) => ({
+            Name: d.name,
+            Value: d.value,
+          }));
 
-        const dimensions: Dimension[] = args.dimensions.map((d) => ({
-          Name: d.name,
-          Value: d.value,
-        }));
+          const command = new GetMetricStatisticsCommand({
+            Namespace: args.namespace,
+            MetricName: args.metricName,
+            Dimensions: dimensions.length > 0 ? dimensions : undefined,
+            StartTime: startTime,
+            EndTime: endTime,
+            Period: period,
+            Statistics: [args.statistic],
+          });
 
-        const command = new GetMetricStatisticsCommand({
-          Namespace: args.namespace,
-          MetricName: args.metricName,
-          Dimensions: dimensions.length > 0 ? dimensions : undefined,
-          StartTime: startTime,
-          EndTime: endTime,
-          Period: period,
-          Statistics: [args.statistic],
-        });
+          const response = await client.send(command);
 
-        const response = await client.send(command);
+          const datapoints = (response.Datapoints || [])
+            .map((dp: Datapoint) => ({
+              timestamp: dp.Timestamp?.toISOString() || "",
+              value: (dp[args.statistic] as number) ?? 0,
+              unit: dp.Unit || null,
+            }))
+            .sort(
+              (a: { timestamp: string }, b: { timestamp: string }) =>
+                new Date(a.timestamp).getTime() -
+                new Date(b.timestamp).getTime(),
+            );
 
-        const datapoints = (response.Datapoints || [])
-          .map((dp: Datapoint) => ({
-            timestamp: dp.Timestamp?.toISOString() || "",
-            value: (dp[args.statistic] as number) ?? 0,
-            unit: dp.Unit || null,
-          }))
-          .sort(
-            (a: { timestamp: string }, b: { timestamp: string }) =>
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+          const dimStr = args.dimensions
+            .map((d) => `${d.name}=${d.value}`)
+            .join(",");
+          const instanceName = `${args.namespace}-${args.metricName}-${
+            dimStr || "all"
+          }`.replace(
+            /[\/\s]/g,
+            "-",
+          ).substring(0, 100);
+
+          const handle = await context.writeResource(
+            "metric_data",
+            instanceName,
+            {
+              metric: {
+                namespace: args.namespace,
+                metricName: args.metricName,
+                dimensions: args.dimensions,
+              },
+              statistic: args.statistic,
+              period,
+              datapoints,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              fetchedAt: new Date().toISOString(),
+            },
           );
 
-        const dimStr = args.dimensions
-          .map((d) => `${d.name}=${d.value}`)
-          .join(",");
-        const instanceName = `${args.namespace}-${args.metricName}-${
-          dimStr || "all"
-        }`.replace(
-          /[\/\s]/g,
-          "-",
-        ).substring(0, 100);
-
-        const handle = await context.writeResource(
-          "metric_data",
-          instanceName,
-          {
-            metric: {
-              namespace: args.namespace,
-              metricName: args.metricName,
-              dimensions: args.dimensions,
-            },
-            statistic: args.statistic,
-            period,
-            datapoints,
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
-            },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Retrieved {count} datapoints for {metric}", {
-          count: datapoints.length,
-          metric: args.metricName,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Retrieved {count} datapoints for {metric}", {
+            count: datapoints.length,
+            metric: args.metricName,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -545,97 +555,101 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
+          const period = calculatePeriod(startTime, endTime);
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
-        const period = calculatePeriod(startTime, endTime);
+          const dimensions: Dimension[] = args.dimensions.map((d) => ({
+            Name: d.name,
+            Value: d.value,
+          }));
 
-        const dimensions: Dimension[] = args.dimensions.map((d) => ({
-          Name: d.name,
-          Value: d.value,
-        }));
+          const command = new GetMetricStatisticsCommand({
+            Namespace: args.namespace,
+            MetricName: args.metricName,
+            Dimensions: dimensions.length > 0 ? dimensions : undefined,
+            StartTime: startTime,
+            EndTime: endTime,
+            Period: period,
+            Statistics: [args.statistic],
+          });
 
-        const command = new GetMetricStatisticsCommand({
-          Namespace: args.namespace,
-          MetricName: args.metricName,
-          Dimensions: dimensions.length > 0 ? dimensions : undefined,
-          StartTime: startTime,
-          EndTime: endTime,
-          Period: period,
-          Statistics: [args.statistic],
-        });
+          const response = await client.send(command);
 
-        const response = await client.send(command);
+          const datapoints = (response.Datapoints || [])
+            .map((dp: Datapoint) => ({
+              timestamp: dp.Timestamp?.toISOString() || "",
+              value: (dp[args.statistic] as number) ?? 0,
+            }))
+            .sort(
+              (a: { timestamp: string }, b: { timestamp: string }) =>
+                new Date(a.timestamp).getTime() -
+                new Date(b.timestamp).getTime(),
+            );
 
-        const datapoints = (response.Datapoints || [])
-          .map((dp: Datapoint) => ({
-            timestamp: dp.Timestamp?.toISOString() || "",
-            value: (dp[args.statistic] as number) ?? 0,
-          }))
-          .sort(
-            (a: { timestamp: string }, b: { timestamp: string }) =>
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+          // Calculate summary statistics
+          const values = datapoints.map((d: { value: number }) => d.value);
+          const summary = values.length > 0
+            ? {
+              min: Math.min(...values),
+              max: Math.max(...values),
+              avg: values.reduce((a: number, b: number) => a + b, 0) /
+                values.length,
+              sum: values.reduce((a: number, b: number) => a + b, 0),
+              count: values.length,
+            }
+            : { min: 0, max: 0, avg: 0, sum: 0, count: 0 };
+
+          // Calculate trend
+          const trend = calculateTrend(datapoints);
+
+          // Find anomalies
+          const anomalies = findAnomalies(datapoints, args.anomalyThreshold);
+
+          const dimStr = args.dimensions
+            .map((d) => `${d.name}=${d.value}`)
+            .join(",");
+          const instanceName = `analysis-${args.namespace}-${args.metricName}-${
+            dimStr || "all"
+          }`
+            .replace(/[\/\s]/g, "-")
+            .substring(0, 100);
+
+          const handle = await context.writeResource(
+            "metric_analysis",
+            instanceName,
+            {
+              metric: {
+                namespace: args.namespace,
+                metricName: args.metricName,
+                dimensions: args.dimensions,
+              },
+              statistic: args.statistic,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              summary,
+              trend,
+              anomalies,
+              fetchedAt: new Date().toISOString(),
+            },
           );
 
-        // Calculate summary statistics
-        const values = datapoints.map((d: { value: number }) => d.value);
-        const summary = values.length > 0
-          ? {
-            min: Math.min(...values),
-            max: Math.max(...values),
-            avg: values.reduce((a: number, b: number) => a + b, 0) /
-              values.length,
-            sum: values.reduce((a: number, b: number) => a + b, 0),
-            count: values.length,
-          }
-          : { min: 0, max: 0, avg: 0, sum: 0, count: 0 };
-
-        // Calculate trend
-        const trend = calculateTrend(datapoints);
-
-        // Find anomalies
-        const anomalies = findAnomalies(datapoints, args.anomalyThreshold);
-
-        const dimStr = args.dimensions
-          .map((d) => `${d.name}=${d.value}`)
-          .join(",");
-        const instanceName = `analysis-${args.namespace}-${args.metricName}-${
-          dimStr || "all"
-        }`
-          .replace(/[\/\s]/g, "-")
-          .substring(0, 100);
-
-        const handle = await context.writeResource(
-          "metric_analysis",
-          instanceName,
-          {
-            metric: {
-              namespace: args.namespace,
-              metricName: args.metricName,
-              dimensions: args.dimensions,
+          context.logger.info(
+            "Analysis complete: trend={trend}, anomalies={anomalyCount}",
+            {
+              trend,
+              anomalyCount: anomalies.length,
             },
-            statistic: args.statistic,
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
-            },
-            summary,
-            trend,
-            anomalies,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info(
-          "Analysis complete: trend={trend}, anomalies={anomalyCount}",
-          {
-            trend,
-            anomalyCount: anomalies.length,
-          },
-        );
-        return { dataHandles: [handle] };
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -665,67 +679,71 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = new Date();
+          const period = calculatePeriod(startTime, endTime);
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = new Date();
-        const period = calculatePeriod(startTime, endTime);
+          const command = new GetMetricStatisticsCommand({
+            Namespace: "AWS/EC2",
+            MetricName: "CPUUtilization",
+            Dimensions: [{ Name: "InstanceId", Value: args.instanceId }],
+            StartTime: startTime,
+            EndTime: endTime,
+            Period: period,
+            Statistics: ["Average", "Maximum"],
+          });
 
-        const command = new GetMetricStatisticsCommand({
-          Namespace: "AWS/EC2",
-          MetricName: "CPUUtilization",
-          Dimensions: [{ Name: "InstanceId", Value: args.instanceId }],
-          StartTime: startTime,
-          EndTime: endTime,
-          Period: period,
-          Statistics: ["Average", "Maximum"],
-        });
+          const response = await client.send(command);
 
-        const response = await client.send(command);
+          const datapoints = (response.Datapoints || [])
+            .map((dp: Datapoint) => ({
+              timestamp: dp.Timestamp?.toISOString() || "",
+              average: dp.Average ?? 0,
+              maximum: dp.Maximum ?? 0,
+              unit: dp.Unit || "Percent",
+            }))
+            .sort(
+              (a: { timestamp: string }, b: { timestamp: string }) =>
+                new Date(a.timestamp).getTime() -
+                new Date(b.timestamp).getTime(),
+            );
 
-        const datapoints = (response.Datapoints || [])
-          .map((dp: Datapoint) => ({
-            timestamp: dp.Timestamp?.toISOString() || "",
-            average: dp.Average ?? 0,
-            maximum: dp.Maximum ?? 0,
-            unit: dp.Unit || "Percent",
-          }))
-          .sort(
-            (a: { timestamp: string }, b: { timestamp: string }) =>
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+          const instanceName = `ec2-cpu-${args.instanceId}`;
+
+          const handle = await context.writeResource(
+            "metric_data",
+            instanceName,
+            {
+              metric: {
+                namespace: "AWS/EC2",
+                metricName: "CPUUtilization",
+                dimensions: [{ name: "InstanceId", value: args.instanceId }],
+              },
+              statistic: "Average",
+              period,
+              datapoints: datapoints.map((
+                d: { timestamp: string; average: number; unit: string },
+              ) => ({
+                timestamp: d.timestamp,
+                value: d.average,
+                unit: d.unit,
+              })),
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              fetchedAt: new Date().toISOString(),
+            },
           );
 
-        const instanceName = `ec2-cpu-${args.instanceId}`;
-
-        const handle = await context.writeResource(
-          "metric_data",
-          instanceName,
-          {
-            metric: {
-              namespace: "AWS/EC2",
-              metricName: "CPUUtilization",
-              dimensions: [{ name: "InstanceId", value: args.instanceId }],
-            },
-            statistic: "Average",
-            period,
-            datapoints: datapoints.map((
-              d: { timestamp: string; average: number; unit: string },
-            ) => ({
-              timestamp: d.timestamp,
-              value: d.average,
-              unit: d.unit,
-            })),
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
-            },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Retrieved CPU data for {instanceId}", {
-          instanceId: args.instanceId,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Retrieved CPU data for {instanceId}", {
+            instanceId: args.instanceId,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -756,128 +774,134 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = new Date();
+          const period = calculatePeriod(startTime, endTime);
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = new Date();
-        const period = calculatePeriod(startTime, endTime);
+          const metricQueries = [
+            {
+              Id: "invocations",
+              MetricStat: {
+                Metric: {
+                  Namespace: "AWS/Lambda",
+                  MetricName: "Invocations",
+                  Dimensions: [{
+                    Name: "FunctionName",
+                    Value: args.functionName,
+                  }],
+                },
+                Period: period,
+                Stat: "Sum",
+              },
+            },
+            {
+              Id: "errors",
+              MetricStat: {
+                Metric: {
+                  Namespace: "AWS/Lambda",
+                  MetricName: "Errors",
+                  Dimensions: [{
+                    Name: "FunctionName",
+                    Value: args.functionName,
+                  }],
+                },
+                Period: period,
+                Stat: "Sum",
+              },
+            },
+            {
+              Id: "duration",
+              MetricStat: {
+                Metric: {
+                  Namespace: "AWS/Lambda",
+                  MetricName: "Duration",
+                  Dimensions: [{
+                    Name: "FunctionName",
+                    Value: args.functionName,
+                  }],
+                },
+                Period: period,
+                Stat: "Average",
+              },
+            },
+            {
+              Id: "throttles",
+              MetricStat: {
+                Metric: {
+                  Namespace: "AWS/Lambda",
+                  MetricName: "Throttles",
+                  Dimensions: [{
+                    Name: "FunctionName",
+                    Value: args.functionName,
+                  }],
+                },
+                Period: period,
+                Stat: "Sum",
+              },
+            },
+          ];
 
-        const metricQueries = [
-          {
-            Id: "invocations",
-            MetricStat: {
-              Metric: {
-                Namespace: "AWS/Lambda",
-                MetricName: "Invocations",
-                Dimensions: [{
-                  Name: "FunctionName",
-                  Value: args.functionName,
+          const command = new GetMetricDataCommand({
+            MetricDataQueries: metricQueries,
+            StartTime: startTime,
+            EndTime: endTime,
+          });
+
+          const response = await client.send(command);
+
+          const results: Record<
+            string,
+            Array<{ timestamp: string; value: number }>
+          > = {};
+
+          for (const result of response.MetricDataResults || []) {
+            const id = result.Id || "unknown";
+            const timestamps = result.Timestamps || [];
+            const values = result.Values || [];
+
+            results[id] = timestamps.map((ts: Date, i: number) => ({
+              timestamp: ts.toISOString(),
+              value: values[i] || 0,
+            }));
+          }
+
+          const instanceName = `lambda-${
+            args.functionName.replace(/[\/\s]/g, "-")
+          }`;
+
+          const handle = await context.writeResource(
+            "metric_data",
+            instanceName,
+            {
+              metric: {
+                namespace: "AWS/Lambda",
+                metricName: "multiple",
+                dimensions: [{
+                  name: "FunctionName",
+                  value: args.functionName,
                 }],
               },
-              Period: period,
-              Stat: "Sum",
-            },
-          },
-          {
-            Id: "errors",
-            MetricStat: {
-              Metric: {
-                Namespace: "AWS/Lambda",
-                MetricName: "Errors",
-                Dimensions: [{
-                  Name: "FunctionName",
-                  Value: args.functionName,
-                }],
+              statistic: "multiple",
+              period,
+              datapoints: [], // Using custom structure
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
               },
-              Period: period,
-              Stat: "Sum",
+              fetchedAt: new Date().toISOString(),
+              // @ts-ignore - extending schema for Lambda-specific data
+              lambdaMetrics: results,
             },
-          },
-          {
-            Id: "duration",
-            MetricStat: {
-              Metric: {
-                Namespace: "AWS/Lambda",
-                MetricName: "Duration",
-                Dimensions: [{
-                  Name: "FunctionName",
-                  Value: args.functionName,
-                }],
-              },
-              Period: period,
-              Stat: "Average",
-            },
-          },
-          {
-            Id: "throttles",
-            MetricStat: {
-              Metric: {
-                Namespace: "AWS/Lambda",
-                MetricName: "Throttles",
-                Dimensions: [{
-                  Name: "FunctionName",
-                  Value: args.functionName,
-                }],
-              },
-              Period: period,
-              Stat: "Sum",
-            },
-          },
-        ];
+          );
 
-        const command = new GetMetricDataCommand({
-          MetricDataQueries: metricQueries,
-          StartTime: startTime,
-          EndTime: endTime,
-        });
-
-        const response = await client.send(command);
-
-        const results: Record<
-          string,
-          Array<{ timestamp: string; value: number }>
-        > = {};
-
-        for (const result of response.MetricDataResults || []) {
-          const id = result.Id || "unknown";
-          const timestamps = result.Timestamps || [];
-          const values = result.Values || [];
-
-          results[id] = timestamps.map((ts: Date, i: number) => ({
-            timestamp: ts.toISOString(),
-            value: values[i] || 0,
-          }));
+          context.logger.info("Retrieved Lambda metrics for {functionName}", {
+            functionName: args.functionName,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-
-        const instanceName = `lambda-${
-          args.functionName.replace(/[\/\s]/g, "-")
-        }`;
-
-        const handle = await context.writeResource(
-          "metric_data",
-          instanceName,
-          {
-            metric: {
-              namespace: "AWS/Lambda",
-              metricName: "multiple",
-              dimensions: [{ name: "FunctionName", value: args.functionName }],
-            },
-            statistic: "multiple",
-            period,
-            datapoints: [], // Using custom structure
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
-            },
-            fetchedAt: new Date().toISOString(),
-            // @ts-ignore - extending schema for Lambda-specific data
-            lambdaMetrics: results,
-          },
-        );
-
-        context.logger.info("Retrieved Lambda metrics for {functionName}", {
-          functionName: args.functionName,
-        });
-        return { dataHandles: [handle] };
       },
     },
   },

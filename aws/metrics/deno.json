@@ -7,5 +7,7 @@
     "test": "deno test --allow-env --allow-net --allow-sys extensions/models/"
   },
   "lint": { "rules": { "exclude": ["no-import-prefix"] } },
-  "imports": { "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5" }
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
+  }
 }

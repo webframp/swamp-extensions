@@ -5,7 +5,8 @@
     "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@systeminit/swamp-testing@0.20260331.5": "0.20260331.5",
-    "npm:zod@4": "4.3.6"
+    "npm:zod@4": "4.3.6",
+    "npm:zod@4.3.6": "4.3.6"
   },
   "jsr": {
     "@std/assert@1.0.19": {

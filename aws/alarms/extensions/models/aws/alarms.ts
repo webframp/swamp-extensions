@@ -18,6 +18,8 @@ import {
   type MetricAlarm,
 } from "npm:@aws-sdk/client-cloudwatch@3.1010.0";
 
+const MAX_PAGES = 10;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -201,43 +203,51 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
-        const alarms: z.infer<typeof AlarmSchema>[] = [];
-        let nextToken: string | undefined;
+        try {
+          const alarms: z.infer<typeof AlarmSchema>[] = [];
+          let nextToken: string | undefined;
 
-        do {
-          const command = new DescribeAlarmsCommand({
-            StateValue: args.stateValue,
-            AlarmNamePrefix: args.alarmNamePrefix,
-            NextToken: nextToken,
-            MaxRecords: Math.min(100, args.limit - alarms.length),
-          });
-          const response = await client.send(command);
+          do {
+            const command = new DescribeAlarmsCommand({
+              StateValue: args.stateValue,
+              AlarmNamePrefix: args.alarmNamePrefix,
+              NextToken: nextToken,
+              MaxRecords: Math.min(100, args.limit - alarms.length),
+            });
+            const response = await client.send(command);
 
-          if (response.MetricAlarms) {
-            for (const alarm of response.MetricAlarms) {
-              if (alarms.length >= args.limit) break;
-              alarms.push(mapAlarm(alarm));
+            if (response.MetricAlarms) {
+              for (const alarm of response.MetricAlarms) {
+                if (alarms.length >= args.limit) break;
+                alarms.push(mapAlarm(alarm));
+              }
             }
-          }
 
-          nextToken = response.NextToken;
-        } while (nextToken && alarms.length < args.limit);
+            nextToken = response.NextToken;
+          } while (nextToken && alarms.length < args.limit);
 
-        const instanceName = args.stateValue
-          ? `state-${args.stateValue.toLowerCase()}`
-          : args.alarmNamePrefix
-          ? `prefix-${args.alarmNamePrefix.replace(/[\/\s]/g, "-")}`
-          : "all";
+          const instanceName = args.stateValue
+            ? `state-${args.stateValue.toLowerCase()}`
+            : args.alarmNamePrefix
+            ? `prefix-${args.alarmNamePrefix.replace(/[\/\s]/g, "-")}`
+            : "all";
 
-        const handle = await context.writeResource("alarm_list", instanceName, {
-          alarms,
-          count: alarms.length,
-          stateFilter: args.stateValue || null,
-          fetchedAt: new Date().toISOString(),
-        });
+          const handle = await context.writeResource(
+            "alarm_list",
+            instanceName,
+            {
+              alarms,
+              count: alarms.length,
+              stateFilter: args.stateValue || null,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
 
-        context.logger.info("Found {count} alarms", { count: alarms.length });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} alarms", { count: alarms.length });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -267,38 +277,42 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
-        const alarms: z.infer<typeof AlarmSchema>[] = [];
-        let nextToken: string | undefined;
+        try {
+          const alarms: z.infer<typeof AlarmSchema>[] = [];
+          let nextToken: string | undefined;
 
-        do {
-          const command = new DescribeAlarmsCommand({
-            StateValue: "ALARM",
-            NextToken: nextToken,
-            MaxRecords: Math.min(100, args.limit - alarms.length),
-          });
-          const response = await client.send(command);
+          do {
+            const command = new DescribeAlarmsCommand({
+              StateValue: "ALARM",
+              NextToken: nextToken,
+              MaxRecords: Math.min(100, args.limit - alarms.length),
+            });
+            const response = await client.send(command);
 
-          if (response.MetricAlarms) {
-            for (const alarm of response.MetricAlarms) {
-              if (alarms.length >= args.limit) break;
-              alarms.push(mapAlarm(alarm));
+            if (response.MetricAlarms) {
+              for (const alarm of response.MetricAlarms) {
+                if (alarms.length >= args.limit) break;
+                alarms.push(mapAlarm(alarm));
+              }
             }
-          }
 
-          nextToken = response.NextToken;
-        } while (nextToken && alarms.length < args.limit);
+            nextToken = response.NextToken;
+          } while (nextToken && alarms.length < args.limit);
 
-        const handle = await context.writeResource("alarm_list", "active", {
-          alarms,
-          count: alarms.length,
-          stateFilter: "ALARM",
-          fetchedAt: new Date().toISOString(),
-        });
+          const handle = await context.writeResource("alarm_list", "active", {
+            alarms,
+            count: alarms.length,
+            stateFilter: "ALARM",
+            fetchedAt: new Date().toISOString(),
+          });
 
-        context.logger.info("Found {count} active alarms", {
-          count: alarms.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} active alarms", {
+            count: alarms.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -352,59 +366,62 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
+          const entries: z.infer<typeof AlarmHistoryEntrySchema>[] = [];
+          let nextToken: string | undefined;
 
-        const entries: z.infer<typeof AlarmHistoryEntrySchema>[] = [];
-        let nextToken: string | undefined;
+          do {
+            const command = new DescribeAlarmHistoryCommand({
+              AlarmName: args.alarmName,
+              HistoryItemType: args.historyItemType,
+              StartDate: startTime,
+              EndDate: endTime,
+              NextToken: nextToken,
+              MaxRecords: Math.min(100, args.limit - entries.length),
+            });
+            const response = await client.send(command);
 
-        do {
-          const command = new DescribeAlarmHistoryCommand({
-            AlarmName: args.alarmName,
-            HistoryItemType: args.historyItemType,
-            StartDate: startTime,
-            EndDate: endTime,
-            NextToken: nextToken,
-            MaxRecords: Math.min(100, args.limit - entries.length),
-          });
-          const response = await client.send(command);
-
-          if (response.AlarmHistoryItems) {
-            for (const item of response.AlarmHistoryItems) {
-              if (entries.length >= args.limit) break;
-              entries.push(mapHistoryItem(item));
+            if (response.AlarmHistoryItems) {
+              for (const item of response.AlarmHistoryItems) {
+                if (entries.length >= args.limit) break;
+                entries.push(mapHistoryItem(item));
+              }
             }
-          }
 
-          nextToken = response.NextToken;
-        } while (nextToken && entries.length < args.limit);
+            nextToken = response.NextToken;
+          } while (nextToken && entries.length < args.limit);
 
-        const instanceName = args.alarmName
-          ? `history-${args.alarmName.replace(/[\/\s]/g, "-")}`
-          : "history-all";
+          const instanceName = args.alarmName
+            ? `history-${args.alarmName.replace(/[\/\s]/g, "-")}`
+            : "history-all";
 
-        const handle = await context.writeResource(
-          "alarm_history",
-          instanceName,
-          {
-            alarmName: args.alarmName || null,
-            entries,
-            count: entries.length,
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
+          const handle = await context.writeResource(
+            "alarm_history",
+            instanceName,
+            {
+              alarmName: args.alarmName || null,
+              entries,
+              count: entries.length,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              fetchedAt: new Date().toISOString(),
             },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          );
 
-        context.logger.info("Found {count} history entries", {
-          count: entries.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} history entries", {
+            count: entries.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -440,105 +457,114 @@ export const model = {
         const client = new CloudWatchClient({
           region: context.globalArgs.region,
         });
+        try {
+          // Get all alarms
+          const allAlarms: MetricAlarm[] = [];
+          let nextToken: string | undefined;
+          let pages = 0;
 
-        // Get all alarms
-        const allAlarms: MetricAlarm[] = [];
-        let nextToken: string | undefined;
+          do {
+            const command = new DescribeAlarmsCommand({
+              NextToken: nextToken,
+              MaxRecords: 100,
+            });
+            const response = await client.send(command);
 
-        do {
-          const command = new DescribeAlarmsCommand({
-            NextToken: nextToken,
-            MaxRecords: 100,
+            if (response.MetricAlarms) {
+              allAlarms.push(...response.MetricAlarms);
+            }
+
+            nextToken = response.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
+
+          // Count states
+          let inAlarm = 0;
+          let ok = 0;
+          let insufficientData = 0;
+          const byNamespace: Record<string, number> = {};
+
+          for (const alarm of allAlarms) {
+            switch (alarm.StateValue) {
+              case "ALARM":
+                inAlarm++;
+                break;
+              case "OK":
+                ok++;
+                break;
+              case "INSUFFICIENT_DATA":
+                insufficientData++;
+                break;
+            }
+
+            const ns = alarm.Namespace || "Unknown";
+            byNamespace[ns] = (byNamespace[ns] || 0) + 1;
+          }
+
+          // Get recent state changes
+          const startTime = args.startTime
+            ? parseRelativeTime(args.startTime)
+            : new Date(Date.now() - args.historyHours * 60 * 60 * 1000);
+          const recentChanges: Array<{
+            alarmName: string;
+            previousState: string;
+            currentState: string;
+            timestamp: string;
+          }> = [];
+
+          const historyCommand = new DescribeAlarmHistoryCommand({
+            HistoryItemType: "StateUpdate",
+            StartDate: startTime,
+            EndDate: new Date(),
+            MaxRecords: 50,
           });
-          const response = await client.send(command);
+          const historyResponse = await client.send(historyCommand);
 
-          if (response.MetricAlarms) {
-            allAlarms.push(...response.MetricAlarms);
-          }
-
-          nextToken = response.NextToken;
-        } while (nextToken);
-
-        // Count states
-        let inAlarm = 0;
-        let ok = 0;
-        let insufficientData = 0;
-        const byNamespace: Record<string, number> = {};
-
-        for (const alarm of allAlarms) {
-          switch (alarm.StateValue) {
-            case "ALARM":
-              inAlarm++;
-              break;
-            case "OK":
-              ok++;
-              break;
-            case "INSUFFICIENT_DATA":
-              insufficientData++;
-              break;
-          }
-
-          const ns = alarm.Namespace || "Unknown";
-          byNamespace[ns] = (byNamespace[ns] || 0) + 1;
-        }
-
-        // Get recent state changes
-        const startTime = args.startTime
-          ? parseRelativeTime(args.startTime)
-          : new Date(Date.now() - args.historyHours * 60 * 60 * 1000);
-        const recentChanges: Array<{
-          alarmName: string;
-          previousState: string;
-          currentState: string;
-          timestamp: string;
-        }> = [];
-
-        const historyCommand = new DescribeAlarmHistoryCommand({
-          HistoryItemType: "StateUpdate",
-          StartDate: startTime,
-          EndDate: new Date(),
-          MaxRecords: 50,
-        });
-        const historyResponse = await client.send(historyCommand);
-
-        if (historyResponse.AlarmHistoryItems) {
-          for (const item of historyResponse.AlarmHistoryItems) {
-            if (item.AlarmName && item.Timestamp && item.HistoryData) {
-              try {
-                const data = JSON.parse(item.HistoryData);
-                recentChanges.push({
-                  alarmName: item.AlarmName,
-                  previousState: data.oldState?.stateValue || "unknown",
-                  currentState: data.newState?.stateValue || "unknown",
-                  timestamp: item.Timestamp.toISOString(),
-                });
-              } catch {
-                // Skip malformed history data
+          if (historyResponse.AlarmHistoryItems) {
+            for (const item of historyResponse.AlarmHistoryItems) {
+              if (item.AlarmName && item.Timestamp && item.HistoryData) {
+                try {
+                  const data = JSON.parse(item.HistoryData);
+                  recentChanges.push({
+                    alarmName: item.AlarmName,
+                    previousState: data.oldState?.stateValue || "unknown",
+                    currentState: data.newState?.stateValue || "unknown",
+                    timestamp: item.Timestamp.toISOString(),
+                  });
+                } catch {
+                  // Skip malformed history data
+                }
               }
             }
           }
+
+          const handle = await context.writeResource(
+            "alarm_summary",
+            "summary",
+            {
+              total: allAlarms.length,
+              inAlarm,
+              ok,
+              insufficientData,
+              byNamespace,
+              recentStateChanges: recentChanges,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info(
+            "Summary: {total} alarms ({inAlarm} in ALARM, {ok} OK, {insufficient} INSUFFICIENT_DATA)",
+            {
+              total: allAlarms.length,
+              inAlarm,
+              ok,
+              insufficient: insufficientData,
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-
-        const handle = await context.writeResource("alarm_summary", "summary", {
-          total: allAlarms.length,
-          inAlarm,
-          ok,
-          insufficientData,
-          byNamespace,
-          recentStateChanges: recentChanges,
-          fetchedAt: new Date().toISOString(),
-        });
-
-        context.logger.info(
-          "Summary: {total} alarms ({inAlarm} in ALARM, {ok} OK, {insufficient} INSUFFICIENT_DATA)",
-          {
-            total: allAlarms.length,
-            inAlarm,
-            ok,
-            insufficient: insufficientData,
-          },
-        );
-        return { dataHandles: [handle] };
       },
     },
   },

@@ -274,104 +274,108 @@ export const model = {
         const client = new GuardDutyClient({
           region: context.globalArgs.region,
         });
-        const detectorId = await getDetectorId(client, context.logger);
+        try {
+          const detectorId = await getDetectorId(client, context.logger);
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        // Build filter criteria
-        const criterion: Record<string, Condition> = {
-          updatedAt: {
-            GreaterThanOrEqual: startTime.getTime(),
-            LessThanOrEqual: endTime.getTime(),
-          },
-        };
-        if (args.severityMin !== undefined) {
-          criterion["severity"] = { GreaterThanOrEqual: args.severityMin };
-        }
-        if (args.accountId) {
-          criterion["accountId"] = { Eq: [args.accountId] };
-        }
-
-        // List finding IDs — when using typePrefix, fetch more to compensate
-        // for client-side filtering, but cap to avoid unbounded API calls
-        const maxIds = args.typePrefix ? args.limit * 20 : args.limit;
-        const allIds: string[] = [];
-        let nextToken: string | undefined;
-        do {
-          const batchSize = Math.min(50, maxIds - allIds.length);
-          if (batchSize <= 0) break;
-          const resp = await client.send(
-            new ListFindingsCommand({
-              DetectorId: detectorId,
-              FindingCriteria: { Criterion: criterion },
-              MaxResults: batchSize,
-              NextToken: nextToken,
-            }),
-          );
-          if (resp.FindingIds) {
-            allIds.push(...resp.FindingIds);
-          }
-          nextToken = resp.NextToken;
-        } while (nextToken && allIds.length < maxIds);
-        const capReached = allIds.length >= maxIds;
-
-        // Fetch details in batches of 50
-        const findings: z.infer<typeof FindingSummarySchema>[] = [];
-        for (let i = 0; i < allIds.length; i += 50) {
-          const batch = allIds.slice(i, i + 50);
-          const resp = await client.send(
-            new GetFindingsCommand({
-              DetectorId: detectorId,
-              FindingIds: batch,
-            }),
-          );
-          if (resp.Findings) {
-            findings.push(...resp.Findings.map(mapFindingSummary));
-          }
-        }
-
-        // Apply client-side prefix filter and enforce limit
-        const matched = args.typePrefix
-          ? findings.filter((f) => f.type.startsWith(args.typePrefix!))
-          : findings;
-        const filtered = matched.slice(0, args.limit);
-
-        const instanceParts = [
-          args.typePrefix ?? "_all",
-          args.severityMin !== undefined ? `sev${args.severityMin}` : null,
-          args.accountId ?? null,
-        ].filter(Boolean);
-        const instanceName = instanceParts.join("__").replace(
-          /[^a-zA-Z0-9_-]/g,
-          "-",
-        );
-
-        const handle = await context.writeResource(
-          "finding_list",
-          instanceName,
-          {
-            findings: filtered,
-            count: filtered.length,
-            truncated: nextToken !== undefined || capReached ||
-              matched.length > args.limit,
-            filters: {
-              typePrefix: args.typePrefix || null,
-              severityMin: args.severityMin ?? null,
-              accountId: args.accountId || null,
-              startTime: startTime.toISOString(),
-              endTime: endTime.toISOString(),
+          // Build filter criteria
+          const criterion: Record<string, Condition> = {
+            updatedAt: {
+              GreaterThanOrEqual: startTime.getTime(),
+              LessThanOrEqual: endTime.getTime(),
             },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          };
+          if (args.severityMin !== undefined) {
+            criterion["severity"] = { GreaterThanOrEqual: args.severityMin };
+          }
+          if (args.accountId) {
+            criterion["accountId"] = { Eq: [args.accountId] };
+          }
 
-        context.logger.info("Found {count} findings", {
-          count: filtered.length,
-        });
-        return { dataHandles: [handle] };
+          // List finding IDs — when using typePrefix, fetch more to compensate
+          // for client-side filtering, but cap to avoid unbounded API calls
+          const maxIds = args.typePrefix ? args.limit * 20 : args.limit;
+          const allIds: string[] = [];
+          let nextToken: string | undefined;
+          do {
+            const batchSize = Math.min(50, maxIds - allIds.length);
+            if (batchSize <= 0) break;
+            const resp = await client.send(
+              new ListFindingsCommand({
+                DetectorId: detectorId,
+                FindingCriteria: { Criterion: criterion },
+                MaxResults: batchSize,
+                NextToken: nextToken,
+              }),
+            );
+            if (resp.FindingIds) {
+              allIds.push(...resp.FindingIds);
+            }
+            nextToken = resp.NextToken;
+          } while (nextToken && allIds.length < maxIds);
+          const capReached = allIds.length >= maxIds;
+
+          // Fetch details in batches of 50
+          const findings: z.infer<typeof FindingSummarySchema>[] = [];
+          for (let i = 0; i < allIds.length; i += 50) {
+            const batch = allIds.slice(i, i + 50);
+            const resp = await client.send(
+              new GetFindingsCommand({
+                DetectorId: detectorId,
+                FindingIds: batch,
+              }),
+            );
+            if (resp.Findings) {
+              findings.push(...resp.Findings.map(mapFindingSummary));
+            }
+          }
+
+          // Apply client-side prefix filter and enforce limit
+          const matched = args.typePrefix
+            ? findings.filter((f) => f.type.startsWith(args.typePrefix!))
+            : findings;
+          const filtered = matched.slice(0, args.limit);
+
+          const instanceParts = [
+            args.typePrefix ?? "_all",
+            args.severityMin !== undefined ? `sev${args.severityMin}` : null,
+            args.accountId ?? null,
+          ].filter(Boolean);
+          const instanceName = instanceParts.join("__").replace(
+            /[^a-zA-Z0-9_-]/g,
+            "-",
+          );
+
+          const handle = await context.writeResource(
+            "finding_list",
+            instanceName,
+            {
+              findings: filtered,
+              count: filtered.length,
+              truncated: nextToken !== undefined || capReached ||
+                matched.length > args.limit,
+              filters: {
+                typePrefix: args.typePrefix || null,
+                severityMin: args.severityMin ?? null,
+                accountId: args.accountId || null,
+                startTime: startTime.toISOString(),
+                endTime: endTime.toISOString(),
+              },
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} findings", {
+            count: filtered.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -402,43 +406,47 @@ export const model = {
         const client = new GuardDutyClient({
           region: context.globalArgs.region,
         });
-        const detectorId = await getDetectorId(client, context.logger);
+        try {
+          const detectorId = await getDetectorId(client, context.logger);
 
-        const ids = args.findingIds.slice(0, 50);
+          const ids = args.findingIds.slice(0, 50);
 
-        // Build a stable, collision-resistant instance name
-        const instanceSuffix = ids.length === 1 ? ids[0] : Array.from(
-          new Uint8Array(
-            await crypto.subtle.digest(
-              "SHA-1",
-              new TextEncoder().encode(ids.slice().sort().join(",")),
+          // Build a stable, collision-resistant instance name
+          const instanceSuffix = ids.length === 1 ? ids[0] : Array.from(
+            new Uint8Array(
+              await crypto.subtle.digest(
+                "SHA-1",
+                new TextEncoder().encode(ids.slice().sort().join(",")),
+              ),
             ),
-          ),
-        ).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+          ).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
 
-        const resp = await client.send(
-          new GetFindingsCommand({
-            DetectorId: detectorId,
-            FindingIds: ids,
-          }),
-        );
+          const resp = await client.send(
+            new GetFindingsCommand({
+              DetectorId: detectorId,
+              FindingIds: ids,
+            }),
+          );
 
-        const findings = (resp.Findings || []).map(mapFindingDetail);
+          const findings = (resp.Findings || []).map(mapFindingDetail);
 
-        const handle = await context.writeResource(
-          "finding_details",
-          `details-${instanceSuffix}`.replace(/[^a-zA-Z0-9_-]/g, "-"),
-          {
-            findings,
+          const handle = await context.writeResource(
+            "finding_details",
+            `details-${instanceSuffix}`.replace(/[^a-zA-Z0-9_-]/g, "-"),
+            {
+              findings,
+              count: findings.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Retrieved {count} finding details", {
             count: findings.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Retrieved {count} finding details", {
-          count: findings.length,
-        });
-        return { dataHandles: [handle] };
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -473,40 +481,44 @@ export const model = {
         const client = new GuardDutyClient({
           region: context.globalArgs.region,
         });
-        const detectorId = await getDetectorId(client, context.logger);
+        try {
+          const detectorId = await getDetectorId(client, context.logger);
 
-        const members: z.infer<typeof MemberSchema>[] = [];
-        let nextToken: string | undefined;
-        do {
-          const resp = await client.send(
-            new ListMembersCommand({
-              DetectorId: detectorId,
-              OnlyAssociated: args.onlyAssociated ? "true" : "false",
-              MaxResults: Math.min(50, args.limit - members.length),
-              NextToken: nextToken,
-            }),
-          );
-          if (resp.Members) {
-            members.push(...resp.Members.map(mapMember));
-          }
-          nextToken = resp.NextToken;
-        } while (nextToken && members.length < args.limit);
+          const members: z.infer<typeof MemberSchema>[] = [];
+          let nextToken: string | undefined;
+          do {
+            const resp = await client.send(
+              new ListMembersCommand({
+                DetectorId: detectorId,
+                OnlyAssociated: args.onlyAssociated ? "true" : "false",
+                MaxResults: Math.min(50, args.limit - members.length),
+                NextToken: nextToken,
+              }),
+            );
+            if (resp.Members) {
+              members.push(...resp.Members.map(mapMember));
+            }
+            nextToken = resp.NextToken;
+          } while (nextToken && members.length < args.limit);
 
-        const truncated = nextToken !== undefined ||
-          members.length > args.limit;
-        const result = members.slice(0, args.limit);
+          const truncated = nextToken !== undefined ||
+            members.length > args.limit;
+          const result = members.slice(0, args.limit);
 
-        const handle = await context.writeResource("member_list", "members", {
-          members: result,
-          count: result.length,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-        });
+          const handle = await context.writeResource("member_list", "members", {
+            members: result,
+            count: result.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          });
 
-        context.logger.info("Found {count} member accounts", {
-          count: result.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} member accounts", {
+            count: result.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
   },

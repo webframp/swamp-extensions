@@ -44,16 +44,24 @@ export async function cfApi<T>(
   return data.result;
 }
 
+const MAX_PAGES = 20;
+
+export interface PaginatedResult<T> {
+  results: T[];
+  truncated: boolean;
+}
+
 export async function cfApiPaginated<T>(
   apiToken: string,
   path: string,
   params?: Record<string, string>,
-): Promise<T[]> {
+): Promise<PaginatedResult<T>> {
   const allResults: T[] = [];
   let page = 1;
   const perPage = 50;
+  let truncated = false;
 
-  while (true) {
+  while (page <= MAX_PAGES) {
     const queryParams = new URLSearchParams({
       page: String(page),
       per_page: String(perPage),
@@ -83,5 +91,9 @@ export async function cfApiPaginated<T>(
     page++;
   }
 
-  return allResults;
+  if (page > MAX_PAGES) {
+    truncated = true;
+  }
+
+  return { results: allResults, truncated };
 }

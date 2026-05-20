@@ -45,23 +45,24 @@ swamp model method run aws-traces analyze_errors --input startTime=6h
 
 ## Methods
 
-| Method | Description |
-|---|---|
+| Method              | Description                                                        |
+| ------------------- | ------------------------------------------------------------------ |
 | `get_service_graph` | Retrieve the X-Ray service dependency graph with health statistics |
-| `get_traces` | List trace summaries with optional filter expressions |
-| `get_errors` | Fetch error, fault, or throttle traces for incident investigation |
-| `analyze_errors` | Aggregate error patterns and surface top faulty services and URLs |
+| `get_traces`        | List trace summaries with optional filter expressions              |
+| `get_errors`        | Fetch error, fault, or throttle traces for incident investigation  |
+| `analyze_errors`    | Aggregate error patterns and surface top faulty services and URLs  |
 
 ## Resources
 
-- **service_graph** -- Service dependency graph with edge statistics (30 min lifetime)
+- **service_graph** -- Service dependency graph with edge statistics (30 min
+  lifetime)
 - **trace_summaries** -- Paginated trace summary list (1 hr lifetime)
 - **error_analysis** -- Aggregated error rates and top offenders (1 hr lifetime)
 
 ## Time Formats
 
-The `startTime` and `endTime` parameters accept relative durations (`30m`,
-`1h`, `2d`) and ISO 8601 timestamps (`2026-03-30T12:00:00Z`).
+The `startTime` and `endTime` parameters accept relative durations (`30m`, `1h`,
+`2d`) and ISO 8601 timestamps (`2026-03-30T12:00:00Z`).
 
 ## License
 

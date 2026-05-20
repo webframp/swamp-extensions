@@ -131,7 +131,11 @@ async function waitForQueryCompletion(
   const startTime = Date.now();
   let status = "Running";
   let results: Array<Record<string, string>> = [];
-  let statistics = null;
+  let statistics: {
+    recordsMatched: number;
+    recordsScanned: number;
+    bytesScanned: number;
+  } | null = null;
 
   while (Date.now() - startTime < maxWaitMs) {
     const command = new GetQueryResultsCommand({ queryId });
@@ -240,50 +244,58 @@ export const model = {
         const client = new CloudWatchLogsClient({
           region: context.globalArgs.region,
         });
-        const logGroups: z.infer<typeof LogGroupSchema>[] = [];
-        let nextToken: string | undefined;
+        try {
+          const logGroups: z.infer<typeof LogGroupSchema>[] = [];
+          let nextToken: string | undefined;
 
-        do {
-          const command = new DescribeLogGroupsCommand({
-            logGroupNamePrefix: args.prefix,
-            nextToken,
-            limit: Math.min(50, args.limit - logGroups.length),
-          });
-          const response = await client.send(command);
+          do {
+            const command = new DescribeLogGroupsCommand({
+              logGroupNamePrefix: args.prefix,
+              nextToken,
+              limit: Math.min(50, args.limit - logGroups.length),
+            });
+            const response = await client.send(command);
 
-          if (response.logGroups) {
-            for (const lg of response.logGroups) {
-              if (logGroups.length >= args.limit) break;
-              logGroups.push({
-                name: lg.logGroupName || "",
-                arn: lg.arn || null,
-                creationTime: lg.creationTime
-                  ? new Date(lg.creationTime).toISOString()
-                  : null,
-                retentionDays: lg.retentionInDays || null,
-                storedBytes: lg.storedBytes || null,
-                logGroupClass: lg.logGroupClass || null,
-              });
+            if (response.logGroups) {
+              for (const lg of response.logGroups) {
+                if (logGroups.length >= args.limit) break;
+                logGroups.push({
+                  name: lg.logGroupName || "",
+                  arn: lg.arn || null,
+                  creationTime: lg.creationTime
+                    ? new Date(lg.creationTime).toISOString()
+                    : null,
+                  retentionDays: lg.retentionInDays || null,
+                  storedBytes: lg.storedBytes || null,
+                  logGroupClass: lg.logGroupClass || null,
+                });
+              }
             }
-          }
 
-          nextToken = response.nextToken;
-        } while (nextToken && logGroups.length < args.limit);
+            nextToken = response.nextToken;
+          } while (nextToken && logGroups.length < args.limit);
 
-        const instanceName = args.prefix
-          ? `prefix-${args.prefix.replace(/\//g, "-")}`
-          : "all";
+          const instanceName = args.prefix
+            ? `prefix-${args.prefix.replace(/\//g, "-")}`
+            : "all";
 
-        const handle = await context.writeResource("log_groups", instanceName, {
-          logGroups,
-          count: logGroups.length,
-          fetchedAt: new Date().toISOString(),
-        });
+          const handle = await context.writeResource(
+            "log_groups",
+            instanceName,
+            {
+              logGroups,
+              count: logGroups.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
 
-        context.logger.info("Found {count} log groups", {
-          count: logGroups.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} log groups", {
+            count: logGroups.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -334,61 +346,64 @@ export const model = {
         const client = new CloudWatchLogsClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
+          // Start the query
+          const startCommand = new StartQueryCommand({
+            logGroupNames: args.logGroupNames,
+            queryString: args.queryString,
+            startTime: Math.floor(startTime.getTime() / 1000),
+            endTime: Math.floor(endTime.getTime() / 1000),
+          });
 
-        // Start the query
-        const startCommand = new StartQueryCommand({
-          logGroupNames: args.logGroupNames,
-          queryString: args.queryString,
-          startTime: Math.floor(startTime.getTime() / 1000),
-          endTime: Math.floor(endTime.getTime() / 1000),
-        });
+          const startResponse = await client.send(startCommand);
+          const queryId = startResponse.queryId;
 
-        const startResponse = await client.send(startCommand);
-        const queryId = startResponse.queryId;
+          if (!queryId) {
+            throw new Error("Failed to start query - no queryId returned");
+          }
 
-        if (!queryId) {
-          throw new Error("Failed to start query - no queryId returned");
-        }
+          context.logger.info("Started query {queryId}", { queryId });
 
-        context.logger.info("Started query {queryId}", { queryId });
-
-        // Wait for completion
-        const { status, results, statistics } = await waitForQueryCompletion(
-          client,
-          queryId,
-          args.maxWaitSeconds * 1000,
-        );
-
-        const instanceName = `query-${Date.now()}-${
-          args.logGroupNames[0]?.replace(/\//g, "-") || "unknown"
-        }`;
-
-        const handle = await context.writeResource(
-          "query_results",
-          instanceName,
-          {
+          // Wait for completion
+          const { status, results, statistics } = await waitForQueryCompletion(
+            client,
             queryId,
-            status,
-            results,
-            statistics,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+            args.maxWaitSeconds * 1000,
+          );
 
-        context.logger.info(
-          "Query {status}: {matched} records matched, {scanned} scanned",
-          {
-            status,
-            matched: statistics?.recordsMatched || 0,
-            scanned: statistics?.recordsScanned || 0,
-          },
-        );
-        return { dataHandles: [handle] };
+          const instanceName = `query-${Date.now()}-${
+            args.logGroupNames[0]?.replace(/\//g, "-") || "unknown"
+          }`;
+
+          const handle = await context.writeResource(
+            "query_results",
+            instanceName,
+            {
+              queryId,
+              status,
+              results,
+              statistics,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info(
+            "Query {status}: {matched} records matched, {scanned} scanned",
+            {
+              status,
+              matched: statistics?.recordsMatched || 0,
+              scanned: statistics?.recordsScanned || 0,
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -439,129 +454,132 @@ export const model = {
         const client = new CloudWatchLogsClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
+          // Query for error patterns
+          const queryString = `
+            fields @timestamp, @message, @logStream
+            | filter @message like /(?i)(${args.keywords.join("|")})/
+            | sort @timestamp desc
+            | limit ${args.limit}
+          `;
 
-        // Query for error patterns
-        const queryString = `
-          fields @timestamp, @message, @logStream
-          | filter @message like /(?i)(${args.keywords.join("|")})/
-          | sort @timestamp desc
-          | limit ${args.limit}
-        `;
+          const startCommand = new StartQueryCommand({
+            logGroupNames: args.logGroupNames,
+            queryString,
+            startTime: Math.floor(startTime.getTime() / 1000),
+            endTime: Math.floor(endTime.getTime() / 1000),
+          });
 
-        const startCommand = new StartQueryCommand({
-          logGroupNames: args.logGroupNames,
-          queryString,
-          startTime: Math.floor(startTime.getTime() / 1000),
-          endTime: Math.floor(endTime.getTime() / 1000),
-        });
+          const startResponse = await client.send(startCommand);
+          const queryId = startResponse.queryId;
 
-        const startResponse = await client.send(startCommand);
-        const queryId = startResponse.queryId;
-
-        if (!queryId) {
-          throw new Error("Failed to start error query");
-        }
-
-        const { results } = await waitForQueryCompletion(
-          client,
-          queryId,
-          30000,
-        );
-
-        // Analyze patterns from results
-        const patternCounts = new Map<
-          string,
-          {
-            count: number;
-            firstTs: string | null;
-            lastTs: string | null;
-            samples: string[];
+          if (!queryId) {
+            throw new Error("Failed to start error query");
           }
-        >();
 
-        for (const row of results) {
-          const message = row["@message"] || "";
-          const timestamp = row["@timestamp"] || "";
+          const { results } = await waitForQueryCompletion(
+            client,
+            queryId,
+            30000,
+          );
 
-          // Extract a simplified pattern (remove timestamps, IDs, numbers)
-          const pattern = message
-            .replace(
-              /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*/g,
-              "[TIMESTAMP]",
-            )
-            .replace(
-              /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-              "[UUID]",
-            )
-            .replace(/\b\d+\b/g, "[NUM]")
-            .substring(0, 200);
+          // Analyze patterns from results
+          const patternCounts = new Map<
+            string,
+            {
+              count: number;
+              firstTs: string | null;
+              lastTs: string | null;
+              samples: string[];
+            }
+          >();
 
-          const existing = patternCounts.get(pattern);
-          if (existing) {
-            existing.count++;
-            if (timestamp < (existing.firstTs || "")) {
-              existing.firstTs = timestamp;
+          for (const row of results) {
+            const message = row["@message"] || "";
+            const timestamp = row["@timestamp"] || "";
+
+            // Extract a simplified pattern (remove timestamps, IDs, numbers)
+            const pattern = message
+              .replace(
+                /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[^\s]*/g,
+                "[TIMESTAMP]",
+              )
+              .replace(
+                /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+                "[UUID]",
+              )
+              .replace(/\b\d+\b/g, "[NUM]")
+              .substring(0, 200);
+
+            const existing = patternCounts.get(pattern);
+            if (existing) {
+              existing.count++;
+              if (timestamp < (existing.firstTs || "")) {
+                existing.firstTs = timestamp;
+              }
+              if (timestamp > (existing.lastTs || "")) {
+                existing.lastTs = timestamp;
+              }
+              if (existing.samples.length < 3) {
+                existing.samples.push(message.substring(0, 500));
+              }
+            } else {
+              patternCounts.set(pattern, {
+                count: 1,
+                firstTs: timestamp,
+                lastTs: timestamp,
+                samples: [message.substring(0, 500)],
+              });
             }
-            if (timestamp > (existing.lastTs || "")) {
-              existing.lastTs = timestamp;
-            }
-            if (existing.samples.length < 3) {
-              existing.samples.push(message.substring(0, 500));
-            }
-          } else {
-            patternCounts.set(pattern, {
-              count: 1,
-              firstTs: timestamp,
-              lastTs: timestamp,
-              samples: [message.substring(0, 500)],
-            });
           }
-        }
 
-        // Convert to sorted array
-        const patterns = [...patternCounts.entries()]
-          .map(([pattern, data]) => ({
-            pattern,
-            count: data.count,
-            firstOccurrence: data.firstTs,
-            lastOccurrence: data.lastTs,
-            sampleMessages: data.samples,
-          }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 20);
+          // Convert to sorted array
+          const patterns = [...patternCounts.entries()]
+            .map(([pattern, data]) => ({
+              pattern,
+              count: data.count,
+              firstOccurrence: data.firstTs,
+              lastOccurrence: data.lastTs,
+              sampleMessages: data.samples,
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 20);
 
-        const instanceName = `errors-${
-          args.logGroupNames[0]?.replace(/\//g, "-") || "unknown"
-        }`;
+          const instanceName = `errors-${
+            args.logGroupNames[0]?.replace(/\//g, "-") || "unknown"
+          }`;
 
-        const handle = await context.writeResource(
-          "error_analysis",
-          instanceName,
-          {
-            logGroupName: args.logGroupNames.join(", "),
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
+          const handle = await context.writeResource(
+            "error_analysis",
+            instanceName,
+            {
+              logGroupName: args.logGroupNames.join(", "),
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              totalErrors: results.length,
+              patterns,
+              fetchedAt: new Date().toISOString(),
             },
-            totalErrors: results.length,
-            patterns,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          );
 
-        context.logger.info(
-          "Found {total} errors with {patterns} unique patterns",
-          {
-            total: results.length,
-            patterns: patterns.length,
-          },
-        );
-        return { dataHandles: [handle] };
+          context.logger.info(
+            "Found {total} errors with {patterns} unique patterns",
+            {
+              total: results.length,
+              patterns: patterns.length,
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -606,64 +624,69 @@ export const model = {
         const client = new CloudWatchLogsClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const events: z.infer<typeof LogEventSchema>[] = [];
+          let nextToken: string | undefined;
 
-        const startTime = parseRelativeTime(args.startTime);
-        const events: z.infer<typeof LogEventSchema>[] = [];
-        let nextToken: string | undefined;
+          do {
+            const command = new FilterLogEventsCommand({
+              logGroupName: args.logGroupName,
+              filterPattern: args.filterPattern,
+              startTime: startTime.getTime(),
+              limit: Math.min(100, args.limit - events.length),
+              nextToken,
+            });
 
-        do {
-          const command = new FilterLogEventsCommand({
-            logGroupName: args.logGroupName,
-            filterPattern: args.filterPattern,
-            startTime: startTime.getTime(),
-            limit: Math.min(100, args.limit - events.length),
-            nextToken,
-          });
+            const response = await client.send(command);
 
-          const response = await client.send(command);
-
-          if (response.events) {
-            for (const event of response.events) {
-              if (events.length >= args.limit) break;
-              events.push({
-                timestamp: event.timestamp
-                  ? new Date(event.timestamp).toISOString()
-                  : "",
-                message: event.message || "",
-                logStreamName: event.logStreamName || null,
-              });
+            if (response.events) {
+              for (const event of response.events) {
+                if (events.length >= args.limit) break;
+                events.push({
+                  timestamp: event.timestamp
+                    ? new Date(event.timestamp).toISOString()
+                    : "",
+                  message: event.message || "",
+                  logStreamName: event.logStreamName || null,
+                });
+              }
             }
-          }
 
-          nextToken = response.nextToken;
-        } while (nextToken && events.length < args.limit);
+            nextToken = response.nextToken;
+          } while (nextToken && events.length < args.limit);
 
-        const instanceName = `events-${args.logGroupName.replace(/\//g, "-")}`;
+          const instanceName = `events-${
+            args.logGroupName.replace(/\//g, "-")
+          }`;
 
-        const handle = await context.writeResource(
-          "query_results",
-          instanceName,
-          {
-            queryId: "filter-events",
-            status: "Complete",
-            results: events.map((e) => ({
-              "@timestamp": e.timestamp,
-              "@message": e.message,
-              "@logStream": e.logStreamName || "",
-            })),
-            statistics: {
-              recordsMatched: events.length,
-              recordsScanned: events.length,
-              bytesScanned: 0,
+          const handle = await context.writeResource(
+            "query_results",
+            instanceName,
+            {
+              queryId: "filter-events",
+              status: "Complete",
+              results: events.map((e) => ({
+                "@timestamp": e.timestamp,
+                "@message": e.message,
+                "@logStream": e.logStreamName || "",
+              })),
+              statistics: {
+                recordsMatched: events.length,
+                recordsScanned: events.length,
+                bytesScanned: 0,
+              },
+              fetchedAt: new Date().toISOString(),
             },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          );
 
-        context.logger.info("Retrieved {count} log events", {
-          count: events.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Retrieved {count} log events", {
+            count: events.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
   },

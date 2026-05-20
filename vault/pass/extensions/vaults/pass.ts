@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.3.6";
 
 const ConfigSchema = z.object({
   storeDir: z.string().optional().describe(

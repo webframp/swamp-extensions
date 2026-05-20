@@ -343,60 +343,63 @@ export const model = {
         const client = new XRayClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
+          const services: z.infer<typeof ServiceNodeSchema>[] = [];
+          let nextToken: string | undefined;
+          let containsOldVersions = false;
 
-        const services: z.infer<typeof ServiceNodeSchema>[] = [];
-        let nextToken: string | undefined;
-        let containsOldVersions = false;
+          do {
+            const command = new GetServiceGraphCommand({
+              StartTime: startTime,
+              EndTime: endTime,
+              GroupName: args.groupName,
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-        do {
-          const command = new GetServiceGraphCommand({
-            StartTime: startTime,
-            EndTime: endTime,
-            GroupName: args.groupName,
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
-
-          if (response.ContainsOldGroupVersions) {
-            containsOldVersions = true;
-          }
-
-          if (response.Services) {
-            for (const svc of response.Services) {
-              services.push(mapService(svc as ServiceNode));
+            if (response.ContainsOldGroupVersions) {
+              containsOldVersions = true;
             }
-          }
 
-          nextToken = response.NextToken;
-        } while (nextToken);
+            if (response.Services) {
+              for (const svc of response.Services) {
+                services.push(mapService(svc as ServiceNode));
+              }
+            }
 
-        const instanceName = args.groupName
-          ? `graph-${args.groupName.replace(/[\/\s]/g, "-")}`
-          : "graph-default";
+            nextToken = response.NextToken;
+          } while (nextToken);
 
-        const handle = await context.writeResource(
-          "service_graph",
-          instanceName,
-          {
-            services,
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
+          const instanceName = args.groupName
+            ? `graph-${args.groupName.replace(/[\/\s]/g, "-")}`
+            : "graph-default";
+
+          const handle = await context.writeResource(
+            "service_graph",
+            instanceName,
+            {
+              services,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              containsOldGroupVersions: containsOldVersions,
+              fetchedAt: new Date().toISOString(),
             },
-            containsOldGroupVersions: containsOldVersions,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          );
 
-        context.logger.info("Found {count} services in graph", {
-          count: services.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} services in graph", {
+            count: services.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -449,56 +452,59 @@ export const model = {
         const client = new XRayClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
+          const traces: z.infer<typeof TraceSummarySchema>[] = [];
+          let nextToken: string | undefined;
 
-        const traces: z.infer<typeof TraceSummarySchema>[] = [];
-        let nextToken: string | undefined;
+          do {
+            const command = new GetTraceSummariesCommand({
+              StartTime: startTime,
+              EndTime: endTime,
+              FilterExpression: args.filterExpression,
+              Sampling: args.sampling,
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-        do {
-          const command = new GetTraceSummariesCommand({
-            StartTime: startTime,
-            EndTime: endTime,
-            FilterExpression: args.filterExpression,
-            Sampling: args.sampling,
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
-
-          if (response.TraceSummaries) {
-            for (const trace of response.TraceSummaries) {
-              if (traces.length >= args.limit) break;
-              traces.push(mapTraceSummary(trace as TraceSummaryItem));
+            if (response.TraceSummaries) {
+              for (const trace of response.TraceSummaries) {
+                if (traces.length >= args.limit) break;
+                traces.push(mapTraceSummary(trace as TraceSummaryItem));
+              }
             }
-          }
 
-          nextToken = response.NextToken;
-        } while (nextToken && traces.length < args.limit);
+            nextToken = response.NextToken;
+          } while (nextToken && traces.length < args.limit);
 
-        const instanceName = args.filterExpression
-          ? `traces-filtered-${Date.now()}`
-          : `traces-${Date.now()}`;
+          const instanceName = args.filterExpression
+            ? `traces-filtered-${Date.now()}`
+            : `traces-${Date.now()}`;
 
-        const handle = await context.writeResource(
-          "trace_summaries",
-          instanceName,
-          {
-            traces,
-            count: traces.length,
-            filterExpression: args.filterExpression || null,
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
+          const handle = await context.writeResource(
+            "trace_summaries",
+            instanceName,
+            {
+              traces,
+              count: traces.length,
+              filterExpression: args.filterExpression || null,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              fetchedAt: new Date().toISOString(),
             },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          );
 
-        context.logger.info("Found {count} traces", { count: traces.length });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} traces", { count: traces.length });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -545,74 +551,77 @@ export const model = {
         const client = new XRayClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
-
-        // Build filter expression based on error type
-        let filterExpression: string;
-        switch (args.errorType) {
-          case "fault":
-            filterExpression = "fault = true";
-            break;
-          case "error":
-            filterExpression = "error = true";
-            break;
-          case "throttle":
-            filterExpression = "throttle = true";
-            break;
-          case "any":
-          default:
-            filterExpression =
-              "fault = true OR error = true OR throttle = true";
-        }
-
-        const traces: z.infer<typeof TraceSummarySchema>[] = [];
-        let nextToken: string | undefined;
-
-        do {
-          const command = new GetTraceSummariesCommand({
-            StartTime: startTime,
-            EndTime: endTime,
-            FilterExpression: filterExpression,
-            Sampling: false, // Don't sample for error investigation
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
-
-          if (response.TraceSummaries) {
-            for (const trace of response.TraceSummaries) {
-              if (traces.length >= args.limit) break;
-              traces.push(mapTraceSummary(trace as TraceSummaryItem));
-            }
+          // Build filter expression based on error type
+          let filterExpression: string;
+          switch (args.errorType) {
+            case "fault":
+              filterExpression = "fault = true";
+              break;
+            case "error":
+              filterExpression = "error = true";
+              break;
+            case "throttle":
+              filterExpression = "throttle = true";
+              break;
+            case "any":
+            default:
+              filterExpression =
+                "fault = true OR error = true OR throttle = true";
           }
 
-          nextToken = response.NextToken;
-        } while (nextToken && traces.length < args.limit);
+          const traces: z.infer<typeof TraceSummarySchema>[] = [];
+          let nextToken: string | undefined;
 
-        const instanceName = `errors-${args.errorType}-${Date.now()}`;
+          do {
+            const command = new GetTraceSummariesCommand({
+              StartTime: startTime,
+              EndTime: endTime,
+              FilterExpression: filterExpression,
+              Sampling: false, // Don't sample for error investigation
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-        const handle = await context.writeResource(
-          "trace_summaries",
-          instanceName,
-          {
-            traces,
-            count: traces.length,
-            filterExpression,
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
+            if (response.TraceSummaries) {
+              for (const trace of response.TraceSummaries) {
+                if (traces.length >= args.limit) break;
+                traces.push(mapTraceSummary(trace as TraceSummaryItem));
+              }
+            }
+
+            nextToken = response.NextToken;
+          } while (nextToken && traces.length < args.limit);
+
+          const instanceName = `errors-${args.errorType}-${Date.now()}`;
+
+          const handle = await context.writeResource(
+            "trace_summaries",
+            instanceName,
+            {
+              traces,
+              count: traces.length,
+              filterExpression,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              fetchedAt: new Date().toISOString(),
             },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          );
 
-        context.logger.info("Found {count} error traces", {
-          count: traces.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} error traces", {
+            count: traces.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -646,109 +655,116 @@ export const model = {
         const client = new XRayClient({
           region: context.globalArgs.region,
         });
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
 
-        const startTime = parseRelativeTime(args.startTime);
-        const endTime = args.endTime
-          ? parseRelativeTime(args.endTime)
-          : new Date();
+          // Get all traces for analysis
+          const allTraces: TraceSummaryItem[] = [];
+          let nextToken: string | undefined;
 
-        // Get all traces for analysis
-        const allTraces: TraceSummaryItem[] = [];
-        let nextToken: string | undefined;
+          do {
+            const command = new GetTraceSummariesCommand({
+              StartTime: startTime,
+              EndTime: endTime,
+              Sampling: true,
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-        do {
-          const command = new GetTraceSummariesCommand({
-            StartTime: startTime,
-            EndTime: endTime,
-            Sampling: true,
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
+            if (response.TraceSummaries) {
+              allTraces.push(
+                ...(response.TraceSummaries as TraceSummaryItem[]),
+              );
+            }
 
-          if (response.TraceSummaries) {
-            allTraces.push(...(response.TraceSummaries as TraceSummaryItem[]));
-          }
+            nextToken = response.NextToken;
+            // Limit to 1000 traces for analysis
+          } while (nextToken && allTraces.length < 1000);
 
-          nextToken = response.NextToken;
-          // Limit to 1000 traces for analysis
-        } while (nextToken && allTraces.length < 1000);
+          // Analyze the traces
+          let faultCount = 0;
+          let errorCount = 0;
+          let throttleCount = 0;
+          const serviceFaults: Record<string, number> = {};
+          const urlFaults: Record<string, number> = {};
 
-        // Analyze the traces
-        let faultCount = 0;
-        let errorCount = 0;
-        let throttleCount = 0;
-        const serviceFaults: Record<string, number> = {};
-        const urlFaults: Record<string, number> = {};
+          for (const trace of allTraces) {
+            if (trace.HasFault) faultCount++;
+            if (trace.HasError) errorCount++;
+            if (trace.HasThrottle) throttleCount++;
 
-        for (const trace of allTraces) {
-          if (trace.HasFault) faultCount++;
-          if (trace.HasError) errorCount++;
-          if (trace.HasThrottle) throttleCount++;
+            if (trace.HasFault) {
+              // Track faulty services
+              if (trace.ServiceIds) {
+                for (const svc of trace.ServiceIds) {
+                  const name = svc.Name || "unknown";
+                  serviceFaults[name] = (serviceFaults[name] || 0) + 1;
+                }
+              }
 
-          if (trace.HasFault) {
-            // Track faulty services
-            if (trace.ServiceIds) {
-              for (const svc of trace.ServiceIds) {
-                const name = svc.Name || "unknown";
-                serviceFaults[name] = (serviceFaults[name] || 0) + 1;
+              // Track faulty URLs
+              if (trace.Http?.HttpURL) {
+                const url = trace.Http.HttpURL;
+                urlFaults[url] = (urlFaults[url] || 0) + 1;
               }
             }
-
-            // Track faulty URLs
-            if (trace.Http?.HttpURL) {
-              const url = trace.Http.HttpURL;
-              urlFaults[url] = (urlFaults[url] || 0) + 1;
-            }
           }
-        }
 
-        const totalTraces = allTraces.length;
-        const faultRate = totalTraces > 0 ? faultCount / totalTraces : 0;
-        const errorRate = totalTraces > 0 ? errorCount / totalTraces : 0;
-        const throttleRate = totalTraces > 0 ? throttleCount / totalTraces : 0;
+          const totalTraces = allTraces.length;
+          const faultRate = totalTraces > 0 ? faultCount / totalTraces : 0;
+          const errorRate = totalTraces > 0 ? errorCount / totalTraces : 0;
+          const throttleRate = totalTraces > 0
+            ? throttleCount / totalTraces
+            : 0;
 
-        // Sort and get top faulty services
-        const topFaultyServices = Object.entries(serviceFaults)
-          .map(([serviceName, count]) => ({ serviceName, faultCount: count }))
-          .sort((a, b) => b.faultCount - a.faultCount)
-          .slice(0, 10);
+          // Sort and get top faulty services
+          const topFaultyServices = Object.entries(serviceFaults)
+            .map(([serviceName, count]) => ({ serviceName, faultCount: count }))
+            .sort((a, b) => b.faultCount - a.faultCount)
+            .slice(0, 10);
 
-        // Sort and get top faulty URLs
-        const topFaultyUrls = Object.entries(urlFaults)
-          .map(([url, count]) => ({ url, faultCount: count }))
-          .sort((a, b) => b.faultCount - a.faultCount)
-          .slice(0, 10);
+          // Sort and get top faulty URLs
+          const topFaultyUrls = Object.entries(urlFaults)
+            .map(([url, count]) => ({ url, faultCount: count }))
+            .sort((a, b) => b.faultCount - a.faultCount)
+            .slice(0, 10);
 
-        const handle = await context.writeResource(
-          "error_analysis",
-          `analysis-${Date.now()}`,
-          {
-            totalTraces,
-            faultCount,
-            errorCount,
-            throttleCount,
-            faultRate,
-            errorRate,
-            throttleRate,
-            topFaultyServices,
-            topFaultyUrls,
-            timeRange: {
-              start: startTime.toISOString(),
-              end: endTime.toISOString(),
+          const handle = await context.writeResource(
+            "error_analysis",
+            `analysis-${Date.now()}`,
+            {
+              totalTraces,
+              faultCount,
+              errorCount,
+              throttleCount,
+              faultRate,
+              errorRate,
+              throttleRate,
+              topFaultyServices,
+              topFaultyUrls,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              fetchedAt: new Date().toISOString(),
             },
-            fetchedAt: new Date().toISOString(),
-          },
-        );
+          );
 
-        context.logger.info(
-          "Analyzed {total} traces: {faults} faults ({rate}%)",
-          {
-            total: totalTraces,
-            faults: faultCount,
-            rate: (faultRate * 100).toFixed(1),
-          },
-        );
-        return { dataHandles: [handle] };
+          context.logger.info(
+            "Analyzed {total} traces: {faults} faults ({rate}%)",
+            {
+              total: totalTraces,
+              faults: faultCount,
+              rate: (faultRate * 100).toFixed(1),
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
   },

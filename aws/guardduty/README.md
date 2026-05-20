@@ -36,8 +36,10 @@ swamp model method run gd list_members
 
 ## Methods
 
-- **list_findings** - List findings with filters for type, severity, time window, and account
-- **get_finding_details** - Get full resource and service action details for specific findings
+- **list_findings** - List findings with filters for type, severity, time
+  window, and account
+- **get_finding_details** - Get full resource and service action details for
+  specific findings
 - **list_members** - List member accounts and their enrollment status
 
 ## Example Workflow Step

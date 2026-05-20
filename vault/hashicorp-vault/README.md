@@ -1,17 +1,16 @@
 # @webframp/hashicorp-vault
 
-HashiCorp Vault KV secrets engine provider for swamp. This extension
-integrates swamp with a HashiCorp Vault server, allowing you to store,
-retrieve, and list secrets through the Vault REST API. It supports both
-KV v1 and KV v2 secrets engines, custom mount paths, and Vault Enterprise
-namespaces.
+HashiCorp Vault KV secrets engine provider for swamp. This extension integrates
+swamp with a HashiCorp Vault server, allowing you to store, retrieve, and list
+secrets through the Vault REST API. It supports both KV v1 and KV v2 secrets
+engines, custom mount paths, and Vault Enterprise namespaces.
 
 ## Prerequisites
 
 - A running HashiCorp Vault server (self-hosted or HCP Vault)
 - A valid Vault token with read/write access to the target KV engine
-- The `VAULT_ADDR` environment variable or an explicit address in your
-  swamp configuration
+- The `VAULT_ADDR` environment variable or an explicit address in your swamp
+  configuration
 
 ## Installation
 
@@ -30,15 +29,15 @@ vaults:
     config:
       address: "https://vault.example.com:8200"
       token: "hvs.CAESI..."
-      mount: "secret"        # default: "secret"
-      kvVersion: "2"         # "1" or "2" (default: "2")
-      namespace: "admin"     # optional, Vault Enterprise only
+      mount: "secret" # default: "secret"
+      kvVersion: "2" # "1" or "2" (default: "2")
+      namespace: "admin" # optional, Vault Enterprise only
 ```
 
 ## Usage
 
-Once configured, interact with secrets through the standard `swamp vault`
-CLI commands:
+Once configured, interact with secrets through the standard `swamp vault` CLI
+commands:
 
 ```bash
 # Store a secret
@@ -53,8 +52,8 @@ swamp vault list hashi
 
 ## Vault expressions in model definitions
 
-Reference vault secrets inside model resource definitions using the
-`vault()` expression:
+Reference vault secrets inside model resource definitions using the `vault()`
+expression:
 
 ```yaml
 resources:
@@ -67,11 +66,10 @@ resources:
 
 ## How it works
 
-The provider communicates with the Vault HTTP API. For KV v2 engines it
-uses the `/v1/<mount>/data/<key>` and `/v1/<mount>/metadata/<key>` paths;
-for KV v1 it uses `/v1/<mount>/<key>` directly. Secrets with a single
-`value` field are returned as plain strings; multi-field secrets are
-returned as JSON.
+The provider communicates with the Vault HTTP API. For KV v2 engines it uses the
+`/v1/<mount>/data/<key>` and `/v1/<mount>/metadata/<key>` paths; for KV v1 it
+uses `/v1/<mount>/<key>` directly. Secrets with a single `value` field are
+returned as plain strings; multi-field secrets are returned as JSON.
 
 ## License
 

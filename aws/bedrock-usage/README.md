@@ -1,13 +1,13 @@
 # @webframp/aws/bedrock-usage
 
 AWS Bedrock token usage monitoring — multi-account fan-out scanning of
-InputTokenCount and OutputTokenCount metrics via CloudWatch. Provides
-per-model breakdowns, tokens-per-minute rates, and invocation stats.
+InputTokenCount and OutputTokenCount metrics via CloudWatch. Provides per-model
+breakdowns, tokens-per-minute rates, and invocation stats.
 
 ## Authentication
 
-Uses the AWS credential chain. Supports cross-account access via named
-profiles with assumed roles (SSO, credential-process, etc.).
+Uses the AWS credential chain. Supports cross-account access via named profiles
+with assumed roles (SSO, credential-process, etc.).
 
 ## Required IAM Permissions
 

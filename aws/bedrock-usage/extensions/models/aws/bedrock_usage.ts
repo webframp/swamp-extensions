@@ -316,9 +316,8 @@ export const model = {
 
         for (const profile of context.globalArgs.profiles) {
           for (const region of context.globalArgs.regions) {
+            const client = createClient(profile, region);
             try {
-              const client = createClient(profile, region);
-
               // Get aggregate totals
               const totals = await getTokenCounts(
                 client,
@@ -401,6 +400,8 @@ export const model = {
                 region,
                 error: String(err),
               });
+            } finally {
+              client.destroy();
             }
           }
         }
@@ -473,24 +474,29 @@ export const model = {
         const region = args.region ?? context.globalArgs.regions[0] ??
           "us-east-1";
         const client = createClient(profile, region);
-        const { models, truncated: modelsTruncated } = await listBedrockModels(
-          client,
-        );
+        try {
+          const { models, truncated: modelsTruncated } =
+            await listBedrockModels(
+              client,
+            );
 
-        const result = {
-          profile,
-          region,
-          models,
-          truncated: modelsTruncated,
-          fetchedAt: new Date().toISOString(),
-        };
+          const result = {
+            profile,
+            region,
+            models,
+            truncated: modelsTruncated,
+            fetchedAt: new Date().toISOString(),
+          };
 
-        const handle = await context.writeResource(
-          "active_models",
-          sanitizeInstanceName(`${profile}-${region}`),
-          result,
-        );
-        return { dataHandles: [handle] };
+          const handle = await context.writeResource(
+            "active_models",
+            sanitizeInstanceName(`${profile}-${region}`),
+            result,
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -534,81 +540,84 @@ export const model = {
         );
         const periodMinutes = args.days * 24 * 60;
         const client = createClient(profile, region);
+        try {
+          const totals = await getTokenCounts(client, startTime, endTime);
+          const { models: modelIds, truncated: modelsTruncated } =
+            await listBedrockModels(client);
+          const models: z.infer<typeof ModelUsageSchema>[] = [];
+          let anyTruncated = modelsTruncated;
 
-        const totals = await getTokenCounts(client, startTime, endTime);
-        const { models: modelIds, truncated: modelsTruncated } =
-          await listBedrockModels(client);
-        const models: z.infer<typeof ModelUsageSchema>[] = [];
-        let anyTruncated = modelsTruncated;
-
-        const batchSize = 5;
-        for (let i = 0; i < modelIds.length; i += batchSize) {
-          const batch = modelIds.slice(i, i + batchSize);
-          const results = await Promise.all(
-            batch.map((modelId) =>
-              getTokenCounts(client, startTime, endTime, modelId)
-                .then((usage) => ({ modelId, ...usage, failed: false }))
-                .catch(() => ({
-                  modelId,
-                  inputTokens: 0,
-                  outputTokens: 0,
-                  failed: true,
-                }))
-            ),
-          );
-          for (const r of results) {
-            if (r.failed) {
-              anyTruncated = true;
-              continue;
-            }
-            if (r.inputTokens > 0 || r.outputTokens > 0) {
-              models.push({
-                modelId: r.modelId,
-                inputTokens: r.inputTokens,
-                outputTokens: r.outputTokens,
-                totalTokens: r.inputTokens + r.outputTokens,
-              });
+          const batchSize = 5;
+          for (let i = 0; i < modelIds.length; i += batchSize) {
+            const batch = modelIds.slice(i, i + batchSize);
+            const results = await Promise.all(
+              batch.map((modelId) =>
+                getTokenCounts(client, startTime, endTime, modelId)
+                  .then((usage) => ({ modelId, ...usage, failed: false }))
+                  .catch(() => ({
+                    modelId,
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    failed: true,
+                  }))
+              ),
+            );
+            for (const r of results) {
+              if (r.failed) {
+                anyTruncated = true;
+                continue;
+              }
+              if (r.inputTokens > 0 || r.outputTokens > 0) {
+                models.push({
+                  modelId: r.modelId,
+                  inputTokens: r.inputTokens,
+                  outputTokens: r.outputTokens,
+                  totalTokens: r.inputTokens + r.outputTokens,
+                });
+              }
             }
           }
-        }
 
-        const invocations = await getInvocations(client, startTime, endTime);
+          const invocations = await getInvocations(client, startTime, endTime);
 
-        const result = {
-          scannedAt: new Date().toISOString(),
-          truncated: anyTruncated,
-          days: args.days,
-          periodMinutes,
-          accounts: [
-            {
-              profile,
-              accountId: null,
-              region,
+          const result = {
+            scannedAt: new Date().toISOString(),
+            truncated: anyTruncated,
+            days: args.days,
+            periodMinutes,
+            accounts: [
+              {
+                profile,
+                accountId: null,
+                region,
+                inputTokens: totals.inputTokens,
+                outputTokens: totals.outputTokens,
+                totalTokens: totals.inputTokens + totals.outputTokens,
+                models: models.sort((a, b) => b.totalTokens - a.totalTokens),
+                invocations,
+                periodMinutes,
+                inputTokensPerMinute: totals.inputTokens / periodMinutes,
+                outputTokensPerMinute: totals.outputTokens / periodMinutes,
+              },
+            ],
+            totals: {
               inputTokens: totals.inputTokens,
               outputTokens: totals.outputTokens,
               totalTokens: totals.inputTokens + totals.outputTokens,
-              models: models.sort((a, b) => b.totalTokens - a.totalTokens),
-              invocations,
-              periodMinutes,
               inputTokensPerMinute: totals.inputTokens / periodMinutes,
               outputTokensPerMinute: totals.outputTokens / periodMinutes,
             },
-          ],
-          totals: {
-            inputTokens: totals.inputTokens,
-            outputTokens: totals.outputTokens,
-            totalTokens: totals.inputTokens + totals.outputTokens,
-            inputTokensPerMinute: totals.inputTokens / periodMinutes,
-            outputTokensPerMinute: totals.outputTokens / periodMinutes,
-          },
-        };
+          };
 
-        const handle = await context.writeResource(
-          "single_scan",
-          sanitizeInstanceName(`${profile}-${region}`),
-          result,
-        );
-        return { dataHandles: [handle] };
+          const handle = await context.writeResource(
+            "single_scan",
+            sanitizeInstanceName(`${profile}-${region}`),
+            result,
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
   },

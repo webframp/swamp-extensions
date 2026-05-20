@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.3.6";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 // =============================================================================
@@ -111,7 +111,9 @@ export const model = {
         if (args.type) params.type = args.type;
         if (args.name) params.name = args.name;
 
-        const records = await cfApiPaginated<z.infer<typeof DnsRecordSchema>>(
+        const { results: records, truncated } = await cfApiPaginated<
+          z.infer<typeof DnsRecordSchema>
+        >(
           apiToken,
           `/zones/${zoneId}/dns_records`,
           params,
@@ -120,6 +122,7 @@ export const model = {
         const handle = await context.writeResource("records", "main", {
           zoneId,
           records,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 

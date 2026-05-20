@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.3.6";
 
 /** Shape returned by {@link vault.createProvider}. */
 interface VaultProviderInstance {
@@ -150,47 +150,51 @@ export const vault = {
       },
 
       list: async (): Promise<string[]> => {
+        const MAX_DEPTH = 10;
+        const MAX_KEYS = 10000;
         const listPath = parsed.kvVersion === "2"
           ? `${baseUrl}/v1/${parsed.mount}/metadata`
           : `${baseUrl}/v1/${parsed.mount}`;
 
+        const allKeys: string[] = [];
+
         const collectKeys = async (
           path: string,
           prefix: string = "",
-        ): Promise<string[]> => {
+          depth: number = 0,
+        ): Promise<void> => {
+          if (depth >= MAX_DEPTH || allKeys.length >= MAX_KEYS) return;
+
           const response = await fetch(`${path}?list=true`, {
             method: "LIST",
             headers: headers(),
           });
 
           if (response.status === 404) {
-            return [];
+            return;
           }
 
           const data = (await handleResponse(response, "list")) as {
             data: { keys: string[] };
           };
 
-          const keys: string[] = [];
-
           for (const key of data.data.keys) {
+            if (allKeys.length >= MAX_KEYS) break;
             const fullKey = prefix ? `${prefix}${key}` : key;
             if (key.endsWith("/")) {
-              // It's a folder, recurse
-              const subKeys = await collectKeys(
+              await collectKeys(
                 `${path}/${key.slice(0, -1)}`,
                 fullKey,
+                depth + 1,
               );
-              keys.push(...subKeys);
             } else {
-              keys.push(fullKey);
+              allKeys.push(fullKey);
             }
           }
-
-          return keys;
         };
 
-        return (await collectKeys(listPath)).sort();
+        await collectKeys(listPath);
+        return allKeys.sort();
       },
 
       getName: (): string => name,

@@ -218,18 +218,19 @@ Deno.test({
     };
 
     try {
-      const results = await cfApiPaginated<{ id: string }>(
+      const { results, truncated } = await cfApiPaginated<{ id: string }>(
         "test-token",
         "/zones",
       );
 
       assertEquals(results.length, 4);
-      assertEquals(results.map((r) => r.id), [
+      assertEquals(results.map((r: { id: string }) => r.id), [
         "zone-1",
         "zone-2",
         "zone-3",
         "zone-4",
       ]);
+      assertEquals(truncated, false);
       assertEquals(requestCount, 2);
     } finally {
       globalThis.fetch = originalFetch;
@@ -260,7 +261,7 @@ Deno.test({
     };
 
     try {
-      const results = await cfApiPaginated<{ id: string }>(
+      const { results } = await cfApiPaginated<{ id: string }>(
         "test-token",
         "/zones",
       );

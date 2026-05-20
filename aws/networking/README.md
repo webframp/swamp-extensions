@@ -1,14 +1,15 @@
 # @webframp/aws/networking
 
-Inspect VPC networking resources that commonly generate hidden costs: NAT Gateways,
-Load Balancers (ALB/NLB), and Elastic IPs. This extension queries the AWS EC2,
-Elastic Load Balancing, and CloudWatch APIs to surface resource inventories and
-data-transfer metrics so you can identify waste before it shows up on the bill.
+Inspect VPC networking resources that commonly generate hidden costs: NAT
+Gateways, Load Balancers (ALB/NLB), and Elastic IPs. This extension queries the
+AWS EC2, Elastic Load Balancing, and CloudWatch APIs to surface resource
+inventories and data-transfer metrics so you can identify waste before it shows
+up on the bill.
 
 ## Prerequisites
 
-The extension uses the default AWS credential chain. Your IAM principal must have
-the following permissions:
+The extension uses the default AWS credential chain. Your IAM principal must
+have the following permissions:
 
 - `ec2:DescribeNatGateways`
 - `ec2:DescribeAddresses`
@@ -37,9 +38,9 @@ swamp model method run aws-networking list_elastic_ips
 
 ## Data Transfer Metrics
 
-The `get_data_transfer_metrics` method collects CloudWatch byte-transfer statistics
-for NAT Gateways and request counts for Application Load Balancers over a
-configurable lookback window:
+The `get_data_transfer_metrics` method collects CloudWatch byte-transfer
+statistics for NAT Gateways and request counts for Application Load Balancers
+over a configurable lookback window:
 
 ```bash
 # Default 7-day lookback
