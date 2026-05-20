@@ -196,6 +196,10 @@ function shellQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\"'\"'") + "'";
 }
 
+function instanceSuffix(region: string, vpcId?: string): string {
+  return vpcId ? `${region}-${vpcId}` : region;
+}
+
 interface DiscoveredVpc {
   vpcId: string;
   cidrBlock: string;
@@ -334,7 +338,7 @@ function generateSetupCommands(
   }
 
   for (const secret of discovered.secrets) {
-    const safeName = secret.name.replace(/\//g, "-");
+    const safeName = secret.name.replace(/\//g, "%2F");
     const name = `${prefix}-secret-${safeName}`;
     commands.push(
       `swamp model create @swamp/aws/secretsmanager/secret ${shellQuote(name)} --global-arg name=${shellQuote(name)}`,
@@ -752,7 +756,7 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `vpcs-${context.globalArgs.region}`,
+            `vpcs-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -786,7 +790,7 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `subnets-${context.globalArgs.region}`,
+            `subnets-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -820,7 +824,7 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `igws-${context.globalArgs.region}`,
+            `igws-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -854,7 +858,7 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `route-tables-${context.globalArgs.region}`,
+            `route-tables-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -888,7 +892,7 @@ export const model = {
           );
           const handle = await context.writeResource(
             "partial",
-            `security-groups-${context.globalArgs.region}`,
+            `security-groups-${instanceSuffix(context.globalArgs.region, context.globalArgs.vpcId)}`,
             {
               region: context.globalArgs.region,
               vpcId: context.globalArgs.vpcId,
@@ -1166,7 +1170,8 @@ export const model = {
           const firstCluster = rdsClusters[0]?.clusterIdentifier ?? "";
           const firstDbSubnetGroup = dbSubnetGroups[0]?.name ?? "";
           const firstSecret = secrets[0]?.name ?? "";
-          const safeSecretName = firstSecret.replace(/\//g, "-");
+          const firstSecretArn = secrets[0]?.arn ?? "";
+          const safeSecretName = firstSecret.replace(/\//g, "%2F");
 
           let workflowCommand = "";
           if (vpcId) {
@@ -1184,6 +1189,10 @@ export const model = {
               workflowCommand +=
                 ` --input secretName=${shellQuote(safeSecretName)}`;
             }
+            if (firstSecretArn) {
+              workflowCommand +=
+                ` --input secretArn=${shellQuote(firstSecretArn)}`;
+            }
             if (args.prefix !== "adopt") {
               workflowCommand += ` --input prefix=${shellQuote(args.prefix)}`;
             }
@@ -1195,7 +1204,7 @@ export const model = {
 
           const handle = await context.writeResource(
             "discovery",
-            `all-${region}`,
+            `all-${instanceSuffix(region, context.globalArgs.vpcId)}`,
             {
               region,
               vpcId: context.globalArgs.vpcId,

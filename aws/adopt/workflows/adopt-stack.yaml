@@ -36,7 +36,10 @@ inputs:
       description: DB subnet group name for adoption
     secretName:
       type: string
-      description: Sanitized secret name (slashes replaced with hyphens)
+      description: Sanitized secret name (slashes percent-encoded) used in model names
+    secretArn:
+      type: string
+      description: Full ARN of the secret for AWS API lookup
     prefix:
       type: string
       default: adopt
@@ -93,13 +96,13 @@ jobs:
           type: completed
     steps:
       - name: get-secret
-        description: Adopt the secret by its sanitized name
+        description: Adopt the secret by its ARN
         task:
           type: model_method
           modelIdOrName: ${{ inputs.prefix }}-secret-${{ inputs.secretName }}
           methodName: get
           inputs:
-            identifier: ${{ inputs.secretName }}
+            identifier: ${{ inputs.secretArn }}
         allowFailure: true
 
   - name: verify-adoption
