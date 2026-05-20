@@ -712,7 +712,7 @@ Deno.test({
       }
 
       // Verify prefix appears in workflow command
-      assertEquals(data.workflowCommand.includes("prefix=mystack"), true);
+      assertEquals(data.workflowCommand.includes("prefix='mystack'"), true);
     } finally {
       restore();
     }

@@ -178,5 +178,8 @@ Deno.test("empty step executions", async () => {
   assertEquals(result.json.summary.totalAttempted, 0);
   assertEquals(result.json.summary.succeeded, 0);
   assertEquals(result.json.summary.failed, 0);
-  assertStringIncludes(result.markdown, "All resources adopted successfully");
+  assertStringIncludes(
+    result.markdown,
+    "No adoption steps were executed. Verify workflow configuration and inputs.",
+  );
 });

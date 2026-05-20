@@ -192,6 +192,10 @@ function modelNameSuffix(resourceId: string): string {
   return resourceId.slice(-9);
 }
 
+function shellQuote(value: string): string {
+  return "'" + value.replace(/'/g, "'\"'\"'") + "'";
+}
+
 interface DiscoveredVpc {
   vpcId: string;
   cidrBlock: string;
@@ -270,61 +274,70 @@ function generateSetupCommands(
 
   for (const vpc of discovered.vpcs) {
     const suffix = modelNameSuffix(vpc.vpcId);
+    const name = `${prefix}-vpc-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/vpc ${prefix}-vpc-${suffix} --global-arg 'name=${prefix}-vpc-${suffix}' --global-arg 'CidrBlock=${vpc.cidrBlock}'`,
+      `swamp model create @swamp/aws/ec2/vpc ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg CidrBlock=${shellQuote(vpc.cidrBlock)}`,
     );
   }
 
   for (const subnet of discovered.subnets) {
     const suffix = modelNameSuffix(subnet.subnetId);
+    const name = `${prefix}-subnet-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/subnet ${prefix}-subnet-${suffix} --global-arg 'name=${prefix}-subnet-${suffix}' --global-arg 'VpcId=${subnet.vpcId}' --global-arg 'CidrBlock=${subnet.cidrBlock}' --global-arg 'AvailabilityZone=${subnet.availabilityZone}'`,
+      `swamp model create @swamp/aws/ec2/subnet ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(subnet.vpcId)} --global-arg CidrBlock=${shellQuote(subnet.cidrBlock)} --global-arg AvailabilityZone=${shellQuote(subnet.availabilityZone)}`,
     );
   }
 
   for (const igw of discovered.igws) {
     const suffix = modelNameSuffix(igw.internetGatewayId);
+    const name = `${prefix}-igw-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/internet-gateway ${prefix}-igw-${suffix} --global-arg 'name=${prefix}-igw-${suffix}'`,
+      `swamp model create @swamp/aws/ec2/internet-gateway ${shellQuote(name)} --global-arg name=${shellQuote(name)}`,
     );
   }
 
   for (const rt of discovered.routeTables) {
     const suffix = modelNameSuffix(rt.routeTableId);
+    const name = `${prefix}-rt-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/route-table ${prefix}-rt-${suffix} --global-arg 'name=${prefix}-rt-${suffix}' --global-arg 'VpcId=${rt.vpcId}'`,
+      `swamp model create @swamp/aws/ec2/route-table ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(rt.vpcId)}`,
     );
   }
 
   for (const sg of discovered.securityGroups) {
     const suffix = modelNameSuffix(sg.groupId);
+    const name = `${prefix}-sg-${suffix}`;
     commands.push(
-      `swamp model create @swamp/aws/ec2/security-group ${prefix}-sg-${suffix} --global-arg 'name=${prefix}-sg-${suffix}' --global-arg 'VpcId=${sg.vpcId}' --global-arg 'GroupName=${sg.groupName}'`,
+      `swamp model create @swamp/aws/ec2/security-group ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(sg.vpcId)} --global-arg GroupName=${shellQuote(sg.groupName)}`,
     );
   }
 
   for (const cluster of discovered.rdsClusters) {
+    const name = `${prefix}-cluster-${cluster.clusterIdentifier}`;
     commands.push(
-      `swamp model create @swamp/aws/rds/dbcluster ${prefix}-cluster-${cluster.clusterIdentifier} --global-arg 'name=${prefix}-cluster-${cluster.clusterIdentifier}' --global-arg 'Engine=${cluster.engine}' --global-arg 'EngineVersion=${cluster.engineVersion}'`,
+      `swamp model create @swamp/aws/rds/dbcluster ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg Engine=${shellQuote(cluster.engine)} --global-arg EngineVersion=${shellQuote(cluster.engineVersion)}`,
     );
   }
 
   for (const instance of discovered.rdsInstances) {
+    const name = `${prefix}-instance-${instance.dbInstanceIdentifier}`;
     commands.push(
-      `swamp model create @swamp/aws/rds/dbinstance ${prefix}-instance-${instance.dbInstanceIdentifier} --global-arg 'name=${prefix}-instance-${instance.dbInstanceIdentifier}' --global-arg 'DBInstanceClass=${instance.dbInstanceClass}' --global-arg 'Engine=${instance.engine}'`,
+      `swamp model create @swamp/aws/rds/dbinstance ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg DBInstanceClass=${shellQuote(instance.dbInstanceClass)} --global-arg Engine=${shellQuote(instance.engine)}`,
     );
   }
 
   for (const dbsg of discovered.dbSubnetGroups) {
+    const name = `${prefix}-dbsubnet-${dbsg.name}`;
     commands.push(
-      `swamp model create @swamp/aws/rds/dbsubnet-group ${prefix}-dbsubnet-${dbsg.name} --global-arg 'name=${prefix}-dbsubnet-${dbsg.name}' --global-arg 'VpcId=${dbsg.vpcId}'`,
+      `swamp model create @swamp/aws/rds/dbsubnet-group ${shellQuote(name)} --global-arg name=${shellQuote(name)} --global-arg VpcId=${shellQuote(dbsg.vpcId)}`,
     );
   }
 
   for (const secret of discovered.secrets) {
     const safeName = secret.name.replace(/\//g, "-");
+    const name = `${prefix}-secret-${safeName}`;
     commands.push(
-      `swamp model create @swamp/aws/secretsmanager/secret ${prefix}-secret-${safeName} --global-arg 'name=${prefix}-secret-${safeName}'`,
+      `swamp model create @swamp/aws/secretsmanager/secret ${shellQuote(name)} --global-arg name=${shellQuote(name)}`,
     );
   }
 
@@ -340,6 +353,8 @@ type GlobalArgs = {
   vpcId?: string;
 };
 
+const MAX_PAGES = 5;
+
 async function discoverVpcs(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
@@ -348,23 +363,33 @@ async function discoverVpcs(
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
   }
-  const command = new DescribeVpcsCommand(
-    filters.length > 0 ? { Filters: filters } : {},
-  );
-  const response = await ec2.send(command);
   const vpcs: z.infer<typeof VpcSchema>[] = [];
-  for (const vpc of response.Vpcs ?? []) {
-    if (!vpc.VpcId) continue;
-    vpcs.push({
-      vpcId: vpc.VpcId,
-      cidrBlock: vpc.CidrBlock ?? "",
-      state: vpc.State ?? "",
-      isDefault: vpc.IsDefault ?? false,
-      tags: tagsToRecord(vpc.Tags),
-      name: getTag(vpc.Tags, "Name"),
-    });
-  }
-  return { results: vpcs, truncated: !!response.NextToken };
+  let nextToken: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await ec2.send(
+      new DescribeVpcsCommand({
+        ...(filters.length > 0 ? { Filters: filters } : {}),
+        NextToken: nextToken,
+      }),
+    );
+    for (const vpc of response.Vpcs ?? []) {
+      if (!vpc.VpcId) continue;
+      vpcs.push({
+        vpcId: vpc.VpcId,
+        cidrBlock: vpc.CidrBlock ?? "",
+        state: vpc.State ?? "",
+        isDefault: vpc.IsDefault ?? false,
+        tags: tagsToRecord(vpc.Tags),
+        name: getTag(vpc.Tags, "Name"),
+      });
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < MAX_PAGES);
+
+  return { results: vpcs, truncated: !!nextToken };
 }
 
 async function discoverSubnets(
@@ -375,24 +400,34 @@ async function discoverSubnets(
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
   }
-  const command = new DescribeSubnetsCommand(
-    filters.length > 0 ? { Filters: filters } : {},
-  );
-  const response = await ec2.send(command);
   const subnets: z.infer<typeof SubnetSchema>[] = [];
-  for (const subnet of response.Subnets ?? []) {
-    if (!subnet.SubnetId) continue;
-    subnets.push({
-      subnetId: subnet.SubnetId,
-      vpcId: subnet.VpcId ?? "",
-      cidrBlock: subnet.CidrBlock ?? "",
-      availabilityZone: subnet.AvailabilityZone ?? "",
-      mapPublicIpOnLaunch: subnet.MapPublicIpOnLaunch ?? false,
-      tags: tagsToRecord(subnet.Tags),
-      name: getTag(subnet.Tags, "Name"),
-    });
-  }
-  return { results: subnets, truncated: !!response.NextToken };
+  let nextToken: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await ec2.send(
+      new DescribeSubnetsCommand({
+        ...(filters.length > 0 ? { Filters: filters } : {}),
+        NextToken: nextToken,
+      }),
+    );
+    for (const subnet of response.Subnets ?? []) {
+      if (!subnet.SubnetId) continue;
+      subnets.push({
+        subnetId: subnet.SubnetId,
+        vpcId: subnet.VpcId ?? "",
+        cidrBlock: subnet.CidrBlock ?? "",
+        availabilityZone: subnet.AvailabilityZone ?? "",
+        mapPublicIpOnLaunch: subnet.MapPublicIpOnLaunch ?? false,
+        tags: tagsToRecord(subnet.Tags),
+        name: getTag(subnet.Tags, "Name"),
+      });
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < MAX_PAGES);
+
+  return { results: subnets, truncated: !!nextToken };
 }
 
 async function discoverInternetGateways(
@@ -405,23 +440,33 @@ async function discoverInternetGateways(
   if (globalArgs.vpcId) {
     filters.push({ Name: "attachment.vpc-id", Values: [globalArgs.vpcId] });
   }
-  const command = new DescribeInternetGatewaysCommand(
-    filters.length > 0 ? { Filters: filters } : {},
-  );
-  const response = await ec2.send(command);
   const igws: z.infer<typeof InternetGatewaySchema>[] = [];
-  for (const igw of response.InternetGateways ?? []) {
-    if (!igw.InternetGatewayId) continue;
-    igws.push({
-      internetGatewayId: igw.InternetGatewayId,
-      attachedVpcIds: (igw.Attachments ?? [])
-        .map((a) => a.VpcId ?? "")
-        .filter((id) => id !== ""),
-      tags: tagsToRecord(igw.Tags),
-      name: getTag(igw.Tags, "Name"),
-    });
-  }
-  return { results: igws, truncated: !!response.NextToken };
+  let nextToken: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await ec2.send(
+      new DescribeInternetGatewaysCommand({
+        ...(filters.length > 0 ? { Filters: filters } : {}),
+        NextToken: nextToken,
+      }),
+    );
+    for (const igw of response.InternetGateways ?? []) {
+      if (!igw.InternetGatewayId) continue;
+      igws.push({
+        internetGatewayId: igw.InternetGatewayId,
+        attachedVpcIds: (igw.Attachments ?? [])
+          .map((a) => a.VpcId ?? "")
+          .filter((id) => id !== ""),
+        tags: tagsToRecord(igw.Tags),
+        name: getTag(igw.Tags, "Name"),
+      });
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < MAX_PAGES);
+
+  return { results: igws, truncated: !!nextToken };
 }
 
 async function discoverRouteTables(
@@ -434,33 +479,43 @@ async function discoverRouteTables(
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
   }
-  const command = new DescribeRouteTablesCommand(
-    filters.length > 0 ? { Filters: filters } : {},
-  );
-  const response = await ec2.send(command);
   const tables: z.infer<typeof RouteTableSchema>[] = [];
-  for (const rt of response.RouteTables ?? []) {
-    if (!rt.RouteTableId) continue;
-    const isMain = (rt.Associations ?? []).some((a) => a.Main === true);
-    const routes = (rt.Routes ?? []).map((r) => ({
-      destination: r.DestinationCidrBlock ?? r.DestinationIpv6CidrBlock ?? "",
-      target: r.GatewayId ?? r.NatGatewayId ?? r.TransitGatewayId ?? "local",
-      state: r.State ?? "",
-    }));
-    const associatedSubnets = (rt.Associations ?? [])
-      .map((a) => a.SubnetId ?? "")
-      .filter((id) => id !== "");
-    tables.push({
-      routeTableId: rt.RouteTableId,
-      vpcId: rt.VpcId ?? "",
-      isMain,
-      routes,
-      associatedSubnets,
-      tags: tagsToRecord(rt.Tags),
-      name: getTag(rt.Tags, "Name"),
-    });
-  }
-  return { results: tables, truncated: !!response.NextToken };
+  let nextToken: string | undefined;
+  let pages = 0;
+
+  do {
+    const response = await ec2.send(
+      new DescribeRouteTablesCommand({
+        ...(filters.length > 0 ? { Filters: filters } : {}),
+        NextToken: nextToken,
+      }),
+    );
+    for (const rt of response.RouteTables ?? []) {
+      if (!rt.RouteTableId) continue;
+      const isMain = (rt.Associations ?? []).some((a) => a.Main === true);
+      const routes = (rt.Routes ?? []).map((r) => ({
+        destination: r.DestinationCidrBlock ?? r.DestinationIpv6CidrBlock ?? "",
+        target: r.GatewayId ?? r.NatGatewayId ?? r.TransitGatewayId ?? "local",
+        state: r.State ?? "",
+      }));
+      const associatedSubnets = (rt.Associations ?? [])
+        .map((a) => a.SubnetId ?? "")
+        .filter((id) => id !== "");
+      tables.push({
+        routeTableId: rt.RouteTableId,
+        vpcId: rt.VpcId ?? "",
+        isMain,
+        routes,
+        associatedSubnets,
+        tags: tagsToRecord(rt.Tags),
+        name: getTag(rt.Tags, "Name"),
+      });
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < MAX_PAGES);
+
+  return { results: tables, truncated: !!nextToken };
 }
 
 async function discoverSecurityGroups(
@@ -473,28 +528,36 @@ async function discoverSecurityGroups(
   if (globalArgs.vpcId) {
     filters.push({ Name: "vpc-id", Values: [globalArgs.vpcId] });
   }
-  const command = new DescribeSecurityGroupsCommand(
-    filters.length > 0 ? { Filters: filters } : {},
-  );
-  const response = await ec2.send(command);
   const groups: z.infer<typeof SecurityGroupSchema>[] = [];
-  for (const sg of response.SecurityGroups ?? []) {
-    if (!sg.GroupId) continue;
-    groups.push({
-      groupId: sg.GroupId,
-      groupName: sg.GroupName ?? "",
-      vpcId: sg.VpcId ?? "",
-      description: sg.Description ?? "",
-      ingressRuleCount: (sg.IpPermissions ?? []).length,
-      egressRuleCount: (sg.IpPermissionsEgress ?? []).length,
-      tags: tagsToRecord(sg.Tags),
-      name: getTag(sg.Tags, "Name"),
-    });
-  }
-  return { results: groups, truncated: !!response.NextToken };
-}
+  let nextToken: string | undefined;
+  let pages = 0;
 
-const MAX_PAGES = 5;
+  do {
+    const response = await ec2.send(
+      new DescribeSecurityGroupsCommand({
+        ...(filters.length > 0 ? { Filters: filters } : {}),
+        NextToken: nextToken,
+      }),
+    );
+    for (const sg of response.SecurityGroups ?? []) {
+      if (!sg.GroupId) continue;
+      groups.push({
+        groupId: sg.GroupId,
+        groupName: sg.GroupName ?? "",
+        vpcId: sg.VpcId ?? "",
+        description: sg.Description ?? "",
+        ingressRuleCount: (sg.IpPermissions ?? []).length,
+        egressRuleCount: (sg.IpPermissionsEgress ?? []).length,
+        tags: tagsToRecord(sg.Tags),
+        name: getTag(sg.Tags, "Name"),
+      });
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < MAX_PAGES);
+
+  return { results: groups, truncated: !!nextToken };
+}
 
 async function discoverRdsClusters(
   rds: RDSClient,
@@ -981,6 +1044,10 @@ export const model = {
       arguments: z.object({
         prefix: z
           .string()
+          .regex(
+            /^[a-z0-9][a-z0-9-]*$/,
+            "prefix must be lowercase alphanumeric and hyphens only",
+          )
           .default("adopt")
           .describe("Prefix for generated model names"),
       }),
@@ -1104,19 +1171,21 @@ export const model = {
           let workflowCommand = "";
           if (vpcId) {
             workflowCommand =
-              `swamp workflow run @webframp/adopt-stack --input vpcId=${vpcId} --input vpcSuffix=${vpcSuffix}`;
+              `swamp workflow run @webframp/adopt-stack --input vpcId=${shellQuote(vpcId)} --input vpcSuffix=${shellQuote(vpcSuffix)}`;
             if (firstCluster) {
-              workflowCommand += ` --input clusterIdentifier=${firstCluster}`;
+              workflowCommand +=
+                ` --input clusterIdentifier=${shellQuote(firstCluster)}`;
             }
             if (firstDbSubnetGroup) {
               workflowCommand +=
-                ` --input dbSubnetGroupName=${firstDbSubnetGroup}`;
+                ` --input dbSubnetGroupName=${shellQuote(firstDbSubnetGroup)}`;
             }
             if (safeSecretName) {
-              workflowCommand += ` --input secretName=${safeSecretName}`;
+              workflowCommand +=
+                ` --input secretName=${shellQuote(safeSecretName)}`;
             }
             if (args.prefix !== "adopt") {
-              workflowCommand += ` --input prefix=${args.prefix}`;
+              workflowCommand += ` --input prefix=${shellQuote(args.prefix)}`;
             }
           }
 

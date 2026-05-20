@@ -61,6 +61,14 @@ interface ReportResult {
 }
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+function escapeCell(value: string): string {
+  return value.replace(/\|/g, "\\|");
+}
+
+// =============================================================================
 // Remediation logic
 // =============================================================================
 
@@ -180,7 +188,7 @@ export const report = {
       for (const r of jobResults) {
         const statusIcon = r.status === "succeeded" ? "✅" : "❌";
         sections.push(
-          `| ${r.modelName} | ${r.modelType} | ${r.method} | ${statusIcon} ${r.status} |`,
+          `| ${escapeCell(r.modelName)} | ${escapeCell(r.modelType)} | ${escapeCell(r.method)} | ${statusIcon} ${r.status} |`,
         );
       }
       sections.push("");
@@ -195,11 +203,11 @@ export const report = {
       sections.push("## Failures\n");
 
       for (const f of failures) {
-        sections.push(`### ❌ ${f.modelName}\n`);
-        sections.push(`- **Type:** ${f.modelType}`);
-        sections.push(`- **Method:** ${f.method}`);
+        sections.push(`### ❌ ${escapeCell(f.modelName)}\n`);
+        sections.push(`- **Type:** ${escapeCell(f.modelType)}`);
+        sections.push(`- **Method:** ${escapeCell(f.method)}`);
         sections.push(
-          `- **Error:** ${f.error ?? "No error message available"}`,
+          `- **Error:** ${escapeCell(f.error ?? "No error message available")}`,
         );
         sections.push(
           `- **Remediation:** ${getRemediation(f.error ?? "")}\n`,
@@ -212,9 +220,13 @@ export const report = {
     // =========================================================================
 
     sections.push("## Next Steps\n");
-    if (failed === 0) {
+    if (failed === 0 && totalAttempted > 0) {
       sections.push(
         "All resources adopted successfully. Recommended follow-up:\n",
+      );
+    } else if (totalAttempted === 0) {
+      sections.push(
+        "No adoption steps were executed. Verify workflow configuration and inputs.\n",
       );
     } else {
       sections.push(

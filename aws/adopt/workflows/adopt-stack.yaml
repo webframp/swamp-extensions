@@ -98,6 +98,8 @@ jobs:
           type: model_method
           modelIdOrName: ${{ inputs.prefix }}-secret-${{ inputs.secretName }}
           methodName: get
+          inputs:
+            identifier: ${{ inputs.secretName }}
         allowFailure: true
 
   - name: verify-adoption
