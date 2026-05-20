@@ -44,6 +44,8 @@ export async function cfApi<T>(
   return data.result;
 }
 
+const MAX_PAGES = 20;
+
 export async function cfApiPaginated<T>(
   apiToken: string,
   path: string,
@@ -53,7 +55,7 @@ export async function cfApiPaginated<T>(
   let page = 1;
   const perPage = 50;
 
-  while (true) {
+  while (page <= MAX_PAGES) {
     const queryParams = new URLSearchParams({
       page: String(page),
       per_page: String(perPage),

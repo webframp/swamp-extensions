@@ -20,6 +20,8 @@ import {
   PricingClient,
 } from "npm:@aws-sdk/client-pricing@3.1010.0";
 
+const MAX_PAGES = 10;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -123,40 +125,46 @@ export const model = {
         },
       ) => {
         const client = new PricingClient({ region: context.globalArgs.region });
-        const services: Array<
-          { serviceCode: string; attributeNames: string[] }
-        > = [];
-        let nextToken: string | undefined;
+        try {
+          const services: Array<
+            { serviceCode: string; attributeNames: string[] }
+          > = [];
+          let nextToken: string | undefined;
+          let pages = 0;
 
-        do {
-          const command = new DescribeServicesCommand({
-            ServiceCode: args.serviceCode,
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
+          do {
+            const command = new DescribeServicesCommand({
+              ServiceCode: args.serviceCode,
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-          if (response.Services) {
-            for (const svc of response.Services) {
-              if (svc.ServiceCode) {
-                services.push({
-                  serviceCode: svc.ServiceCode,
-                  attributeNames: svc.AttributeNames || [],
-                });
+            if (response.Services) {
+              for (const svc of response.Services) {
+                if (svc.ServiceCode) {
+                  services.push({
+                    serviceCode: svc.ServiceCode,
+                    attributeNames: svc.AttributeNames || [],
+                  });
+                }
               }
             }
-          }
-          nextToken = response.NextToken;
-        } while (nextToken);
+            nextToken = response.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
 
-        const handle = await context.writeResource("services", "all", {
-          services,
-          fetchedAt: new Date().toISOString(),
-        });
+          const handle = await context.writeResource("services", "all", {
+            services,
+            fetchedAt: new Date().toISOString(),
+          });
 
-        context.logger.info("Found {count} AWS services", {
-          count: services.length,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} AWS services", {
+            count: services.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -183,44 +191,54 @@ export const model = {
         },
       ) => {
         const client = new PricingClient({ region: context.globalArgs.region });
-        const values: string[] = [];
-        let nextToken: string | undefined;
+        try {
+          const values: string[] = [];
+          let nextToken: string | undefined;
+          let pages = 0;
 
-        do {
-          const command = new GetAttributeValuesCommand({
-            ServiceCode: args.serviceCode,
-            AttributeName: args.attributeName,
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
+          do {
+            const command = new GetAttributeValuesCommand({
+              ServiceCode: args.serviceCode,
+              AttributeName: args.attributeName,
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-          if (response.AttributeValues) {
-            for (const av of response.AttributeValues) {
-              if (av.Value) {
-                values.push(av.Value);
+            if (response.AttributeValues) {
+              for (const av of response.AttributeValues) {
+                if (av.Value) {
+                  values.push(av.Value);
+                }
               }
             }
-          }
-          nextToken = response.NextToken;
-        } while (nextToken);
+            nextToken = response.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
 
-        const instanceName = `${args.serviceCode}-${args.attributeName}`;
-        const handle = await context.writeResource("attributes", instanceName, {
-          serviceCode: args.serviceCode,
-          attributeName: args.attributeName,
-          values: values.sort(),
-          fetchedAt: new Date().toISOString(),
-        });
+          const instanceName = `${args.serviceCode}-${args.attributeName}`;
+          const handle = await context.writeResource(
+            "attributes",
+            instanceName,
+            {
+              serviceCode: args.serviceCode,
+              attributeName: args.attributeName,
+              values: values.sort(),
+              fetchedAt: new Date().toISOString(),
+            },
+          );
 
-        context.logger.info(
-          "Found {count} values for {service}.{attribute}",
-          {
-            count: values.length,
-            service: args.serviceCode,
-            attribute: args.attributeName,
-          },
-        );
-        return { dataHandles: [handle] };
+          context.logger.info(
+            "Found {count} values for {service}.{attribute}",
+            {
+              count: values.length,
+              service: args.serviceCode,
+              attribute: args.attributeName,
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -261,69 +279,73 @@ export const model = {
         },
       ) => {
         const client = new PricingClient({ region: context.globalArgs.region });
+        try {
+          const apiFilters: Filter[] = (args.filters || []).map((f) => ({
+            Type: "TERM_MATCH" as const,
+            Field: f.field,
+            Value: f.value,
+          }));
 
-        const apiFilters: Filter[] = (args.filters || []).map((f) => ({
-          Type: "TERM_MATCH" as const,
-          Field: f.field,
-          Value: f.value,
-        }));
+          const items: Array<{
+            serviceCode: string;
+            product: Record<string, unknown>;
+            terms: Record<string, unknown>;
+          }> = [];
+          let nextToken: string | undefined;
+          let fetched = 0;
 
-        const items: Array<{
-          serviceCode: string;
-          product: Record<string, unknown>;
-          terms: Record<string, unknown>;
-        }> = [];
-        let nextToken: string | undefined;
-        let fetched = 0;
+          do {
+            const command = new GetProductsCommand({
+              ServiceCode: args.serviceCode,
+              Filters: apiFilters.length > 0 ? apiFilters : undefined,
+              NextToken: nextToken,
+              MaxResults: Math.min(100, args.maxResults - fetched),
+            });
+            const response = await client.send(command);
 
-        do {
-          const command = new GetProductsCommand({
-            ServiceCode: args.serviceCode,
-            Filters: apiFilters.length > 0 ? apiFilters : undefined,
-            NextToken: nextToken,
-            MaxResults: Math.min(100, args.maxResults - fetched),
-          });
-          const response = await client.send(command);
-
-          if (response.PriceList) {
-            for (const priceJson of response.PriceList) {
-              if (fetched >= args.maxResults) break;
-              try {
-                const priceData = JSON.parse(priceJson);
-                items.push({
-                  serviceCode: args.serviceCode,
-                  product: priceData.product || {},
-                  terms: priceData.terms || {},
-                });
-                fetched++;
-              } catch {
-                // Skip malformed entries
+            if (response.PriceList) {
+              for (const priceJson of response.PriceList) {
+                if (fetched >= args.maxResults) break;
+                try {
+                  const priceData = JSON.parse(priceJson);
+                  items.push({
+                    serviceCode: args.serviceCode,
+                    product: priceData.product || {},
+                    terms: priceData.terms || {},
+                  });
+                  fetched++;
+                } catch {
+                  // Skip malformed entries
+                }
               }
             }
-          }
-          nextToken = response.NextToken;
-        } while (nextToken && fetched < args.maxResults);
+            nextToken = response.NextToken;
+          } while (nextToken && fetched < args.maxResults);
 
-        const filterStr = (args.filters || [])
-          .map((f) => `${f.field}=${f.value}`)
-          .join(",");
-        const instanceName = `${args.serviceCode}-${filterStr || "all"}`.slice(
-          0,
-          100,
-        );
+          const filterStr = (args.filters || [])
+            .map((f) => `${f.field}=${f.value}`)
+            .join(",");
+          const instanceName = `${args.serviceCode}-${filterStr || "all"}`
+            .slice(
+              0,
+              100,
+            );
 
-        const handle = await context.writeResource("prices", instanceName, {
-          serviceCode: args.serviceCode,
-          filters: args.filters || [],
-          items,
-          fetchedAt: new Date().toISOString(),
-        });
+          const handle = await context.writeResource("prices", instanceName, {
+            serviceCode: args.serviceCode,
+            filters: args.filters || [],
+            items,
+            fetchedAt: new Date().toISOString(),
+          });
 
-        context.logger.info("Found {count} price items for {service}", {
-          count: items.length,
-          service: args.serviceCode,
-        });
-        return { dataHandles: [handle] };
+          context.logger.info("Found {count} price items for {service}", {
+            count: items.length,
+            service: args.serviceCode,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -366,75 +388,78 @@ export const model = {
         },
       ) => {
         const client = new PricingClient({ region: context.globalArgs.region });
+        try {
+          const command = new GetProductsCommand({
+            ServiceCode: "AmazonEC2",
+            Filters: [
+              {
+                Type: "TERM_MATCH",
+                Field: "instanceType",
+                Value: args.instanceType,
+              },
+              {
+                Type: "TERM_MATCH",
+                Field: "location",
+                Value: regionToLocation(args.region),
+              },
+              {
+                Type: "TERM_MATCH",
+                Field: "operatingSystem",
+                Value: args.operatingSystem,
+              },
+              { Type: "TERM_MATCH", Field: "tenancy", Value: args.tenancy },
+              { Type: "TERM_MATCH", Field: "preInstalledSw", Value: "NA" },
+              { Type: "TERM_MATCH", Field: "capacitystatus", Value: "Used" },
+            ],
+            MaxResults: 10,
+          });
 
-        const command = new GetProductsCommand({
-          ServiceCode: "AmazonEC2",
-          Filters: [
-            {
-              Type: "TERM_MATCH",
-              Field: "instanceType",
-              Value: args.instanceType,
-            },
-            {
-              Type: "TERM_MATCH",
-              Field: "location",
-              Value: regionToLocation(args.region),
-            },
-            {
-              Type: "TERM_MATCH",
-              Field: "operatingSystem",
-              Value: args.operatingSystem,
-            },
-            { Type: "TERM_MATCH", Field: "tenancy", Value: args.tenancy },
-            { Type: "TERM_MATCH", Field: "preInstalledSw", Value: "NA" },
-            { Type: "TERM_MATCH", Field: "capacitystatus", Value: "Used" },
-          ],
-          MaxResults: 10,
-        });
+          const response = await client.send(command);
+          const items: Array<{
+            serviceCode: string;
+            product: Record<string, unknown>;
+            terms: Record<string, unknown>;
+          }> = [];
 
-        const response = await client.send(command);
-        const items: Array<{
-          serviceCode: string;
-          product: Record<string, unknown>;
-          terms: Record<string, unknown>;
-        }> = [];
-
-        if (response.PriceList) {
-          for (const priceJson of response.PriceList) {
-            try {
-              const priceData = JSON.parse(priceJson);
-              items.push({
-                serviceCode: "AmazonEC2",
-                product: priceData.product || {},
-                terms: priceData.terms || {},
-              });
-            } catch {
-              // Skip malformed entries
+          if (response.PriceList) {
+            for (const priceJson of response.PriceList) {
+              try {
+                const priceData = JSON.parse(priceJson);
+                items.push({
+                  serviceCode: "AmazonEC2",
+                  product: priceData.product || {},
+                  terms: priceData.terms || {},
+                });
+              } catch {
+                // Skip malformed entries
+              }
             }
           }
+
+          const instanceName = `ec2-${args.instanceType}-${args.region}`;
+          const handle = await context.writeResource("prices", instanceName, {
+            serviceCode: "AmazonEC2",
+            filters: [
+              { field: "instanceType", value: args.instanceType },
+              { field: "region", value: args.region },
+              { field: "operatingSystem", value: args.operatingSystem },
+            ],
+            items,
+            fetchedAt: new Date().toISOString(),
+          });
+
+          context.logger.info(
+            "Found {count} price items for EC2 {type} in {region}",
+            {
+              count: items.length,
+              type: args.instanceType,
+              region: args.region,
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-
-        const instanceName = `ec2-${args.instanceType}-${args.region}`;
-        const handle = await context.writeResource("prices", instanceName, {
-          serviceCode: "AmazonEC2",
-          filters: [
-            { field: "instanceType", value: args.instanceType },
-            { field: "region", value: args.region },
-            { field: "operatingSystem", value: args.operatingSystem },
-          ],
-          items,
-          fetchedAt: new Date().toISOString(),
-        });
-
-        context.logger.info(
-          "Found {count} price items for EC2 {type} in {region}",
-          {
-            count: items.length,
-            type: args.instanceType,
-            region: args.region,
-          },
-        );
-        return { dataHandles: [handle] };
       },
     },
   },

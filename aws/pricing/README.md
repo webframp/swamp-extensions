@@ -1,18 +1,18 @@
 # @webframp/aws/pricing
 
 A swamp model extension for querying the AWS Pricing API. This extension
-provides methods to list available AWS services, retrieve attribute values,
-look up pricing data with flexible filters, and fetch EC2 instance pricing
-through a dedicated convenience method.
+provides methods to list available AWS services, retrieve attribute values, look
+up pricing data with flexible filters, and fetch EC2 instance pricing through a
+dedicated convenience method.
 
 ## Authentication
 
 The extension uses the default AWS credential chain. The Pricing API serves
-public catalog data and does not require special IAM permissions, but valid
-AWS credentials must be present in the environment.
+public catalog data and does not require special IAM permissions, but valid AWS
+credentials must be present in the environment.
 
-The AWS Pricing API is available only in `us-east-1` and `ap-south-1`.
-Configure the model's `region` global argument accordingly.
+The AWS Pricing API is available only in `us-east-1` and `ap-south-1`. Configure
+the model's `region` global argument accordingly.
 
 ## Installation
 
@@ -57,11 +57,11 @@ swamp model method run aws-pricing get_ec2_price \
 ## Methods
 
 | Method                 | Description                                      |
-|------------------------|--------------------------------------------------|
-| `list_services`        | List all AWS services in the Pricing API catalog  |
-| `get_attribute_values` | Retrieve possible values for a service attribute  |
-| `get_price`            | Query pricing data with optional field filters    |
-| `get_ec2_price`        | Shortcut for EC2 On-Demand instance pricing       |
+| ---------------------- | ------------------------------------------------ |
+| `list_services`        | List all AWS services in the Pricing API catalog |
+| `get_attribute_values` | Retrieve possible values for a service attribute |
+| `get_price`            | Query pricing data with optional field filters   |
+| `get_ec2_price`        | Shortcut for EC2 On-Demand instance pricing      |
 
 ## Common Service Codes
 

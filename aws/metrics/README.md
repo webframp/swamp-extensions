@@ -2,13 +2,15 @@
 
 A swamp extension for querying and analyzing AWS CloudWatch Metrics. This model
 provides operational visibility into CloudWatch metric namespaces, enabling
-performance monitoring, trend analysis, and anomaly detection across AWS services.
+performance monitoring, trend analysis, and anomaly detection across AWS
+services.
 
 ## Features
 
 - List available CloudWatch metrics by namespace
 - Retrieve metric data points with configurable statistics and time ranges
-- Analyze metrics for trends, anomalies, and summary statistics using linear regression
+- Analyze metrics for trends, anomalies, and summary statistics using linear
+  regression
 - Convenience methods for common use cases (EC2 CPU, Lambda function metrics)
 - Automatic period calculation based on requested time range
 

@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.3.6";
 
 /** Shape returned by {@link vault.createProvider}. */
 interface VaultProviderInstance {
@@ -150,6 +150,8 @@ export const vault = {
       },
 
       list: async (): Promise<string[]> => {
+        const MAX_DEPTH = 10;
+        const MAX_KEYS = 10000;
         const listPath = parsed.kvVersion === "2"
           ? `${baseUrl}/v1/${parsed.mount}/metadata`
           : `${baseUrl}/v1/${parsed.mount}`;
@@ -157,7 +159,10 @@ export const vault = {
         const collectKeys = async (
           path: string,
           prefix: string = "",
+          depth: number = 0,
         ): Promise<string[]> => {
+          if (depth >= MAX_DEPTH) return [];
+
           const response = await fetch(`${path}?list=true`, {
             method: "LIST",
             headers: headers(),
@@ -174,12 +179,13 @@ export const vault = {
           const keys: string[] = [];
 
           for (const key of data.data.keys) {
+            if (keys.length >= MAX_KEYS) break;
             const fullKey = prefix ? `${prefix}${key}` : key;
             if (key.endsWith("/")) {
-              // It's a folder, recurse
               const subKeys = await collectKeys(
                 `${path}/${key.slice(0, -1)}`,
                 fullKey,
+                depth + 1,
               );
               keys.push(...subKeys);
             } else {

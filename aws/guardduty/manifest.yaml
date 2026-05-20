@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/guardduty"
-version: "2026.04.28.1"
+version: "2026.05.20.1"
 description: |
   Query and inspect GuardDuty findings from a delegated administrator account,
   covering all member accounts in an AWS Organization.

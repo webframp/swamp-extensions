@@ -1,12 +1,14 @@
 # @webframp/aws/cost-estimate
 
-Calculate AWS infrastructure costs from inventory data or planned resource specifications.
-This swamp model extension queries the AWS Pricing API for real-time On-Demand rates
-and produces monthly cost estimates for EC2 and RDS resources.
+Calculate AWS infrastructure costs from inventory data or planned resource
+specifications. This swamp model extension queries the AWS Pricing API for
+real-time On-Demand rates and produces monthly cost estimates for EC2 and RDS
+resources.
 
 ## Features
 
-- Estimate EC2 compute costs from live inventory gathered by `@webframp/aws/inventory`
+- Estimate EC2 compute costs from live inventory gathered by
+  `@webframp/aws/inventory`
 - Estimate RDS costs (compute + storage) from live inventory data
 - Pre-deployment cost estimation from a declarative resource specification
 - Price caching within a single run to minimize API calls
@@ -15,15 +17,15 @@ and produces monthly cost estimates for EC2 and RDS resources.
 ## Authentication
 
 Uses the default AWS credential chain. The Pricing API serves public pricing
-data but still requires valid AWS credentials. Only two regions host the
-Pricing API endpoint: `us-east-1` and `ap-south-1`.
+data but still requires valid AWS credentials. Only two regions host the Pricing
+API endpoint: `us-east-1` and `ap-south-1`.
 
 ## Usage
 
 ### Estimate costs from existing inventory
 
-First gather inventory with `@webframp/aws/inventory`, then pass the data
-to the cost estimate model:
+First gather inventory with `@webframp/aws/inventory`, then pass the data to the
+cost estimate model:
 
 ```bash
 # Create model instances
@@ -50,17 +52,19 @@ swamp model method run cost-est estimate_from_spec \
 
 ## Methods
 
-| Method               | Description                                      |
-| -------------------- | ------------------------------------------------ |
+| Method               | Description                                       |
+| -------------------- | ------------------------------------------------- |
 | `estimate_ec2`       | Estimate EC2 costs from inventory data            |
 | `estimate_rds`       | Estimate RDS costs from inventory data            |
 | `estimate_from_spec` | Estimate costs for planned resources (pre-deploy) |
 
 ## Pricing Notes
 
-- All rates are On-Demand; Reserved Instance and Savings Plan discounts are not applied.
+- All rates are On-Demand; Reserved Instance and Savings Plan discounts are not
+  applied.
 - EC2 estimates cover compute hours only (no EBS volumes or data transfer).
-- RDS estimates include compute hours plus storage at the gp2 default rate of $0.115/GB-month.
+- RDS estimates include compute hours plus storage at the gp2 default rate of
+  $0.115/GB-month.
 - Monthly estimates assume 730 hours per month.
 
 ## License

@@ -1,18 +1,22 @@
 # @webframp/aws/logs
 
 A swamp extension model for querying and analyzing AWS CloudWatch Logs. This
-extension provides operational visibility and incident investigation capabilities
-by wrapping the CloudWatch Logs API with structured methods for log group
-discovery, Logs Insights queries, error pattern analysis, and recent event
+extension provides operational visibility and incident investigation
+capabilities by wrapping the CloudWatch Logs API with structured methods for log
+group discovery, Logs Insights queries, error pattern analysis, and recent event
 filtering.
 
 ## Features
 
 - **Log group discovery** -- list and filter CloudWatch log groups by prefix
-- **Logs Insights queries** -- run ad-hoc CloudWatch Logs Insights queries with automatic polling for results
-- **Error pattern analysis** -- detect and aggregate error patterns across log groups using configurable keywords
-- **Recent event filtering** -- retrieve recent log events with CloudWatch filter patterns
-- **Relative time parsing** -- specify time ranges as relative offsets (`1h`, `30m`, `2d`) or ISO 8601 timestamps
+- **Logs Insights queries** -- run ad-hoc CloudWatch Logs Insights queries with
+  automatic polling for results
+- **Error pattern analysis** -- detect and aggregate error patterns across log
+  groups using configurable keywords
+- **Recent event filtering** -- retrieve recent log events with CloudWatch
+  filter patterns
+- **Relative time parsing** -- specify time ranges as relative offsets (`1h`,
+  `30m`, `2d`) or ISO 8601 timestamps
 
 ## Prerequisites
 
@@ -32,8 +36,8 @@ swamp extension install @webframp/aws/logs
 
 ## Usage
 
-Create a model instance scoped to a specific AWS region, then invoke its
-methods to interact with CloudWatch Logs.
+Create a model instance scoped to a specific AWS region, then invoke its methods
+to interact with CloudWatch Logs.
 
 ```bash
 # Create a logs model instance
@@ -61,12 +65,12 @@ swamp model method run aws-logs get_recent_events \
 
 ## Methods
 
-| Method              | Description                                          |
-|---------------------|------------------------------------------------------|
-| `list_log_groups`   | Discover CloudWatch log groups by name prefix        |
-| `query`             | Run CloudWatch Logs Insights queries                 |
-| `find_errors`       | Analyze error patterns with keyword detection        |
-| `get_recent_events` | Filter and retrieve recent log events                |
+| Method              | Description                                   |
+| ------------------- | --------------------------------------------- |
+| `list_log_groups`   | Discover CloudWatch log groups by name prefix |
+| `query`             | Run CloudWatch Logs Insights queries          |
+| `find_errors`       | Analyze error patterns with keyword detection |
+| `get_recent_events` | Filter and retrieve recent log events         |
 
 ## Time Formats
 

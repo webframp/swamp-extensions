@@ -22,9 +22,9 @@ datastore:
   type: "@webframp/postgres-datastore"
   config:
     connectionString: "postgres://user:pass@your-host:5432/swamp"
-    schema: "swamp"        # default: "swamp"
-    ssl: "verify-ca"       # default: "require"
-    sslCaPath: "/path/to/rds-global-bundle.pem"  # required when ssl=verify-ca
+    schema: "swamp" # default: "swamp"
+    ssl: "verify-ca" # default: "require"
+    sslCaPath: "/path/to/rds-global-bundle.pem" # required when ssl=verify-ca
 ```
 
 Or via environment variable:
@@ -53,11 +53,11 @@ CREATE TABLE swamp.locks (
 
 ## SSL Modes
 
-| Mode        | Behavior                                            |
-|-------------|-----------------------------------------------------|
-| `disable`   | No TLS (local development only)                     |
-| `require`   | TLS without CA verification (default)               |
-| `verify-ca` | TLS with CA certificate verification (recommended)  |
+| Mode        | Behavior                                           |
+| ----------- | -------------------------------------------------- |
+| `disable`   | No TLS (local development only)                    |
+| `require`   | TLS without CA verification (default)              |
+| `verify-ca` | TLS with CA certificate verification (recommended) |
 
 For AWS RDS/Aurora, download the CA bundle:
 

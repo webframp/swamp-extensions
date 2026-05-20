@@ -381,45 +381,49 @@ export const model = {
 
         const cwClient = new CloudWatchClient({ region });
         const snsClient = new SNSClient({ region });
+        try {
+          const command = new DescribeAlarmsCommand({
+            AlarmNames: [alarmName],
+          });
+          const response = await cwClient.send(command);
 
-        const command = new DescribeAlarmsCommand({
-          AlarmNames: [alarmName],
-        });
-        const response = await cwClient.send(command);
+          const alarms: MetricAlarm[] = [
+            ...(response.MetricAlarms ?? []),
+          ];
 
-        const alarms: MetricAlarm[] = [
-          ...(response.MetricAlarms ?? []),
-        ];
+          if (alarms.length === 0) {
+            throw new Error(
+              `Alarm not found: "${alarmName}" in region ${region}`,
+            );
+          }
 
-        if (alarms.length === 0) {
-          throw new Error(
-            `Alarm not found: "${alarmName}" in region ${region}`,
+          const alarm = alarms[0];
+          context.logger.info(
+            "Fetched alarm definition for {alarmName}, enriching",
+            { alarmName },
           );
+
+          const detail = await enrichAlarm(cwClient, snsClient, alarm);
+
+          context.logger.info(
+            "Alarm {alarmName} verdict: {verdict} — {reason}",
+            {
+              alarmName,
+              verdict: detail.verdict,
+              reason: detail.verdictReason,
+            },
+          );
+
+          const handle = await context.writeResource(
+            "alarm_detail",
+            sanitize(alarmName),
+            detail,
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          cwClient.destroy();
+          snsClient.destroy();
         }
-
-        const alarm = alarms[0];
-        context.logger.info(
-          "Fetched alarm definition for {alarmName}, enriching",
-          { alarmName },
-        );
-
-        const detail = await enrichAlarm(cwClient, snsClient, alarm);
-
-        context.logger.info(
-          "Alarm {alarmName} verdict: {verdict} — {reason}",
-          {
-            alarmName,
-            verdict: detail.verdict,
-            reason: detail.verdictReason,
-          },
-        );
-
-        const handle = await context.writeResource(
-          "alarm_detail",
-          sanitize(alarmName),
-          detail,
-        );
-        return { dataHandles: [handle] };
       },
     },
 
@@ -466,107 +470,112 @@ export const model = {
 
         const cwClient = new CloudWatchClient({ region });
         const snsClient = new SNSClient({ region });
+        try {
+          // Fetch all alarms, paginating up to `limit`
+          const alarms: MetricAlarm[] = [];
+          let nextToken: string | undefined;
 
-        // Fetch all alarms, paginating up to `limit`
-        const alarms: MetricAlarm[] = [];
-        let nextToken: string | undefined;
+          do {
+            const command = new DescribeAlarmsCommand({
+              StateValue: stateFilter,
+              NextToken: nextToken,
+              MaxRecords: Math.min(100, limit - alarms.length),
+            });
+            const response = await cwClient.send(command);
 
-        do {
-          const command = new DescribeAlarmsCommand({
-            StateValue: stateFilter,
-            NextToken: nextToken,
-            MaxRecords: Math.min(100, limit - alarms.length),
-          });
-          const response = await cwClient.send(command);
-
-          if (response.MetricAlarms) {
-            for (const alarm of response.MetricAlarms) {
-              if (alarms.length >= limit) break;
-              alarms.push(alarm);
+            if (response.MetricAlarms) {
+              for (const alarm of response.MetricAlarms) {
+                if (alarms.length >= limit) break;
+                alarms.push(alarm);
+              }
             }
-          }
 
-          nextToken = response.NextToken;
-        } while (nextToken && alarms.length < limit);
+            nextToken = response.NextToken;
+          } while (nextToken && alarms.length < limit);
 
-        context.logger.info(
-          "Fetched {count} alarms, beginning enrichment",
-          { count: alarms.length },
-        );
-
-        // Enrich sequentially to avoid rate-limiting CloudWatch/SNS APIs.
-        const handles: { name: string }[] = [];
-        const verdictCounts: Record<string, number> = {};
-        const stateCounts: Record<string, number> = {};
-
-        for (let i = 0; i < alarms.length; i++) {
-          const alarm = alarms[i];
-          context.logger.info("Enriching {alarmName}", {
-            alarmName: alarm.AlarmName ?? "",
-          });
-
-          let detail: AlarmDetail;
-          try {
-            detail = await enrichAlarm(cwClient, snsClient, alarm);
-          } catch (err) {
-            context.logger.warn(
-              "Failed to enrich alarm {alarmName}: {error}",
-              {
-                alarmName: alarm.AlarmName ?? "",
-                error: String(err),
-              },
-            );
-            // Write a degraded record so the alarm still appears in output.
-            detail = {
-              alarmName: alarm.AlarmName ?? "",
-              namespace: alarm.Namespace ?? null,
-              metricName: alarm.MetricName ?? null,
-              state: (alarm.StateValue as
-                | "OK"
-                | "ALARM"
-                | "INSUFFICIENT_DATA") ?? "INSUFFICIENT_DATA",
-              daysInCurrentState: 0,
-              hasAlarmActions: (alarm.AlarmActions ?? []).length > 0 &&
-                (alarm.ActionsEnabled ?? false),
-              sns_topics: [],
-              recentDataPoints: null,
-              lastMetricTimestamp: null,
-              verdict: "unknown",
-              verdictReason: `Enrichment failed: ${String(err)}`,
-              fetchedAt: new Date().toISOString(),
-            };
-          }
-
-          verdictCounts[detail.verdict] = (verdictCounts[detail.verdict] ?? 0) +
-            1;
-          stateCounts[detail.state] = (stateCounts[detail.state] ?? 0) + 1;
-
-          const handle = await context.writeResource(
-            "alarm_detail",
-            `${sanitize(alarm.AlarmName ?? "unknown")}-${i}`,
-            detail,
+          context.logger.info(
+            "Fetched {count} alarms, beginning enrichment",
+            { count: alarms.length },
           );
-          handles.push(handle);
+
+          // Enrich sequentially to avoid rate-limiting CloudWatch/SNS APIs.
+          const handles: { name: string }[] = [];
+          const verdictCounts: Record<string, number> = {};
+          const stateCounts: Record<string, number> = {};
+
+          for (let i = 0; i < alarms.length; i++) {
+            const alarm = alarms[i];
+            context.logger.info("Enriching {alarmName}", {
+              alarmName: alarm.AlarmName ?? "",
+            });
+
+            let detail: AlarmDetail;
+            try {
+              detail = await enrichAlarm(cwClient, snsClient, alarm);
+            } catch (err) {
+              context.logger.warn(
+                "Failed to enrich alarm {alarmName}: {error}",
+                {
+                  alarmName: alarm.AlarmName ?? "",
+                  error: String(err),
+                },
+              );
+              // Write a degraded record so the alarm still appears in output.
+              detail = {
+                alarmName: alarm.AlarmName ?? "",
+                namespace: alarm.Namespace ?? null,
+                metricName: alarm.MetricName ?? null,
+                state: (alarm.StateValue as
+                  | "OK"
+                  | "ALARM"
+                  | "INSUFFICIENT_DATA") ?? "INSUFFICIENT_DATA",
+                daysInCurrentState: 0,
+                hasAlarmActions: (alarm.AlarmActions ?? []).length > 0 &&
+                  (alarm.ActionsEnabled ?? false),
+                sns_topics: [],
+                recentDataPoints: null,
+                lastMetricTimestamp: null,
+                verdict: "unknown",
+                verdictReason: `Enrichment failed: ${String(err)}`,
+                fetchedAt: new Date().toISOString(),
+              };
+            }
+
+            verdictCounts[detail.verdict] =
+              (verdictCounts[detail.verdict] ?? 0) +
+              1;
+            stateCounts[detail.state] = (stateCounts[detail.state] ?? 0) + 1;
+
+            const handle = await context.writeResource(
+              "alarm_detail",
+              `${sanitize(alarm.AlarmName ?? "unknown")}-${i}`,
+              detail,
+            );
+            handles.push(handle);
+          }
+
+          context.logger.info(
+            "Triage complete — {total} alarms processed",
+            { total: alarms.length },
+          );
+
+          const summaryHandle = await context.writeResource(
+            "triage_summary",
+            "summary",
+            {
+              total: alarms.length,
+              byVerdict: verdictCounts,
+              byState: stateCounts,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+          handles.push(summaryHandle);
+
+          return { dataHandles: handles };
+        } finally {
+          cwClient.destroy();
+          snsClient.destroy();
         }
-
-        context.logger.info(
-          "Triage complete — {total} alarms processed",
-          { total: alarms.length },
-        );
-
-        const summaryHandle = await context.writeResource(
-          "triage_summary",
-          "summary",
-          {
-            total: alarms.length,
-            byVerdict: verdictCounts,
-            byState: stateCounts,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        handles.push(summaryHandle);
-
-        return { dataHandles: handles };
       },
     },
   },

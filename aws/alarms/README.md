@@ -1,10 +1,15 @@
 # @webframp/aws/alarms
 
-Query and analyze AWS CloudWatch Alarms for operational visibility and incident response. This extension provides methods to list alarms, retrieve alarm history, identify active alerts, and generate summaries of alarm states across your AWS account.
+Query and analyze AWS CloudWatch Alarms for operational visibility and incident
+response. This extension provides methods to list alarms, retrieve alarm
+history, identify active alerts, and generate summaries of alarm states across
+your AWS account.
 
 ## Authentication
 
-This extension uses the default AWS credential chain. Ensure your environment has valid AWS credentials configured (environment variables, shared credentials file, or IAM role).
+This extension uses the default AWS credential chain. Ensure your environment
+has valid AWS credentials configured (environment variables, shared credentials
+file, or IAM role).
 
 ### Required IAM Permissions
 
@@ -46,16 +51,17 @@ swamp model method run aws-alarms get_summary --input historyHours=6
 
 ## Methods
 
-| Method | Description |
-|---|---|
+| Method        | Description                                                        |
+| ------------- | ------------------------------------------------------------------ |
 | `list_alarms` | List CloudWatch alarms with optional state and name prefix filters |
-| `get_active` | Get all alarms currently in ALARM state |
-| `get_history` | Get alarm state change history with time range filters |
-| `get_summary` | Get a summary including state counts and recent state changes |
+| `get_active`  | Get all alarms currently in ALARM state                            |
+| `get_history` | Get alarm state change history with time range filters             |
+| `get_summary` | Get a summary including state counts and recent state changes      |
 
 ## Time Formats
 
-The `startTime` and `endTime` parameters accept relative times and ISO 8601 dates:
+The `startTime` and `endTime` parameters accept relative times and ISO 8601
+dates:
 
 ```text
 30m    -- 30 minutes ago

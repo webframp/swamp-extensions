@@ -86,7 +86,11 @@ Optional:
 
     const info = await lock.inspect();
     if (info) {
-      pass(`Lock info: holder=${info.holder}, nonce=${info.nonce?.substring(0, 8)}...`);
+      pass(
+        `Lock info: holder=${info.holder}, nonce=${
+          info.nonce?.substring(0, 8)
+        }...`,
+      );
     }
 
     log("Releasing lock...");
@@ -115,11 +119,15 @@ Optional:
   try {
     // Create test files
     await Deno.mkdir(`${tempDir}/test-data`, { recursive: true });
-    const testContent = JSON.stringify({
-      test: true,
-      timestamp: new Date().toISOString(),
-      message: "Hello from smoke test!",
-    }, null, 2);
+    const testContent = JSON.stringify(
+      {
+        test: true,
+        timestamp: new Date().toISOString(),
+        message: "Hello from smoke test!",
+      },
+      null,
+      2,
+    );
     await Deno.writeTextFile(`${tempDir}/test-data/smoke.json`, testContent);
     pass("Created test file: test-data/smoke.json");
 
@@ -143,7 +151,9 @@ Optional:
 
     // Verify content
     try {
-      const content = await Deno.readTextFile(`${pullDir}/test-data/smoke.json`);
+      const content = await Deno.readTextFile(
+        `${pullDir}/test-data/smoke.json`,
+      );
       const parsed = JSON.parse(content);
       if (parsed.test === true) {
         pass("Verified pulled content matches");

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/logs"
-version: "2026.04.22.1"
+version: "2026.05.20.1"
 description: |
   Query and analyze CloudWatch Logs for operational visibility and incident investigation.
 

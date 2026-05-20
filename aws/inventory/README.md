@@ -8,8 +8,8 @@ tables, Lambda functions, S3 buckets, and EBS volumes.
 ## Authentication
 
 Uses the default AWS credential chain. Ensure your environment has valid
-credentials configured (environment variables, shared credentials file, or
-an instance profile). The IAM principal must hold the permissions listed below.
+credentials configured (environment variables, shared credentials file, or an
+instance profile). The IAM principal must hold the permissions listed below.
 
 ### Required IAM Permissions
 
@@ -59,15 +59,15 @@ swamp model method run aws-inv inventory_all
 
 ## Methods
 
-| Method           | Description                                      |
-|------------------|--------------------------------------------------|
-| `list_ec2`       | List EC2 instances filtered by state              |
-| `list_rds`       | List RDS database instances                       |
-| `list_dynamodb`  | List DynamoDB tables with capacity details         |
-| `list_lambda`    | List Lambda functions                             |
-| `list_s3`        | List S3 buckets (global, ignores region setting)   |
-| `list_ebs`       | List EBS volumes with attachment status            |
-| `inventory_all`  | Run full inventory across all supported resources  |
+| Method          | Description                                       |
+| --------------- | ------------------------------------------------- |
+| `list_ec2`      | List EC2 instances filtered by state              |
+| `list_rds`      | List RDS database instances                       |
+| `list_dynamodb` | List DynamoDB tables with capacity details        |
+| `list_lambda`   | List Lambda functions                             |
+| `list_s3`       | List S3 buckets (global, ignores region setting)  |
+| `list_ebs`      | List EBS volumes with attachment status           |
+| `inventory_all` | Run full inventory across all supported resources |
 
 ## License
 

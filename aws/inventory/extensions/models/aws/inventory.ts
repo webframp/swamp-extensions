@@ -31,6 +31,8 @@ import {
 } from "npm:@aws-sdk/client-lambda@3.1010.0";
 import { ListBucketsCommand, S3Client } from "npm:@aws-sdk/client-s3@3.1010.0";
 
+const MAX_PAGES = 10;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -166,69 +168,76 @@ export const model = {
         },
       ) => {
         const client = new EC2Client({ region: context.globalArgs.region });
-        const instances: z.infer<typeof EC2InstanceSchema>[] = [];
-        let nextToken: string | undefined;
+        try {
+          const instances: z.infer<typeof EC2InstanceSchema>[] = [];
+          let nextToken: string | undefined;
+          let pages = 0;
 
-        do {
-          const command = new DescribeInstancesCommand({
-            Filters: [
-              {
-                Name: "instance-state-name",
-                Values: args.stateFilter,
-              },
-            ],
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
+          do {
+            const command = new DescribeInstancesCommand({
+              Filters: [
+                {
+                  Name: "instance-state-name",
+                  Values: args.stateFilter,
+                },
+              ],
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-          if (response.Reservations) {
-            for (const reservation of response.Reservations) {
-              if (reservation.Instances) {
-                for (const instance of reservation.Instances) {
-                  if (instance.InstanceId && instance.InstanceType) {
-                    const tags: Record<string, string> = {};
-                    if (instance.Tags) {
-                      for (const tag of instance.Tags) {
-                        if (tag.Key && tag.Value) {
-                          tags[tag.Key] = tag.Value;
+            if (response.Reservations) {
+              for (const reservation of response.Reservations) {
+                if (reservation.Instances) {
+                  for (const instance of reservation.Instances) {
+                    if (instance.InstanceId && instance.InstanceType) {
+                      const tags: Record<string, string> = {};
+                      if (instance.Tags) {
+                        for (const tag of instance.Tags) {
+                          if (tag.Key && tag.Value) {
+                            tags[tag.Key] = tag.Value;
+                          }
                         }
                       }
+                      instances.push({
+                        instanceId: instance.InstanceId,
+                        instanceType: instance.InstanceType,
+                        state: instance.State?.Name || "unknown",
+                        availabilityZone:
+                          instance.Placement?.AvailabilityZone ||
+                          "unknown",
+                        platform: instance.Platform || null,
+                        tags,
+                        launchTime: instance.LaunchTime?.toISOString() || null,
+                      });
                     }
-                    instances.push({
-                      instanceId: instance.InstanceId,
-                      instanceType: instance.InstanceType,
-                      state: instance.State?.Name || "unknown",
-                      availabilityZone: instance.Placement?.AvailabilityZone ||
-                        "unknown",
-                      platform: instance.Platform || null,
-                      tags,
-                      launchTime: instance.LaunchTime?.toISOString() || null,
-                    });
                   }
                 }
               }
             }
-          }
-          nextToken = response.NextToken;
-        } while (nextToken);
+            nextToken = response.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
 
-        const handle = await context.writeResource(
-          "inventory",
-          `ec2-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "ec2",
-            resources: instances,
+          const handle = await context.writeResource(
+            "inventory",
+            `ec2-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "ec2",
+              resources: instances,
+              count: instances.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} EC2 instances in {region}", {
             count: instances.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Found {count} EC2 instances in {region}", {
-          count: instances.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -250,52 +259,58 @@ export const model = {
         },
       ) => {
         const client = new RDSClient({ region: context.globalArgs.region });
-        const instances: z.infer<typeof RDSInstanceSchema>[] = [];
-        let marker: string | undefined;
+        try {
+          const instances: z.infer<typeof RDSInstanceSchema>[] = [];
+          let marker: string | undefined;
+          let pages = 0;
 
-        do {
-          const command = new DescribeDBInstancesCommand({
-            Marker: marker,
-          });
-          const response = await client.send(command);
+          do {
+            const command = new DescribeDBInstancesCommand({
+              Marker: marker,
+            });
+            const response = await client.send(command);
 
-          if (response.DBInstances) {
-            for (const db of response.DBInstances) {
-              if (db.DBInstanceIdentifier && db.DBInstanceClass) {
-                instances.push({
-                  dbInstanceId: db.DBInstanceIdentifier,
-                  dbInstanceClass: db.DBInstanceClass,
-                  engine: db.Engine || "unknown",
-                  engineVersion: db.EngineVersion || "unknown",
-                  status: db.DBInstanceStatus || "unknown",
-                  availabilityZone: db.AvailabilityZone || null,
-                  multiAz: db.MultiAZ || false,
-                  storageType: db.StorageType || "standard",
-                  allocatedStorage: db.AllocatedStorage || 0,
-                });
+            if (response.DBInstances) {
+              for (const db of response.DBInstances) {
+                if (db.DBInstanceIdentifier && db.DBInstanceClass) {
+                  instances.push({
+                    dbInstanceId: db.DBInstanceIdentifier,
+                    dbInstanceClass: db.DBInstanceClass,
+                    engine: db.Engine || "unknown",
+                    engineVersion: db.EngineVersion || "unknown",
+                    status: db.DBInstanceStatus || "unknown",
+                    availabilityZone: db.AvailabilityZone || null,
+                    multiAz: db.MultiAZ || false,
+                    storageType: db.StorageType || "standard",
+                    allocatedStorage: db.AllocatedStorage || 0,
+                  });
+                }
               }
             }
-          }
-          marker = response.Marker;
-        } while (marker);
+            marker = response.Marker;
+            pages++;
+          } while (marker && pages < MAX_PAGES);
 
-        const handle = await context.writeResource(
-          "inventory",
-          `rds-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "rds",
-            resources: instances,
+          const handle = await context.writeResource(
+            "inventory",
+            `rds-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "rds",
+              resources: instances,
+              count: instances.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} RDS instances in {region}", {
             count: instances.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Found {count} RDS instances in {region}", {
-          count: instances.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -319,64 +334,70 @@ export const model = {
         const client = new DynamoDBClient({
           region: context.globalArgs.region,
         });
-        const tables: z.infer<typeof DynamoDBTableSchema>[] = [];
-        let lastEvaluatedTableName: string | undefined;
+        try {
+          const tables: z.infer<typeof DynamoDBTableSchema>[] = [];
+          let lastEvaluatedTableName: string | undefined;
 
-        // First, list all table names
-        const tableNames: string[] = [];
-        do {
-          const listCommand = new ListTablesCommand({
-            ExclusiveStartTableName: lastEvaluatedTableName,
-          });
-          const listResponse = await client.send(listCommand);
-
-          if (listResponse.TableNames) {
-            tableNames.push(...listResponse.TableNames);
-          }
-          lastEvaluatedTableName = listResponse.LastEvaluatedTableName;
-        } while (lastEvaluatedTableName);
-
-        // Then describe each table for details
-        for (const tableName of tableNames) {
-          const describeCommand = new DescribeTableCommand({
-            TableName: tableName,
-          });
-          const describeResponse = await client.send(describeCommand);
-          const table = describeResponse.Table;
-
-          if (table) {
-            tables.push({
-              tableName: table.TableName || tableName,
-              tableStatus: table.TableStatus || "unknown",
-              billingMode: table.BillingModeSummary?.BillingMode ||
-                "PROVISIONED",
-              readCapacityUnits:
-                table.ProvisionedThroughput?.ReadCapacityUnits || null,
-              writeCapacityUnits:
-                table.ProvisionedThroughput?.WriteCapacityUnits || null,
-              itemCount: Number(table.ItemCount) || 0,
-              tableSizeBytes: Number(table.TableSizeBytes) || 0,
+          // First, list all table names
+          const tableNames: string[] = [];
+          let pages = 0;
+          do {
+            const listCommand = new ListTablesCommand({
+              ExclusiveStartTableName: lastEvaluatedTableName,
             });
+            const listResponse = await client.send(listCommand);
+
+            if (listResponse.TableNames) {
+              tableNames.push(...listResponse.TableNames);
+            }
+            lastEvaluatedTableName = listResponse.LastEvaluatedTableName;
+            pages++;
+          } while (lastEvaluatedTableName && pages < MAX_PAGES);
+
+          // Then describe each table for details
+          for (const tableName of tableNames) {
+            const describeCommand = new DescribeTableCommand({
+              TableName: tableName,
+            });
+            const describeResponse = await client.send(describeCommand);
+            const table = describeResponse.Table;
+
+            if (table) {
+              tables.push({
+                tableName: table.TableName || tableName,
+                tableStatus: table.TableStatus || "unknown",
+                billingMode: table.BillingModeSummary?.BillingMode ||
+                  "PROVISIONED",
+                readCapacityUnits:
+                  table.ProvisionedThroughput?.ReadCapacityUnits || null,
+                writeCapacityUnits:
+                  table.ProvisionedThroughput?.WriteCapacityUnits || null,
+                itemCount: Number(table.ItemCount) || 0,
+                tableSizeBytes: Number(table.TableSizeBytes) || 0,
+              });
+            }
           }
-        }
 
-        const handle = await context.writeResource(
-          "inventory",
-          `dynamodb-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "dynamodb",
-            resources: tables,
+          const handle = await context.writeResource(
+            "inventory",
+            `dynamodb-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "dynamodb",
+              resources: tables,
+              count: tables.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} DynamoDB tables in {region}", {
             count: tables.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Found {count} DynamoDB tables in {region}", {
-          count: tables.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -398,50 +419,56 @@ export const model = {
         },
       ) => {
         const client = new LambdaClient({ region: context.globalArgs.region });
-        const functions: z.infer<typeof LambdaFunctionSchema>[] = [];
-        let marker: string | undefined;
+        try {
+          const functions: z.infer<typeof LambdaFunctionSchema>[] = [];
+          let marker: string | undefined;
+          let pages = 0;
 
-        do {
-          const command = new ListFunctionsCommand({
-            Marker: marker,
-          });
-          const response = await client.send(command);
+          do {
+            const command = new ListFunctionsCommand({
+              Marker: marker,
+            });
+            const response = await client.send(command);
 
-          if (response.Functions) {
-            for (const fn of response.Functions) {
-              if (fn.FunctionName) {
-                functions.push({
-                  functionName: fn.FunctionName,
-                  runtime: fn.Runtime || null,
-                  memorySize: fn.MemorySize || 128,
-                  timeout: fn.Timeout || 3,
-                  codeSize: fn.CodeSize || 0,
-                  lastModified: fn.LastModified || "",
-                  architecture: fn.Architectures?.[0] || "x86_64",
-                });
+            if (response.Functions) {
+              for (const fn of response.Functions) {
+                if (fn.FunctionName) {
+                  functions.push({
+                    functionName: fn.FunctionName,
+                    runtime: fn.Runtime || null,
+                    memorySize: fn.MemorySize || 128,
+                    timeout: fn.Timeout || 3,
+                    codeSize: fn.CodeSize || 0,
+                    lastModified: fn.LastModified || "",
+                    architecture: fn.Architectures?.[0] || "x86_64",
+                  });
+                }
               }
             }
-          }
-          marker = response.NextMarker;
-        } while (marker);
+            marker = response.NextMarker;
+            pages++;
+          } while (marker && pages < MAX_PAGES);
 
-        const handle = await context.writeResource(
-          "inventory",
-          `lambda-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "lambda",
-            resources: functions,
+          const handle = await context.writeResource(
+            "inventory",
+            `lambda-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "lambda",
+              resources: functions,
+              count: functions.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} Lambda functions in {region}", {
             count: functions.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Found {count} Lambda functions in {region}", {
-          count: functions.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -463,34 +490,38 @@ export const model = {
         },
       ) => {
         const client = new S3Client({ region: context.globalArgs.region });
-        const buckets: z.infer<typeof S3BucketSchema>[] = [];
+        try {
+          const buckets: z.infer<typeof S3BucketSchema>[] = [];
 
-        const command = new ListBucketsCommand({});
-        const response = await client.send(command);
+          const command = new ListBucketsCommand({});
+          const response = await client.send(command);
 
-        if (response.Buckets) {
-          for (const bucket of response.Buckets) {
-            if (bucket.Name) {
-              buckets.push({
-                bucketName: bucket.Name,
-                creationDate: bucket.CreationDate?.toISOString() || null,
-              });
+          if (response.Buckets) {
+            for (const bucket of response.Buckets) {
+              if (bucket.Name) {
+                buckets.push({
+                  bucketName: bucket.Name,
+                  creationDate: bucket.CreationDate?.toISOString() || null,
+                });
+              }
             }
           }
+
+          const handle = await context.writeResource("inventory", "s3-global", {
+            region: "global",
+            resourceType: "s3",
+            resources: buckets,
+            count: buckets.length,
+            fetchedAt: new Date().toISOString(),
+          });
+
+          context.logger.info("Found {count} S3 buckets", {
+            count: buckets.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-
-        const handle = await context.writeResource("inventory", "s3-global", {
-          region: "global",
-          resourceType: "s3",
-          resources: buckets,
-          count: buckets.length,
-          fetchedAt: new Date().toISOString(),
-        });
-
-        context.logger.info("Found {count} S3 buckets", {
-          count: buckets.length,
-        });
-        return { dataHandles: [handle] };
       },
     },
 
@@ -517,74 +548,80 @@ export const model = {
         },
       ) => {
         const client = new EC2Client({ region: context.globalArgs.region });
-        const volumes: z.infer<typeof EBSVolumeSchema>[] = [];
-        let nextToken: string | undefined;
+        try {
+          const volumes: z.infer<typeof EBSVolumeSchema>[] = [];
+          let nextToken: string | undefined;
+          let pages = 0;
 
-        do {
-          const command = new DescribeVolumesCommand({
-            Filters: [
-              {
-                Name: "status",
-                Values: args.stateFilter,
-              },
-            ],
-            NextToken: nextToken,
-          });
-          const response = await client.send(command);
+          do {
+            const command = new DescribeVolumesCommand({
+              Filters: [
+                {
+                  Name: "status",
+                  Values: args.stateFilter,
+                },
+              ],
+              NextToken: nextToken,
+            });
+            const response = await client.send(command);
 
-          if (response.Volumes) {
-            for (const vol of response.Volumes) {
-              if (vol.VolumeId) {
-                const tags: Record<string, string> = {};
-                if (vol.Tags) {
-                  for (const tag of vol.Tags) {
-                    if (tag.Key && tag.Value) {
-                      tags[tag.Key] = tag.Value;
+            if (response.Volumes) {
+              for (const vol of response.Volumes) {
+                if (vol.VolumeId) {
+                  const tags: Record<string, string> = {};
+                  if (vol.Tags) {
+                    for (const tag of vol.Tags) {
+                      if (tag.Key && tag.Value) {
+                        tags[tag.Key] = tag.Value;
+                      }
                     }
                   }
+                  const attachments = (vol.Attachments || [])
+                    .filter((a) => a.InstanceId && a.Device && a.State)
+                    .map((a) => ({
+                      instanceId: a.InstanceId!,
+                      device: a.Device!,
+                      state: a.State!,
+                    }));
+                  volumes.push({
+                    volumeId: vol.VolumeId,
+                    volumeType: vol.VolumeType || "unknown",
+                    size: vol.Size || 0,
+                    state: vol.State || "unknown",
+                    availabilityZone: vol.AvailabilityZone || "unknown",
+                    encrypted: vol.Encrypted || false,
+                    attachments,
+                    isAttached: attachments.length > 0,
+                    createTime: vol.CreateTime?.toISOString() || null,
+                    tags,
+                  });
                 }
-                const attachments = (vol.Attachments || [])
-                  .filter((a) => a.InstanceId && a.Device && a.State)
-                  .map((a) => ({
-                    instanceId: a.InstanceId!,
-                    device: a.Device!,
-                    state: a.State!,
-                  }));
-                volumes.push({
-                  volumeId: vol.VolumeId,
-                  volumeType: vol.VolumeType || "unknown",
-                  size: vol.Size || 0,
-                  state: vol.State || "unknown",
-                  availabilityZone: vol.AvailabilityZone || "unknown",
-                  encrypted: vol.Encrypted || false,
-                  attachments,
-                  isAttached: attachments.length > 0,
-                  createTime: vol.CreateTime?.toISOString() || null,
-                  tags,
-                });
               }
             }
-          }
-          nextToken = response.NextToken;
-        } while (nextToken);
+            nextToken = response.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
 
-        const handle = await context.writeResource(
-          "inventory",
-          `ebs-${context.globalArgs.region}`,
-          {
-            region: context.globalArgs.region,
-            resourceType: "ebs",
-            resources: volumes,
+          const handle = await context.writeResource(
+            "inventory",
+            `ebs-${context.globalArgs.region}`,
+            {
+              region: context.globalArgs.region,
+              resourceType: "ebs",
+              resources: volumes,
+              count: volumes.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} EBS volumes in {region}", {
             count: volumes.length,
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-
-        context.logger.info("Found {count} EBS volumes in {region}", {
-          count: volumes.length,
-          region: context.globalArgs.region,
-        });
-        return { dataHandles: [handle] };
+            region: context.globalArgs.region,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -623,214 +660,235 @@ export const model = {
         },
       ) => {
         const region = context.globalArgs.region;
-        const summary: Record<string, number> = {};
-        const handles: { name: string }[] = [];
-
-        // EC2
         const ec2Client = new EC2Client({ region });
-        const ec2Instances: z.infer<typeof EC2InstanceSchema>[] = [];
-        let ec2Token: string | undefined;
-        const ec2States = args.includeStoppedEc2
-          ? ["running", "stopped"]
-          : ["running"];
-        do {
-          const cmd = new DescribeInstancesCommand({
-            Filters: [{ Name: "instance-state-name", Values: ec2States }],
-            NextToken: ec2Token,
-          });
-          const resp = await ec2Client.send(cmd);
-          if (resp.Reservations) {
-            for (const res of resp.Reservations) {
-              for (const inst of res.Instances || []) {
-                if (inst.InstanceId && inst.InstanceType) {
-                  const tags: Record<string, string> = {};
-                  for (const t of inst.Tags || []) {
-                    if (t.Key && t.Value) tags[t.Key] = t.Value;
+        const rdsClient = new RDSClient({ region });
+        const ddbClient = new DynamoDBClient({ region });
+        const lambdaClient = new LambdaClient({ region });
+        let s3Client: S3Client | undefined;
+
+        try {
+          const summary: Record<string, number> = {};
+          const handles: { name: string }[] = [];
+
+          // EC2
+          const ec2Instances: z.infer<typeof EC2InstanceSchema>[] = [];
+          let ec2Token: string | undefined;
+          let ec2Pages = 0;
+          const ec2States = args.includeStoppedEc2
+            ? ["running", "stopped"]
+            : ["running"];
+          do {
+            const cmd = new DescribeInstancesCommand({
+              Filters: [{ Name: "instance-state-name", Values: ec2States }],
+              NextToken: ec2Token,
+            });
+            const resp = await ec2Client.send(cmd);
+            if (resp.Reservations) {
+              for (const res of resp.Reservations) {
+                for (const inst of res.Instances || []) {
+                  if (inst.InstanceId && inst.InstanceType) {
+                    const tags: Record<string, string> = {};
+                    for (const t of inst.Tags || []) {
+                      if (t.Key && t.Value) tags[t.Key] = t.Value;
+                    }
+                    ec2Instances.push({
+                      instanceId: inst.InstanceId,
+                      instanceType: inst.InstanceType,
+                      state: inst.State?.Name || "unknown",
+                      availabilityZone: inst.Placement?.AvailabilityZone ||
+                        "unknown",
+                      platform: inst.Platform || null,
+                      tags,
+                      launchTime: inst.LaunchTime?.toISOString() || null,
+                    });
                   }
-                  ec2Instances.push({
-                    instanceId: inst.InstanceId,
-                    instanceType: inst.InstanceType,
-                    state: inst.State?.Name || "unknown",
-                    availabilityZone: inst.Placement?.AvailabilityZone ||
-                      "unknown",
-                    platform: inst.Platform || null,
-                    tags,
-                    launchTime: inst.LaunchTime?.toISOString() || null,
-                  });
                 }
               }
             }
-          }
-          ec2Token = resp.NextToken;
-        } while (ec2Token);
-        summary.ec2 = ec2Instances.length;
+            ec2Token = resp.NextToken;
+            ec2Pages++;
+          } while (ec2Token && ec2Pages < MAX_PAGES);
+          summary.ec2 = ec2Instances.length;
 
-        // RDS
-        const rdsClient = new RDSClient({ region });
-        const rdsInstances: z.infer<typeof RDSInstanceSchema>[] = [];
-        let rdsMarker: string | undefined;
-        do {
-          const cmd = new DescribeDBInstancesCommand({ Marker: rdsMarker });
-          const resp = await rdsClient.send(cmd);
-          for (const db of resp.DBInstances || []) {
-            if (db.DBInstanceIdentifier && db.DBInstanceClass) {
-              rdsInstances.push({
-                dbInstanceId: db.DBInstanceIdentifier,
-                dbInstanceClass: db.DBInstanceClass,
-                engine: db.Engine || "unknown",
-                engineVersion: db.EngineVersion || "unknown",
-                status: db.DBInstanceStatus || "unknown",
-                availabilityZone: db.AvailabilityZone || null,
-                multiAz: db.MultiAZ || false,
-                storageType: db.StorageType || "standard",
-                allocatedStorage: db.AllocatedStorage || 0,
-              });
-            }
-          }
-          rdsMarker = resp.Marker;
-        } while (rdsMarker);
-        summary.rds = rdsInstances.length;
-
-        // DynamoDB
-        const ddbClient = new DynamoDBClient({ region });
-        const ddbTables: z.infer<typeof DynamoDBTableSchema>[] = [];
-        const tableNames: string[] = [];
-        let lastTable: string | undefined;
-        do {
-          const listCmd = new ListTablesCommand({
-            ExclusiveStartTableName: lastTable,
-          });
-          const listResp = await ddbClient.send(listCmd);
-          tableNames.push(...(listResp.TableNames || []));
-          lastTable = listResp.LastEvaluatedTableName;
-        } while (lastTable);
-        for (const tName of tableNames) {
-          const descCmd = new DescribeTableCommand({ TableName: tName });
-          const descResp = await ddbClient.send(descCmd);
-          const t = descResp.Table;
-          if (t) {
-            ddbTables.push({
-              tableName: t.TableName || tName,
-              tableStatus: t.TableStatus || "unknown",
-              billingMode: t.BillingModeSummary?.BillingMode || "PROVISIONED",
-              readCapacityUnits: t.ProvisionedThroughput?.ReadCapacityUnits ||
-                null,
-              writeCapacityUnits: t.ProvisionedThroughput?.WriteCapacityUnits ||
-                null,
-              itemCount: Number(t.ItemCount) || 0,
-              tableSizeBytes: Number(t.TableSizeBytes) || 0,
-            });
-          }
-        }
-        summary.dynamodb = ddbTables.length;
-
-        // Lambda
-        const lambdaClient = new LambdaClient({ region });
-        const lambdaFns: z.infer<typeof LambdaFunctionSchema>[] = [];
-        let lambdaMarker: string | undefined;
-        do {
-          const cmd = new ListFunctionsCommand({ Marker: lambdaMarker });
-          const resp = await lambdaClient.send(cmd);
-          for (const fn of resp.Functions || []) {
-            if (fn.FunctionName) {
-              lambdaFns.push({
-                functionName: fn.FunctionName,
-                runtime: fn.Runtime || null,
-                memorySize: fn.MemorySize || 128,
-                timeout: fn.Timeout || 3,
-                codeSize: fn.CodeSize || 0,
-                lastModified: fn.LastModified || "",
-                architecture: fn.Architectures?.[0] || "x86_64",
-              });
-            }
-          }
-          lambdaMarker = resp.NextMarker;
-        } while (lambdaMarker);
-        summary.lambda = lambdaFns.length;
-
-        // S3 (optional)
-        const s3Buckets: z.infer<typeof S3BucketSchema>[] = [];
-        if (args.includeS3) {
-          const s3Client = new S3Client({ region });
-          const s3Resp = await s3Client.send(new ListBucketsCommand({}));
-          for (const b of s3Resp.Buckets || []) {
-            if (b.Name) {
-              s3Buckets.push({
-                bucketName: b.Name,
-                creationDate: b.CreationDate?.toISOString() || null,
-              });
-            }
-          }
-          summary.s3 = s3Buckets.length;
-        }
-
-        // EBS (optional)
-        const ebsVolumes: z.infer<typeof EBSVolumeSchema>[] = [];
-        if (args.includeEbs) {
-          let ebsToken: string | undefined;
+          // RDS
+          const rdsInstances: z.infer<typeof RDSInstanceSchema>[] = [];
+          let rdsMarker: string | undefined;
+          let rdsPages = 0;
           do {
-            const cmd = new DescribeVolumesCommand({
-              NextToken: ebsToken,
-            });
-            const resp = await ec2Client.send(cmd);
-            for (const vol of resp.Volumes || []) {
-              if (vol.VolumeId) {
-                const tags: Record<string, string> = {};
-                for (const t of vol.Tags || []) {
-                  if (t.Key && t.Value) tags[t.Key] = t.Value;
-                }
-                const attachments = (vol.Attachments || [])
-                  .filter((a) => a.InstanceId && a.Device && a.State)
-                  .map((a) => ({
-                    instanceId: a.InstanceId!,
-                    device: a.Device!,
-                    state: a.State!,
-                  }));
-                ebsVolumes.push({
-                  volumeId: vol.VolumeId,
-                  volumeType: vol.VolumeType || "unknown",
-                  size: vol.Size || 0,
-                  state: vol.State || "unknown",
-                  availabilityZone: vol.AvailabilityZone || "unknown",
-                  encrypted: vol.Encrypted || false,
-                  attachments,
-                  isAttached: attachments.length > 0,
-                  createTime: vol.CreateTime?.toISOString() || null,
-                  tags,
+            const cmd = new DescribeDBInstancesCommand({ Marker: rdsMarker });
+            const resp = await rdsClient.send(cmd);
+            for (const db of resp.DBInstances || []) {
+              if (db.DBInstanceIdentifier && db.DBInstanceClass) {
+                rdsInstances.push({
+                  dbInstanceId: db.DBInstanceIdentifier,
+                  dbInstanceClass: db.DBInstanceClass,
+                  engine: db.Engine || "unknown",
+                  engineVersion: db.EngineVersion || "unknown",
+                  status: db.DBInstanceStatus || "unknown",
+                  availabilityZone: db.AvailabilityZone || null,
+                  multiAz: db.MultiAZ || false,
+                  storageType: db.StorageType || "standard",
+                  allocatedStorage: db.AllocatedStorage || 0,
                 });
               }
             }
-            ebsToken = resp.NextToken;
-          } while (ebsToken);
-          summary.ebs = ebsVolumes.length;
-        }
+            rdsMarker = resp.Marker;
+            rdsPages++;
+          } while (rdsMarker && rdsPages < MAX_PAGES);
+          summary.rds = rdsInstances.length;
 
-        // Write combined inventory
-        const handle = await context.writeResource(
-          "inventory",
-          `all-${region}`,
-          {
-            region,
-            resourceType: "all",
-            resources: {
-              ec2: ec2Instances,
-              rds: rdsInstances,
-              dynamodb: ddbTables,
-              lambda: lambdaFns,
-              ...(args.includeS3 ? { s3: s3Buckets } : {}),
-              ...(args.includeEbs ? { ebs: ebsVolumes } : {}),
+          // DynamoDB
+          const ddbTables: z.infer<typeof DynamoDBTableSchema>[] = [];
+          const tableNames: string[] = [];
+          let lastTable: string | undefined;
+          let ddbPages = 0;
+          do {
+            const listCmd = new ListTablesCommand({
+              ExclusiveStartTableName: lastTable,
+            });
+            const listResp = await ddbClient.send(listCmd);
+            tableNames.push(...(listResp.TableNames || []));
+            lastTable = listResp.LastEvaluatedTableName;
+            ddbPages++;
+          } while (lastTable && ddbPages < MAX_PAGES);
+          for (const tName of tableNames) {
+            const descCmd = new DescribeTableCommand({ TableName: tName });
+            const descResp = await ddbClient.send(descCmd);
+            const t = descResp.Table;
+            if (t) {
+              ddbTables.push({
+                tableName: t.TableName || tName,
+                tableStatus: t.TableStatus || "unknown",
+                billingMode: t.BillingModeSummary?.BillingMode || "PROVISIONED",
+                readCapacityUnits: t.ProvisionedThroughput?.ReadCapacityUnits ||
+                  null,
+                writeCapacityUnits:
+                  t.ProvisionedThroughput?.WriteCapacityUnits ||
+                  null,
+                itemCount: Number(t.ItemCount) || 0,
+                tableSizeBytes: Number(t.TableSizeBytes) || 0,
+              });
+            }
+          }
+          summary.dynamodb = ddbTables.length;
+
+          // Lambda
+          const lambdaFns: z.infer<typeof LambdaFunctionSchema>[] = [];
+          let lambdaMarker: string | undefined;
+          let lambdaPages = 0;
+          do {
+            const cmd = new ListFunctionsCommand({ Marker: lambdaMarker });
+            const resp = await lambdaClient.send(cmd);
+            for (const fn of resp.Functions || []) {
+              if (fn.FunctionName) {
+                lambdaFns.push({
+                  functionName: fn.FunctionName,
+                  runtime: fn.Runtime || null,
+                  memorySize: fn.MemorySize || 128,
+                  timeout: fn.Timeout || 3,
+                  codeSize: fn.CodeSize || 0,
+                  lastModified: fn.LastModified || "",
+                  architecture: fn.Architectures?.[0] || "x86_64",
+                });
+              }
+            }
+            lambdaMarker = resp.NextMarker;
+            lambdaPages++;
+          } while (lambdaMarker && lambdaPages < MAX_PAGES);
+          summary.lambda = lambdaFns.length;
+
+          // S3 (optional)
+          const s3Buckets: z.infer<typeof S3BucketSchema>[] = [];
+          if (args.includeS3) {
+            s3Client = new S3Client({ region });
+            const s3Resp = await s3Client.send(new ListBucketsCommand({}));
+            for (const b of s3Resp.Buckets || []) {
+              if (b.Name) {
+                s3Buckets.push({
+                  bucketName: b.Name,
+                  creationDate: b.CreationDate?.toISOString() || null,
+                });
+              }
+            }
+            summary.s3 = s3Buckets.length;
+          }
+
+          // EBS (optional)
+          const ebsVolumes: z.infer<typeof EBSVolumeSchema>[] = [];
+          if (args.includeEbs) {
+            let ebsToken: string | undefined;
+            let ebsPages = 0;
+            do {
+              const cmd = new DescribeVolumesCommand({
+                NextToken: ebsToken,
+              });
+              const resp = await ec2Client.send(cmd);
+              for (const vol of resp.Volumes || []) {
+                if (vol.VolumeId) {
+                  const tags: Record<string, string> = {};
+                  for (const t of vol.Tags || []) {
+                    if (t.Key && t.Value) tags[t.Key] = t.Value;
+                  }
+                  const attachments = (vol.Attachments || [])
+                    .filter((a) => a.InstanceId && a.Device && a.State)
+                    .map((a) => ({
+                      instanceId: a.InstanceId!,
+                      device: a.Device!,
+                      state: a.State!,
+                    }));
+                  ebsVolumes.push({
+                    volumeId: vol.VolumeId,
+                    volumeType: vol.VolumeType || "unknown",
+                    size: vol.Size || 0,
+                    state: vol.State || "unknown",
+                    availabilityZone: vol.AvailabilityZone || "unknown",
+                    encrypted: vol.Encrypted || false,
+                    attachments,
+                    isAttached: attachments.length > 0,
+                    createTime: vol.CreateTime?.toISOString() || null,
+                    tags,
+                  });
+                }
+              }
+              ebsToken = resp.NextToken;
+              ebsPages++;
+            } while (ebsToken && ebsPages < MAX_PAGES);
+            summary.ebs = ebsVolumes.length;
+          }
+
+          // Write combined inventory
+          const handle = await context.writeResource(
+            "inventory",
+            `all-${region}`,
+            {
+              region,
+              resourceType: "all",
+              resources: {
+                ec2: ec2Instances,
+                rds: rdsInstances,
+                dynamodb: ddbTables,
+                lambda: lambdaFns,
+                ...(args.includeS3 ? { s3: s3Buckets } : {}),
+                ...(args.includeEbs ? { ebs: ebsVolumes } : {}),
+              },
+              count: Object.values(summary).reduce((a, b) => a + b, 0),
+              fetchedAt: new Date().toISOString(),
             },
-            count: Object.values(summary).reduce((a, b) => a + b, 0),
-            fetchedAt: new Date().toISOString(),
-          },
-        );
-        handles.push(handle);
+          );
+          handles.push(handle);
 
-        context.logger.info(
-          "Full inventory complete for {region}: {summary}",
-          { region, summary: JSON.stringify(summary) },
-        );
-        return { dataHandles: handles };
+          context.logger.info(
+            "Full inventory complete for {region}: {summary}",
+            { region, summary: JSON.stringify(summary) },
+          );
+          return { dataHandles: handles };
+        } finally {
+          ec2Client.destroy();
+          rdsClient.destroy();
+          ddbClient.destroy();
+          lambdaClient.destroy();
+          s3Client?.destroy();
+        }
       },
     },
   },

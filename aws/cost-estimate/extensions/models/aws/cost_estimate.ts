@@ -259,56 +259,60 @@ export const model = {
         const client = new PricingClient({
           region: context.globalArgs.pricingRegion,
         });
-        const items: z.infer<typeof EC2CostItemSchema>[] = [];
-        let totalMonthly = 0;
+        try {
+          const items: z.infer<typeof EC2CostItemSchema>[] = [];
+          let totalMonthly = 0;
 
-        // Group by instance type and region for efficient pricing lookups
-        const priceCache = new Map<string, number>();
+          // Group by instance type and region for efficient pricing lookups
+          const priceCache = new Map<string, number>();
 
-        for (const instance of args.inventory) {
-          const region = instance.availabilityZone.slice(0, -1);
-          const platform = instance.platform || "linux";
-          const cacheKey = `${instance.instanceType}:${region}:${platform}`;
+          for (const instance of args.inventory) {
+            const region = instance.availabilityZone.slice(0, -1);
+            const platform = instance.platform || "linux";
+            const cacheKey = `${instance.instanceType}:${region}:${platform}`;
 
-          let hourlyRate = priceCache.get(cacheKey);
-          if (hourlyRate === undefined) {
-            hourlyRate = await getEC2HourlyRate(
-              client,
-              instance.instanceType,
+            let hourlyRate = priceCache.get(cacheKey);
+            if (hourlyRate === undefined) {
+              hourlyRate = await getEC2HourlyRate(
+                client,
+                instance.instanceType,
+                region,
+                platform,
+              );
+              priceCache.set(cacheKey, hourlyRate);
+            }
+
+            const monthlyEstimate = hourlyRate * HOURS_PER_MONTH;
+            totalMonthly += monthlyEstimate;
+
+            items.push({
+              instanceId: instance.instanceId,
+              instanceType: instance.instanceType,
               region,
               platform,
-            );
-            priceCache.set(cacheKey, hourlyRate);
+              hourlyRate,
+              monthlyEstimate,
+              tags: instance.tags || {},
+            });
           }
 
-          const monthlyEstimate = hourlyRate * HOURS_PER_MONTH;
-          totalMonthly += monthlyEstimate;
-
-          items.push({
-            instanceId: instance.instanceId,
-            instanceType: instance.instanceType,
-            region,
-            platform,
-            hourlyRate,
-            monthlyEstimate,
-            tags: instance.tags || {},
+          const handle = await context.writeResource("estimate", "ec2", {
+            resourceType: "ec2",
+            region: "mixed",
+            items,
+            totalMonthly,
+            currency: "USD",
+            estimatedAt: new Date().toISOString(),
           });
+
+          context.logger.info(
+            "EC2 cost estimate: {count} instances, ${total}/month",
+            { count: items.length, total: totalMonthly.toFixed(2) },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-
-        const handle = await context.writeResource("estimate", "ec2", {
-          resourceType: "ec2",
-          region: "mixed",
-          items,
-          totalMonthly,
-          currency: "USD",
-          estimatedAt: new Date().toISOString(),
-        });
-
-        context.logger.info(
-          "EC2 cost estimate: {count} instances, ${total}/month",
-          { count: items.length, total: totalMonthly.toFixed(2) },
-        );
-        return { dataHandles: [handle] };
       },
     },
 
@@ -359,61 +363,65 @@ export const model = {
         const client = new PricingClient({
           region: context.globalArgs.pricingRegion,
         });
-        const items: z.infer<typeof RDSCostItemSchema>[] = [];
-        let totalMonthly = 0;
+        try {
+          const items: z.infer<typeof RDSCostItemSchema>[] = [];
+          let totalMonthly = 0;
 
-        const priceCache = new Map<string, number>();
+          const priceCache = new Map<string, number>();
 
-        for (const db of args.inventory) {
-          const region = db.availabilityZone
-            ? db.availabilityZone.slice(0, -1)
-            : "us-east-1";
-          const cacheKey =
-            `${db.dbInstanceClass}:${db.engine}:${region}:${db.multiAz}`;
+          for (const db of args.inventory) {
+            const region = db.availabilityZone
+              ? db.availabilityZone.slice(0, -1)
+              : "us-east-1";
+            const cacheKey =
+              `${db.dbInstanceClass}:${db.engine}:${region}:${db.multiAz}`;
 
-          let hourlyRate = priceCache.get(cacheKey);
-          if (hourlyRate === undefined) {
-            hourlyRate = await getRDSHourlyRate(
-              client,
-              db.dbInstanceClass,
-              db.engine,
+            let hourlyRate = priceCache.get(cacheKey);
+            if (hourlyRate === undefined) {
+              hourlyRate = await getRDSHourlyRate(
+                client,
+                db.dbInstanceClass,
+                db.engine,
+                region,
+                db.multiAz,
+              );
+              priceCache.set(cacheKey, hourlyRate);
+            }
+
+            const computeMonthly = hourlyRate * HOURS_PER_MONTH;
+            const storageMonthly = db.allocatedStorage * args.storageRatePerGb;
+            const monthlyEstimate = computeMonthly + storageMonthly;
+            totalMonthly += monthlyEstimate;
+
+            items.push({
+              dbInstanceId: db.dbInstanceId,
+              dbInstanceClass: db.dbInstanceClass,
+              engine: db.engine,
               region,
-              db.multiAz,
-            );
-            priceCache.set(cacheKey, hourlyRate);
+              multiAz: db.multiAz,
+              storageGb: db.allocatedStorage,
+              hourlyRate,
+              monthlyEstimate,
+            });
           }
 
-          const computeMonthly = hourlyRate * HOURS_PER_MONTH;
-          const storageMonthly = db.allocatedStorage * args.storageRatePerGb;
-          const monthlyEstimate = computeMonthly + storageMonthly;
-          totalMonthly += monthlyEstimate;
-
-          items.push({
-            dbInstanceId: db.dbInstanceId,
-            dbInstanceClass: db.dbInstanceClass,
-            engine: db.engine,
-            region,
-            multiAz: db.multiAz,
-            storageGb: db.allocatedStorage,
-            hourlyRate,
-            monthlyEstimate,
+          const handle = await context.writeResource("estimate", "rds", {
+            resourceType: "rds",
+            region: "mixed",
+            items,
+            totalMonthly,
+            currency: "USD",
+            estimatedAt: new Date().toISOString(),
           });
+
+          context.logger.info(
+            "RDS cost estimate: {count} instances, ${total}/month",
+            { count: items.length, total: totalMonthly.toFixed(2) },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-
-        const handle = await context.writeResource("estimate", "rds", {
-          resourceType: "rds",
-          region: "mixed",
-          items,
-          totalMonthly,
-          currency: "USD",
-          estimatedAt: new Date().toISOString(),
-        });
-
-        context.logger.info(
-          "RDS cost estimate: {count} instances, ${total}/month",
-          { count: items.length, total: totalMonthly.toFixed(2) },
-        );
-        return { dataHandles: [handle] };
       },
     },
 
@@ -481,88 +489,91 @@ export const model = {
         const client = new PricingClient({
           region: context.globalArgs.pricingRegion,
         });
+        try {
+          const estimates: Array<{
+            name: string;
+            type: string;
+            spec: string;
+            count: number;
+            hourlyRate: number;
+            monthlyPerUnit: number;
+            monthlyTotal: number;
+          }> = [];
 
-        const estimates: Array<{
-          name: string;
-          type: string;
-          spec: string;
-          count: number;
-          hourlyRate: number;
-          monthlyPerUnit: number;
-          monthlyTotal: number;
-        }> = [];
+          let grandTotal = 0;
 
-        let grandTotal = 0;
+          // Process EC2 instances
+          if (args.ec2Instances) {
+            for (const ec2 of args.ec2Instances) {
+              const hourlyRate = await getEC2HourlyRate(
+                client,
+                ec2.instanceType,
+                ec2.region,
+                ec2.platform,
+              );
+              const monthlyPerUnit = hourlyRate * HOURS_PER_MONTH;
+              const monthlyTotal = monthlyPerUnit * ec2.count;
+              grandTotal += monthlyTotal;
 
-        // Process EC2 instances
-        if (args.ec2Instances) {
-          for (const ec2 of args.ec2Instances) {
-            const hourlyRate = await getEC2HourlyRate(
-              client,
-              ec2.instanceType,
-              ec2.region,
-              ec2.platform,
-            );
-            const monthlyPerUnit = hourlyRate * HOURS_PER_MONTH;
-            const monthlyTotal = monthlyPerUnit * ec2.count;
-            grandTotal += monthlyTotal;
-
-            estimates.push({
-              name: ec2.name,
-              type: "ec2",
-              spec: `${ec2.instanceType} (${ec2.platform})`,
-              count: ec2.count,
-              hourlyRate,
-              monthlyPerUnit,
-              monthlyTotal,
-            });
+              estimates.push({
+                name: ec2.name,
+                type: "ec2",
+                spec: `${ec2.instanceType} (${ec2.platform})`,
+                count: ec2.count,
+                hourlyRate,
+                monthlyPerUnit,
+                monthlyTotal,
+              });
+            }
           }
-        }
 
-        // Process RDS instances
-        if (args.rdsInstances) {
-          const storageRate = 0.115; // gp2 default
-          for (const rds of args.rdsInstances) {
-            const hourlyRate = await getRDSHourlyRate(
-              client,
-              rds.dbInstanceClass,
-              rds.engine,
-              rds.region,
-              rds.multiAz,
-            );
-            const computeMonthly = hourlyRate * HOURS_PER_MONTH;
-            const storageMonthly = rds.storageGb * storageRate;
-            const monthlyPerUnit = computeMonthly + storageMonthly;
-            grandTotal += monthlyPerUnit;
+          // Process RDS instances
+          if (args.rdsInstances) {
+            const storageRate = 0.115; // gp2 default
+            for (const rds of args.rdsInstances) {
+              const hourlyRate = await getRDSHourlyRate(
+                client,
+                rds.dbInstanceClass,
+                rds.engine,
+                rds.region,
+                rds.multiAz,
+              );
+              const computeMonthly = hourlyRate * HOURS_PER_MONTH;
+              const storageMonthly = rds.storageGb * storageRate;
+              const monthlyPerUnit = computeMonthly + storageMonthly;
+              grandTotal += monthlyPerUnit;
 
-            estimates.push({
-              name: rds.name,
-              type: "rds",
-              spec: `${rds.dbInstanceClass} (${rds.engine}${
-                rds.multiAz ? ", Multi-AZ" : ""
-              })`,
-              count: 1,
-              hourlyRate,
-              monthlyPerUnit,
-              monthlyTotal: monthlyPerUnit,
-            });
+              estimates.push({
+                name: rds.name,
+                type: "rds",
+                spec: `${rds.dbInstanceClass} (${rds.engine}${
+                  rds.multiAz ? ", Multi-AZ" : ""
+                })`,
+                count: 1,
+                hourlyRate,
+                monthlyPerUnit,
+                monthlyTotal: monthlyPerUnit,
+              });
+            }
           }
+
+          const handle = await context.writeResource("estimate", "spec", {
+            resourceType: "spec",
+            region: "mixed",
+            items: estimates,
+            totalMonthly: grandTotal,
+            currency: "USD",
+            estimatedAt: new Date().toISOString(),
+          });
+
+          context.logger.info(
+            "Spec cost estimate: {count} resources, ${total}/month",
+            { count: estimates.length, total: grandTotal.toFixed(2) },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-
-        const handle = await context.writeResource("estimate", "spec", {
-          resourceType: "spec",
-          region: "mixed",
-          items: estimates,
-          totalMonthly: grandTotal,
-          currency: "USD",
-          estimatedAt: new Date().toISOString(),
-        });
-
-        context.logger.info(
-          "Spec cost estimate: {count} resources, ${total}/month",
-          { count: estimates.length, total: grandTotal.toFixed(2) },
-        );
-        return { dataHandles: [handle] };
       },
     },
   },

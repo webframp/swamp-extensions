@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/alarms"
-version: "2026.04.22.1"
+version: "2026.05.20.1"
 description: |
   Query and analyze CloudWatch Alarms for operational visibility and incident response.
 
@@ -68,4 +68,3 @@ labels:
   - observability
   - ops
   - incident-response
-
