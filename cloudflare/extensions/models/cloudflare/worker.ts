@@ -122,7 +122,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const scripts = await cfApiPaginated<
+        const { results: scripts, truncated } = await cfApiPaginated<
           z.infer<typeof WorkerScriptSchema>
         >(
           apiToken,
@@ -132,6 +132,7 @@ export const model = {
         const handle = await context.writeResource("scripts", "main", {
           accountId,
           scripts,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 
@@ -347,7 +348,9 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const routes = await cfApiPaginated<z.infer<typeof WorkerRouteSchema>>(
+        const { results: routes, truncated } = await cfApiPaginated<
+          z.infer<typeof WorkerRouteSchema>
+        >(
           apiToken,
           `/zones/${args.zoneId}/workers/routes`,
         );
@@ -355,6 +358,7 @@ export const model = {
         const handle = await context.writeResource("routes", args.zoneId, {
           zoneId: args.zoneId,
           routes,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 
@@ -396,7 +400,9 @@ export const model = {
         );
 
         // Refresh routes list
-        const routes = await cfApiPaginated<z.infer<typeof WorkerRouteSchema>>(
+        const { results: routes, truncated } = await cfApiPaginated<
+          z.infer<typeof WorkerRouteSchema>
+        >(
           apiToken,
           `/zones/${args.zoneId}/workers/routes`,
         );
@@ -404,6 +410,7 @@ export const model = {
         const handle = await context.writeResource("routes", args.zoneId, {
           zoneId: args.zoneId,
           routes,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 

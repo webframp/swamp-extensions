@@ -194,6 +194,7 @@ export const model = {
               region: context.globalArgs.region,
               queryType: "nat_gateways",
               data: gateways,
+              truncated: nextToken !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );
@@ -307,6 +308,7 @@ export const model = {
               region: context.globalArgs.region,
               queryType: "load_balancers",
               data: loadBalancers,
+              truncated: marker !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );

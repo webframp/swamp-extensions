@@ -226,6 +226,7 @@ export const model = {
               resourceType: "ec2",
               resources: instances,
               count: instances.length,
+              truncated: nextToken !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );
@@ -299,6 +300,7 @@ export const model = {
               resourceType: "rds",
               resources: instances,
               count: instances.length,
+              truncated: marker !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );
@@ -386,6 +388,7 @@ export const model = {
               resourceType: "dynamodb",
               resources: tables,
               count: tables.length,
+              truncated: lastEvaluatedTableName !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );
@@ -457,6 +460,7 @@ export const model = {
               resourceType: "lambda",
               resources: functions,
               count: functions.length,
+              truncated: marker !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );
@@ -610,6 +614,7 @@ export const model = {
               resourceType: "ebs",
               resources: volumes,
               count: volumes.length,
+              truncated: nextToken !== undefined,
               fetchedAt: new Date().toISOString(),
             },
           );

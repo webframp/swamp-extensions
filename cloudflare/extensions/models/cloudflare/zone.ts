@@ -117,7 +117,9 @@ export const model = {
         const params: Record<string, string> = {};
         if (args.status) params.status = args.status;
 
-        const zones = await cfApiPaginated<z.infer<typeof ZoneSchema>>(
+        const { results: zones, truncated } = await cfApiPaginated<
+          z.infer<typeof ZoneSchema>
+        >(
           apiToken,
           "/zones",
           params,
@@ -125,6 +127,7 @@ export const model = {
 
         const handle = await context.writeResource("zones", "main", {
           zones,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 

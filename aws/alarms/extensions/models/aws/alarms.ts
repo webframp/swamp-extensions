@@ -18,6 +18,8 @@ import {
   type MetricAlarm,
 } from "npm:@aws-sdk/client-cloudwatch@3.1010.0";
 
+const MAX_PAGES = 10;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -459,6 +461,7 @@ export const model = {
           // Get all alarms
           const allAlarms: MetricAlarm[] = [];
           let nextToken: string | undefined;
+          let pages = 0;
 
           do {
             const command = new DescribeAlarmsCommand({
@@ -472,7 +475,8 @@ export const model = {
             }
 
             nextToken = response.NextToken;
-          } while (nextToken);
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
 
           // Count states
           let inAlarm = 0;

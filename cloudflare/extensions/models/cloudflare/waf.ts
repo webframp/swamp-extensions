@@ -137,7 +137,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const rules = await cfApiPaginated<z.infer<typeof FirewallRuleSchema>>(
+        const { results: rules, truncated } = await cfApiPaginated<
+          z.infer<typeof FirewallRuleSchema>
+        >(
           apiToken,
           `/zones/${zoneId}/firewall/rules`,
         );
@@ -145,6 +147,7 @@ export const model = {
         const handle = await context.writeResource("rules", "main", {
           zoneId,
           rules,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 
@@ -331,7 +334,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const packages = await cfApiPaginated<z.infer<typeof WafPackageSchema>>(
+        const { results: packages, truncated } = await cfApiPaginated<
+          z.infer<typeof WafPackageSchema>
+        >(
           apiToken,
           `/zones/${zoneId}/firewall/waf/packages`,
         );
@@ -339,6 +344,7 @@ export const model = {
         const handle = await context.writeResource("packages", "main", {
           zoneId,
           packages,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 

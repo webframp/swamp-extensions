@@ -14,6 +14,8 @@ import {
   SNSClient,
 } from "npm:@aws-sdk/client-sns@3.1010.0";
 
+const MAX_PAGES = 10;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -172,6 +174,7 @@ async function resolveSnsTopics(
     try {
       const subscriptions: { Protocol?: string }[] = [];
       let nextToken: string | undefined;
+      let pages = 0;
       do {
         const response = await snsClient.send(
           new ListSubscriptionsByTopicCommand({
@@ -181,7 +184,8 @@ async function resolveSnsTopics(
         );
         subscriptions.push(...(response.Subscriptions ?? []));
         nextToken = response.NextToken;
-      } while (nextToken);
+        pages++;
+      } while (nextToken && pages < MAX_PAGES);
       const protocols = [
         ...new Set(
           subscriptions.map((s) => s.Protocol).filter(Boolean) as string[],

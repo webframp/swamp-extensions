@@ -156,12 +156,14 @@ export const vault = {
           ? `${baseUrl}/v1/${parsed.mount}/metadata`
           : `${baseUrl}/v1/${parsed.mount}`;
 
+        const allKeys: string[] = [];
+
         const collectKeys = async (
           path: string,
           prefix: string = "",
           depth: number = 0,
-        ): Promise<string[]> => {
-          if (depth >= MAX_DEPTH) return [];
+        ): Promise<void> => {
+          if (depth >= MAX_DEPTH || allKeys.length >= MAX_KEYS) return;
 
           const response = await fetch(`${path}?list=true`, {
             method: "LIST",
@@ -169,34 +171,30 @@ export const vault = {
           });
 
           if (response.status === 404) {
-            return [];
+            return;
           }
 
           const data = (await handleResponse(response, "list")) as {
             data: { keys: string[] };
           };
 
-          const keys: string[] = [];
-
           for (const key of data.data.keys) {
-            if (keys.length >= MAX_KEYS) break;
+            if (allKeys.length >= MAX_KEYS) break;
             const fullKey = prefix ? `${prefix}${key}` : key;
             if (key.endsWith("/")) {
-              const subKeys = await collectKeys(
+              await collectKeys(
                 `${path}/${key.slice(0, -1)}`,
                 fullKey,
                 depth + 1,
               );
-              keys.push(...subKeys);
             } else {
-              keys.push(fullKey);
+              allKeys.push(fullKey);
             }
           }
-
-          return keys;
         };
 
-        return (await collectKeys(listPath)).sort();
+        await collectKeys(listPath);
+        return allKeys.sort();
       },
 
       getName: (): string => name,
