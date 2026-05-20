@@ -617,7 +617,7 @@ export const model = {
               fetchedAt: new Date().toISOString(),
             };
 
-            const instance = new URL(args.url).hostname;
+            const instance = `http-${new URL(args.url).hostname}`;
             const handle = await context.writeResource(
               "http_checks",
               instance,
@@ -658,7 +658,7 @@ export const model = {
             fetchedAt: new Date().toISOString(),
           };
 
-          const instance = new URL(args.url).hostname;
+          const instance = `http-${new URL(args.url).hostname}`;
           const handle = await context.writeResource(
             "http_checks",
             instance,
@@ -692,9 +692,9 @@ export const model = {
 
           let instance: string;
           try {
-            instance = new URL(args.url).hostname;
+            instance = `http-${new URL(args.url).hostname}`;
           } catch {
-            instance = args.url;
+            instance = `http-${args.url}`;
           }
 
           const handle = await context.writeResource(
@@ -742,7 +742,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "whois_info",
-          args.domain,
+          `whois-${args.domain}`,
           data,
         );
 
@@ -862,7 +862,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "traceroute",
-          args.host,
+          `trace-${args.host}`,
           data,
         );
 
@@ -918,7 +918,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "port_scan",
-          args.host,
+          `ports-${args.host}`,
           data,
         );
 

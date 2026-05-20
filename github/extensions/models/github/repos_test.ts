@@ -395,7 +395,7 @@ Deno.test("list_prs writes pull_requests resource", async () => {
 
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
-    assertEquals(resources[0].name, "owner-repo-open");
+    assertEquals(resources[0].name, "prs-owner-repo-open");
 
     const data = resources[0].data as {
       count: number;
@@ -447,7 +447,7 @@ Deno.test("list_issues writes issues resource", async () => {
 
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
-    assertEquals(resources[0].name, "owner-repo-open");
+    assertEquals(resources[0].name, "issues-owner-repo-open");
 
     const data = resources[0].data as {
       count: number;

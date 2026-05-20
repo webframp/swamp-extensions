@@ -401,6 +401,10 @@ async function executeBundle(
       }
 
       // Parse structured output from bundle runner
+      const defaultSpecName = request.resourceSpecs
+        ? Object.keys(request.resourceSpecs)[0] ?? request.methodName
+        : request.methodName;
+
       const outputs: DriverOutput[] = [];
       try {
         const parsed = JSON.parse(stdoutResult);
@@ -408,8 +412,8 @@ async function executeBundle(
           for (const out of parsed.outputs) {
             outputs.push({
               kind: "pending",
-              specName: out.specName ?? request.methodName,
-              name: out.name ?? out.specName ?? request.methodName,
+              specName: out.specName ?? defaultSpecName,
+              name: out.name ?? out.specName ?? defaultSpecName,
               type: out.type ?? "resource",
               content: new TextEncoder().encode(
                 typeof out.content === "string"
@@ -425,8 +429,8 @@ async function executeBundle(
         // Non-JSON stdout: treat entire output as resource
         outputs.push({
           kind: "pending",
-          specName: request.methodName,
-          name: request.methodName,
+          specName: defaultSpecName,
+          name: defaultSpecName,
           type: "resource",
           content: new TextEncoder().encode(stdoutResult),
           metadata: {
