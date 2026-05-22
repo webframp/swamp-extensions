@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
+/** A reference to data produced by a workflow step execution. */
 interface DataHandle {
   name: string;
   dataId: string;
   version: number;
 }
 
+/** Metadata and outcome for a single workflow step execution. */
 interface StepExecution {
   jobName: string;
   stepName: string;
@@ -18,6 +20,7 @@ interface StepExecution {
   error?: string;
 }
 
+/** Context provided to the report by the swamp workflow runtime. */
 interface WorkflowReportContext {
   workflowId: string;
   workflowRunId: string;
@@ -34,6 +37,7 @@ interface WorkflowReportContext {
 // Types
 // =============================================================================
 
+/** High-level adoption outcome counts and per-job breakdown. */
 interface AdoptionSummary {
   timestamp: string;
   workflowName: string;
@@ -46,6 +50,7 @@ interface AdoptionSummary {
   >;
 }
 
+/** Individual resource adoption result with status and optional error. */
 interface AdoptionResult {
   modelName: string;
   modelType: string;
@@ -55,6 +60,7 @@ interface AdoptionResult {
   job: string;
 }
 
+/** Combined markdown and structured JSON output from the report. */
 interface ReportResult {
   markdown: string;
   json: { summary: AdoptionSummary; results: AdoptionResult[] };
@@ -64,6 +70,7 @@ interface ReportResult {
 // Helpers
 // =============================================================================
 
+/** Escape pipe characters for safe use in markdown table cells. */
 function escapeCell(value: string): string {
   return value.replace(/\|/g, "\\|");
 }
@@ -72,6 +79,7 @@ function escapeCell(value: string): string {
 // Remediation logic
 // =============================================================================
 
+/** Return a human-readable remediation suggestion based on the error message. */
 function getRemediation(error: string): string {
   if (/not found|NotFound/i.test(error)) {
     return "Model not created. Run the setup command from discover_all output.";
@@ -89,6 +97,7 @@ function getRemediation(error: string): string {
 // Report
 // =============================================================================
 
+/** Adoption workflow report that summarizes success/failure counts and provides remediation guidance. */
 export const report = {
   name: "@webframp/adopt-report",
   description:

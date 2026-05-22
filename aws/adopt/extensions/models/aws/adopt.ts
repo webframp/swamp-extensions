@@ -24,6 +24,7 @@ import {
 // Schemas
 // =============================================================================
 
+/** Validates global arguments for region and optional VPC filter. */
 const GlobalArgsSchema = z.object({
   region: z
     .string()
@@ -35,6 +36,7 @@ const GlobalArgsSchema = z.object({
     .describe("Filter discovery to a specific VPC"),
 });
 
+/** Schema for a discovered VPC resource. */
 const VpcSchema = z.object({
   vpcId: z.string(),
   cidrBlock: z.string(),
@@ -44,6 +46,7 @@ const VpcSchema = z.object({
   name: z.string(),
 });
 
+/** Schema for a discovered subnet resource. */
 const SubnetSchema = z.object({
   subnetId: z.string(),
   vpcId: z.string(),
@@ -54,6 +57,7 @@ const SubnetSchema = z.object({
   name: z.string(),
 });
 
+/** Schema for a discovered internet gateway resource. */
 const InternetGatewaySchema = z.object({
   internetGatewayId: z.string(),
   attachedVpcIds: z.array(z.string()),
@@ -61,6 +65,7 @@ const InternetGatewaySchema = z.object({
   name: z.string(),
 });
 
+/** Schema for a discovered route table resource. */
 const RouteTableSchema = z.object({
   routeTableId: z.string(),
   vpcId: z.string(),
@@ -75,6 +80,7 @@ const RouteTableSchema = z.object({
   name: z.string(),
 });
 
+/** Schema for a discovered security group resource. */
 const SecurityGroupSchema = z.object({
   groupId: z.string(),
   groupName: z.string(),
@@ -86,6 +92,7 @@ const SecurityGroupSchema = z.object({
   name: z.string(),
 });
 
+/** Schema for a discovered RDS cluster. */
 const RdsClusterSchema = z.object({
   clusterIdentifier: z.string(),
   engine: z.string(),
@@ -99,6 +106,7 @@ const RdsClusterSchema = z.object({
   members: z.array(z.string()),
 });
 
+/** Schema for a discovered RDS instance. */
 const RdsInstanceSchema = z.object({
   dbInstanceIdentifier: z.string(),
   dbInstanceClass: z.string(),
@@ -113,6 +121,7 @@ const RdsInstanceSchema = z.object({
   dbSubnetGroup: z.string(),
 });
 
+/** Schema for a discovered DB subnet group. */
 const DbSubnetGroupSchema = z.object({
   name: z.string(),
   description: z.string(),
@@ -121,6 +130,7 @@ const DbSubnetGroupSchema = z.object({
   status: z.string(),
 });
 
+/** Schema for a discovered Secrets Manager secret. */
 const SecretSchema = z.object({
   name: z.string(),
   arn: z.string(),
@@ -129,6 +139,7 @@ const SecretSchema = z.object({
   tags: z.record(z.string(), z.string()),
 });
 
+/** Schema for a single resource-type discovery result. */
 const PartialDiscoverySchema = z.object({
   region: z.string(),
   vpcId: z.string().optional(),
@@ -139,6 +150,7 @@ const PartialDiscoverySchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for the full discovery result including setup commands. */
 const DiscoveryResultSchema = z.object({
   region: z.string(),
   vpcId: z.string().optional(),
@@ -166,6 +178,7 @@ const DiscoveryResultSchema = z.object({
 // Helpers
 // =============================================================================
 
+/** Extract a specific tag value from an AWS Tags array. */
 function getTag(
   tags: Array<{ Key?: string; Value?: string }> | undefined,
   key: string,
@@ -175,6 +188,7 @@ function getTag(
   return tag?.Value ?? "";
 }
 
+/** Convert an AWS Tags array to a flat key-value record. */
 function tagsToRecord(
   tags: Array<{ Key?: string; Value?: string }> | undefined,
 ): Record<string, string> {
@@ -188,24 +202,29 @@ function tagsToRecord(
   return result;
 }
 
+/** Derive a short suffix from a resource ID for model naming. */
 function modelNameSuffix(resourceId: string): string {
   return resourceId.slice(-9);
 }
 
+/** Safely quote a string for shell command interpolation. */
 function shellQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\"'\"'") + "'";
 }
 
+/** Build a deterministic resource instance name suffix from region and optional VPC. */
 function instanceSuffix(region: string, vpcId?: string): string {
   return vpcId ? `${region}-${vpcId}` : region;
 }
 
+/** Minimal VPC data needed for setup command generation. */
 interface DiscoveredVpc {
   vpcId: string;
   cidrBlock: string;
   name: string;
 }
 
+/** Minimal subnet data needed for setup command generation. */
 interface DiscoveredSubnet {
   subnetId: string;
   vpcId: string;
@@ -214,17 +233,20 @@ interface DiscoveredSubnet {
   name: string;
 }
 
+/** Minimal internet gateway data needed for setup command generation. */
 interface DiscoveredIgw {
   internetGatewayId: string;
   name: string;
 }
 
+/** Minimal route table data needed for setup command generation. */
 interface DiscoveredRouteTable {
   routeTableId: string;
   vpcId: string;
   name: string;
 }
 
+/** Minimal security group data needed for setup command generation. */
 interface DiscoveredSecurityGroup {
   groupId: string;
   groupName: string;
@@ -232,6 +254,7 @@ interface DiscoveredSecurityGroup {
   name: string;
 }
 
+/** Minimal RDS cluster data needed for setup command generation. */
 interface DiscoveredRdsCluster {
   clusterIdentifier: string;
   engine: string;
@@ -240,6 +263,7 @@ interface DiscoveredRdsCluster {
   port: number;
 }
 
+/** Minimal RDS instance data needed for setup command generation. */
 interface DiscoveredRdsInstance {
   dbInstanceIdentifier: string;
   dbInstanceClass: string;
@@ -247,17 +271,20 @@ interface DiscoveredRdsInstance {
   clusterIdentifier: string;
 }
 
+/** Minimal DB subnet group data needed for setup command generation. */
 interface DiscoveredDbSubnetGroup {
   name: string;
   vpcId: string;
   subnetIds: string[];
 }
 
+/** Minimal secret data needed for setup command generation. */
 interface DiscoveredSecret {
   name: string;
   arn: string;
 }
 
+/** Aggregated discovery results across all resource types. */
 interface AllDiscovered {
   vpcs: DiscoveredVpc[];
   subnets: DiscoveredSubnet[];
@@ -270,6 +297,7 @@ interface AllDiscovered {
   secrets: DiscoveredSecret[];
 }
 
+/** Generate swamp model create commands for all discovered resources. */
 function generateSetupCommands(
   discovered: AllDiscovered,
   prefix: string,
@@ -386,13 +414,16 @@ function generateSetupCommands(
 // Discovery Functions
 // =============================================================================
 
+/** Parsed global arguments passed to each discovery method. */
 type GlobalArgs = {
   region: string;
   vpcId?: string;
 };
 
+/** Maximum pagination pages to fetch per API call to prevent unbounded loops. */
 const MAX_PAGES = 5;
 
+/** Discover VPCs in the target region, optionally filtered by VPC ID. */
 async function discoverVpcs(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
@@ -430,6 +461,7 @@ async function discoverVpcs(
   return { results: vpcs, truncated: !!nextToken };
 }
 
+/** Discover subnets in the target region, optionally filtered by VPC ID. */
 async function discoverSubnets(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
@@ -468,6 +500,7 @@ async function discoverSubnets(
   return { results: subnets, truncated: !!nextToken };
 }
 
+/** Discover internet gateways attached to the target VPC or region. */
 async function discoverInternetGateways(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
@@ -507,6 +540,7 @@ async function discoverInternetGateways(
   return { results: igws, truncated: !!nextToken };
 }
 
+/** Discover route tables in the target region, optionally filtered by VPC. */
 async function discoverRouteTables(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
@@ -556,6 +590,7 @@ async function discoverRouteTables(
   return { results: tables, truncated: !!nextToken };
 }
 
+/** Discover security groups in the target region, optionally filtered by VPC. */
 async function discoverSecurityGroups(
   ec2: EC2Client,
   globalArgs: GlobalArgs,
@@ -597,6 +632,7 @@ async function discoverSecurityGroups(
   return { results: groups, truncated: !!nextToken };
 }
 
+/** Discover RDS Aurora clusters in the target region. */
 async function discoverRdsClusters(
   rds: RDSClient,
 ): Promise<
@@ -640,6 +676,7 @@ async function discoverRdsClusters(
   return { results: clusters, truncated: !!marker };
 }
 
+/** Discover RDS DB instances in the target region. */
 async function discoverRdsInstances(
   rds: RDSClient,
 ): Promise<
@@ -676,6 +713,7 @@ async function discoverRdsInstances(
   return { results: instances, truncated: !!marker };
 }
 
+/** Discover DB subnet groups in the target region. */
 async function discoverDbSubnetGroups(
   rds: RDSClient,
 ): Promise<
@@ -708,6 +746,7 @@ async function discoverDbSubnetGroups(
   return { results: groups, truncated: !!marker };
 }
 
+/** Discover Secrets Manager secrets in the target region. */
 async function discoverSecrets(
   sm: SecretsManagerClient,
 ): Promise<{ results: z.infer<typeof SecretSchema>[]; truncated: boolean }> {
@@ -740,6 +779,7 @@ async function discoverSecrets(
 // Context type
 // =============================================================================
 
+/** Execution context provided to each model method by the swamp runtime. */
 type MethodContext = {
   globalArgs: GlobalArgs;
   writeResource: (
@@ -756,6 +796,7 @@ type MethodContext = {
 // Model Definition
 // =============================================================================
 
+/** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
   version: "2026.05.18.1",
