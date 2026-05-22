@@ -4,12 +4,12 @@
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.12",
-    "jsr:@std/yaml@1": "1.1.0",
-    "jsr:@systeminit/swamp-testing@0.20260331.5": "0.20260331.5",
+    "jsr:@systeminit/swamp-testing@0.20260504.10": "0.20260504.10",
     "npm:@aws-sdk/client-ec2@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-rds@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-secrets-manager@3.1010.0": "3.1010.0",
-    "npm:zod@4.3.6": "4.3.6"
+    "npm:zod@4.3.6": "4.3.6",
+    "npm:zod@^4.3.6": "4.3.6"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -21,13 +21,11 @@
     "@std/internal@1.0.12": {
       "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
     },
-    "@std/yaml@1.1.0": {
-      "integrity": "fc1c5c63e05c4c5eb6118355f557958035d41940d6c29d35b306ef7155d6edb0"
-    },
-    "@systeminit/swamp-testing@0.20260331.5": {
-      "integrity": "7f336df3a10433f2218c998b1b9757cba134585f44d53776ed82420b12b04df7",
+    "@systeminit/swamp-testing@0.20260504.10": {
+      "integrity": "f7047edc8089811bdd2c91bf30d7f203bb5bc4b84c4d227a79c29c7910ed655a",
       "dependencies": [
-        "jsr:@std/assert@1.0.19"
+        "jsr:@std/assert@1.0.19",
+        "npm:zod@^4.3.6"
       ]
     }
   },
@@ -874,7 +872,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@systeminit/swamp-testing@0.20260331.5"
+      "jsr:@systeminit/swamp-testing@0.20260504.10"
     ]
   }
 }
