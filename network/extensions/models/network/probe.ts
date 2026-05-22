@@ -17,6 +17,7 @@ import { z } from "npm:zod@4.3.6";
 // Context Type
 // =============================================================================
 
+/** Execution context provided by swamp to model methods. */
 interface ModelContext {
   globalArgs: Record<string, never>;
   writeResource: (
@@ -33,6 +34,7 @@ interface ModelContext {
 // Schemas
 // =============================================================================
 
+/** Schema for a single DNS record entry. */
 const DnsRecordSchema = z.object({
   name: z.string(),
   type: z.string(),
@@ -40,6 +42,7 @@ const DnsRecordSchema = z.object({
   data: z.string(),
 });
 
+/** Schema for a complete DNS lookup result. */
 const DnsLookupSchema = z.object({
   domain: z.string(),
   recordType: z.string(),
@@ -50,6 +53,7 @@ const DnsLookupSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for an HTTP endpoint check result. */
 const HttpCheckSchema = z.object({
   url: z.string(),
   method: z.string(),
@@ -66,6 +70,7 @@ const HttpCheckSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for WHOIS domain registration data. */
 const WhoisInfoSchema = z.object({
   domain: z.string(),
   registrar: z.string().nullable(),
@@ -78,6 +83,7 @@ const WhoisInfoSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for TLS certificate inspection results. */
 const CertInfoSchema = z.object({
   host: z.string(),
   port: z.number(),
@@ -91,6 +97,7 @@ const CertInfoSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for a single traceroute hop entry. */
 const TracerouteHopSchema = z.object({
   hop: z.number(),
   host: z.string().nullable(),
@@ -98,6 +105,7 @@ const TracerouteHopSchema = z.object({
   rttMs: z.array(z.number().nullable()),
 });
 
+/** Schema for a complete traceroute result. */
 const TracerouteSchema = z.object({
   host: z.string(),
   maxHops: z.number(),
@@ -106,12 +114,14 @@ const TracerouteSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for a single port connectivity check result. */
 const PortResultSchema = z.object({
   port: z.number(),
   open: z.boolean(),
   error: z.string().nullable(),
 });
 
+/** Schema for a complete port scan result. */
 const PortScanSchema = z.object({
   host: z.string(),
   results: z.array(PortResultSchema),
@@ -160,6 +170,7 @@ async function runCommand(
 // Parsers
 // =============================================================================
 
+/** Shape of a single answer entry in dig JSON output. */
 interface DigAnswer {
   name?: string;
   type?: number | string;
@@ -934,7 +945,7 @@ export const model = {
   },
 };
 
-// Exported for testing
+/** Internal parsing utilities exported for unit testing. */
 export const _internals = {
   parseDigJson,
   parseDigText,

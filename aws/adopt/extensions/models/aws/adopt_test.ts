@@ -79,7 +79,7 @@ type WrittenResource = any;
 
 Deno.test("model type and version are correct", () => {
   assertEquals(model.type, "@webframp/aws/adopt");
-  assertEquals(model.version, "2026.05.18.1");
+  assertEquals(model.version, "2026.05.21.1");
 });
 
 // =============================================================================

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertEquals, assertExists, assertRejects } from "@std/assert";
+import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
 import { datastore } from "./mod.ts";
 
 // Mock PostgreSQL server that simulates the wire protocol at the HTTP level
@@ -17,6 +18,13 @@ import { datastore } from "./mod.ts";
 // 3. Verifier logic via a mock SQL executor
 
 Deno.test("datastore export has required fields", () => {
+  assertDatastoreExportConformance(datastore, {
+    validConfigs: [{
+      connectionString: "postgres://user:pass@localhost:5432/swamp",
+    }],
+    invalidConfigs: [{}, { connectionString: "" }],
+  });
+
   assertExists(datastore.type);
   assertExists(datastore.name);
   assertExists(datastore.description);

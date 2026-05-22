@@ -10,6 +10,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
+/** Handle referencing a versioned data artifact produced by a workflow step. */
 interface DataHandle {
   name: string;
   dataId: string;
@@ -17,6 +18,7 @@ interface DataHandle {
   specName?: string;
 }
 
+/** Metadata for a single step execution within a workflow run. */
 interface StepExecution {
   jobName: string;
   stepName: string;
@@ -28,6 +30,7 @@ interface StepExecution {
   dataHandles: DataHandle[];
 }
 
+/** Context provided to a workflow-scoped report at execution time. */
 interface WorkflowReportContext {
   workflowId: string;
   workflowRunId: string;
@@ -85,6 +88,13 @@ function findStep(
   return null;
 }
 
+/**
+ * Morning pulse report definition.
+ *
+ * Scoped to the `morning-pulse` workflow, this report aggregates alarm status
+ * across regions, alarm health verdicts, cost trends, and open GitHub PRs into
+ * a concise daily briefing.
+ */
 export const report = {
   name: "@webframp/morning-pulse-report",
   description:

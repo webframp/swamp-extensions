@@ -1,1 +1,6 @@
 version: 1
+repoId: 5027f92c-e26a-4122-9a52-45039d774372
+swampVersion: 20260521.121912.0
+upgradedAt: '2026-05-22T02:47:02.551Z'
+tools:
+  - claude
