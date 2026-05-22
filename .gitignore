@@ -6,7 +6,9 @@
 !/AGENTS.md
 
 # Per-extension .claude/ directories managed by `swamp repo init/upgrade`
-# Skills are bundled from the swamp binary, not authored in this repo
+# Skills are bundled from the swamp binary, not authored in this repo.
+# Intentionally blanket-ignores the whole directory — per-extension .gitignore
+# entries for .claude/ sub-paths are swamp-managed but redundant here.
 **/.claude/
 
 # Git worktrees for isolated development

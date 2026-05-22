@@ -799,7 +799,7 @@ type MethodContext = {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.05.18.1",
+  version: "2026.05.21.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
