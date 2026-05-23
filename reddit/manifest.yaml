@@ -1,0 +1,40 @@
+manifestVersion: 1
+name: "@webframp/reddit/moderation"
+version: "2026.05.23.1"
+description: |
+  Reddit moderation model for subreddit management.
+
+  Read-only API wrapper providing modqueue inspection, user reports,
+  moderator action logs, and content listing. Designed for automated
+  moderation pipelines. Authentication via Reddit OAuth2 script app flow
+  with credentials stored in swamp vault.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/reddit/moderation
+  swamp model create @webframp/reddit/moderation reddit-mod \
+    --global-arg subreddit=aoe4 \
+    --global-arg clientId=vault://reddit/clientId \
+    --global-arg clientSecret=vault://reddit/clientSecret \
+    --global-arg username=vault://reddit/username \
+    --global-arg password=vault://reddit/password \
+    --global-arg userAgent="swamp:aoe4mod:v1.0 (by /u/yourbot)"
+  swamp model method run reddit-mod get_modqueue
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - reddit/moderation.ts
+labels:
+  - reddit
+  - moderation
+  - community
+  - social
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
