@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -56,7 +56,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -88,7 +88,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -125,7 +125,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -146,7 +146,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: |
           if ls extensions/models/cloudflare/*_test.ts 1> /dev/null 2>&1; then
@@ -165,7 +165,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-env --allow-net=0.0.0.0 --allow-read extensions/models/
 
@@ -179,7 +179,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-env --allow-read extensions/models/
 
@@ -193,7 +193,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-run --allow-env extensions/models/
 
@@ -207,7 +207,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-run extensions/models/
 
@@ -225,7 +225,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -246,7 +246,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test extensions/reports/
 
@@ -264,7 +264,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -285,7 +285,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test extensions/reports/
 
@@ -303,7 +303,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -324,7 +324,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-env --allow-net --allow-read --allow-write extensions/models/
 
@@ -342,7 +342,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -363,7 +363,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-env --allow-net --allow-read --allow-write extensions/reports/
 
@@ -381,7 +381,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -402,7 +402,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-run --allow-env --allow-read extensions/models/
 
@@ -420,7 +420,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -441,7 +441,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-env --allow-read --allow-write extensions/reports/
 
@@ -460,7 +460,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -488,7 +488,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -516,7 +516,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
@@ -543,7 +543,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno ${{ matrix.task }}
         run: |
           if [ "${{ matrix.task }}" = "fmt" ]; then
