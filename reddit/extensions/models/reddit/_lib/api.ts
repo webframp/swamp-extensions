@@ -41,8 +41,14 @@ export function createRedditClient(creds: RedditCredentials) {
   function trackRateLimit(resp: Response): void {
     const remaining = resp.headers.get("x-ratelimit-remaining");
     const reset = resp.headers.get("x-ratelimit-reset");
-    if (remaining != null) rateLimitRemaining = parseFloat(remaining);
-    if (reset != null) rateLimitResetMs = Date.now() + parseFloat(reset) * 1000;
+    if (remaining != null) {
+      const n = parseFloat(remaining);
+      if (isFinite(n)) rateLimitRemaining = n;
+    }
+    if (reset != null) {
+      const n = parseFloat(reset);
+      if (isFinite(n)) rateLimitResetMs = Date.now() + n * 1000;
+    }
   }
 
   async function authenticate(): Promise<string> {
@@ -154,6 +160,7 @@ export function createRedditClient(creds: RedditCredentials) {
         reqParams,
       );
 
+      after = data.data.after ?? undefined;
       if (data.data.children.length === 0) break;
 
       for (const child of data.data.children) {
@@ -161,7 +168,6 @@ export function createRedditClient(creds: RedditCredentials) {
         if (items.length >= limit) break;
       }
 
-      after = data.data.after ?? undefined;
       if (!after) break;
       pages++;
     }
