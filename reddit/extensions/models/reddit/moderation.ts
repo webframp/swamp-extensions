@@ -315,7 +315,9 @@ export const model = {
           params,
         );
 
-        const instanceName = `modlog-${args.action || "all"}-${args.mod || "all"}`;
+        const instanceName = `modlog-${args.action || "all"}-${
+          args.mod || "all"
+        }`;
         const handle = await context.writeResource("modlog", instanceName, {
           items,
           truncated,
