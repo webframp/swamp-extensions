@@ -23,6 +23,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/guardduty`](aws/guardduty/) | AWS GuardDuty findings and member account enrollment from delegated admin | `@aws-sdk/client-guardduty` |
 | [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
 | [`@webframp/terraform`](terraform/) | Terraform/OpenTofu state reader — resource inventory, full state, and outputs | None (shells out to `terraform` or `tofu`) |
+| [`@webframp/reddit/moderation`](reddit/) | Reddit moderation — modqueue, reports, modlog, comments, posts, user info | None (uses fetch + OAuth2) |
 
 ## Workflow + Report Extensions
 
@@ -74,6 +75,7 @@ swamp extension pull @webframp/gitlab
 swamp extension pull @webframp/system
 swamp extension pull @webframp/network
 swamp extension pull @webframp/terraform
+swamp extension pull @webframp/reddit/moderation
 
 # Workflow + report extensions (auto-pull model dependencies)
 swamp extension pull @webframp/sre
@@ -198,6 +200,24 @@ swamp model create @webframp/redmine tracker \
 
 swamp workflow run @webframp/scaffold-story \
   --input subject="ADDS | LDAP | Implement Geographic Redundancy"
+```
+
+### Reddit moderation
+
+```bash
+swamp extension pull @webframp/reddit/moderation
+
+swamp model create @webframp/reddit/moderation reddit-mod \
+  --global-arg subreddit=yoursubreddit \
+  --global-arg clientId=vault://reddit/clientId \
+  --global-arg clientSecret=vault://reddit/clientSecret \
+  --global-arg username=vault://reddit/username \
+  --global-arg password=vault://reddit/password \
+  --global-arg userAgent="swamp:yourbot:v1.0 (by /u/yourname)"
+
+swamp model method run reddit-mod get_modqueue
+swamp model method run reddit-mod get_reports --input limit=50
+swamp model method run reddit-mod get_user_info --input username=targetuser
 ```
 
 ### Terraform state reader
