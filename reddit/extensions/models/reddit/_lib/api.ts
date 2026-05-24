@@ -193,7 +193,7 @@ export function createRedditClient(creds: RedditCredentials) {
           `Reddit API error (${retry.status}): ${await retry.text()}`,
         );
       }
-      return (await retry.json()) as T;
+      return await parseJsonResponse<T>(retry);
     }
 
     if (!resp.ok) {
@@ -202,7 +202,13 @@ export function createRedditClient(creds: RedditCredentials) {
       );
     }
 
-    return (await resp.json()) as T;
+    return await parseJsonResponse<T>(resp);
+  }
+
+  async function parseJsonResponse<T>(resp: Response): Promise<T> {
+    const text = await resp.text();
+    if (!text || text.trim() === "") return {} as T;
+    return JSON.parse(text) as T;
   }
 
   return { api, paginate, post };

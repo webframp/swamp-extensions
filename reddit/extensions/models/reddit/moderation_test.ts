@@ -987,6 +987,64 @@ Deno.test({
   },
 });
 
+Deno.test({
+  name: "moderation model: send_modmail throws on modmail API errors",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    const server = startMockRedditServer({
+      handler: (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname === "/api/mod/conversations") {
+          return Response.json({
+            conversation: null,
+            messages: {},
+            errors: { USER_DOESNT_EXIST: "that user does not exist" },
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      let threw = false;
+      try {
+        await model.methods.send_modmail.execute(
+          { to: "deleted_user", subject: "Test", body: "Hello" },
+          context as unknown as Parameters<
+            typeof model.methods.send_modmail.execute
+          >[1],
+        );
+      } catch (e) {
+        threw = true;
+        assertEquals(
+          (e as Error).message.includes("USER_DOESNT_EXIST"),
+          true,
+        );
+      }
+      assertEquals(threw, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 // =============================================================================
 // Pagination Tests
 // =============================================================================

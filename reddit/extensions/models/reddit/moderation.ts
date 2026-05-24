@@ -623,7 +623,8 @@ export const model = {
     },
 
     send_modmail: {
-      description: "Send a modmail message to a user",
+      description:
+        "Send a modmail message to a user (repeat calls create new data versions per recipient)",
       arguments: z.object({
         to: z.string().min(1).describe("Recipient username"),
         subject: z.string().min(1).describe("Message subject"),
@@ -638,7 +639,9 @@ export const model = {
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
-        const response = await client.post<Record<string, unknown>>(
+        const response = await client.post<
+          Record<string, unknown> & { errors?: Record<string, unknown> }
+        >(
           "/api/mod/conversations",
           {
             srName: subreddit,
@@ -649,6 +652,12 @@ export const model = {
           },
           { json: true },
         );
+
+        if (response.errors && Object.keys(response.errors).length > 0) {
+          throw new Error(
+            `Reddit send_modmail failed: ${JSON.stringify(response.errors)}`,
+          );
+        }
 
         const result = {
           action: "send_modmail",
