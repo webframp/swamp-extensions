@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws-ops"
-version: "2026.05.21.1"
+version: "2026.05.24.1"
 description: |
   AWS Operations Toolkit - Unified incident investigation and daily operational visibility.
 
@@ -99,13 +99,13 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/aws/logs@2026.03.30.1"
-  - "@webframp/aws/metrics@2026.03.30.1"
-  - "@webframp/aws/alarms@2026.03.30.1"
-  - "@webframp/aws/traces@2026.03.30.1"
-  - "@webframp/aws/inventory@2026.03.31.1"
-  - "@webframp/aws/networking@2026.04.12.1"
-  - "@webframp/aws/alarm-investigation@2026.04.22.1"
-  - "@webframp/aws/cost-explorer@2026.03.30.1"
-  - "@webframp/github@2026.03.30.1"
+  - "@webframp/aws/logs@2026.05.20.1"
+  - "@webframp/aws/metrics@2026.05.20.1"
+  - "@webframp/aws/alarms@2026.05.20.1"
+  - "@webframp/aws/traces@2026.05.20.1"
+  - "@webframp/aws/inventory@2026.05.20.1"
+  - "@webframp/aws/networking@2026.05.20.1"
+  - "@webframp/aws/alarm-investigation@2026.05.20.1"
+  - "@webframp/aws/cost-explorer@2026.05.20.1"
+  - "@webframp/github@2026.05.14.1"
 
