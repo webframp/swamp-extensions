@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.3.6";
 import { createRedditClient } from "./_lib/api.ts";
 
 // =============================================================================
@@ -16,7 +16,7 @@ import { createRedditClient } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  subreddit: z.string().describe("Subreddit name (without r/ prefix)"),
+  subreddit: z.string().min(1).describe("Subreddit name (without r/ prefix)"),
   clientId: z.string().describe("Reddit OAuth2 application client ID"),
   clientSecret: z.string().meta({ sensitive: true }).describe(
     "Reddit OAuth2 application client secret",
@@ -315,7 +315,7 @@ export const model = {
           params,
         );
 
-        const instanceName = `modlog-${args.action || "all"}`;
+        const instanceName = `modlog-${args.action || "all"}-${args.mod || "all"}`;
         const handle = await context.writeResource("modlog", instanceName, {
           items,
           truncated,
@@ -409,19 +409,13 @@ export const model = {
     get_user_info: {
       description: "Retrieve information about a specific Reddit user",
       arguments: z.object({
-        username: z.string().describe("Reddit username to look up"),
+        username: z.string().min(1).describe("Reddit username to look up"),
       }),
       execute: async (
         args: { username: string },
         context: MethodContext,
       ) => {
-        const creds = {
-          clientId: context.globalArgs.clientId,
-          clientSecret: context.globalArgs.clientSecret,
-          username: context.globalArgs.username,
-          password: context.globalArgs.password,
-          userAgent: context.globalArgs.userAgent,
-        };
+        const { subreddit: _, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
         const response = await client.api<{ data: Record<string, unknown> }>(

@@ -347,7 +347,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "modlog");
-      assertEquals(resources[0].name, "modlog-removecomment");
+      assertEquals(resources[0].name, "modlog-removecomment-all");
       const data = resources[0].data as {
         items: unknown[];
         truncated: boolean;
