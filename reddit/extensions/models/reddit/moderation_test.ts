@@ -88,6 +88,18 @@ Deno.test("moderation model: globalArguments schema parses valid input", () => {
   assertEquals(result.success, true);
 });
 
+Deno.test("moderation model: globalArguments rejects path traversal in subreddit", () => {
+  const result = model.globalArguments.safeParse({
+    subreddit: "foo/../../admin",
+    clientId: "abc123",
+    clientSecret: "secret",
+    username: "bot",
+    password: "pass",
+    userAgent: "swamp:test:v1.0",
+  });
+  assertEquals(result.success, false);
+});
+
 // =============================================================================
 // Mock Reddit API Server Helpers
 // =============================================================================

@@ -16,7 +16,9 @@ import { createRedditClient, type RedditActionResponse } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  subreddit: z.string().min(1).describe("Subreddit name (without r/ prefix)"),
+  subreddit: z.string().regex(/^[A-Za-z0-9_]{2,21}$/).describe(
+    "Subreddit name (without r/ prefix)",
+  ),
   clientId: z.string().describe("Reddit OAuth2 application client ID"),
   clientSecret: z.string().meta({ sensitive: true }).describe(
     "Reddit OAuth2 application client secret",
