@@ -14,7 +14,7 @@ Deno.test("moderation model: has correct type", () => {
 });
 
 Deno.test("moderation model: has correct version", () => {
-  assertEquals(model.version, "2026.05.23.1");
+  assertEquals(model.version, "2026.05.24.1");
 });
 
 Deno.test("moderation model: globalArguments schema has all 6 fields", () => {
@@ -642,7 +642,12 @@ Deno.test({
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-reddit", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.approve.execute(
@@ -700,7 +705,12 @@ Deno.test({
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-reddit", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.remove.execute(
@@ -755,7 +765,12 @@ Deno.test({
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-reddit", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.ban_user.execute(
@@ -824,7 +839,12 @@ Deno.test({
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-reddit", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.send_modmail.execute(
@@ -880,7 +900,12 @@ Deno.test({
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-reddit", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.flair_post.execute(
@@ -933,7 +958,12 @@ Deno.test({
     try {
       const { context } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-reddit", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
       });
 
       let threw = false;

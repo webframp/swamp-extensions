@@ -160,10 +160,10 @@ interface MethodContext {
 // Model Definition
 // =============================================================================
 
-/** Reddit moderation model providing read-only access to subreddit moderation data. */
+/** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.05.23.1",
+  version: "2026.05.24.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

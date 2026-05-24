@@ -1,9 +1,10 @@
 # @webframp/reddit/moderation
 
-Reddit moderation model for subreddit management. Provides read-only API
-methods for modqueue inspection, user reports, moderator action logs, and
-content listing. Designed for automated moderation pipelines that need
-structured access to subreddit moderation data.
+Reddit moderation model for subreddit management. Provides API methods for
+modqueue inspection, user reports, moderator action logs, content listing, and
+moderation actions (approve, remove, ban, modmail, flair). Designed for
+automated moderation pipelines that need structured access to subreddit
+moderation data.
 
 ## Prerequisites
 
@@ -61,6 +62,21 @@ swamp model method run reddit-mod list_posts --input sort=new
 
 # Look up information about a specific user
 swamp model method run reddit-mod get_user_info --input username=targetuser
+
+# Approve an item from modqueue
+swamp model method run reddit-mod approve --input thingId=t3_abc123
+
+# Remove a post as spam
+swamp model method run reddit-mod remove --input thingId=t3_abc123 --input spam=true
+
+# Ban a user for 7 days
+swamp model method run reddit-mod ban_user --input username=spammer --input duration=7 --input banReason="Spam"
+
+# Send modmail
+swamp model method run reddit-mod send_modmail --input to=targetuser --input subject="Warning" --input body="Please follow rules"
+
+# Apply flair to a post
+swamp model method run reddit-mod flair_post --input thingId=t3_abc123 --input flairTemplateId=tmpl_xyz
 ```
 
 ## Methods
@@ -73,6 +89,11 @@ swamp model method run reddit-mod get_user_info --input username=targetuser
 | `list_comments`  | List recent comments in the subreddit                        |
 | `list_posts`     | List posts with configurable sort order                      |
 | `get_user_info`  | Retrieve public profile information for a Reddit user        |
+| `approve`        | Approve a post or comment from the modqueue                  |
+| `remove`         | Remove a post or comment (with optional spam flag)           |
+| `ban_user`       | Ban a user from the subreddit                                |
+| `send_modmail`   | Send a modmail message to a user                             |
+| `flair_post`     | Apply a flair template to a post                             |
 
 ## Authentication
 
