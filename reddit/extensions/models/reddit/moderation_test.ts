@@ -28,7 +28,7 @@ Deno.test("moderation model: globalArguments schema has all 6 fields", () => {
   assertExists(shape.userAgent);
 });
 
-Deno.test("moderation model: has all 6 resources", () => {
+Deno.test("moderation model: has all 7 resources", () => {
   assertExists(model.resources);
   assertExists(model.resources.modqueue);
   assertExists(model.resources.reports);
@@ -36,9 +36,10 @@ Deno.test("moderation model: has all 6 resources", () => {
   assertExists(model.resources.comments);
   assertExists(model.resources.posts);
   assertExists(model.resources.user_info);
+  assertExists(model.resources.action);
 });
 
-Deno.test("moderation model: has all 6 methods with execute functions", () => {
+Deno.test("moderation model: has all 11 methods with execute functions", () => {
   assertExists(model.methods);
   assertExists(model.methods.get_modqueue);
   assertExists(model.methods.get_modqueue.arguments);
@@ -58,6 +59,21 @@ Deno.test("moderation model: has all 6 methods with execute functions", () => {
   assertExists(model.methods.get_user_info);
   assertExists(model.methods.get_user_info.arguments);
   assertExists(model.methods.get_user_info.execute);
+  assertExists(model.methods.approve);
+  assertExists(model.methods.approve.arguments);
+  assertExists(model.methods.approve.execute);
+  assertExists(model.methods.remove);
+  assertExists(model.methods.remove.arguments);
+  assertExists(model.methods.remove.execute);
+  assertExists(model.methods.ban_user);
+  assertExists(model.methods.ban_user.arguments);
+  assertExists(model.methods.ban_user.execute);
+  assertExists(model.methods.send_modmail);
+  assertExists(model.methods.send_modmail.arguments);
+  assertExists(model.methods.send_modmail.execute);
+  assertExists(model.methods.flair_post);
+  assertExists(model.methods.flair_post.arguments);
+  assertExists(model.methods.flair_post.execute);
 });
 
 Deno.test("moderation model: globalArguments schema parses valid input", () => {
