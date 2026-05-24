@@ -154,7 +154,7 @@ export function createRedditClient(creds: RedditCredentials) {
   /** Make an authenticated POST request to the Reddit API. */
   async function post<T>(
     path: string,
-    body: Record<string, string>,
+    body: Record<string, string | boolean | number>,
     opts?: { json?: boolean },
   ): Promise<T> {
     const token = await authenticate();
@@ -170,7 +170,11 @@ export function createRedditClient(creds: RedditCredentials) {
       reqBody = JSON.stringify(body);
     } else {
       headers["Content-Type"] = "application/x-www-form-urlencoded";
-      reqBody = new URLSearchParams(body).toString();
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(body)) {
+        params.set(k, String(v));
+      }
+      reqBody = params.toString();
     }
 
     const resp = await fetch(url, { method: "POST", headers, body: reqBody });

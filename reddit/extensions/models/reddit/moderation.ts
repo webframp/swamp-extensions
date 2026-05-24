@@ -645,7 +645,7 @@ export const model = {
             to: args.to,
             subject: args.subject,
             body: args.body,
-            isAuthorHidden: "true",
+            isAuthorHidden: true,
           },
           { json: true },
         );
@@ -658,10 +658,9 @@ export const model = {
           performedAt: new Date().toISOString(),
         };
 
-        const ts = Date.now();
         const handle = await context.writeResource(
           "action",
-          `send_modmail-${args.to}-${ts}`,
+          `send_modmail-${args.to}`,
           result,
         );
         context.logger.info("Sent modmail to {to}", { to: args.to });

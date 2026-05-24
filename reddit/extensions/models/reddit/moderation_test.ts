@@ -866,10 +866,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "action");
-      assertEquals(
-        resources[0].name.startsWith("send_modmail-targetuser-"),
-        true,
-      );
+      assertEquals(resources[0].name, "send_modmail-targetuser");
     } finally {
       uninstall();
       await server.shutdown();
