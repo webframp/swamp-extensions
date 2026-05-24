@@ -723,6 +723,7 @@ Deno.test({
       const params = new URLSearchParams(capturedBody);
       assertEquals(params.get("id"), "t1_xyz789");
       assertEquals(params.get("spam"), "false");
+      assertEquals(params.get("mod_note"), "Rule 3 violation");
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
@@ -865,7 +866,10 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "action");
-      assertEquals(resources[0].name, "send_modmail-targetuser");
+      assertEquals(
+        resources[0].name.startsWith("send_modmail-targetuser-"),
+        true,
+      );
     } finally {
       uninstall();
       await server.shutdown();

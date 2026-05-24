@@ -523,6 +523,7 @@ export const model = {
           id: args.thingId,
           spam: String(args.spam ?? false),
         };
+        if (args.modNote != null) body.mod_note = args.modNote;
 
         const response = await client.post<RedditActionResponse>(
           "/api/remove",
@@ -585,8 +586,8 @@ export const model = {
           name: args.username,
         };
         if (args.duration != null) body.duration = String(args.duration);
-        if (args.banReason) body.ban_reason = args.banReason;
-        if (args.modNote) body.note = args.modNote;
+        if (args.banReason != null) body.ban_reason = args.banReason;
+        if (args.modNote != null) body.note = args.modNote;
 
         const response = await client.post<RedditActionResponse>(
           `/r/${subreddit}/api/friend`,
@@ -657,9 +658,10 @@ export const model = {
           performedAt: new Date().toISOString(),
         };
 
+        const ts = Date.now();
         const handle = await context.writeResource(
           "action",
-          `send_modmail-${args.to}`,
+          `send_modmail-${args.to}-${ts}`,
           result,
         );
         context.logger.info("Sent modmail to {to}", { to: args.to });
