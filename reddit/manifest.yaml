@@ -1,13 +1,14 @@
 manifestVersion: 1
 name: "@webframp/reddit/moderation"
-version: "2026.05.23.1"
+version: "2026.05.24.1"
 description: |
   Reddit moderation model for subreddit management.
 
-  Read-only API wrapper providing modqueue inspection, user reports,
-  moderator action logs, and content listing. Designed for automated
-  moderation pipelines. Authentication via Reddit OAuth2 script app flow
-  with credentials stored in swamp vault.
+  Reddit moderation API wrapper providing modqueue inspection, user reports,
+  moderator action logs, content listing, and moderation actions (approve,
+  remove, ban, modmail, flair). Designed for automated moderation pipelines.
+  Authentication via Reddit OAuth2 script app flow with credentials stored
+  in swamp vault.
 
   ## Quick Start
 

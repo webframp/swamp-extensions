@@ -14,7 +14,7 @@ Deno.test("moderation model: has correct type", () => {
 });
 
 Deno.test("moderation model: has correct version", () => {
-  assertEquals(model.version, "2026.05.23.1");
+  assertEquals(model.version, "2026.05.24.1");
 });
 
 Deno.test("moderation model: globalArguments schema has all 6 fields", () => {
@@ -28,7 +28,7 @@ Deno.test("moderation model: globalArguments schema has all 6 fields", () => {
   assertExists(shape.userAgent);
 });
 
-Deno.test("moderation model: has all 6 resources", () => {
+Deno.test("moderation model: has all 7 resources", () => {
   assertExists(model.resources);
   assertExists(model.resources.modqueue);
   assertExists(model.resources.reports);
@@ -36,9 +36,10 @@ Deno.test("moderation model: has all 6 resources", () => {
   assertExists(model.resources.comments);
   assertExists(model.resources.posts);
   assertExists(model.resources.user_info);
+  assertExists(model.resources.action);
 });
 
-Deno.test("moderation model: has all 6 methods with execute functions", () => {
+Deno.test("moderation model: has all 11 methods with execute functions", () => {
   assertExists(model.methods);
   assertExists(model.methods.get_modqueue);
   assertExists(model.methods.get_modqueue.arguments);
@@ -58,6 +59,21 @@ Deno.test("moderation model: has all 6 methods with execute functions", () => {
   assertExists(model.methods.get_user_info);
   assertExists(model.methods.get_user_info.arguments);
   assertExists(model.methods.get_user_info.execute);
+  assertExists(model.methods.approve);
+  assertExists(model.methods.approve.arguments);
+  assertExists(model.methods.approve.execute);
+  assertExists(model.methods.remove);
+  assertExists(model.methods.remove.arguments);
+  assertExists(model.methods.remove.execute);
+  assertExists(model.methods.ban_user);
+  assertExists(model.methods.ban_user.arguments);
+  assertExists(model.methods.ban_user.execute);
+  assertExists(model.methods.send_modmail);
+  assertExists(model.methods.send_modmail.arguments);
+  assertExists(model.methods.send_modmail.execute);
+  assertExists(model.methods.flair_post);
+  assertExists(model.methods.flair_post.arguments);
+  assertExists(model.methods.flair_post.execute);
 });
 
 Deno.test("moderation model: globalArguments schema parses valid input", () => {
@@ -592,6 +608,446 @@ Deno.test({
     }
   },
 });
+
+// =============================================================================
+// Action Method Tests
+// =============================================================================
+
+Deno.test({
+  name: "moderation model: approve posts to /api/approve with correct body",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    let capturedMethod = "";
+    let capturedPath = "";
+    let capturedBody = "";
+    const server = startMockRedditServer({
+      handler: async (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname === "/api/approve") {
+          capturedMethod = req.method;
+          capturedPath = url.pathname;
+          capturedBody = await req.text();
+          return Response.json({});
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await model.methods.approve.execute(
+        { thingId: "t3_abc123" },
+        context as unknown as Parameters<
+          typeof model.methods.approve.execute
+        >[1],
+      );
+
+      assertEquals(capturedMethod, "POST");
+      assertEquals(capturedPath, "/api/approve");
+      assertEquals(capturedBody, "id=t3_abc123");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "action");
+      assertEquals(resources[0].name, "approve-t3_abc123");
+      const data = resources[0].data as {
+        action: string;
+        thingId: string;
+        success: boolean;
+      };
+      assertEquals(data.action, "approve");
+      assertEquals(data.thingId, "t3_abc123");
+      assertEquals(data.success, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "moderation model: remove posts to /api/remove with reason",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    let capturedBody = "";
+    const server = startMockRedditServer({
+      handler: async (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname === "/api/remove") {
+          capturedBody = await req.text();
+          return Response.json({});
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await model.methods.remove.execute(
+        { thingId: "t1_xyz789", spam: false, modNote: "Rule 3 violation" },
+        context as unknown as Parameters<
+          typeof model.methods.remove.execute
+        >[1],
+      );
+
+      const params = new URLSearchParams(capturedBody);
+      assertEquals(params.get("id"), "t1_xyz789");
+      assertEquals(params.get("spam"), "false");
+      assertEquals(params.get("mod_note"), "Rule 3 violation");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "action");
+      assertEquals(resources[0].name, "remove-t1_xyz789");
+      const data = resources[0].data as { action: string; success: boolean };
+      assertEquals(data.action, "remove");
+      assertEquals(data.success, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "moderation model: ban_user posts to /r/{sub}/api/friend",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    let capturedPath = "";
+    let capturedBody = "";
+    const server = startMockRedditServer({
+      handler: async (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname.includes("/api/friend")) {
+          capturedPath = url.pathname;
+          capturedBody = await req.text();
+          return Response.json({ json: { errors: [] } });
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await model.methods.ban_user.execute(
+        {
+          username: "baduser",
+          duration: 7,
+          banReason: "Spam",
+          modNote: "Repeat offender",
+        },
+        context as unknown as Parameters<
+          typeof model.methods.ban_user.execute
+        >[1],
+      );
+
+      assertEquals(capturedPath, "/r/testsubreddit/api/friend");
+      const params = new URLSearchParams(capturedBody);
+      assertEquals(params.get("type"), "banned");
+      assertEquals(params.get("name"), "baduser");
+      assertEquals(params.get("duration"), "7");
+      assertEquals(params.get("ban_reason"), "Spam");
+      assertEquals(params.get("note"), "Repeat offender");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "action");
+      assertEquals(resources[0].name, "ban_user-baduser");
+      const data = resources[0].data as { action: string; thingId: string };
+      assertEquals(data.action, "ban_user");
+      assertEquals(data.thingId, "baduser");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "moderation model: send_modmail posts JSON to /api/mod/conversations",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    let capturedPath = "";
+    let capturedBody = "";
+    let capturedContentType = "";
+    const server = startMockRedditServer({
+      handler: async (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname === "/api/mod/conversations") {
+          capturedPath = url.pathname;
+          capturedBody = await req.text();
+          capturedContentType = req.headers.get("content-type") ?? "";
+          return Response.json({
+            conversation: { id: "conv_abc" },
+            messages: {},
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await model.methods.send_modmail.execute(
+        { to: "targetuser", subject: "Warning", body: "Please follow rules" },
+        context as unknown as Parameters<
+          typeof model.methods.send_modmail.execute
+        >[1],
+      );
+
+      assertEquals(capturedPath, "/api/mod/conversations");
+      assertEquals(capturedContentType, "application/json");
+      const parsed = JSON.parse(capturedBody);
+      assertEquals(parsed.to, "targetuser");
+      assertEquals(parsed.subject, "Warning");
+      assertEquals(parsed.body, "Please follow rules");
+      assertEquals(parsed.srName, "testsubreddit");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "action");
+      assertEquals(resources[0].name, "send_modmail-targetuser");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "moderation model: flair_post posts to /r/{sub}/api/flair",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    let capturedPath = "";
+    let capturedBody = "";
+    const server = startMockRedditServer({
+      handler: async (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname.includes("/api/flair")) {
+          capturedPath = url.pathname;
+          capturedBody = await req.text();
+          return Response.json({});
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await model.methods.flair_post.execute(
+        { thingId: "t3_post001", flairTemplateId: "tmpl_xyz" },
+        context as unknown as Parameters<
+          typeof model.methods.flair_post.execute
+        >[1],
+      );
+
+      assertEquals(capturedPath, "/r/testsubreddit/api/flair");
+      const params = new URLSearchParams(capturedBody);
+      assertEquals(params.get("link"), "t3_post001");
+      assertEquals(params.get("flair_template_id"), "tmpl_xyz");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "action");
+      assertEquals(resources[0].name, "flair_post-t3_post001");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "moderation model: action methods throw on Reddit API errors",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    const server = startMockRedditServer({
+      handler: (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname === "/api/approve") {
+          return Response.json({
+            json: {
+              errors: [["id", "that item does not exist", "NOT_FOUND"]],
+            },
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      let threw = false;
+      try {
+        await model.methods.approve.execute(
+          { thingId: "t3_invalid" },
+          context as unknown as Parameters<
+            typeof model.methods.approve.execute
+          >[1],
+        );
+      } catch (e) {
+        threw = true;
+        assertEquals((e as Error).message.includes("NOT_FOUND"), true);
+      }
+      assertEquals(threw, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "moderation model: send_modmail throws on modmail API errors",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    const server = startMockRedditServer({
+      handler: (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        if (url.pathname === "/api/mod/conversations") {
+          return Response.json({
+            conversation: null,
+            messages: {},
+            errors: { USER_DOESNT_EXIST: "that user does not exist" },
+          });
+        }
+        return new Response("Not found", { status: 404 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      let threw = false;
+      try {
+        await model.methods.send_modmail.execute(
+          { to: "deleted_user", subject: "Test", body: "Hello" },
+          context as unknown as Parameters<
+            typeof model.methods.send_modmail.execute
+          >[1],
+        );
+      } catch (e) {
+        threw = true;
+        assertEquals(
+          (e as Error).message.includes("USER_DOESNT_EXIST"),
+          true,
+        );
+      }
+      assertEquals(threw, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// =============================================================================
+// Pagination Tests
+// =============================================================================
 
 Deno.test({
   name:

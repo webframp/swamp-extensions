@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.3.6";
-import { createRedditClient } from "./_lib/api.ts";
+import { createRedditClient, type RedditActionResponse } from "./_lib/api.ts";
 
 // =============================================================================
 // Global Arguments
@@ -130,6 +130,14 @@ const UserInfoSchema = z.object({
   icon_img: z.string(),
 }).passthrough();
 
+const ActionResultSchema = z.object({
+  action: z.string(),
+  thingId: z.string(),
+  success: z.boolean(),
+  response: z.unknown(),
+  performedAt: z.string(),
+});
+
 // =============================================================================
 // Type aliases for context
 // =============================================================================
@@ -152,10 +160,10 @@ interface MethodContext {
 // Model Definition
 // =============================================================================
 
-/** Reddit moderation model providing read-only access to subreddit moderation data. */
+/** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.05.23.1",
+  version: "2026.05.24.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -194,6 +202,13 @@ export const model = {
       schema: UserInfoSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    action: {
+      description:
+        "Result of a moderation action (approve, remove, ban, modmail, flair)",
+      schema: ActionResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 50,
     },
   },
 
@@ -434,6 +449,282 @@ export const model = {
 
         context.logger.info("Fetched user info for {username}", {
           username: args.username,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    approve: {
+      description: "Approve a post or comment from the modqueue",
+      arguments: z.object({
+        thingId: z.string().min(1).describe(
+          "Reddit fullname of the item to approve (e.g. t3_abc123 or t1_xyz789)",
+        ),
+      }),
+      execute: async (
+        args: { thingId: string },
+        context: MethodContext,
+      ) => {
+        const { subreddit: _, ...creds } = context.globalArgs;
+        const client = createRedditClient(creds);
+
+        const response = await client.post<RedditActionResponse>(
+          "/api/approve",
+          { id: args.thingId },
+        );
+
+        const errors = response?.json?.errors ?? [];
+        if (errors.length > 0) {
+          throw new Error(
+            `Reddit approve failed: ${JSON.stringify(errors)}`,
+          );
+        }
+
+        const result = {
+          action: "approve",
+          thingId: args.thingId,
+          success: true,
+          response,
+          performedAt: new Date().toISOString(),
+        };
+
+        const handle = await context.writeResource(
+          "action",
+          `approve-${args.thingId}`,
+          result,
+        );
+        context.logger.info("Approved {thingId}", { thingId: args.thingId });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    remove: {
+      description:
+        "Remove a post or comment (with optional reason and mod note)",
+      arguments: z.object({
+        thingId: z.string().min(1).describe(
+          "Reddit fullname of the item to remove (e.g. t3_abc123 or t1_xyz789)",
+        ),
+        spam: z.boolean().default(false).describe(
+          "Mark as spam (default: false)",
+        ),
+        modNote: z.string().optional().describe(
+          "Internal mod note (up to 100 chars)",
+        ),
+      }),
+      execute: async (
+        args: { thingId: string; spam?: boolean; modNote?: string },
+        context: MethodContext,
+      ) => {
+        const { subreddit: _, ...creds } = context.globalArgs;
+        const client = createRedditClient(creds);
+
+        const body: Record<string, string> = {
+          id: args.thingId,
+          spam: String(args.spam ?? false),
+        };
+        if (args.modNote != null) body.mod_note = args.modNote;
+
+        const response = await client.post<RedditActionResponse>(
+          "/api/remove",
+          body,
+        );
+
+        const errors = response?.json?.errors ?? [];
+        if (errors.length > 0) {
+          throw new Error(
+            `Reddit remove failed: ${JSON.stringify(errors)}`,
+          );
+        }
+
+        const result = {
+          action: "remove",
+          thingId: args.thingId,
+          success: true,
+          response,
+          performedAt: new Date().toISOString(),
+        };
+
+        const handle = await context.writeResource(
+          "action",
+          `remove-${args.thingId}`,
+          result,
+        );
+        context.logger.info("Removed {thingId}", { thingId: args.thingId });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    ban_user: {
+      description: "Ban a user from the subreddit",
+      arguments: z.object({
+        username: z.string().min(1).describe("Reddit username to ban"),
+        duration: z.number().int().min(1).max(999).optional().describe(
+          "Ban duration in days (omit for permanent)",
+        ),
+        banReason: z.string().max(100).optional().describe(
+          "Reason shown to the banned user",
+        ),
+        modNote: z.string().max(300).optional().describe(
+          "Internal moderator note",
+        ),
+      }),
+      execute: async (
+        args: {
+          username: string;
+          duration?: number;
+          banReason?: string;
+          modNote?: string;
+        },
+        context: MethodContext,
+      ) => {
+        const { subreddit, ...creds } = context.globalArgs;
+        const client = createRedditClient(creds);
+
+        const body: Record<string, string> = {
+          type: "banned",
+          name: args.username,
+        };
+        if (args.duration != null) body.duration = String(args.duration);
+        if (args.banReason != null) body.ban_reason = args.banReason;
+        if (args.modNote != null) body.note = args.modNote;
+
+        const response = await client.post<RedditActionResponse>(
+          `/r/${subreddit}/api/friend`,
+          body,
+        );
+
+        const errors = response?.json?.errors ?? [];
+        if (errors.length > 0) {
+          throw new Error(
+            `Reddit ban_user failed: ${JSON.stringify(errors)}`,
+          );
+        }
+
+        const result = {
+          action: "ban_user",
+          thingId: args.username,
+          success: true,
+          response,
+          performedAt: new Date().toISOString(),
+        };
+
+        const handle = await context.writeResource(
+          "action",
+          `ban_user-${args.username}`,
+          result,
+        );
+        context.logger.info("Banned user {username} for {duration} days", {
+          username: args.username,
+          duration: args.duration ?? "permanent",
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    send_modmail: {
+      description:
+        "Send a modmail message to a user (repeat calls create new data versions per recipient)",
+      arguments: z.object({
+        to: z.string().min(1).describe("Recipient username"),
+        subject: z.string().min(1).describe("Message subject"),
+        body: z.string().min(1).describe(
+          "Message body (markdown supported)",
+        ),
+      }),
+      execute: async (
+        args: { to: string; subject: string; body: string },
+        context: MethodContext,
+      ) => {
+        const { subreddit, ...creds } = context.globalArgs;
+        const client = createRedditClient(creds);
+
+        const response = await client.post<
+          Record<string, unknown> & { errors?: Record<string, unknown> }
+        >(
+          "/api/mod/conversations",
+          {
+            srName: subreddit,
+            to: args.to,
+            subject: args.subject,
+            body: args.body,
+            isAuthorHidden: true,
+          },
+          { json: true },
+        );
+
+        if (response.errors && Object.keys(response.errors).length > 0) {
+          throw new Error(
+            `Reddit send_modmail failed: ${JSON.stringify(response.errors)}`,
+          );
+        }
+
+        const result = {
+          action: "send_modmail",
+          thingId: args.to,
+          success: true,
+          response,
+          performedAt: new Date().toISOString(),
+        };
+
+        const handle = await context.writeResource(
+          "action",
+          `send_modmail-${args.to}`,
+          result,
+        );
+        context.logger.info("Sent modmail to {to}", { to: args.to });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    flair_post: {
+      description: "Apply a flair template to a post",
+      arguments: z.object({
+        thingId: z.string().min(1).describe(
+          "Reddit fullname of the post to flair (e.g. t3_abc123)",
+        ),
+        flairTemplateId: z.string().min(1).describe(
+          "Flair template ID to apply",
+        ),
+      }),
+      execute: async (
+        args: { thingId: string; flairTemplateId: string },
+        context: MethodContext,
+      ) => {
+        const { subreddit, ...creds } = context.globalArgs;
+        const client = createRedditClient(creds);
+
+        const response = await client.post<RedditActionResponse>(
+          `/r/${subreddit}/api/flair`,
+          {
+            link: args.thingId,
+            flair_template_id: args.flairTemplateId,
+          },
+        );
+
+        const errors = response?.json?.errors ?? [];
+        if (errors.length > 0) {
+          throw new Error(
+            `Reddit flair_post failed: ${JSON.stringify(errors)}`,
+          );
+        }
+
+        const result = {
+          action: "flair_post",
+          thingId: args.thingId,
+          success: true,
+          response,
+          performedAt: new Date().toISOString(),
+        };
+
+        const handle = await context.writeResource(
+          "action",
+          `flair_post-${args.thingId}`,
+          result,
+        );
+        context.logger.info("Applied flair {flairId} to {thingId}", {
+          flairId: args.flairTemplateId,
+          thingId: args.thingId,
         });
         return { dataHandles: [handle] };
       },
