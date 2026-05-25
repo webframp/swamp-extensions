@@ -511,3 +511,166 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "sync service advertises scopedSync and lazyHydration capabilities",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      const caps = syncService.capabilities!();
+      assertEquals(caps.scopedSync, true);
+      assertEquals(caps.lazyHydration, true);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "scoped pull only downloads states matching context.models",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      // Populate mock with states for two different models
+      const wrap = (s: string) =>
+        new TextEncoder().encode(wrapInTerraformState(s));
+      mock.states.set(
+        "swamp--data--mytype--model-1--result--1--raw",
+        wrap("content-1"),
+      );
+      mock.states.set(
+        "swamp--data--mytype--model-1--result--1--metadata.yaml",
+        wrap("version: 1"),
+      );
+      mock.states.set(
+        "swamp--data--mytype--model-2--result--1--raw",
+        wrap("content-2"),
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+
+      // Scoped pull for model-1 only
+      const count = await syncService.pullChanged({
+        context: { models: [{ modelType: "mytype", modelId: "model-1" }] },
+      });
+
+      assertEquals(count, 2); // raw + metadata for model-1
+      // model-2 file should NOT exist
+      let model2Exists = true;
+      try {
+        await Deno.stat(`${tempDir}/data/mytype/model-2/result/1/raw`);
+      } catch {
+        model2Exists = false;
+      }
+      assertEquals(model2Exists, false);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "scoped push only uploads files matching context.models",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      // Create local files for two models
+      await Deno.mkdir(`${tempDir}/data/mytype/model-1/result/1`, {
+        recursive: true,
+      });
+      await Deno.writeTextFile(
+        `${tempDir}/data/mytype/model-1/result/1/raw`,
+        "content-1",
+      );
+      await Deno.mkdir(`${tempDir}/data/mytype/model-2/result/1`, {
+        recursive: true,
+      });
+      await Deno.writeTextFile(
+        `${tempDir}/data/mytype/model-2/result/1/raw`,
+        "content-2",
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+
+      // Scoped push for model-1 only
+      const count = await syncService.pushChanged({
+        context: { models: [{ modelType: "mytype", modelId: "model-1" }] },
+      });
+
+      assertEquals(count, 1);
+      // model-1 state should exist
+      assertEquals(
+        mock.states.has("swamp--data--mytype--model-1--result--1--raw"),
+        true,
+      );
+      // model-2 state should NOT exist
+      assertEquals(
+        mock.states.has("swamp--data--mytype--model-2--result--1--raw"),
+        false,
+      );
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "unscoped pull downloads all states",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const wrap = (s: string) =>
+        new TextEncoder().encode(wrapInTerraformState(s));
+      mock.states.set("swamp--data--a--b--1--raw", wrap("a"));
+      mock.states.set("swamp--data--c--d--1--raw", wrap("b"));
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      const count = await syncService.pullChanged();
+
+      assertEquals(count, 2);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});

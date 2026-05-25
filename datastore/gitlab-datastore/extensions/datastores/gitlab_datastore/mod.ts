@@ -653,6 +653,38 @@ function decodeStateName(prefix: string, stateName: string): string | null {
 }
 
 /**
+ * Build a path filter from SyncContext.models.
+ * Returns null when no scoping is requested (full sync).
+ * Matching paths start with "data/{modelType}/{modelId}/".
+ */
+function buildScopeFilter(
+  context?: SyncContext,
+): ((relPath: string) => boolean) | null {
+  if (!context?.models?.length) return null;
+  const prefixes = context.models.map((m) =>
+    `data/${m.modelType}/${m.modelId}/`
+  );
+  return (relPath: string) => prefixes.some((p) => relPath.startsWith(p));
+}
+
+/**
+ * Check if a directory path could contain files matching the scope.
+ * Used to prune directory walks early.
+ */
+function couldMatchScope(
+  dirPath: string,
+  context?: SyncContext,
+): boolean {
+  if (!context?.models?.length) return true;
+  for (const m of context.models) {
+    const prefix = `data/${m.modelType}/${m.modelId}`;
+    // dirPath is a prefix of the target, or target is a prefix of dirPath
+    if (prefix.startsWith(dirPath) || dirPath.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+/**
  * Sync service for GitLab datastore
  */
 class GitLabSyncService implements DatastoreSyncService {
@@ -662,6 +694,10 @@ class GitLabSyncService implements DatastoreSyncService {
     private readonly cachePath: string,
   ) {}
 
+  capabilities(): SyncCapabilities {
+    return { scopedSync: true, lazyHydration: true };
+  }
+
   async markDirty(_options?: DatastoreSyncOptions): Promise<void> {
     // No-op: GitLab sync does a full walk on every push.
   }
@@ -670,11 +706,13 @@ class GitLabSyncService implements DatastoreSyncService {
     const signal = options?.signal;
     const states = await this.client.listStates(signal);
     let count = 0;
+    const scopeFilter = buildScopeFilter(options?.context);
 
     for (const stateName of states) {
       signal?.throwIfAborted();
       const relativePath = decodeStateName(this.prefix, stateName);
       if (!relativePath) continue;
+      if (scopeFilter && !scopeFilter(relativePath)) continue;
 
       const content = await this.client.getState(stateName, signal);
       if (content) {
@@ -693,6 +731,7 @@ class GitLabSyncService implements DatastoreSyncService {
 
   async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
     const signal = options?.signal;
+    const scopeFilter = buildScopeFilter(options?.context);
     let count = 0;
 
     const walkDir = async (dir: string, base: string): Promise<void> => {
@@ -703,8 +742,15 @@ class GitLabSyncService implements DatastoreSyncService {
           const relativePath = base ? `${base}/${entry.name}` : entry.name;
 
           if (entry.isDirectory) {
+            // Skip entire subtrees that can't match scope
+            if (
+              scopeFilter && !couldMatchScope(relativePath, options?.context)
+            ) {
+              continue;
+            }
             await walkDir(fullPath, relativePath);
           } else if (entry.isFile) {
+            if (scopeFilter && !scopeFilter(relativePath)) continue;
             const content = await Deno.readFile(fullPath);
             const stateName = encodeStateName(this.prefix, relativePath);
             await this.client.putState(stateName, content, undefined, signal);
