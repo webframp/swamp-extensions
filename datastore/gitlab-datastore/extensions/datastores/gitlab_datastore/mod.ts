@@ -76,6 +76,10 @@ interface DatastoreSyncService {
   pushChanged(options?: DatastoreSyncOptions): Promise<number | void>;
   markDirty(options?: DatastoreSyncOptions): Promise<void>;
   capabilities?(): SyncCapabilities;
+  hydrateFile?(
+    relPath: string,
+    options?: DatastoreSyncOptions,
+  ): Promise<boolean>;
 }
 
 /**
@@ -684,6 +688,43 @@ function couldMatchScope(
   return false;
 }
 
+/** Path to the sync state sidecar file within the cache directory. */
+const SYNC_STATE_FILE = ".datastore-sync-state.json";
+
+/** Persisted sync state for lazy hydration tracking. */
+interface SyncState {
+  lazyPullActive: boolean;
+}
+
+/** Read sync state from the sidecar file. */
+async function readSyncState(cachePath: string): Promise<SyncState> {
+  try {
+    const raw = await Deno.readTextFile(`${cachePath}/${SYNC_STATE_FILE}`);
+    return JSON.parse(raw) as SyncState;
+  } catch {
+    return { lazyPullActive: false };
+  }
+}
+
+/** Write sync state to the sidecar file. */
+async function writeSyncState(
+  cachePath: string,
+  state: SyncState,
+): Promise<void> {
+  await Deno.writeTextFile(
+    `${cachePath}/${SYNC_STATE_FILE}`,
+    JSON.stringify(state),
+  );
+}
+
+/**
+ * Returns true if a cache-relative path is a raw content file under data/.
+ * Pattern: data/.../.../raw
+ */
+function isDataRawFile(relPath: string): boolean {
+  return relPath.startsWith("data/") && relPath.endsWith("/raw");
+}
+
 /**
  * Sync service for GitLab datastore
  */
@@ -704,6 +745,7 @@ class GitLabSyncService implements DatastoreSyncService {
 
   async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
     const signal = options?.signal;
+    const metadataOnly = options?.metadataOnly === true;
     const states = await this.client.listStates(signal);
     let count = 0;
     const scopeFilter = buildScopeFilter(options?.context);
@@ -713,6 +755,16 @@ class GitLabSyncService implements DatastoreSyncService {
       const relativePath = decodeStateName(this.prefix, stateName);
       if (!relativePath) continue;
       if (scopeFilter && !scopeFilter(relativePath)) continue;
+
+      if (metadataOnly && isDataRawFile(relativePath)) {
+        // Skip raw content but create parent directory for catalog walker
+        const localPath = `${this.cachePath}/${relativePath}`;
+        await Deno.mkdir(
+          localPath.substring(0, localPath.lastIndexOf("/")),
+          { recursive: true },
+        );
+        continue;
+      }
 
       const content = await this.client.getState(stateName, signal);
       if (content) {
@@ -726,12 +778,21 @@ class GitLabSyncService implements DatastoreSyncService {
       }
     }
 
+    // Track lazy hydration state
+    if (metadataOnly) {
+      await writeSyncState(this.cachePath, { lazyPullActive: true });
+    } else if (!options?.context) {
+      // Full unscoped pull clears lazy state
+      await writeSyncState(this.cachePath, { lazyPullActive: false });
+    }
+
     return count;
   }
 
   async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
     const signal = options?.signal;
     const scopeFilter = buildScopeFilter(options?.context);
+    const syncState = await readSyncState(this.cachePath);
     let count = 0;
 
     const walkDir = async (dir: string, base: string): Promise<void> => {
@@ -765,7 +826,36 @@ class GitLabSyncService implements DatastoreSyncService {
     };
 
     await walkDir(this.cachePath, "");
+
+    // When lazyPullActive, push is additive-only: never delete remote states
+    // for files missing locally (they're un-hydrated, not deleted).
+    // Future: if reconciliation-delete is added, guard it here with:
+    //   if (!syncState.lazyPullActive) { /* delete remote orphans */ }
+    void syncState;
+
     return count;
+  }
+
+  async hydrateFile(
+    relPath: string,
+    options?: DatastoreSyncOptions,
+  ): Promise<boolean> {
+    const signal = options?.signal;
+    const stateName = encodeStateName(this.prefix, relPath);
+    const content = await this.client.getState(stateName, signal);
+    if (!content) return false;
+
+    const localPath = `${this.cachePath}/${relPath}`;
+    await Deno.mkdir(
+      localPath.substring(0, localPath.lastIndexOf("/")),
+      { recursive: true },
+    );
+
+    // Atomic write: tmp file + rename
+    const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
+    await Deno.writeFile(tmpPath, content);
+    await Deno.rename(tmpPath, localPath);
+    return true;
   }
 }
 

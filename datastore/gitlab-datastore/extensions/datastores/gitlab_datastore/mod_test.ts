@@ -674,3 +674,273 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "metadataOnly pull skips raw files but creates parent dirs",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const wrap = (s: string) =>
+        new TextEncoder().encode(wrapInTerraformState(s));
+      mock.states.set(
+        "swamp--data--mytype--m1--result--1--raw",
+        wrap("big content"),
+      );
+      mock.states.set(
+        "swamp--data--mytype--m1--result--1--metadata.yaml",
+        wrap("version: 1"),
+      );
+      mock.states.set(
+        "swamp--data--mytype--m1--result--2--raw",
+        wrap("more content"),
+      );
+      mock.states.set(
+        "swamp--outputs--workflow-1.yaml",
+        wrap("output: done"),
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      const count = await syncService.pullChanged({ metadataOnly: true });
+
+      // Should download metadata.yaml + outputs, skip raw files
+      assertEquals(count, 2); // metadata.yaml + outputs
+
+      // metadata.yaml should exist
+      const meta = await Deno.readTextFile(
+        `${tempDir}/data/mytype/m1/result/1/metadata.yaml`,
+      );
+      assertEquals(meta, "version: 1");
+
+      // raw files should NOT exist
+      let rawExists = true;
+      try {
+        await Deno.stat(`${tempDir}/data/mytype/m1/result/1/raw`);
+      } catch {
+        rawExists = false;
+      }
+      assertEquals(rawExists, false);
+
+      // But parent dir for raw should exist (for catalog walker)
+      const dirInfo = await Deno.stat(`${tempDir}/data/mytype/m1/result/1`);
+      assertEquals(dirInfo.isDirectory, true);
+
+      // Parent dir for version 2 raw should also exist
+      const dir2Info = await Deno.stat(`${tempDir}/data/mytype/m1/result/2`);
+      assertEquals(dir2Info.isDirectory, true);
+
+      // outputs (outside data/) should be downloaded fully
+      const output = await Deno.readTextFile(
+        `${tempDir}/outputs/workflow-1.yaml`,
+      );
+      assertEquals(output, "output: done");
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "metadataOnly pull sets lazyPullActive in sync state",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const wrap = (s: string) =>
+        new TextEncoder().encode(wrapInTerraformState(s));
+      mock.states.set(
+        "swamp--data--t--m--d--1--metadata.yaml",
+        wrap("v: 1"),
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      await syncService.pullChanged({ metadataOnly: true });
+
+      // Sync state should show lazyPullActive
+      const stateJson = await Deno.readTextFile(
+        `${tempDir}/.datastore-sync-state.json`,
+      );
+      const state = JSON.parse(stateJson);
+      assertEquals(state.lazyPullActive, true);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "full unscoped pull clears lazyPullActive",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      // Pre-set lazyPullActive
+      await Deno.writeTextFile(
+        `${tempDir}/.datastore-sync-state.json`,
+        JSON.stringify({ lazyPullActive: true }),
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      await syncService.pullChanged(); // full unscoped pull
+
+      const stateJson = await Deno.readTextFile(
+        `${tempDir}/.datastore-sync-state.json`,
+      );
+      const state = JSON.parse(stateJson);
+      assertEquals(state.lazyPullActive, false);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "hydrateFile downloads single file atomically",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const wrap = (s: string) =>
+        new TextEncoder().encode(wrapInTerraformState(s));
+      mock.states.set(
+        "swamp--data--mytype--m1--result--1--raw",
+        wrap("hydrated content"),
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      const result = await syncService.hydrateFile!(
+        "data/mytype/m1/result/1/raw",
+      );
+
+      assertEquals(result, true);
+      const content = await Deno.readTextFile(
+        `${tempDir}/data/mytype/m1/result/1/raw`,
+      );
+      assertEquals(content, "hydrated content");
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "hydrateFile returns false for non-existent state",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      const result = await syncService.hydrateFile!(
+        "data/mytype/m1/result/99/raw",
+      );
+
+      assertEquals(result, false);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "push after lazy pull does not tombstone un-hydrated files",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const wrap = (s: string) =>
+        new TextEncoder().encode(wrapInTerraformState(s));
+
+      // Remote has raw content for model-1
+      mock.states.set(
+        "swamp--data--t--model-1--d--1--raw",
+        wrap("original"),
+      );
+      mock.states.set(
+        "swamp--data--t--model-1--d--1--metadata.yaml",
+        wrap("v: 1"),
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+
+      // Lazy pull — raw not downloaded
+      await syncService.pullChanged({ metadataOnly: true });
+
+      // Create new local data (simulating a model run)
+      await Deno.mkdir(`${tempDir}/data/t/model-1/new/1`, { recursive: true });
+      await Deno.writeTextFile(
+        `${tempDir}/data/t/model-1/new/1/raw`,
+        "new content",
+      );
+
+      // Push — should upload new file, NOT delete the original remote raw
+      await syncService.pushChanged();
+
+      // Original remote state should still exist
+      assertEquals(
+        mock.states.has("swamp--data--t--model-1--d--1--raw"),
+        true,
+      );
+      // New state should be uploaded
+      assertEquals(
+        mock.states.has("swamp--data--t--model-1--new--1--raw"),
+        true,
+      );
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
