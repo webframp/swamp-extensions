@@ -52,9 +52,30 @@ interface DatastoreVerifier {
   verify(): Promise<DatastoreHealthResult>;
 }
 
+/** Domain-level sync context for scoped operations. */
+interface SyncContext {
+  models?: ReadonlyArray<{ modelType: string; modelId: string }>;
+}
+
+/** Capabilities a sync service advertises to swamp core. */
+interface SyncCapabilities {
+  scopedSync?: boolean;
+  lazyHydration?: boolean;
+}
+
+/** Options accepted by sync service methods. */
+interface DatastoreSyncOptions {
+  signal?: AbortSignal;
+  relPath?: string;
+  context?: SyncContext;
+  metadataOnly?: boolean;
+}
+
 interface DatastoreSyncService {
-  pullChanged(): Promise<number | void>;
-  pushChanged(): Promise<number | void>;
+  pullChanged(options?: DatastoreSyncOptions): Promise<number | void>;
+  pushChanged(options?: DatastoreSyncOptions): Promise<number | void>;
+  markDirty(options?: DatastoreSyncOptions): Promise<void>;
+  capabilities?(): SyncCapabilities;
 }
 
 /**
@@ -178,11 +199,15 @@ class GitLabStateClient {
   /**
    * Get state content (unwrapped from Terraform state format)
    */
-  async getState(stateName: string): Promise<Uint8Array | null> {
+  async getState(
+    stateName: string,
+    signal?: AbortSignal,
+  ): Promise<Uint8Array | null> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
     const response = await fetch(url, {
       method: "GET",
       headers: this.headers(),
+      signal,
     });
 
     if (response.status === 404) {
@@ -206,6 +231,7 @@ class GitLabStateClient {
     stateName: string,
     content: Uint8Array,
     lockId?: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     let url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
     if (lockId) {
@@ -218,7 +244,7 @@ class GitLabStateClient {
     try {
       const existingResponse = await fetch(
         `${this.baseUrl}/${encodeURIComponent(stateName)}`,
-        { method: "GET", headers: this.headers() },
+        { method: "GET", headers: this.headers(), signal },
       );
       if (existingResponse.ok) {
         const existingState = await existingResponse.text();
@@ -240,6 +266,7 @@ class GitLabStateClient {
         "Content-Type": "application/json",
       },
       body: wrappedState,
+      signal,
     });
 
     if (!response.ok) {
@@ -270,7 +297,7 @@ class GitLabStateClient {
   /**
    * List all states using GraphQL API
    */
-  async listStates(): Promise<string[]> {
+  async listStates(signal?: AbortSignal): Promise<string[]> {
     // First, get the project path if we only have a numeric ID
     let projectPath = this.config.projectId;
     if (/^\d+$/.test(projectPath)) {
@@ -280,6 +307,7 @@ class GitLabStateClient {
       const projectResponse = await fetch(projectUrl, {
         method: "GET",
         headers: this.headers(),
+        signal,
       });
       if (projectResponse.ok) {
         const project = (await projectResponse.json()) as {
@@ -310,6 +338,7 @@ class GitLabStateClient {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query }),
+      signal,
     });
 
     if (!response.ok) {
@@ -633,15 +662,21 @@ class GitLabSyncService implements DatastoreSyncService {
     private readonly cachePath: string,
   ) {}
 
-  async pullChanged(): Promise<number> {
-    const states = await this.client.listStates();
+  async markDirty(_options?: DatastoreSyncOptions): Promise<void> {
+    // No-op: GitLab sync does a full walk on every push.
+  }
+
+  async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
+    const signal = options?.signal;
+    const states = await this.client.listStates(signal);
     let count = 0;
 
     for (const stateName of states) {
+      signal?.throwIfAborted();
       const relativePath = decodeStateName(this.prefix, stateName);
       if (!relativePath) continue;
 
-      const content = await this.client.getState(stateName);
+      const content = await this.client.getState(stateName, signal);
       if (content) {
         const localPath = `${this.cachePath}/${relativePath}`;
         await Deno.mkdir(
@@ -656,12 +691,14 @@ class GitLabSyncService implements DatastoreSyncService {
     return count;
   }
 
-  async pushChanged(): Promise<number> {
+  async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
+    const signal = options?.signal;
     let count = 0;
 
     const walkDir = async (dir: string, base: string): Promise<void> => {
       try {
         for await (const entry of Deno.readDir(dir)) {
+          signal?.throwIfAborted();
           const fullPath = `${dir}/${entry.name}`;
           const relativePath = base ? `${base}/${entry.name}` : entry.name;
 
@@ -670,7 +707,7 @@ class GitLabSyncService implements DatastoreSyncService {
           } else if (entry.isFile) {
             const content = await Deno.readFile(fullPath);
             const stateName = encodeStateName(this.prefix, relativePath);
-            await this.client.putState(stateName, content);
+            await this.client.putState(stateName, content, undefined, signal);
             count++;
           }
         }
@@ -770,13 +807,11 @@ export const datastore = {
         return new GitLabSyncService(client, parsed.statePrefix, cachePath);
       },
 
-      resolveDatastorePath: (repoDir: string): string => {
-        // For remote datastores, return the cache path
-        return `${repoDir}/.swamp/gitlab-cache`;
-      },
+      resolveDatastorePath: (_repoDir: string): string =>
+        `gitlab://${parsed.projectId}/${parsed.statePrefix}`,
 
-      resolveCachePath: (repoDir: string): string => {
-        return `${repoDir}/.swamp/gitlab-cache`;
+      resolveCachePath: (_repoDir: string): string | undefined => {
+        return undefined;
       },
     };
   },

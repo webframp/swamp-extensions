@@ -215,24 +215,24 @@ Deno.test("createProvider returns DatastoreProvider", () => {
   assertExists(provider.resolveCachePath);
 });
 
-Deno.test("resolveDatastorePath returns cache path", () => {
+Deno.test("resolveDatastorePath returns logical URI", () => {
   const provider = datastore.createProvider({
     projectId: "123",
     token: "glpat-xxxx",
   });
 
   const path = provider.resolveDatastorePath("/repo");
-  assertEquals(path, "/repo/.swamp/gitlab-cache");
+  assertEquals(path, "gitlab://123/swamp");
 });
 
-Deno.test("resolveCachePath returns cache path", () => {
+Deno.test("resolveCachePath returns undefined for XDG standard", () => {
   const provider = datastore.createProvider({
     projectId: "123",
     token: "glpat-xxxx",
   });
 
   const path = provider.resolveCachePath!("/repo");
-  assertEquals(path, "/repo/.swamp/gitlab-cache");
+  assertEquals(path, undefined);
 });
 
 Deno.test({
@@ -407,6 +407,31 @@ Deno.test({
       await lock.release();
     } finally {
       await mock.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "sync service has markDirty method that does not throw",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      // markDirty must exist and not throw
+      await syncService.markDirty();
+      await syncService.markDirty({ relPath: "data/test/v1/raw" });
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
     }
   },
 });
