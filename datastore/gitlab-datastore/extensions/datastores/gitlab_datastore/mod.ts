@@ -680,10 +680,13 @@ function couldMatchScope(
   context?: SyncContext,
 ): boolean {
   if (!context?.models?.length) return true;
+  const dirWithSlash = dirPath + "/";
   for (const m of context.models) {
-    const prefix = `data/${m.modelType}/${m.modelId}`;
+    const prefix = `data/${m.modelType}/${m.modelId}/`;
     // dirPath is a prefix of the target, or target is a prefix of dirPath
-    if (prefix.startsWith(dirPath) || dirPath.startsWith(prefix)) return true;
+    if (prefix.startsWith(dirWithSlash) || dirWithSlash.startsWith(prefix)) {
+      return true;
+    }
   }
   return false;
 }
@@ -808,7 +811,9 @@ class GitLabSyncService implements DatastoreSyncService {
           localPath.substring(0, localPath.lastIndexOf("/")),
           { recursive: true },
         );
-        await Deno.writeFile(localPath, content);
+        const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
+        await Deno.writeFile(tmpPath, content);
+        await Deno.rename(tmpPath, localPath);
         count++;
       }
     }
@@ -844,7 +849,10 @@ class GitLabSyncService implements DatastoreSyncService {
         throw error;
       }
 
-      // Hash-based skip: same hash means no change
+      // Hash-based skip: same hash means no change since last push.
+      // Note: if a remote state is deleted externally (outside swamp),
+      // this skip prevents re-upload until the local file changes.
+      // Acceptable when swamp is the sole writer to this datastore.
       const hash = await sha256Hex(content);
       if (syncState.hashes[relativePath] === hash) return;
 
@@ -859,11 +867,17 @@ class GitLabSyncService implements DatastoreSyncService {
       !syncState.dirtyOverflow;
 
     if (useDirtyPaths) {
+      const processed: Set<string> = new Set();
       for (const relPath of syncState.dirtyPaths) {
         signal?.throwIfAborted();
         if (scopeFilter && !scopeFilter(relPath)) continue;
+        processed.add(relPath);
         await pushFile(relPath);
       }
+      // Only remove paths that were actually processed; keep out-of-scope paths
+      syncState.dirtyPaths = syncState.dirtyPaths.filter((p) =>
+        !processed.has(p)
+      );
     } else {
       // Full walk fallback
       const walkDir = async (dir: string, base: string): Promise<void> => {
@@ -896,8 +910,11 @@ class GitLabSyncService implements DatastoreSyncService {
       await walkDir(this.cachePath, "");
     }
 
-    // Clear dirty state after successful push
-    syncState.dirtyPaths = [];
+    // Clear dirty state after successful push.
+    // For full walk: clear everything. For dirty-path mode: already filtered above.
+    if (!useDirtyPaths) {
+      syncState.dirtyPaths = [];
+    }
     syncState.dirtyOverflow = false;
     await writeSyncState(this.cachePath, syncState);
 
