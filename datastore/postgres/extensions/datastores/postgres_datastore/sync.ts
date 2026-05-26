@@ -143,11 +143,13 @@ export function createSyncService(
   async function pull(opts?: {
     prefixes?: string[];
     metadataOnly?: boolean;
+    signal?: AbortSignal;
   }): Promise<number> {
     await ready();
     const prefixes = opts?.prefixes;
     const metadataOnly = opts?.metadataOnly === true;
     const scoped = prefixes !== undefined && prefixes.length > 0;
+    const signal = opts?.signal;
 
     if (metadataOnly) await sidecar.setLazyPullActive(true);
     const state = await sidecar.read();
@@ -187,7 +189,9 @@ export function createSyncService(
       : 0;
 
     for (const row of rows) {
+      signal?.throwIfAborted();
       const relPath = row.path as string;
+      if (relPath.split("/").some((s) => s === "..")) continue;
       const updatedMs = new Date(String(row.updated_at)).getTime();
       if (updatedMs > maxUpdatedAt) maxUpdatedAt = updatedMs;
 
@@ -293,6 +297,7 @@ export function createSyncService(
     lastPulledAt: string | null,
     lazyPullActive: boolean,
   ): Promise<number> {
+    if (relPath.split("/").some((s) => s === "..")) return 0;
     await ready();
     const absPath = `${cachePath}/${relPath}`;
     let stat: Deno.FileInfo | null = null;
@@ -386,6 +391,7 @@ export function createSyncService(
       return await pull({
         prefixes: prefixes.length > 0 ? prefixes : undefined,
         metadataOnly: options?.metadataOnly,
+        signal: options?.signal,
       });
     },
 
