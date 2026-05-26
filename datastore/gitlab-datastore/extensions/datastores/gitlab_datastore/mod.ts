@@ -712,7 +712,10 @@ async function readSyncState(cachePath: string): Promise<SyncState> {
     const parsed = JSON.parse(raw);
     return {
       lazyPullActive: parsed.lazyPullActive ?? false,
-      dirtyPaths: parsed.dirtyPaths ?? [],
+      dirtyPaths: (parsed.dirtyPaths ?? []).filter(
+        (p: unknown) =>
+          typeof p === "string" && !p.split("/").some((s) => s === ".."),
+      ),
       dirtyOverflow: parsed.dirtyOverflow ?? false,
       hashes: parsed.hashes ?? {},
     };
@@ -769,7 +772,11 @@ class GitLabSyncService implements DatastoreSyncService {
   }
 
   async markDirty(options?: DatastoreSyncOptions): Promise<void> {
-    if (!options?.relPath) return;
+    if (
+      !options?.relPath || options.relPath.split("/").some((s) => s === "..")
+    ) {
+      return;
+    }
     const state = await readSyncState(this.cachePath);
     if (state.dirtyOverflow) return; // already in full-walk mode
     if (state.dirtyPaths.includes(options.relPath)) return;
