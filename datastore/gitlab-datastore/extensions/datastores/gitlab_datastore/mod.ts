@@ -691,18 +691,35 @@ function couldMatchScope(
 /** Path to the sync state sidecar file within the cache directory. */
 const SYNC_STATE_FILE = ".datastore-sync-state.json";
 
-/** Persisted sync state for lazy hydration tracking. */
+/** Maximum dirty paths before falling back to full walk. */
+const MAX_DIRTY_PATHS = 200;
+
+/** Persisted sync state for lazy hydration and dirty tracking. */
 interface SyncState {
   lazyPullActive: boolean;
+  dirtyPaths: string[];
+  dirtyOverflow: boolean;
+  hashes: Record<string, string>;
 }
 
 /** Read sync state from the sidecar file. */
 async function readSyncState(cachePath: string): Promise<SyncState> {
   try {
     const raw = await Deno.readTextFile(`${cachePath}/${SYNC_STATE_FILE}`);
-    return JSON.parse(raw) as SyncState;
+    const parsed = JSON.parse(raw);
+    return {
+      lazyPullActive: parsed.lazyPullActive ?? false,
+      dirtyPaths: parsed.dirtyPaths ?? [],
+      dirtyOverflow: parsed.dirtyOverflow ?? false,
+      hashes: parsed.hashes ?? {},
+    };
   } catch {
-    return { lazyPullActive: false };
+    return {
+      lazyPullActive: false,
+      dirtyPaths: [],
+      dirtyOverflow: false,
+      hashes: {},
+    };
   }
 }
 
@@ -715,6 +732,15 @@ async function writeSyncState(
     `${cachePath}/${SYNC_STATE_FILE}`,
     JSON.stringify(state),
   );
+}
+
+/** Compute SHA-256 hex digest of content. */
+async function sha256Hex(content: Uint8Array): Promise<string> {
+  const buf = new Uint8Array(content).buffer as ArrayBuffer;
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
@@ -739,8 +765,17 @@ class GitLabSyncService implements DatastoreSyncService {
     return { scopedSync: true, lazyHydration: true };
   }
 
-  async markDirty(_options?: DatastoreSyncOptions): Promise<void> {
-    // No-op: GitLab sync does a full walk on every push.
+  async markDirty(options?: DatastoreSyncOptions): Promise<void> {
+    if (!options?.relPath) return;
+    const state = await readSyncState(this.cachePath);
+    if (state.dirtyOverflow) return; // already in full-walk mode
+    if (state.dirtyPaths.includes(options.relPath)) return;
+    state.dirtyPaths.push(options.relPath);
+    if (state.dirtyPaths.length > MAX_DIRTY_PATHS) {
+      state.dirtyPaths = [];
+      state.dirtyOverflow = true;
+    }
+    await writeSyncState(this.cachePath, state);
   }
 
   async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
@@ -780,10 +815,14 @@ class GitLabSyncService implements DatastoreSyncService {
 
     // Track lazy hydration state
     if (metadataOnly) {
-      await writeSyncState(this.cachePath, { lazyPullActive: true });
+      const state = await readSyncState(this.cachePath);
+      state.lazyPullActive = true;
+      await writeSyncState(this.cachePath, state);
     } else if (!options?.context) {
       // Full unscoped pull clears lazy state
-      await writeSyncState(this.cachePath, { lazyPullActive: false });
+      const state = await readSyncState(this.cachePath);
+      state.lazyPullActive = false;
+      await writeSyncState(this.cachePath, state);
     }
 
     return count;
@@ -795,43 +834,72 @@ class GitLabSyncService implements DatastoreSyncService {
     const syncState = await readSyncState(this.cachePath);
     let count = 0;
 
-    const walkDir = async (dir: string, base: string): Promise<void> => {
+    const pushFile = async (relativePath: string): Promise<void> => {
+      const fullPath = `${this.cachePath}/${relativePath}`;
+      let content: Uint8Array;
       try {
-        for await (const entry of Deno.readDir(dir)) {
-          signal?.throwIfAborted();
-          const fullPath = `${dir}/${entry.name}`;
-          const relativePath = base ? `${base}/${entry.name}` : entry.name;
-
-          if (entry.isDirectory) {
-            // Skip entire subtrees that can't match scope
-            if (
-              scopeFilter && !couldMatchScope(relativePath, options?.context)
-            ) {
-              continue;
-            }
-            await walkDir(fullPath, relativePath);
-          } else if (entry.isFile) {
-            if (scopeFilter && !scopeFilter(relativePath)) continue;
-            const content = await Deno.readFile(fullPath);
-            const stateName = encodeStateName(this.prefix, relativePath);
-            await this.client.putState(stateName, content, undefined, signal);
-            count++;
-          }
-        }
+        content = await Deno.readFile(fullPath);
       } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) {
-          throw error;
-        }
+        if (error instanceof Deno.errors.NotFound) return;
+        throw error;
       }
+
+      // Hash-based skip: same hash means no change
+      const hash = await sha256Hex(content);
+      if (syncState.hashes[relativePath] === hash) return;
+
+      const stateName = encodeStateName(this.prefix, relativePath);
+      await this.client.putState(stateName, content, undefined, signal);
+      syncState.hashes[relativePath] = hash;
+      count++;
     };
 
-    await walkDir(this.cachePath, "");
+    // Use dirty paths when available and not overflowed
+    const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
+      !syncState.dirtyOverflow;
 
-    // When lazyPullActive, push is additive-only: never delete remote states
-    // for files missing locally (they're un-hydrated, not deleted).
-    // Future: if reconciliation-delete is added, guard it here with:
-    //   if (!syncState.lazyPullActive) { /* delete remote orphans */ }
-    void syncState;
+    if (useDirtyPaths) {
+      for (const relPath of syncState.dirtyPaths) {
+        signal?.throwIfAborted();
+        if (scopeFilter && !scopeFilter(relPath)) continue;
+        await pushFile(relPath);
+      }
+    } else {
+      // Full walk fallback
+      const walkDir = async (dir: string, base: string): Promise<void> => {
+        try {
+          for await (const entry of Deno.readDir(dir)) {
+            signal?.throwIfAborted();
+            const fullPath = `${dir}/${entry.name}`;
+            const relativePath = base ? `${base}/${entry.name}` : entry.name;
+
+            if (entry.isDirectory) {
+              if (
+                scopeFilter && !couldMatchScope(relativePath, options?.context)
+              ) {
+                continue;
+              }
+              await walkDir(fullPath, relativePath);
+            } else if (entry.isFile) {
+              if (relativePath === SYNC_STATE_FILE) continue;
+              if (scopeFilter && !scopeFilter(relativePath)) continue;
+              await pushFile(relativePath);
+            }
+          }
+        } catch (error) {
+          if (!(error instanceof Deno.errors.NotFound)) {
+            throw error;
+          }
+        }
+      };
+
+      await walkDir(this.cachePath, "");
+    }
+
+    // Clear dirty state after successful push
+    syncState.dirtyPaths = [];
+    syncState.dirtyOverflow = false;
+    await writeSyncState(this.cachePath, syncState);
 
     return count;
   }
