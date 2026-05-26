@@ -726,15 +726,15 @@ async function readSyncState(cachePath: string): Promise<SyncState> {
   }
 }
 
-/** Write sync state to the sidecar file. */
+/** Write sync state to the sidecar file atomically. */
 async function writeSyncState(
   cachePath: string,
   state: SyncState,
 ): Promise<void> {
-  await Deno.writeTextFile(
-    `${cachePath}/${SYNC_STATE_FILE}`,
-    JSON.stringify(state),
-  );
+  const filePath = `${cachePath}/${SYNC_STATE_FILE}`;
+  const tmpPath = `${filePath}.${crypto.randomUUID()}.tmp`;
+  await Deno.writeTextFile(tmpPath, JSON.stringify(state));
+  await Deno.rename(tmpPath, filePath);
 }
 
 /** Compute SHA-256 hex digest of content. */
@@ -791,7 +791,9 @@ class GitLabSyncService implements DatastoreSyncService {
     for (const stateName of states) {
       signal?.throwIfAborted();
       const relativePath = decodeStateName(this.prefix, stateName);
-      if (!relativePath) continue;
+      if (!relativePath || relativePath.split("/").some((s) => s === "..")) {
+        continue;
+      }
       if (scopeFilter && !scopeFilter(relativePath)) continue;
 
       if (metadataOnly && isDataRawFile(relativePath)) {
@@ -925,6 +927,7 @@ class GitLabSyncService implements DatastoreSyncService {
     relPath: string,
     options?: DatastoreSyncOptions,
   ): Promise<boolean> {
+    if (relPath.split("/").some((s) => s === "..")) return false;
     const signal = options?.signal;
     const stateName = encodeStateName(this.prefix, relPath);
     const content = await this.client.getState(stateName, signal);
@@ -940,6 +943,12 @@ class GitLabSyncService implements DatastoreSyncService {
     const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
     await Deno.writeFile(tmpPath, content);
     await Deno.rename(tmpPath, localPath);
+
+    // Update hash so next pushChanged doesn't re-upload unchanged content
+    const state = await readSyncState(this.cachePath);
+    state.hashes[relPath] = await sha256Hex(content);
+    await writeSyncState(this.cachePath, state);
+
     return true;
   }
 }
