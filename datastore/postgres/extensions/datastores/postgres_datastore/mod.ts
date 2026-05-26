@@ -3,6 +3,10 @@
 
 import { z } from "npm:zod@4.3.6";
 import postgres from "npm:postgres@3.4.7";
+import {
+  createSyncService as createSync,
+  type DatastoreSyncService,
+} from "./sync.ts";
 
 interface LockInfo {
   holder: string;
@@ -43,7 +47,12 @@ interface DatastoreVerifier {
 interface DatastoreProvider {
   createLock(datastorePath: string, options?: LockOptions): DistributedLock;
   createVerifier(): DatastoreVerifier;
+  createSyncService?(
+    repoDir: string,
+    cachePath: string,
+  ): DatastoreSyncService;
   resolveDatastorePath(repoDir: string): string;
+  resolveCachePath?(repoDir: string): string | undefined;
 }
 
 const ConfigSchema = z.object({
@@ -293,6 +302,18 @@ export const datastore = {
 
       resolveDatastorePath: (_repoDir: string): string =>
         `pg://${parsed.schema}.datastore`,
+
+      createSyncService: (
+        _repoDir: string,
+        cachePath: string,
+      ) => {
+        const filesTable = `${parsed.schema}.files`;
+        return createSync(sql, filesTable, cachePath);
+      },
+
+      resolveCachePath: (_repoDir: string): string | undefined => {
+        return undefined;
+      },
     };
   },
 };
