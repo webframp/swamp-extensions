@@ -52,9 +52,34 @@ interface DatastoreVerifier {
   verify(): Promise<DatastoreHealthResult>;
 }
 
+/** Domain-level sync context for scoped operations. */
+interface SyncContext {
+  models?: ReadonlyArray<{ modelType: string; modelId: string }>;
+}
+
+/** Capabilities a sync service advertises to swamp core. */
+interface SyncCapabilities {
+  scopedSync?: boolean;
+  lazyHydration?: boolean;
+}
+
+/** Options accepted by sync service methods. */
+interface DatastoreSyncOptions {
+  signal?: AbortSignal;
+  relPath?: string;
+  context?: SyncContext;
+  metadataOnly?: boolean;
+}
+
 interface DatastoreSyncService {
-  pullChanged(): Promise<number | void>;
-  pushChanged(): Promise<number | void>;
+  pullChanged(options?: DatastoreSyncOptions): Promise<number | void>;
+  pushChanged(options?: DatastoreSyncOptions): Promise<number | void>;
+  markDirty(options?: DatastoreSyncOptions): Promise<void>;
+  capabilities?(): SyncCapabilities;
+  hydrateFile?(
+    relPath: string,
+    options?: DatastoreSyncOptions,
+  ): Promise<boolean>;
 }
 
 /**
@@ -178,11 +203,15 @@ class GitLabStateClient {
   /**
    * Get state content (unwrapped from Terraform state format)
    */
-  async getState(stateName: string): Promise<Uint8Array | null> {
+  async getState(
+    stateName: string,
+    signal?: AbortSignal,
+  ): Promise<Uint8Array | null> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
     const response = await fetch(url, {
       method: "GET",
       headers: this.headers(),
+      signal,
     });
 
     if (response.status === 404) {
@@ -206,6 +235,7 @@ class GitLabStateClient {
     stateName: string,
     content: Uint8Array,
     lockId?: string,
+    signal?: AbortSignal,
   ): Promise<void> {
     let url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
     if (lockId) {
@@ -218,7 +248,7 @@ class GitLabStateClient {
     try {
       const existingResponse = await fetch(
         `${this.baseUrl}/${encodeURIComponent(stateName)}`,
-        { method: "GET", headers: this.headers() },
+        { method: "GET", headers: this.headers(), signal },
       );
       if (existingResponse.ok) {
         const existingState = await existingResponse.text();
@@ -240,6 +270,7 @@ class GitLabStateClient {
         "Content-Type": "application/json",
       },
       body: wrappedState,
+      signal,
     });
 
     if (!response.ok) {
@@ -270,7 +301,7 @@ class GitLabStateClient {
   /**
    * List all states using GraphQL API
    */
-  async listStates(): Promise<string[]> {
+  async listStates(signal?: AbortSignal): Promise<string[]> {
     // First, get the project path if we only have a numeric ID
     let projectPath = this.config.projectId;
     if (/^\d+$/.test(projectPath)) {
@@ -280,6 +311,7 @@ class GitLabStateClient {
       const projectResponse = await fetch(projectUrl, {
         method: "GET",
         headers: this.headers(),
+        signal,
       });
       if (projectResponse.ok) {
         const project = (await projectResponse.json()) as {
@@ -310,6 +342,7 @@ class GitLabStateClient {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query }),
+      signal,
     });
 
     if (!response.ok) {
@@ -624,6 +657,107 @@ function decodeStateName(prefix: string, stateName: string): string | null {
 }
 
 /**
+ * Build a path filter from SyncContext.models.
+ * Returns null when no scoping is requested (full sync).
+ * Matching paths start with "data/{modelType}/{modelId}/".
+ */
+function buildScopeFilter(
+  context?: SyncContext,
+): ((relPath: string) => boolean) | null {
+  if (!context?.models?.length) return null;
+  const prefixes = context.models.map((m) =>
+    `data/${m.modelType}/${m.modelId}/`
+  );
+  return (relPath: string) => prefixes.some((p) => relPath.startsWith(p));
+}
+
+/**
+ * Check if a directory path could contain files matching the scope.
+ * Used to prune directory walks early.
+ */
+function couldMatchScope(
+  dirPath: string,
+  context?: SyncContext,
+): boolean {
+  if (!context?.models?.length) return true;
+  const dirWithSlash = dirPath + "/";
+  for (const m of context.models) {
+    const prefix = `data/${m.modelType}/${m.modelId}/`;
+    // dirPath is a prefix of the target, or target is a prefix of dirPath
+    if (prefix.startsWith(dirWithSlash) || dirWithSlash.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Path to the sync state sidecar file within the cache directory. */
+const SYNC_STATE_FILE = ".datastore-sync-state.json";
+
+/** Maximum dirty paths before falling back to full walk. */
+const MAX_DIRTY_PATHS = 200;
+
+/** Persisted sync state for lazy hydration and dirty tracking. */
+interface SyncState {
+  lazyPullActive: boolean;
+  dirtyPaths: string[];
+  dirtyOverflow: boolean;
+  hashes: Record<string, string>;
+}
+
+/** Read sync state from the sidecar file. */
+async function readSyncState(cachePath: string): Promise<SyncState> {
+  try {
+    const raw = await Deno.readTextFile(`${cachePath}/${SYNC_STATE_FILE}`);
+    const parsed = JSON.parse(raw);
+    return {
+      lazyPullActive: parsed.lazyPullActive ?? false,
+      dirtyPaths: (parsed.dirtyPaths ?? []).filter(
+        (p: unknown) =>
+          typeof p === "string" && !p.split("/").some((s) => s === ".."),
+      ),
+      dirtyOverflow: parsed.dirtyOverflow ?? false,
+      hashes: parsed.hashes ?? {},
+    };
+  } catch {
+    return {
+      lazyPullActive: false,
+      dirtyPaths: [],
+      dirtyOverflow: false,
+      hashes: {},
+    };
+  }
+}
+
+/** Write sync state to the sidecar file atomically. */
+async function writeSyncState(
+  cachePath: string,
+  state: SyncState,
+): Promise<void> {
+  const filePath = `${cachePath}/${SYNC_STATE_FILE}`;
+  const tmpPath = `${filePath}.${crypto.randomUUID()}.tmp`;
+  await Deno.writeTextFile(tmpPath, JSON.stringify(state));
+  await Deno.rename(tmpPath, filePath);
+}
+
+/** Compute SHA-256 hex digest of content. */
+async function sha256Hex(content: Uint8Array): Promise<string> {
+  const buf = new Uint8Array(content).buffer as ArrayBuffer;
+  const hash = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Returns true if a cache-relative path is a raw content file under data/.
+ * Pattern: data/.../.../raw
+ */
+function isDataRawFile(relPath: string): boolean {
+  return relPath.startsWith("data/") && relPath.endsWith("/raw");
+}
+
+/**
  * Sync service for GitLab datastore
  */
 class GitLabSyncService implements DatastoreSyncService {
@@ -633,56 +767,196 @@ class GitLabSyncService implements DatastoreSyncService {
     private readonly cachePath: string,
   ) {}
 
-  async pullChanged(): Promise<number> {
-    const states = await this.client.listStates();
+  capabilities(): SyncCapabilities {
+    return { scopedSync: true, lazyHydration: true };
+  }
+
+  async markDirty(options?: DatastoreSyncOptions): Promise<void> {
+    if (
+      !options?.relPath || options.relPath.split("/").some((s) => s === "..")
+    ) {
+      return;
+    }
+    const state = await readSyncState(this.cachePath);
+    if (state.dirtyOverflow) return; // already in full-walk mode
+    if (state.dirtyPaths.includes(options.relPath)) return;
+    state.dirtyPaths.push(options.relPath);
+    if (state.dirtyPaths.length > MAX_DIRTY_PATHS) {
+      state.dirtyPaths = [];
+      state.dirtyOverflow = true;
+    }
+    await writeSyncState(this.cachePath, state);
+  }
+
+  async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
+    const signal = options?.signal;
+    const metadataOnly = options?.metadataOnly === true;
+    const states = await this.client.listStates(signal);
     let count = 0;
+    const scopeFilter = buildScopeFilter(options?.context);
 
     for (const stateName of states) {
+      signal?.throwIfAborted();
       const relativePath = decodeStateName(this.prefix, stateName);
-      if (!relativePath) continue;
+      if (!relativePath || relativePath.split("/").some((s) => s === "..")) {
+        continue;
+      }
+      if (scopeFilter && !scopeFilter(relativePath)) continue;
 
-      const content = await this.client.getState(stateName);
+      if (metadataOnly && isDataRawFile(relativePath)) {
+        // Skip raw content but create parent directory for catalog walker
+        const localPath = `${this.cachePath}/${relativePath}`;
+        await Deno.mkdir(
+          localPath.substring(0, localPath.lastIndexOf("/")),
+          { recursive: true },
+        );
+        continue;
+      }
+
+      const content = await this.client.getState(stateName, signal);
       if (content) {
         const localPath = `${this.cachePath}/${relativePath}`;
         await Deno.mkdir(
           localPath.substring(0, localPath.lastIndexOf("/")),
           { recursive: true },
         );
-        await Deno.writeFile(localPath, content);
+        const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
+        await Deno.writeFile(tmpPath, content);
+        await Deno.rename(tmpPath, localPath);
         count++;
       }
+    }
+
+    // Track lazy hydration state
+    if (metadataOnly) {
+      const state = await readSyncState(this.cachePath);
+      state.lazyPullActive = true;
+      await writeSyncState(this.cachePath, state);
+    } else if (!options?.context) {
+      // Full unscoped pull clears lazy state
+      const state = await readSyncState(this.cachePath);
+      state.lazyPullActive = false;
+      await writeSyncState(this.cachePath, state);
     }
 
     return count;
   }
 
-  async pushChanged(): Promise<number> {
+  async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
+    const signal = options?.signal;
+    const scopeFilter = buildScopeFilter(options?.context);
+    const syncState = await readSyncState(this.cachePath);
     let count = 0;
 
-    const walkDir = async (dir: string, base: string): Promise<void> => {
+    const pushFile = async (relativePath: string): Promise<void> => {
+      const fullPath = `${this.cachePath}/${relativePath}`;
+      let content: Uint8Array;
       try {
-        for await (const entry of Deno.readDir(dir)) {
-          const fullPath = `${dir}/${entry.name}`;
-          const relativePath = base ? `${base}/${entry.name}` : entry.name;
-
-          if (entry.isDirectory) {
-            await walkDir(fullPath, relativePath);
-          } else if (entry.isFile) {
-            const content = await Deno.readFile(fullPath);
-            const stateName = encodeStateName(this.prefix, relativePath);
-            await this.client.putState(stateName, content);
-            count++;
-          }
-        }
+        content = await Deno.readFile(fullPath);
       } catch (error) {
-        if (!(error instanceof Deno.errors.NotFound)) {
-          throw error;
-        }
+        if (error instanceof Deno.errors.NotFound) return;
+        throw error;
       }
+
+      // Hash-based skip: same hash means no change since last push.
+      // Note: if a remote state is deleted externally (outside swamp),
+      // this skip prevents re-upload until the local file changes.
+      // Acceptable when swamp is the sole writer to this datastore.
+      const hash = await sha256Hex(content);
+      if (syncState.hashes[relativePath] === hash) return;
+
+      const stateName = encodeStateName(this.prefix, relativePath);
+      await this.client.putState(stateName, content, undefined, signal);
+      syncState.hashes[relativePath] = hash;
+      count++;
     };
 
-    await walkDir(this.cachePath, "");
+    // Use dirty paths when available and not overflowed
+    const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
+      !syncState.dirtyOverflow;
+
+    if (useDirtyPaths) {
+      const processed: Set<string> = new Set();
+      for (const relPath of syncState.dirtyPaths) {
+        signal?.throwIfAborted();
+        if (scopeFilter && !scopeFilter(relPath)) continue;
+        processed.add(relPath);
+        await pushFile(relPath);
+      }
+      // Only remove paths that were actually processed; keep out-of-scope paths
+      syncState.dirtyPaths = syncState.dirtyPaths.filter((p) =>
+        !processed.has(p)
+      );
+    } else {
+      // Full walk fallback
+      const walkDir = async (dir: string, base: string): Promise<void> => {
+        try {
+          for await (const entry of Deno.readDir(dir)) {
+            signal?.throwIfAborted();
+            const fullPath = `${dir}/${entry.name}`;
+            const relativePath = base ? `${base}/${entry.name}` : entry.name;
+
+            if (entry.isDirectory) {
+              if (
+                scopeFilter && !couldMatchScope(relativePath, options?.context)
+              ) {
+                continue;
+              }
+              await walkDir(fullPath, relativePath);
+            } else if (entry.isFile) {
+              if (relativePath === SYNC_STATE_FILE) continue;
+              if (scopeFilter && !scopeFilter(relativePath)) continue;
+              await pushFile(relativePath);
+            }
+          }
+        } catch (error) {
+          if (!(error instanceof Deno.errors.NotFound)) {
+            throw error;
+          }
+        }
+      };
+
+      await walkDir(this.cachePath, "");
+    }
+
+    // Clear dirty state after successful push.
+    // For full walk: clear everything. For dirty-path mode: already filtered above.
+    if (!useDirtyPaths) {
+      syncState.dirtyPaths = [];
+    }
+    syncState.dirtyOverflow = false;
+    await writeSyncState(this.cachePath, syncState);
+
     return count;
+  }
+
+  async hydrateFile(
+    relPath: string,
+    options?: DatastoreSyncOptions,
+  ): Promise<boolean> {
+    if (relPath.split("/").some((s) => s === "..")) return false;
+    const signal = options?.signal;
+    const stateName = encodeStateName(this.prefix, relPath);
+    const content = await this.client.getState(stateName, signal);
+    if (!content) return false;
+
+    const localPath = `${this.cachePath}/${relPath}`;
+    await Deno.mkdir(
+      localPath.substring(0, localPath.lastIndexOf("/")),
+      { recursive: true },
+    );
+
+    // Atomic write: tmp file + rename
+    const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
+    await Deno.writeFile(tmpPath, content);
+    await Deno.rename(tmpPath, localPath);
+
+    // Update hash so next pushChanged doesn't re-upload unchanged content
+    const state = await readSyncState(this.cachePath);
+    state.hashes[relPath] = await sha256Hex(content);
+    await writeSyncState(this.cachePath, state);
+
+    return true;
   }
 }
 
@@ -770,13 +1044,11 @@ export const datastore = {
         return new GitLabSyncService(client, parsed.statePrefix, cachePath);
       },
 
-      resolveDatastorePath: (repoDir: string): string => {
-        // For remote datastores, return the cache path
-        return `${repoDir}/.swamp/gitlab-cache`;
-      },
+      resolveDatastorePath: (_repoDir: string): string =>
+        `gitlab://${parsed.projectId}/${parsed.statePrefix}`,
 
-      resolveCachePath: (repoDir: string): string => {
-        return `${repoDir}/.swamp/gitlab-cache`;
+      resolveCachePath: (_repoDir: string): string | undefined => {
+        return undefined;
       },
     };
   },
