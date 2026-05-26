@@ -48,6 +48,10 @@ const DATASTORE_SUBDIRS = [
   "files",
 ] as const;
 
+function isTraversal(p: string): boolean {
+  return !p || p.split("/").some((s) => s === "..");
+}
+
 function modelPrefixes(
   models: ReadonlyArray<{ modelType: string; modelId: string }> | undefined,
 ): string[] {
@@ -55,10 +59,14 @@ function modelPrefixes(
   return models.map((m) => `data/${m.modelType}/${m.modelId}/`);
 }
 
+/** Escape SQL LIKE wildcards in a literal prefix. */
+function escapeLike(s: string): string {
+  return s.replace(/[%_\\]/g, "\\$&");
+}
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const input = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(input).set(bytes);
-  const digest = await crypto.subtle.digest("SHA-256", input);
+  const buf = new Uint8Array(bytes).buffer as ArrayBuffer;
+  const digest = await crypto.subtle.digest("SHA-256", buf);
   const view = new Uint8Array(digest);
   let hex = "";
   for (let i = 0; i < view.length; i++) {
@@ -83,14 +91,16 @@ async function walkAndPush(
   root: string,
   relRoot: string,
   onFile: (relPath: string, bytes: Uint8Array) => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<void> {
   try {
     for await (const entry of Deno.readDir(root)) {
+      signal?.throwIfAborted();
       if (entry.isSymlink) continue;
       const childAbs = `${root}/${entry.name}`;
       const childRel = `${relRoot}/${entry.name}`;
       if (entry.isDirectory) {
-        await walkAndPush(childAbs, childRel, onFile);
+        await walkAndPush(childAbs, childRel, onFile, signal);
       } else if (entry.isFile) {
         let bytes: Uint8Array;
         try {
@@ -120,14 +130,16 @@ export function createSyncService(
       CREATE TABLE IF NOT EXISTS ${filesTable} (
         path       TEXT PRIMARY KEY,
         hash       TEXT NOT NULL,
-        size       INTEGER NOT NULL,
+        size       BIGINT NOT NULL,
         content    BYTEA NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         deleted_at TIMESTAMPTZ
       )
     `);
     await sql.unsafe(`
-      CREATE INDEX IF NOT EXISTS idx_${filesTable.replace(".", "_")}_updated_at
+      CREATE INDEX IF NOT EXISTS idx_${
+      filesTable.replaceAll(".", "_")
+    }_updated_at
       ON ${filesTable} (updated_at)
     `);
   }
@@ -138,6 +150,12 @@ export function createSyncService(
       await ensureSchema();
       schemaEnsured = true;
     }
+  }
+
+  /** Get server time for watermark (avoids client/server clock skew). */
+  async function serverNow(): Promise<string> {
+    const [row] = await sql.unsafe(`SELECT now()::text AS ts`);
+    return row.ts as string;
   }
 
   async function pull(opts?: {
@@ -154,20 +172,23 @@ export function createSyncService(
     if (metadataOnly) await sidecar.setLazyPullActive(true);
     const state = await sidecar.read();
 
-    // Build WHERE clause
+    // Capture server time BEFORE the data query for safe watermark.
+    const pullStartTime = await serverNow();
+
+    // Phase 1: fetch metadata only (no content BYTEA)
     const conditions: string[] = [];
     const params: string[] = [];
     let paramIdx = 1;
 
     if (scoped) {
       const orClauses = prefixes!.map((p) => {
-        params.push(p + "%");
-        return `path LIKE $${paramIdx++}`;
+        params.push(escapeLike(p) + "%");
+        return `path LIKE $${paramIdx++} ESCAPE '\\'`;
       });
       conditions.push(`(${orClauses.join(" OR ")})`);
     } else if (state.lastPulledAt !== null) {
       params.push(state.lastPulledAt);
-      conditions.push(`updated_at > $${paramIdx++}`);
+      conditions.push(`updated_at >= $${paramIdx++}`);
     }
 
     if (metadataOnly) {
@@ -178,25 +199,23 @@ export function createSyncService(
       ? `WHERE ${conditions.join(" AND ")}`
       : "";
 
-    const rows: postgres.Row[] = await sql.unsafe(
-      `SELECT path, hash, size, content, deleted_at, updated_at FROM ${filesTable} ${where}`,
+    // Phase 1: metadata scan
+    const metaRows: postgres.Row[] = await sql.unsafe(
+      `SELECT path, hash, deleted_at FROM ${filesTable} ${where}`,
       params,
     );
 
-    let changes = 0;
-    let maxUpdatedAt = state.lastPulledAt
-      ? new Date(state.lastPulledAt).getTime()
-      : 0;
+    signal?.throwIfAborted();
 
-    for (const row of rows) {
+    let changes = 0;
+    const needContent: string[] = [];
+
+    for (const row of metaRows) {
       signal?.throwIfAborted();
       const relPath = row.path as string;
-      if (relPath.split("/").some((s) => s === "..")) continue;
-      const updatedMs = new Date(String(row.updated_at)).getTime();
-      if (updatedMs > maxUpdatedAt) maxUpdatedAt = updatedMs;
+      if (isTraversal(relPath)) continue;
 
       if (row.deleted_at !== null) {
-        // Remove local file
         try {
           await Deno.remove(`${cachePath}/${relPath}`);
           changes++;
@@ -204,24 +223,37 @@ export function createSyncService(
           if (!(err instanceof Deno.errors.NotFound)) throw err;
         }
       } else {
-        // Write content to cache
-        const content = row.content as Uint8Array;
+        // Check if local hash matches — if so, skip content fetch
         const localPath = `${cachePath}/${relPath}`;
-        // Skip if local hash matches
         try {
           const local = await Deno.readFile(localPath);
           if (await sha256Hex(local) === (row.hash as string)) continue;
-        } catch { /* file missing or unreadable — download */ }
-        await writeFileAtomic(localPath, content);
+        } catch { /* file missing — need content */ }
+        needContent.push(relPath);
+      }
+    }
+
+    // Phase 2: fetch content only for changed/missing files
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < needContent.length; i += BATCH_SIZE) {
+      signal?.throwIfAborted();
+      const batch = needContent.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(", ");
+      const contentRows: postgres.Row[] = await sql.unsafe(
+        `SELECT path, content FROM ${filesTable} WHERE path IN (${placeholders}) AND deleted_at IS NULL`,
+        batch,
+      );
+      for (const row of contentRows) {
+        signal?.throwIfAborted();
+        const relPath = row.path as string;
+        const content = row.content as Uint8Array;
+        await writeFileAtomic(`${cachePath}/${relPath}`, content);
         changes++;
       }
     }
 
     if (!scoped && !metadataOnly) {
-      const watermark = maxUpdatedAt > 0
-        ? new Date(maxUpdatedAt).toISOString()
-        : new Date().toISOString();
-      await sidecar.setLastPulledAt(watermark);
+      await sidecar.setLastPulledAt(pullStartTime);
       await sidecar.setLazyPullActive(false);
     }
 
@@ -231,13 +263,14 @@ export function createSyncService(
   async function fullWalkPush(
     lastPulledAt: string | null,
     lazyPullActive: boolean,
+    signal?: AbortSignal,
   ): Promise<number> {
     await ready();
     let changes = 0;
 
-    // Fetch remote manifest for diff
+    // Fetch remote manifest for diff (metadata only, no content)
     const remoteRows: postgres.Row[] = await sql.unsafe(
-      `SELECT path, hash, deleted_at, updated_at FROM ${filesTable}`,
+      `SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE deleted_at IS NULL`,
     );
     const remotePaths = new Map<
       string,
@@ -254,6 +287,7 @@ export function createSyncService(
     const localPaths = new Set<string>();
 
     const onFile = async (relPath: string, bytes: Uint8Array) => {
+      signal?.throwIfAborted();
       localPaths.add(relPath);
       const hash = await sha256Hex(bytes);
       const existing = remotePaths.get(relPath);
@@ -272,7 +306,8 @@ export function createSyncService(
     };
 
     for (const sub of DATASTORE_SUBDIRS) {
-      await walkAndPush(`${cachePath}/${sub}`, sub, onFile);
+      signal?.throwIfAborted();
+      await walkAndPush(`${cachePath}/${sub}`, sub, onFile, signal);
     }
 
     // Tombstone pass — skip when lazyPullActive
@@ -296,9 +331,11 @@ export function createSyncService(
     relPath: string,
     lastPulledAt: string | null,
     lazyPullActive: boolean,
+    signal?: AbortSignal,
   ): Promise<number> {
-    if (relPath.split("/").some((s) => s === "..")) return 0;
+    if (isTraversal(relPath)) return 0;
     await ready();
+    signal?.throwIfAborted();
     const absPath = `${cachePath}/${relPath}`;
     let stat: Deno.FileInfo | null = null;
     try {
@@ -321,14 +358,14 @@ export function createSyncService(
           hash: await sha256Hex(bytes),
           bytes,
         });
-      });
+      }, signal);
     }
 
-    // Fetch remote state for this subtree
+    // Fetch remote state for this subtree (escaped LIKE)
     const remoteRows: postgres.Row[] = await sql.unsafe(
       `SELECT path, hash, deleted_at, updated_at FROM ${filesTable}
-       WHERE path = $1 OR path LIKE $2`,
-      [relPath, relPath + "/%"],
+       WHERE path = $1 OR path LIKE $2 ESCAPE '\\'`,
+      [relPath, escapeLike(relPath) + "/%"],
     );
     const remotePaths = new Map<
       string,
@@ -344,6 +381,7 @@ export function createSyncService(
 
     let changes = 0;
     for (const f of localFiles) {
+      signal?.throwIfAborted();
       const existing = remotePaths.get(f.relPath);
       if (existing && existing.deletedAt === null && existing.hash === f.hash) {
         continue;
@@ -395,23 +433,44 @@ export function createSyncService(
       });
     },
 
-    async pushChanged(_options?: DatastoreSyncOptions): Promise<number> {
+    async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
       await ready();
-      const state = await sidecar.read();
-      const lazy = state.lazyPullActive;
+      const signal = options?.signal;
 
-      if (state.bulkInvalidated) {
-        const changes = await fullWalkPush(state.lastPulledAt, lazy);
-        await sidecar.clearDirty();
-        return changes;
+      // Atomic snapshot-and-clear: grab dirty state and reset in one
+      // serialized operation so concurrent markDirty calls aren't lost.
+      const snapshot = await sidecar.update((state) => {
+        const snap = {
+          dirtyPaths: [...state.dirtyPaths],
+          bulkInvalidated: state.bulkInvalidated,
+          lastPulledAt: state.lastPulledAt,
+          lazyPullActive: state.lazyPullActive,
+        };
+        state.dirtyPaths = [];
+        state.bulkInvalidated = false;
+        // Store snapshot in a side channel via the return
+        (state as unknown as Record<string, unknown>).__snapshot = snap;
+      });
+      const snap = (snapshot as unknown as Record<string, unknown>)
+        .__snapshot as {
+          dirtyPaths: string[];
+          bulkInvalidated: boolean;
+          lastPulledAt: string | null;
+          lazyPullActive: boolean;
+        };
+
+      const lazy = snap.lazyPullActive;
+
+      if (snap.bulkInvalidated) {
+        return await fullWalkPush(snap.lastPulledAt, lazy, signal);
       }
 
-      if (state.dirtyPaths.length === 0) return 0;
+      if (snap.dirtyPaths.length === 0) return 0;
       let changes = 0;
-      for (const relPath of state.dirtyPaths) {
-        changes += await pushOneRel(relPath, state.lastPulledAt, lazy);
+      for (const relPath of snap.dirtyPaths) {
+        signal?.throwIfAborted();
+        changes += await pushOneRel(relPath, snap.lastPulledAt, lazy, signal);
       }
-      await sidecar.clearDirty();
       return changes;
     },
 
@@ -419,10 +478,10 @@ export function createSyncService(
       relPath: string,
       _options?: DatastoreSyncOptions,
     ): Promise<boolean> {
-      if (relPath.split("/").some((s) => s === "..")) return false;
+      if (isTraversal(relPath)) return false;
       await ready();
       const rows: postgres.Row[] = await sql.unsafe(
-        `SELECT content, hash FROM ${filesTable} WHERE path = $1 AND deleted_at IS NULL`,
+        `SELECT content FROM ${filesTable} WHERE path = $1 AND deleted_at IS NULL`,
         [relPath],
       );
       if (rows.length === 0) return false;
