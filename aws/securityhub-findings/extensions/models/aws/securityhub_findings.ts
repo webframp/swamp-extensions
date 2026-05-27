@@ -270,7 +270,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.05.27.2",
+  version: "2026.05.27.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     finding_list: {
