@@ -91,6 +91,7 @@ const FindingDetailSchema = z.object({
 const FindingDetailsSchema = z.object({
   findings: z.array(FindingDetailSchema),
   count: z.number(),
+  notFound: z.array(z.string()),
   fetchedAt: z.string(),
 });
 
@@ -136,7 +137,15 @@ const UpdateResultSchema = z.object({
 /** Parse relative time strings (e.g., "24h", "7d", "30m") to ISO date. */
 function parseRelativeTime(input: string): string {
   const match = input.match(/^(\d+)([mhd])$/);
-  if (!match) return input; // assume ISO date
+  if (!match) {
+    // Validate it looks like an ISO date before passing through
+    if (!/^\d{4}-\d{2}-\d{2}/.test(input)) {
+      throw new Error(
+        `Invalid time format: "${input}". Use a relative duration (e.g. 24h, 7d, 30m) or ISO 8601 date.`,
+      );
+    }
+    return input;
+  }
   const [, value, unit] = match;
   const ms = { m: 60_000, h: 3_600_000, d: 86_400_000 }[unit] ?? 0;
   return new Date(Date.now() - parseInt(value) * ms).toISOString();
@@ -322,8 +331,8 @@ export const model = {
             resourceId: f.Resources?.[0]?.Id ?? null,
             workflowStatus: f.Workflow?.Status ?? "NEW",
             recordState: f.RecordState ?? "ACTIVE",
-            createdAt: f.CreatedAt ?? "",
-            updatedAt: f.UpdatedAt ?? "",
+            createdAt: f.CreatedAt ? String(f.CreatedAt) : "",
+            updatedAt: f.UpdatedAt ? String(f.UpdatedAt) : "",
           }));
 
           const data = {
@@ -421,8 +430,8 @@ export const model = {
             productName: f.ProductFields?.["aws/securityhub/ProductName"] ?? "",
             productArn: f.ProductArn ?? "",
             workflowStatus: f.Workflow?.Status ?? "NEW",
-            createdAt: f.CreatedAt ?? "",
-            updatedAt: f.UpdatedAt ?? "",
+            createdAt: f.CreatedAt ? String(f.CreatedAt) : "",
+            updatedAt: f.UpdatedAt ? String(f.UpdatedAt) : "",
             resources: f.Resources ?? [],
             productFields: f.ProductFields ?? {},
             note: f.Note?.Text ?? null,
@@ -431,6 +440,9 @@ export const model = {
           const data = {
             findings,
             count: findings.length,
+            notFound: args.findingArns.filter(
+              (arn) => !findings.some((f) => f.arn === arn),
+            ),
             fetchedAt: new Date().toISOString(),
           };
 
@@ -570,9 +582,13 @@ export const model = {
             },
           );
 
+          const suffix = hashInstanceName({
+            p: args.productName,
+            t: startIso,
+          });
           const handle = await context.writeResource(
             "severity_summary",
-            "summary",
+            suffix,
             data,
           );
           return { dataHandles: [handle] };
@@ -593,7 +609,7 @@ export const model = {
           .describe("Finding ARNs to archive"),
         note: z
           .string()
-          .min(1)
+          .min(1).max(512)
           .describe("Reason for archiving (required for audit trail)"),
       }),
       execute: async (
@@ -631,7 +647,7 @@ export const model = {
           .describe("Finding ARNs to resolve"),
         note: z
           .string()
-          .min(1)
+          .min(1).max(512)
           .describe("Resolution details (required for audit trail)"),
       }),
       execute: async (
@@ -669,7 +685,7 @@ export const model = {
           .describe("Finding ARNs to reopen"),
         note: z
           .string()
-          .min(1)
+          .min(1).max(512)
           .describe("Reason for reopening (required for audit trail)"),
       }),
       execute: async (
@@ -799,9 +815,10 @@ async function updateWorkflowStatus(
       { updated: data.updated, failed: data.failed },
     );
 
+    const suffix = hashInstanceName({ status, arns: [...findingArns].sort() });
     const handle = await context.writeResource(
       "update_result",
-      status.toLowerCase(),
+      suffix,
       data,
     );
     return { dataHandles: [handle] };
