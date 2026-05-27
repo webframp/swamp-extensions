@@ -164,6 +164,7 @@ const DiffFindingsSchema = z.object({
   newCount: z.number(),
   resolvedCount: z.number(),
   currentSnapshot: z.array(z.object({ arn: z.string() })),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -1127,6 +1128,7 @@ export const model = {
             newCount: newFindings.length,
             resolvedCount: resolvedArns.length,
             currentSnapshot: currentFindings.map((f) => ({ arn: f.arn })),
+            truncated: !!resp.NextToken,
             fetchedAt: new Date().toISOString(),
           };
 

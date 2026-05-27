@@ -101,7 +101,13 @@ interface FindingsByType {
   groups: Array<{
     type: string;
     count: number;
-    severities: { critical: number; high: number; medium: number; low: number };
+    severities: {
+      critical: number;
+      high: number;
+      medium: number;
+      low: number;
+      informational: number;
+    };
     accounts: string[];
   }>;
   totalTypes: number;
@@ -127,7 +133,11 @@ async function readStepData<T>(
     handle.version,
   );
   if (!raw) return null;
-  return JSON.parse(new TextDecoder().decode(raw)) as T;
+  try {
+    return JSON.parse(new TextDecoder().decode(raw)) as T;
+  } catch {
+    return null;
+  }
 }
 
 /** Security Hub Findings Triage Report. */
