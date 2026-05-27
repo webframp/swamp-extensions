@@ -362,6 +362,8 @@ export const model = {
             s: args.severityLabel,
             a: args.accountId,
             w: args.workflowStatus,
+            st: args.startTime,
+            et: args.endTime,
           });
 
           context.logger.info(
@@ -410,19 +412,28 @@ export const model = {
 
         const client = createClient(context.globalArgs.region);
         try {
-          const resp = await client.send(
-            new GetFindingsCommand({
-              Filters: {
-                Id: args.findingArns.map((arn) => ({
-                  Value: arn,
-                  Comparison: "EQUALS" as const,
-                })),
-              },
-              MaxResults: 20,
-            }),
-          );
+          // Paginate — API may not return all matching findings in one page
+          const allRawFindings: AwsSecurityFinding[] = [];
+          let detailToken: string | undefined;
+          for (let page = 0; page < 3; page++) {
+            const resp = await client.send(
+              new GetFindingsCommand({
+                Filters: {
+                  Id: args.findingArns.map((arn) => ({
+                    Value: arn,
+                    Comparison: "EQUALS" as const,
+                  })),
+                },
+                MaxResults: 20,
+                NextToken: detailToken,
+              }),
+            );
+            allRawFindings.push(...(resp.Findings ?? []));
+            detailToken = resp.NextToken;
+            if (!detailToken) break;
+          }
 
-          const findings = (resp.Findings ?? []).map((
+          const findings = allRawFindings.map((
             f: AwsSecurityFinding,
           ) => ({
             id: f.Id?.split("/").pop() ?? f.Id ?? "",
@@ -754,10 +765,11 @@ async function updateWorkflowStatus(
       status,
     });
 
-    // Retrieve the actual ProductArn for each finding (paginate if needed)
+    // Retrieve the actual ProductArn for each finding (paginate if needed, max 20 pages)
     const foundFindings: AwsSecurityFinding[] = [];
     let lookupToken: string | undefined;
-    do {
+    const maxLookupPages = 20;
+    for (let page = 0; page < maxLookupPages; page++) {
       const lookupResp = await client.send(
         new GetFindingsCommand({
           Filters: {
@@ -772,7 +784,8 @@ async function updateWorkflowStatus(
       );
       foundFindings.push(...(lookupResp.Findings ?? []));
       lookupToken = lookupResp.NextToken;
-    } while (lookupToken);
+      if (!lookupToken) break;
+    }
     if (foundFindings.length === 0) {
       throw new Error(
         `None of the ${findingArns.length} finding ARNs could be resolved. ` +
@@ -828,7 +841,11 @@ async function updateWorkflowStatus(
       { updated: data.updated, failed: data.failed },
     );
 
-    const suffix = hashInstanceName({ status, arns: [...findingArns].sort() });
+    const suffix = hashInstanceName({
+      status,
+      arns: [...findingArns].sort(),
+      n: note,
+    });
     const handle = await context.writeResource(
       "update_result",
       suffix,
