@@ -122,7 +122,7 @@ export const model = {
           { purge_everything: true },
         );
 
-        const handle = await context.writeResource("purge", "latest", {
+        const handle = await context.writeResource("purge", "result", {
           zoneId,
           purgeType: "everything",
           purgedAt: new Date().toISOString(),
@@ -167,7 +167,7 @@ export const model = {
           { files: args.urls },
         );
 
-        const handle = await context.writeResource("purge", "latest", {
+        const handle = await context.writeResource("purge", "result", {
           zoneId,
           purgeType: "urls",
           purgedAt: new Date().toISOString(),
@@ -209,7 +209,7 @@ export const model = {
           { tags: args.tags },
         );
 
-        const handle = await context.writeResource("purge", "latest", {
+        const handle = await context.writeResource("purge", "result", {
           zoneId,
           purgeType: "tags",
           purgedAt: new Date().toISOString(),
@@ -251,7 +251,7 @@ export const model = {
           { prefixes: args.prefixes },
         );
 
-        const handle = await context.writeResource("purge", "latest", {
+        const handle = await context.writeResource("purge", "result", {
           zoneId,
           purgeType: "prefixes",
           purgedAt: new Date().toISOString(),
