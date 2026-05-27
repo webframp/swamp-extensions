@@ -182,7 +182,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.05.26.2",
+  version: "2026.05.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     finding_list: {
@@ -491,13 +491,23 @@ export const model = {
           .string()
           .optional()
           .describe("Filter by product (e.g. GuardDuty)"),
+        workflowStatus: z
+          .string()
+          .default("NEW")
+          .describe(
+            "Workflow status to include (NEW, NOTIFIED, SUPPRESSED, RESOLVED). Defaults to NEW.",
+          ),
         startTime: z
           .string()
           .default("24h")
           .describe("Start time (ISO date or relative: 1h, 24h, 7d)"),
       }),
       execute: async (
-        args: { productName?: string; startTime: string },
+        args: {
+          productName?: string;
+          workflowStatus: string;
+          startTime: string;
+        },
         context: {
           globalArgs: { region: string };
           logger: {
@@ -512,6 +522,7 @@ export const model = {
       ): Promise<{ dataHandles: unknown[] }> => {
         context.logger.info("Generating severity summary", {
           productName: args.productName ?? "all",
+          workflowStatus: args.workflowStatus,
           startTime: args.startTime,
         });
 
@@ -520,7 +531,9 @@ export const model = {
           const startIso = parseRelativeTime(args.startTime);
           const filters: Record<string, unknown[]> = {
             RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
-            WorkflowStatus: [{ Value: "NEW", Comparison: "EQUALS" }],
+            WorkflowStatus: [
+              { Value: args.workflowStatus, Comparison: "EQUALS" },
+            ],
             UpdatedAt: [{ Start: startIso, End: new Date().toISOString() }],
           };
           if (args.productName) {
@@ -603,6 +616,7 @@ export const model = {
 
           const suffix = hashInstanceName({
             p: args.productName,
+            w: args.workflowStatus,
             t: args.startTime,
           });
           const handle = await context.writeResource(
@@ -766,25 +780,30 @@ async function updateWorkflowStatus(
     });
 
     // Retrieve the actual ProductArn for each finding (paginate if needed, max 20 pages)
+    // GetFindings Id filter accepts at most 20 values — chunk accordingly
     const foundFindings: AwsSecurityFinding[] = [];
-    let lookupToken: string | undefined;
-    const maxLookupPages = 20;
-    for (let page = 0; page < maxLookupPages; page++) {
-      const lookupResp = await client.send(
-        new GetFindingsCommand({
-          Filters: {
-            Id: findingArns.map((arn) => ({
-              Value: arn,
-              Comparison: "EQUALS" as const,
-            })),
-          },
-          MaxResults: 100,
-          NextToken: lookupToken,
-        }),
-      );
-      foundFindings.push(...(lookupResp.Findings ?? []));
-      lookupToken = lookupResp.NextToken;
-      if (!lookupToken) break;
+    const chunkSize = 20;
+    for (let i = 0; i < findingArns.length; i += chunkSize) {
+      const chunk = findingArns.slice(i, i + chunkSize);
+      let lookupToken: string | undefined;
+      const maxLookupPages = 5;
+      for (let page = 0; page < maxLookupPages; page++) {
+        const lookupResp = await client.send(
+          new GetFindingsCommand({
+            Filters: {
+              Id: chunk.map((arn) => ({
+                Value: arn,
+                Comparison: "EQUALS" as const,
+              })),
+            },
+            MaxResults: 20,
+            NextToken: lookupToken,
+          }),
+        );
+        foundFindings.push(...(lookupResp.Findings ?? []));
+        lookupToken = lookupResp.NextToken;
+        if (!lookupToken) break;
+      }
     }
     if (foundFindings.length === 0) {
       throw new Error(

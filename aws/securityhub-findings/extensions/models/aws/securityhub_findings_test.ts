@@ -321,7 +321,7 @@ Deno.test({
     try {
       const ctx = createMockContext();
       await model.methods.get_severity_summary.execute(
-        { startTime: "24h" },
+        { startTime: "24h", workflowStatus: "NEW" },
         ctx,
       );
       const data = ctx.written[0].data as {
@@ -361,13 +361,13 @@ Deno.test({
       const ctx1 = createMockContext();
       const ctx2 = createMockContext();
       await model.methods.get_severity_summary.execute(
-        { startTime: "24h" },
+        { startTime: "24h", workflowStatus: "NEW" },
         ctx1,
       );
       // Small delay to ensure Date.now() would differ if timestamp were used
       await new Promise((r) => setTimeout(r, 10));
       await model.methods.get_severity_summary.execute(
-        { startTime: "24h" },
+        { startTime: "24h", workflowStatus: "NEW" },
         ctx2,
       );
       // Same raw args → same instance name (not timestamp-based)
