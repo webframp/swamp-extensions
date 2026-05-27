@@ -108,6 +108,11 @@ interface FindingsByType {
   totalFindings: number;
 }
 
+/** Escape a string for safe use in a markdown table cell. */
+function escapeCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+}
+
 /** Read and parse JSON data from a step execution's data handle. */
 async function readStepData<T>(
   step: StepExecution,
@@ -250,7 +255,9 @@ export const report = {
             ? f.title.slice(0, 57) + "..."
             : f.title;
           lines.push(
-            `| ${f.severity} | ${shortType} | ${shortTitle} | ${f.accountId} |`,
+            `| ${escapeCell(f.severity)} | ${escapeCell(shortType)} | ${
+              escapeCell(shortTitle)
+            } | ${f.accountId} |`,
           );
         }
         lines.push("");
@@ -268,7 +275,9 @@ export const report = {
           ? f.title.slice(0, 47) + "..."
           : f.title;
         lines.push(
-          `| ${f.severity} | ${shortTitle} | ${f.accountId} | ${f.region} | ${f.productName} |`,
+          `| ${escapeCell(f.severity)} | ${
+            escapeCell(shortTitle)
+          } | ${f.accountId} | ${f.region} | ${escapeCell(f.productName)} |`,
         );
       }
       lines.push("");
@@ -283,7 +292,9 @@ export const report = {
       for (const g of byType.groups.slice(0, 10)) {
         const shortType = g.type.split("/").pop() ?? g.type;
         lines.push(
-          `| ${shortType} | ${g.count} | ${g.severities.critical} | ${g.severities.high} | ${g.severities.medium} | ${g.accounts.length} |`,
+          `| ${
+            escapeCell(shortType)
+          } | ${g.count} | ${g.severities.critical} | ${g.severities.high} | ${g.severities.medium} | ${g.accounts.length} |`,
         );
       }
       lines.push("");

@@ -595,9 +595,9 @@ Deno.test({
         { startTime: "24h", limit: 100 },
         ctx,
       );
-      // Should write to both finding_list and diff_findings
-      assertEquals(ctx.written.length, 2);
-      const diffData = ctx.written[1].data as {
+      // Should write diff_findings
+      assertEquals(ctx.written.length, 1);
+      const diffData = ctx.written[0].data as {
         newCount: number;
         resolvedCount: number;
       };
@@ -618,11 +618,11 @@ Deno.test({
     }));
     try {
       const ctx = createMockContext();
-      // Previous run had both findings
+      // Previous run had both findings (stored as currentSnapshot)
       (ctx as unknown as { readResource: () => Promise<unknown> })
         .readResource = () =>
           Promise.resolve({
-            findings: [
+            currentSnapshot: [
               { arn: finding1.Id },
               { arn: finding2.Id },
             ],
@@ -631,7 +631,7 @@ Deno.test({
         { startTime: "24h", limit: 100 },
         ctx,
       );
-      const diffData = ctx.written[1].data as {
+      const diffData = ctx.written[0].data as {
         newCount: number;
         resolvedCount: number;
       };
