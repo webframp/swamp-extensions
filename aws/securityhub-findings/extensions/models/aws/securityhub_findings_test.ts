@@ -106,6 +106,10 @@ Deno.test("model has all expected methods", () => {
       "archive_findings",
       "resolve_findings",
       "reopen_findings",
+      "list_findings_by_type",
+      "diff_findings",
+      "resolve_accounts",
+      "list_all_findings",
     ]
   ) {
     assertEquals(names.includes(m), true, `missing method: ${m}`);
@@ -536,4 +540,214 @@ Deno.test("get_finding_details rejects empty array", () => {
     }).success,
     false,
   );
+});
+
+// =============================================================================
+// list_findings_by_type tests
+// =============================================================================
+
+Deno.test({
+  name: "list_findings_by_type groups findings correctly",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub(() => ({
+      Findings: [finding1, finding2, finding1], // 2x finding1 type, 1x finding2 type
+    }));
+    try {
+      const ctx = createMockContext();
+      await model.methods.list_findings_by_type.execute(
+        { startTime: "24h", limit: 100 },
+        ctx,
+      );
+      const data = ctx.written[0].data as {
+        groups: Array<{ type: string; count: number; accounts: string[] }>;
+        totalTypes: number;
+        totalFindings: number;
+      };
+      assertEquals(data.totalFindings, 3);
+      assertEquals(data.totalTypes, 2);
+      // Sorted by count desc — finding1 type has 2
+      assertEquals(data.groups[0].count, 2);
+      assertEquals(data.groups[1].count, 1);
+    } finally {
+      restore();
+    }
+  },
+});
+
+// =============================================================================
+// diff_findings tests
+// =============================================================================
+
+Deno.test({
+  name: "diff_findings identifies new findings when no previous data",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub(() => ({
+      Findings: [finding1, finding2],
+    }));
+    try {
+      const ctx = createMockContext();
+      // readResource returns null (no previous run)
+      (ctx as unknown as { readResource: () => Promise<null> }).readResource =
+        () => Promise.resolve(null);
+      await model.methods.diff_findings.execute(
+        { startTime: "24h", limit: 100 },
+        ctx,
+      );
+      // Should write to both finding_list and diff_findings
+      assertEquals(ctx.written.length, 2);
+      const diffData = ctx.written[1].data as {
+        newCount: number;
+        resolvedCount: number;
+      };
+      assertEquals(diffData.newCount, 2); // all are new
+      assertEquals(diffData.resolvedCount, 0);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "diff_findings identifies resolved findings",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub(() => ({
+      Findings: [finding1], // only finding1 remains
+    }));
+    try {
+      const ctx = createMockContext();
+      // Previous run had both findings
+      (ctx as unknown as { readResource: () => Promise<unknown> })
+        .readResource = () =>
+          Promise.resolve({
+            findings: [
+              { arn: finding1.Id },
+              { arn: finding2.Id },
+            ],
+          });
+      await model.methods.diff_findings.execute(
+        { startTime: "24h", limit: 100 },
+        ctx,
+      );
+      const diffData = ctx.written[1].data as {
+        newCount: number;
+        resolvedCount: number;
+      };
+      assertEquals(diffData.newCount, 0);
+      assertEquals(diffData.resolvedCount, 1); // finding2 resolved
+    } finally {
+      restore();
+    }
+  },
+});
+
+// =============================================================================
+// resolve_accounts tests
+// =============================================================================
+
+Deno.test({
+  name: "resolve_accounts maps org accounts",
+  sanitizeResources: false,
+  fn: async () => {
+    // Mock OrganizationsClient
+    const { OrganizationsClient } = await import(
+      "npm:@aws-sdk/client-organizations@3.1010.0"
+    );
+    const original = OrganizationsClient.prototype.send;
+    OrganizationsClient.prototype.send = () =>
+      Promise.resolve({
+        Accounts: [
+          {
+            Id: "123456789012",
+            Name: "prod",
+            Email: "prod@example.com",
+            Status: "ACTIVE",
+          },
+          {
+            Id: "987654321098",
+            Name: "dev",
+            Email: "dev@example.com",
+            Status: "ACTIVE",
+          },
+        ],
+        NextToken: undefined,
+      });
+    try {
+      const ctx = createMockContext();
+      await model.methods.resolve_accounts.execute({} as never, ctx);
+      const data = ctx.written[0].data as {
+        accounts: Array<{ id: string; name: string }>;
+        count: number;
+      };
+      assertEquals(data.count, 2);
+      assertEquals(data.accounts[0].name, "prod");
+      assertEquals(data.accounts[1].id, "987654321098");
+    } finally {
+      OrganizationsClient.prototype.send = original;
+    }
+  },
+});
+
+// =============================================================================
+// list_all_findings tests
+// =============================================================================
+
+Deno.test({
+  name: "list_all_findings paginates across multiple pages",
+  sanitizeResources: false,
+  fn: async () => {
+    let callCount = 0;
+    const restore = mockSecurityHub(() => {
+      callCount++;
+      if (callCount === 1) {
+        return { Findings: [finding1], NextToken: "page2" };
+      }
+      return { Findings: [finding2] }; // no NextToken = last page
+    });
+    try {
+      const ctx = createMockContext();
+      await model.methods.list_all_findings.execute(
+        { startTime: "24h", maxPages: 5, workflowStatus: "NEW" },
+        ctx,
+      );
+      const data = ctx.written[0].data as {
+        count: number;
+        totalPages: number;
+        findings: unknown[];
+      };
+      assertEquals(data.count, 2);
+      assertEquals(data.totalPages, 2);
+      assertEquals(callCount, 2);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "list_all_findings respects maxPages cap",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub(() => ({
+      Findings: [finding1],
+      NextToken: "always-more", // infinite pages
+    }));
+    try {
+      const ctx = createMockContext();
+      await model.methods.list_all_findings.execute(
+        { startTime: "24h", maxPages: 2, workflowStatus: "NEW" },
+        ctx,
+      );
+      const data = ctx.written[0].data as {
+        count: number;
+        totalPages: number;
+      };
+      assertEquals(data.totalPages, 2); // capped at maxPages
+      assertEquals(data.count, 2); // 1 finding per page × 2 pages
+    } finally {
+      restore();
+    }
+  },
 });

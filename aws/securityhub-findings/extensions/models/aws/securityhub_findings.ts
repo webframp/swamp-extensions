@@ -21,6 +21,10 @@ import {
   GetFindingsCommand,
   SecurityHubClient,
 } from "npm:@aws-sdk/client-securityhub@3.1010.0";
+import {
+  ListAccountsCommand,
+  OrganizationsClient,
+} from "npm:@aws-sdk/client-organizations@3.1010.0";
 
 // =============================================================================
 // Schemas
@@ -131,6 +135,62 @@ const UpdateResultSchema = z.object({
   updatedAt: z.string(),
 });
 
+const FindingsByTypeSchema = z.object({
+  groups: z.array(
+    z.object({
+      type: z.string(),
+      count: z.number(),
+      severities: z.object({
+        critical: z.number(),
+        high: z.number(),
+        medium: z.number(),
+        low: z.number(),
+      }),
+      accounts: z.array(z.string()),
+      findings: z.array(FindingSummarySchema),
+    }),
+  ),
+  totalTypes: z.number(),
+  totalFindings: z.number(),
+  fetchedAt: z.string(),
+});
+
+const DiffFindingsSchema = z.object({
+  newFindings: z.array(FindingSummarySchema),
+  resolvedFindings: z.array(FindingSummarySchema),
+  newCount: z.number(),
+  resolvedCount: z.number(),
+  previousVersion: z.number(),
+  currentVersion: z.number(),
+  fetchedAt: z.string(),
+});
+
+const AccountMapSchema = z.object({
+  accounts: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      email: z.string(),
+      status: z.string(),
+    }),
+  ),
+  count: z.number(),
+  fetchedAt: z.string(),
+});
+
+const FullExportSchema = z.object({
+  findings: z.array(FindingSummarySchema),
+  count: z.number(),
+  totalPages: z.number(),
+  filters: z.object({
+    productName: z.string().nullable(),
+    severityLabel: z.string().nullable(),
+    workflowStatus: z.string(),
+    startTime: z.string().nullable(),
+  }),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -163,6 +223,29 @@ function createClient(region: string): SecurityHubClient {
   return new SecurityHubClient({ region });
 }
 
+/** Map an AWS finding to our normalized summary schema. */
+function mapFindingSummary(f: AwsSecurityFinding) {
+  return {
+    id: f.Id?.split("/").pop() ?? f.Id ?? "",
+    arn: f.Id ?? "",
+    type: f.Types?.[0] ?? "Unknown",
+    severity: f.Severity?.Label ?? "UNKNOWN",
+    severityScore: f.Severity?.Product ?? 0,
+    title: f.Title ?? "",
+    description: f.Description ?? "",
+    accountId: f.AwsAccountId ?? "",
+    region: f.Region ?? "",
+    productName: f.ProductFields?.["aws/securityhub/ProductName"] ?? "",
+    productArn: f.ProductArn ?? "",
+    resourceType: f.Resources?.[0]?.Type ?? null,
+    resourceId: f.Resources?.[0]?.Id ?? null,
+    workflowStatus: f.Workflow?.Status ?? "NEW",
+    recordState: f.RecordState ?? "ACTIVE",
+    createdAt: f.CreatedAt ? String(f.CreatedAt) : "",
+    updatedAt: f.UpdatedAt ? String(f.UpdatedAt) : "",
+  };
+}
+
 /** Create a collision-resistant instance name from filter parameters. */
 function hashInstanceName(parts: Record<string, unknown>): string {
   const canonical = JSON.stringify(parts, Object.keys(parts).sort());
@@ -182,7 +265,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.05.27.1",
+  version: "2026.05.27.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     finding_list: {
@@ -208,6 +291,30 @@ export const model = {
       schema: UpdateResultSchema,
       lifetime: "1h",
       garbageCollection: 10,
+    },
+    findings_by_type: {
+      description: "Findings grouped by finding type",
+      schema: FindingsByTypeSchema,
+      lifetime: "30m",
+      garbageCollection: 5,
+    },
+    diff_findings: {
+      description: "New and resolved findings since last run",
+      schema: DiffFindingsSchema,
+      lifetime: "1h",
+      garbageCollection: 10,
+    },
+    account_map: {
+      description: "AWS Organizations account ID to name mapping",
+      schema: AccountMapSchema,
+      lifetime: "24h",
+      garbageCollection: 3,
+    },
+    full_export: {
+      description: "Paginated full findings export",
+      schema: FullExportSchema,
+      lifetime: "1h",
+      garbageCollection: 5,
     },
   },
   methods: {
@@ -320,27 +427,7 @@ export const model = {
             }),
           );
 
-          const findings = (resp.Findings ?? []).map((
-            f: AwsSecurityFinding,
-          ) => ({
-            id: f.Id?.split("/").pop() ?? f.Id ?? "",
-            arn: f.Id ?? "",
-            type: f.Types?.[0] ?? "Unknown",
-            severity: f.Severity?.Label ?? "UNKNOWN",
-            severityScore: f.Severity?.Product ?? 0,
-            title: f.Title ?? "",
-            description: f.Description ?? "",
-            accountId: f.AwsAccountId ?? "",
-            region: f.Region ?? "",
-            productName: f.ProductFields?.["aws/securityhub/ProductName"] ?? "",
-            productArn: f.ProductArn ?? "",
-            resourceType: f.Resources?.[0]?.Type ?? null,
-            resourceId: f.Resources?.[0]?.Id ?? null,
-            workflowStatus: f.Workflow?.Status ?? "NEW",
-            recordState: f.RecordState ?? "ACTIVE",
-            createdAt: f.CreatedAt ? String(f.CreatedAt) : "",
-            updatedAt: f.UpdatedAt ? String(f.UpdatedAt) : "",
-          }));
+          const findings = (resp.Findings ?? []).map(mapFindingSummary);
 
           const data = {
             findings,
@@ -742,6 +829,514 @@ export const model = {
           args.note,
           context,
         );
+      },
+    },
+
+    list_findings_by_type: {
+      description:
+        "List findings grouped by finding type with severity breakdown per group",
+      arguments: z.object({
+        productName: z
+          .string()
+          .optional()
+          .describe("Filter by product (e.g. GuardDuty)"),
+        severityLabel: z
+          .string()
+          .optional()
+          .describe("Minimum severity to include"),
+        startTime: z
+          .string()
+          .default("24h")
+          .describe("Start time (ISO date or relative: 1h, 24h, 7d)"),
+        limit: z
+          .number()
+          .min(1)
+          .max(100)
+          .default(100)
+          .describe("Maximum findings to fetch before grouping"),
+      }),
+      execute: async (
+        args: {
+          productName?: string;
+          severityLabel?: string;
+          startTime: string;
+          limit: number;
+        },
+        context: {
+          globalArgs: { region: string };
+          logger: {
+            info: (msg: string, props?: Record<string, unknown>) => void;
+          };
+          writeResource: (
+            spec: string,
+            name: string,
+            data: unknown,
+          ) => Promise<unknown>;
+        },
+      ): Promise<{ dataHandles: unknown[] }> => {
+        context.logger.info("Listing findings by type", {
+          productName: args.productName ?? "all",
+          startTime: args.startTime,
+        });
+
+        const client = createClient(context.globalArgs.region);
+        try {
+          const filters: Record<string, unknown[]> = {
+            RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
+            WorkflowStatus: [{ Value: "NEW", Comparison: "EQUALS" }],
+            UpdatedAt: [{
+              Start: parseRelativeTime(args.startTime),
+              End: new Date().toISOString(),
+            }],
+          };
+          if (args.productName) {
+            filters.ProductName = [
+              { Value: args.productName, Comparison: "EQUALS" },
+            ];
+          }
+          if (args.severityLabel) {
+            filters.SeverityLabel = [
+              { Value: args.severityLabel, Comparison: "EQUALS" },
+            ];
+          }
+
+          const resp = await client.send(
+            new GetFindingsCommand({
+              Filters: filters as AwsSecurityFindingFilters,
+              MaxResults: args.limit,
+              SortCriteria: [
+                { Field: "SeverityNormalized", SortOrder: "desc" },
+              ],
+            }),
+          );
+
+          const findings = (resp.Findings ?? []).map(mapFindingSummary);
+          const grouped: Record<
+            string,
+            {
+              findings: typeof findings;
+              severities: Record<string, number>;
+              accounts: Set<string>;
+            }
+          > = {};
+
+          for (const f of findings) {
+            if (!grouped[f.type]) {
+              grouped[f.type] = {
+                findings: [],
+                severities: { critical: 0, high: 0, medium: 0, low: 0 },
+                accounts: new Set(),
+              };
+            }
+            grouped[f.type].findings.push(f);
+            const sev = f.severity.toLowerCase();
+            if (sev in grouped[f.type].severities) {
+              grouped[f.type].severities[sev]++;
+            }
+            grouped[f.type].accounts.add(f.accountId);
+          }
+
+          const groups = Object.entries(grouped)
+            .map(([type, g]) => ({
+              type,
+              count: g.findings.length,
+              severities: {
+                critical: g.severities.critical,
+                high: g.severities.high,
+                medium: g.severities.medium,
+                low: g.severities.low,
+              },
+              accounts: [...g.accounts],
+              findings: g.findings,
+            }))
+            .sort((a, b) => b.count - a.count);
+
+          const data = {
+            groups,
+            totalTypes: groups.length,
+            totalFindings: findings.length,
+            fetchedAt: new Date().toISOString(),
+          };
+
+          context.logger.info("Grouped {total} findings into {types} types", {
+            total: findings.length,
+            types: groups.length,
+          });
+
+          const suffix = hashInstanceName({
+            p: args.productName,
+            s: args.severityLabel,
+            t: args.startTime,
+          });
+          const handle = await context.writeResource(
+            "findings_by_type",
+            suffix,
+            data,
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
+      },
+    },
+
+    diff_findings: {
+      description:
+        "Compare current findings with the previous run to identify new and resolved findings",
+      arguments: z.object({
+        productName: z
+          .string()
+          .optional()
+          .describe("Filter by product (e.g. GuardDuty)"),
+        severityLabel: z
+          .string()
+          .optional()
+          .describe("Filter by severity label"),
+        startTime: z
+          .string()
+          .default("24h")
+          .describe("Start time (ISO date or relative: 1h, 24h, 7d)"),
+        limit: z
+          .number()
+          .min(1)
+          .max(100)
+          .default(100)
+          .describe("Maximum findings to fetch"),
+      }),
+      execute: async (
+        args: {
+          productName?: string;
+          severityLabel?: string;
+          startTime: string;
+          limit: number;
+        },
+        context: {
+          globalArgs: { region: string };
+          logger: {
+            info: (msg: string, props?: Record<string, unknown>) => void;
+          };
+          readResource?: (
+            name: string,
+            version?: number,
+          ) => Promise<Record<string, unknown> | null>;
+          writeResource: (
+            spec: string,
+            name: string,
+            data: unknown,
+          ) => Promise<unknown>;
+        },
+      ): Promise<{ dataHandles: unknown[] }> => {
+        context.logger.info("Computing findings diff", {
+          productName: args.productName ?? "all",
+          startTime: args.startTime,
+        });
+
+        const client = createClient(context.globalArgs.region);
+        try {
+          const filters: Record<string, unknown[]> = {
+            RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
+            WorkflowStatus: [{ Value: "NEW", Comparison: "EQUALS" }],
+            UpdatedAt: [{
+              Start: parseRelativeTime(args.startTime),
+              End: new Date().toISOString(),
+            }],
+          };
+          if (args.productName) {
+            filters.ProductName = [
+              { Value: args.productName, Comparison: "EQUALS" },
+            ];
+          }
+          if (args.severityLabel) {
+            filters.SeverityLabel = [
+              { Value: args.severityLabel, Comparison: "EQUALS" },
+            ];
+          }
+
+          const resp = await client.send(
+            new GetFindingsCommand({
+              Filters: filters as AwsSecurityFindingFilters,
+              MaxResults: args.limit,
+              SortCriteria: [
+                { Field: "SeverityNormalized", SortOrder: "desc" },
+              ],
+            }),
+          );
+
+          const currentFindings = (resp.Findings ?? []).map(mapFindingSummary);
+          const suffix = hashInstanceName({
+            p: args.productName,
+            s: args.severityLabel,
+            t: args.startTime,
+          });
+
+          // Read previous version
+          let previousFindings: typeof currentFindings = [];
+          let previousVersion = 0;
+          if (context.readResource) {
+            const prev = await context.readResource(suffix);
+            if (prev && Array.isArray(prev.findings)) {
+              previousFindings = prev.findings as typeof currentFindings;
+              previousVersion = (prev._version as number) ?? 0;
+            }
+          }
+
+          const currentArns = new Set(currentFindings.map((f) => f.arn));
+          const previousArns = new Set(previousFindings.map((f) => f.arn));
+
+          const newFindings = currentFindings.filter(
+            (f) => !previousArns.has(f.arn),
+          );
+          const resolvedFindings = previousFindings.filter(
+            (f) => !currentArns.has(f.arn),
+          );
+
+          // Write current findings to finding_list for next diff comparison
+          const listData = {
+            findings: currentFindings,
+            count: currentFindings.length,
+            truncated: !!resp.NextToken,
+            filters: {
+              productName: args.productName ?? null,
+              severityLabel: args.severityLabel ?? null,
+              accountId: null,
+              workflowStatus: "NEW",
+              startTime: parseRelativeTime(args.startTime),
+              endTime: new Date().toISOString(),
+            },
+            fetchedAt: new Date().toISOString(),
+          };
+          await context.writeResource("finding_list", suffix, listData);
+
+          const diffData = {
+            newFindings,
+            resolvedFindings,
+            newCount: newFindings.length,
+            resolvedCount: resolvedFindings.length,
+            previousVersion,
+            currentVersion: previousVersion + 1,
+            fetchedAt: new Date().toISOString(),
+          };
+
+          context.logger.info(
+            "Diff: {new} new, {resolved} resolved",
+            { new: newFindings.length, resolved: resolvedFindings.length },
+          );
+
+          const handle = await context.writeResource(
+            "diff_findings",
+            suffix,
+            diffData,
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
+      },
+    },
+
+    resolve_accounts: {
+      description:
+        "Fetch AWS Organizations account list to map account IDs to friendly names",
+      arguments: z.object({}),
+      execute: async (
+        _args: Record<string, never>,
+        context: {
+          globalArgs: { region: string };
+          logger: {
+            info: (msg: string, props?: Record<string, unknown>) => void;
+          };
+          writeResource: (
+            spec: string,
+            name: string,
+            data: unknown,
+          ) => Promise<unknown>;
+        },
+      ): Promise<{ dataHandles: unknown[] }> => {
+        context.logger.info("Fetching AWS Organizations account list", {});
+
+        const client = new OrganizationsClient({
+          region: "us-east-1",
+        });
+        try {
+          const accounts: Array<{
+            id: string;
+            name: string;
+            email: string;
+            status: string;
+          }> = [];
+          let nextToken: string | undefined;
+          const maxPages = 10;
+
+          for (let page = 0; page < maxPages; page++) {
+            const resp = await client.send(
+              new ListAccountsCommand({ NextToken: nextToken, MaxResults: 20 }),
+            );
+            for (const acct of resp.Accounts ?? []) {
+              accounts.push({
+                id: acct.Id ?? "",
+                name: acct.Name ?? "",
+                email: acct.Email ?? "",
+                status: acct.Status ?? "",
+              });
+            }
+            nextToken = resp.NextToken;
+            if (!nextToken) break;
+          }
+
+          const data = {
+            accounts,
+            count: accounts.length,
+            fetchedAt: new Date().toISOString(),
+          };
+
+          context.logger.info("Resolved {count} accounts", {
+            count: accounts.length,
+          });
+
+          const handle = await context.writeResource(
+            "account_map",
+            "org",
+            data,
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
+      },
+    },
+
+    list_all_findings: {
+      description:
+        "Paginated full export of findings (up to 500). Fetches multiple pages internally.",
+      arguments: z.object({
+        productName: z
+          .string()
+          .optional()
+          .describe("Filter by product (e.g. GuardDuty)"),
+        severityLabel: z
+          .string()
+          .optional()
+          .describe("Filter by severity label"),
+        workflowStatus: z
+          .string()
+          .default("NEW")
+          .describe("Workflow status filter"),
+        startTime: z
+          .string()
+          .default("24h")
+          .describe("Start time (ISO date or relative: 1h, 24h, 7d)"),
+        maxPages: z
+          .number()
+          .min(1)
+          .max(5)
+          .default(5)
+          .describe("Maximum pages to fetch (100 findings per page, max 500)"),
+      }),
+      execute: async (
+        args: {
+          productName?: string;
+          severityLabel?: string;
+          workflowStatus: string;
+          startTime: string;
+          maxPages: number;
+        },
+        context: {
+          globalArgs: { region: string };
+          logger: {
+            info: (msg: string, props?: Record<string, unknown>) => void;
+          };
+          writeResource: (
+            spec: string,
+            name: string,
+            data: unknown,
+          ) => Promise<unknown>;
+        },
+      ): Promise<{ dataHandles: unknown[] }> => {
+        context.logger.info("Exporting all findings (paginated)", {
+          productName: args.productName ?? "all",
+          maxPages: args.maxPages,
+          startTime: args.startTime,
+        });
+
+        const client = createClient(context.globalArgs.region);
+        try {
+          const filters: Record<string, unknown[]> = {
+            RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
+            WorkflowStatus: [
+              { Value: args.workflowStatus, Comparison: "EQUALS" },
+            ],
+            UpdatedAt: [{
+              Start: parseRelativeTime(args.startTime),
+              End: new Date().toISOString(),
+            }],
+          };
+          if (args.productName) {
+            filters.ProductName = [
+              { Value: args.productName, Comparison: "EQUALS" },
+            ];
+          }
+          if (args.severityLabel) {
+            filters.SeverityLabel = [
+              { Value: args.severityLabel, Comparison: "EQUALS" },
+            ];
+          }
+
+          const allFindings: ReturnType<typeof mapFindingSummary>[] = [];
+          let nextToken: string | undefined;
+          let totalPages = 0;
+
+          for (let page = 0; page < args.maxPages; page++) {
+            const resp = await client.send(
+              new GetFindingsCommand({
+                Filters: filters as AwsSecurityFindingFilters,
+                MaxResults: 100,
+                SortCriteria: [
+                  { Field: "SeverityNormalized", SortOrder: "desc" },
+                ],
+                NextToken: nextToken,
+              }),
+            );
+            allFindings.push(
+              ...(resp.Findings ?? []).map(mapFindingSummary),
+            );
+            totalPages++;
+            nextToken = resp.NextToken;
+            if (!nextToken) break;
+          }
+
+          const data = {
+            findings: allFindings,
+            count: allFindings.length,
+            totalPages,
+            filters: {
+              productName: args.productName ?? null,
+              severityLabel: args.severityLabel ?? null,
+              workflowStatus: args.workflowStatus,
+              startTime: args.startTime,
+            },
+            fetchedAt: new Date().toISOString(),
+          };
+
+          context.logger.info(
+            "Exported {count} findings across {pages} pages",
+            { count: allFindings.length, pages: totalPages },
+          );
+
+          const suffix = hashInstanceName({
+            p: args.productName,
+            s: args.severityLabel,
+            w: args.workflowStatus,
+            t: args.startTime,
+          });
+          const handle = await context.writeResource(
+            "full_export",
+            suffix,
+            data,
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
   },
