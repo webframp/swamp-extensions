@@ -59,6 +59,8 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/securityhub_findings.ts
+reports:
+  - security_findings_triage.ts
 additionalFiles:
   - README.md
   - LICENSE.md
