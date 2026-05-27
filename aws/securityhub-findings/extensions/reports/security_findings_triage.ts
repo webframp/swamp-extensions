@@ -95,6 +95,7 @@ interface DiffFindings {
   }>;
   newCount: number;
   resolvedCount: number;
+  truncated: boolean;
 }
 
 interface FindingsByType {
@@ -116,7 +117,10 @@ interface FindingsByType {
 
 /** Escape a string for safe use in a markdown table cell. */
 function escapeCell(value: string): string {
-  return value.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(
+    /[\r\n]+/g,
+    " ",
+  );
 }
 
 /** Read and parse JSON data from a step execution's data handle. */
@@ -235,7 +239,9 @@ export const report = {
         lines.push("|---|---|---|---|---|");
         for (const a of top) {
           lines.push(
-            `| ${a.accountId} | ${a.critical} | ${a.high} | ${a.medium} | ${a.low} |`,
+            `| ${
+              escapeCell(a.accountId)
+            } | ${a.critical} | ${a.high} | ${a.medium} | ${a.low} |`,
           );
         }
         lines.push("");
@@ -252,6 +258,11 @@ export const report = {
       lines.push(
         `- **Resolved findings**: ${diff.resolvedCount}`,
       );
+      if (diff.truncated) {
+        lines.push(
+          "- ⚠️ *Results were truncated — resolved count may include findings that are still active but fell outside the query window.*",
+        );
+      }
       lines.push("");
 
       if (diff.newFindings.length > 0) {
@@ -267,7 +278,7 @@ export const report = {
           lines.push(
             `| ${escapeCell(f.severity)} | ${escapeCell(shortType)} | ${
               escapeCell(shortTitle)
-            } | ${f.accountId} |`,
+            } | ${escapeCell(f.accountId)} |`,
           );
         }
         lines.push("");
@@ -285,9 +296,9 @@ export const report = {
           ? f.title.slice(0, 47) + "..."
           : f.title;
         lines.push(
-          `| ${escapeCell(f.severity)} | ${
-            escapeCell(shortTitle)
-          } | ${f.accountId} | ${f.region} | ${escapeCell(f.productName)} |`,
+          `| ${escapeCell(f.severity)} | ${escapeCell(shortTitle)} | ${
+            escapeCell(f.accountId)
+          } | ${escapeCell(f.region)} | ${escapeCell(f.productName)} |`,
         );
       }
       lines.push("");
