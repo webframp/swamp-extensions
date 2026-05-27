@@ -1,5 +1,5 @@
 id: 74349b0e-bd34-4ffa-ad2f-b5b1c0baad6a
-name: securityhub-triage
+name: "@webframp/securityhub-triage"
 description: |
   On-demand Security Hub findings triage workflow.
   Collects severity summary, critical/high findings, and diff since last run
