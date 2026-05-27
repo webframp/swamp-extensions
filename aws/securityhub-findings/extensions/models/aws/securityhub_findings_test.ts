@@ -680,6 +680,42 @@ Deno.test({
   },
 });
 
+Deno.test({
+  name:
+    "diff_findings suppresses both new and resolved when previous was truncated",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub(() => ({
+      Findings: [finding1], // only finding1 in current
+    }));
+    try {
+      const ctx = createMockContext();
+      // Previous run was truncated — stored snapshot is incomplete
+      (ctx as unknown as { readResource: () => Promise<unknown> })
+        .readResource = () =>
+          Promise.resolve({
+            currentSnapshot: [
+              { arn: finding2.Id },
+            ],
+            truncated: true, // previous was truncated
+          });
+      await model.methods.diff_findings.execute(
+        { startTime: "24h", limit: 100 },
+        ctx,
+      );
+      const diffData = ctx.written[0].data as {
+        newCount: number;
+        resolvedCount: number;
+      };
+      // Both should be 0 — can't trust diff when either side is truncated
+      assertEquals(diffData.newCount, 0);
+      assertEquals(diffData.resolvedCount, 0);
+    } finally {
+      restore();
+    }
+  },
+});
+
 // =============================================================================
 // resolve_accounts tests
 // =============================================================================

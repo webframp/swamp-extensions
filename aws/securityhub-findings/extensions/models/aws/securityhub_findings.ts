@@ -164,7 +164,6 @@ const DiffFindingsSchema = z.object({
   newCount: z.number(),
   resolvedCount: z.number(),
   truncated: z.boolean(),
-  snapshotTruncated: z.boolean(),
   currentSnapshot: z.array(FindingSummarySchema),
   fetchedAt: z.string(),
 });
@@ -1091,23 +1090,25 @@ export const model = {
             const prev = await context.readResource(suffix);
             if (prev && Array.isArray(prev.currentSnapshot)) {
               previousFindings = prev.currentSnapshot as PrevSnapshot;
-              previousWasTruncated =
-                !!(prev.snapshotTruncated ?? prev.truncated);
+              previousWasTruncated = !!(prev.truncated);
             }
           }
+
+          const currentTruncated = !!resp.NextToken;
+          const eitherTruncated = previousWasTruncated || currentTruncated;
 
           const currentArns = new Set(currentFindings.map((f) => f.arn));
           const previousArns = new Set(previousFindings.map((f) => f.arn));
 
-          const newFindings = currentFindings.filter(
-            (f) => !previousArns.has(f.arn),
-          );
-
-          // Only report resolved findings if NEITHER snapshot was truncated
-          // When truncated, we can't distinguish "resolved" from "fell off the page"
-          const currentTruncated = !!resp.NextToken;
+          // Only compute diff when NEITHER snapshot was truncated.
+          // When truncated, we can't distinguish "new/resolved" from
+          // "fell off the page" — both directions produce false positives.
+          let newFindings: typeof currentFindings = [];
           let resolvedFindings: typeof currentFindings = [];
-          if (!previousWasTruncated && !currentTruncated) {
+          if (!eitherTruncated) {
+            newFindings = currentFindings.filter(
+              (f) => !previousArns.has(f.arn),
+            );
             resolvedFindings = previousFindings.filter(
               (f) => !currentArns.has(f.arn),
             ) as typeof currentFindings;
@@ -1119,7 +1120,6 @@ export const model = {
             newCount: newFindings.length,
             resolvedCount: resolvedFindings.length,
             truncated: currentTruncated,
-            snapshotTruncated: currentTruncated,
             currentSnapshot: currentFindings,
             fetchedAt: new Date().toISOString(),
           };
