@@ -147,7 +147,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "purge");
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "result");
 
       const data = resources[0].data as { purgeType: string };
       assertEquals(data.purgeType, "everything");
