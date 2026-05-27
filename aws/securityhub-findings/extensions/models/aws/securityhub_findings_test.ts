@@ -618,14 +618,51 @@ Deno.test({
     }));
     try {
       const ctx = createMockContext();
-      // Previous run had both findings (stored as currentSnapshot)
+      // Previous run had both findings (stored as currentSnapshot, not truncated)
       (ctx as unknown as { readResource: () => Promise<unknown> })
         .readResource = () =>
           Promise.resolve({
             currentSnapshot: [
-              { arn: finding1.Id },
-              { arn: finding2.Id },
+              {
+                arn: finding1.Id,
+                id: "f1",
+                type: "T",
+                severity: "HIGH",
+                severityScore: 8,
+                title: "t",
+                description: "",
+                accountId: "123",
+                region: "us-east-1",
+                productName: "GD",
+                productArn: "",
+                resourceType: null,
+                resourceId: null,
+                workflowStatus: "NEW",
+                recordState: "ACTIVE",
+                createdAt: "",
+                updatedAt: "",
+              },
+              {
+                arn: finding2.Id,
+                id: "f2",
+                type: "T",
+                severity: "MEDIUM",
+                severityScore: 5,
+                title: "t",
+                description: "",
+                accountId: "456",
+                region: "us-east-2",
+                productName: "GD",
+                productArn: "",
+                resourceType: null,
+                resourceId: null,
+                workflowStatus: "NEW",
+                recordState: "ACTIVE",
+                createdAt: "",
+                updatedAt: "",
+              },
             ],
+            snapshotTruncated: false,
           });
       await model.methods.diff_findings.execute(
         { startTime: "24h", limit: 100 },

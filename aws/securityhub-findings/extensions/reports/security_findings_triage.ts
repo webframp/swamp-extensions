@@ -212,11 +212,11 @@ export const report = {
       lines.push("## Severity Dashboard");
       lines.push("");
       lines.push(
-        `| 🔴 CRITICAL | 🟠 HIGH | 🟡 MEDIUM | 🔵 LOW | Total |`,
+        `| 🔴 CRITICAL | 🟠 HIGH | 🟡 MEDIUM | 🔵 LOW | ℹ️ INFO | Total |`,
       );
-      lines.push(`|---|---|---|---|---|`);
+      lines.push(`|---|---|---|---|---|---|`);
       lines.push(
-        `| ${summary.critical} | ${summary.high} | ${summary.medium} | ${summary.low} | ${summary.total} |`,
+        `| ${summary.critical} | ${summary.high} | ${summary.medium} | ${summary.low} | ${summary.informational} | ${summary.total} |`,
       );
       if (summary.truncated) {
         lines.push("");
@@ -260,7 +260,7 @@ export const report = {
       );
       if (diff.truncated) {
         lines.push(
-          "- ⚠️ *Results were truncated — resolved count may include findings that are still active but fell outside the query window.*",
+          "- ⚠️ *Results were truncated — resolved findings are not reported when the query window is incomplete.*",
         );
       }
       lines.push("");
@@ -322,7 +322,10 @@ export const report = {
     }
 
     // No data fallback
-    if (!summary && criticalHigh.count === 0 && !diff && !byType) {
+    if (
+      !summary && criticalHigh.count === 0 && !diff &&
+      (!byType || byType.groups.length === 0)
+    ) {
       lines.push("## No Data");
       lines.push("");
       lines.push(

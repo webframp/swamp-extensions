@@ -163,8 +163,9 @@ const DiffFindingsSchema = z.object({
   resolvedFindings: z.array(FindingSummarySchema),
   newCount: z.number(),
   resolvedCount: z.number(),
-  currentSnapshot: z.array(z.object({ arn: z.string() })),
   truncated: z.boolean(),
+  snapshotTruncated: z.boolean(),
+  currentSnapshot: z.array(FindingSummarySchema),
   fetchedAt: z.string(),
 });
 
@@ -1082,59 +1083,50 @@ export const model = {
             t: args.startTime,
           });
 
-          // Read previous diff output to get the snapshot of ARNs from last run
-          let previousArns = new Set<string>();
+          // Read previous diff output to get the full snapshot from last run
+          type PrevSnapshot = Array<{ arn: string } & Record<string, unknown>>;
+          let previousFindings: PrevSnapshot = [];
+          let previousWasTruncated = false;
           if (context.readResource) {
             const prev = await context.readResource(suffix);
             if (prev && Array.isArray(prev.currentSnapshot)) {
-              previousArns = new Set(
-                (prev.currentSnapshot as Array<{ arn: string }>).map((f) =>
-                  f.arn
-                ),
-              );
+              previousFindings = prev.currentSnapshot as PrevSnapshot;
+              previousWasTruncated =
+                !!(prev.snapshotTruncated ?? prev.truncated);
             }
           }
 
           const currentArns = new Set(currentFindings.map((f) => f.arn));
+          const previousArns = new Set(previousFindings.map((f) => f.arn));
 
           const newFindings = currentFindings.filter(
             (f) => !previousArns.has(f.arn),
           );
-          const resolvedArns = [...previousArns].filter(
-            (arn) => !currentArns.has(arn),
-          );
+
+          // Only report resolved findings if NEITHER snapshot was truncated
+          // When truncated, we can't distinguish "resolved" from "fell off the page"
+          const currentTruncated = !!resp.NextToken;
+          let resolvedFindings: typeof currentFindings = [];
+          if (!previousWasTruncated && !currentTruncated) {
+            resolvedFindings = previousFindings.filter(
+              (f) => !currentArns.has(f.arn),
+            ) as typeof currentFindings;
+          }
 
           const diffData = {
             newFindings,
-            resolvedFindings: resolvedArns.map((arn) => ({
-              id: arn.split("/").pop() ?? arn,
-              arn,
-              type: "Unknown",
-              severity: "UNKNOWN",
-              severityScore: 0,
-              title: "(resolved — no longer in current results)",
-              description: "",
-              accountId: "",
-              region: "",
-              productName: "",
-              productArn: "",
-              resourceType: null,
-              resourceId: null,
-              workflowStatus: "RESOLVED",
-              recordState: "ACTIVE",
-              createdAt: "",
-              updatedAt: "",
-            })),
+            resolvedFindings,
             newCount: newFindings.length,
-            resolvedCount: resolvedArns.length,
-            currentSnapshot: currentFindings.map((f) => ({ arn: f.arn })),
-            truncated: !!resp.NextToken,
+            resolvedCount: resolvedFindings.length,
+            truncated: currentTruncated,
+            snapshotTruncated: currentTruncated,
+            currentSnapshot: currentFindings,
             fetchedAt: new Date().toISOString(),
           };
 
           context.logger.info(
             "Diff: {new} new, {resolved} resolved",
-            { new: newFindings.length, resolved: resolvedArns.length },
+            { new: newFindings.length, resolved: resolvedFindings.length },
           );
 
           const handle = await context.writeResource(

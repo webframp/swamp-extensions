@@ -100,7 +100,7 @@ Deno.test("report renders severity dashboard from summary step", async () => {
   ]);
   const result = await report.execute(ctx);
   assertEquals(result.markdown.includes("## Severity Dashboard"), true);
-  assertEquals(result.markdown.includes("| 3 | 7 | 20 | 50 | 82 |"), true);
+  assertEquals(result.markdown.includes("| 3 | 7 | 20 | 50 | 2 | 82 |"), true);
   assertEquals(result.markdown.includes("111"), true);
   assertEquals(result.json.summary?.critical, 3);
   assertEquals(result.json.summary?.total, 82);
