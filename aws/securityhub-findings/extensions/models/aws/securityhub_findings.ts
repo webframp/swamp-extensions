@@ -95,6 +95,7 @@ const FindingDetailSchema = z.object({
 const FindingDetailsSchema = z.object({
   findings: z.array(FindingDetailSchema),
   count: z.number(),
+  truncated: z.boolean(),
   notFound: z.array(z.string()),
   fetchedAt: z.string(),
 });
@@ -145,6 +146,7 @@ const FindingsByTypeSchema = z.object({
         high: z.number(),
         medium: z.number(),
         low: z.number(),
+        informational: z.number(),
       }),
       accounts: z.array(z.string()),
       findings: z.array(FindingSummarySchema),
@@ -152,6 +154,7 @@ const FindingsByTypeSchema = z.object({
   ),
   totalTypes: z.number(),
   totalFindings: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -160,8 +163,8 @@ const DiffFindingsSchema = z.object({
   resolvedFindings: z.array(FindingSummarySchema),
   newCount: z.number(),
   resolvedCount: z.number(),
-  previousVersion: z.number(),
-  currentVersion: z.number(),
+  truncated: z.boolean(),
+  currentSnapshot: z.array(FindingSummarySchema),
   fetchedAt: z.string(),
 });
 
@@ -175,12 +178,14 @@ const AccountMapSchema = z.object({
     }),
   ),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
 const FullExportSchema = z.object({
   findings: z.array(FindingSummarySchema),
   count: z.number(),
+  truncated: z.boolean(),
   totalPages: z.number(),
   filters: z.object({
     productName: z.string().nullable(),
@@ -924,7 +929,13 @@ export const model = {
             if (!grouped[f.type]) {
               grouped[f.type] = {
                 findings: [],
-                severities: { critical: 0, high: 0, medium: 0, low: 0 },
+                severities: {
+                  critical: 0,
+                  high: 0,
+                  medium: 0,
+                  low: 0,
+                  informational: 0,
+                },
                 accounts: new Set(),
               };
             }
@@ -945,6 +956,7 @@ export const model = {
                 high: g.severities.high,
                 medium: g.severities.medium,
                 low: g.severities.low,
+                informational: g.severities.informational,
               },
               accounts: [...g.accounts],
               findings: g.findings,
@@ -955,6 +967,7 @@ export const model = {
             groups,
             totalTypes: groups.length,
             totalFindings: findings.length,
+            truncated: !!resp.NextToken,
             fetchedAt: new Date().toISOString(),
           };
 
@@ -1069,51 +1082,45 @@ export const model = {
             t: args.startTime,
           });
 
-          // Read previous version
-          let previousFindings: typeof currentFindings = [];
-          let previousVersion = 0;
+          // Read previous diff output to get the full snapshot from last run
+          type PrevSnapshot = Array<{ arn: string } & Record<string, unknown>>;
+          let previousFindings: PrevSnapshot = [];
+          let previousWasTruncated = false;
           if (context.readResource) {
             const prev = await context.readResource(suffix);
-            if (prev && Array.isArray(prev.findings)) {
-              previousFindings = prev.findings as typeof currentFindings;
-              previousVersion = (prev._version as number) ?? 0;
+            if (prev && Array.isArray(prev.currentSnapshot)) {
+              previousFindings = prev.currentSnapshot as PrevSnapshot;
+              previousWasTruncated = !!(prev.truncated);
             }
           }
+
+          const currentTruncated = !!resp.NextToken;
+          const eitherTruncated = previousWasTruncated || currentTruncated;
 
           const currentArns = new Set(currentFindings.map((f) => f.arn));
           const previousArns = new Set(previousFindings.map((f) => f.arn));
 
-          const newFindings = currentFindings.filter(
-            (f) => !previousArns.has(f.arn),
-          );
-          const resolvedFindings = previousFindings.filter(
-            (f) => !currentArns.has(f.arn),
-          );
-
-          // Write current findings to finding_list for next diff comparison
-          const listData = {
-            findings: currentFindings,
-            count: currentFindings.length,
-            truncated: !!resp.NextToken,
-            filters: {
-              productName: args.productName ?? null,
-              severityLabel: args.severityLabel ?? null,
-              accountId: null,
-              workflowStatus: "NEW",
-              startTime: parseRelativeTime(args.startTime),
-              endTime: new Date().toISOString(),
-            },
-            fetchedAt: new Date().toISOString(),
-          };
-          await context.writeResource("finding_list", suffix, listData);
+          // Only compute diff when NEITHER snapshot was truncated.
+          // When truncated, we can't distinguish "new/resolved" from
+          // "fell off the page" — both directions produce false positives.
+          let newFindings: typeof currentFindings = [];
+          let resolvedFindings: typeof currentFindings = [];
+          if (!eitherTruncated) {
+            newFindings = currentFindings.filter(
+              (f) => !previousArns.has(f.arn),
+            );
+            resolvedFindings = previousFindings.filter(
+              (f) => !currentArns.has(f.arn),
+            ) as typeof currentFindings;
+          }
 
           const diffData = {
             newFindings,
             resolvedFindings,
             newCount: newFindings.length,
             resolvedCount: resolvedFindings.length,
-            previousVersion,
-            currentVersion: previousVersion + 1,
+            truncated: currentTruncated,
+            currentSnapshot: currentFindings,
             fetchedAt: new Date().toISOString(),
           };
 
@@ -1154,6 +1161,7 @@ export const model = {
       ): Promise<{ dataHandles: unknown[] }> => {
         context.logger.info("Fetching AWS Organizations account list", {});
 
+        // AWS Organizations is a global service — must use us-east-1 regardless of model region
         const client = new OrganizationsClient({
           region: "us-east-1",
         });
@@ -1186,6 +1194,7 @@ export const model = {
           const data = {
             accounts,
             count: accounts.length,
+            truncated: !!nextToken,
             fetchedAt: new Date().toISOString(),
           };
 
@@ -1308,6 +1317,7 @@ export const model = {
             findings: allFindings,
             count: allFindings.length,
             totalPages,
+            truncated: !!nextToken,
             filters: {
               productName: args.productName ?? null,
               severityLabel: args.severityLabel ?? null,

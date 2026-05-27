@@ -595,9 +595,9 @@ Deno.test({
         { startTime: "24h", limit: 100 },
         ctx,
       );
-      // Should write to both finding_list and diff_findings
-      assertEquals(ctx.written.length, 2);
-      const diffData = ctx.written[1].data as {
+      // Should write diff_findings
+      assertEquals(ctx.written.length, 1);
+      const diffData = ctx.written[0].data as {
         newCount: number;
         resolvedCount: number;
       };
@@ -618,25 +618,98 @@ Deno.test({
     }));
     try {
       const ctx = createMockContext();
-      // Previous run had both findings
+      // Previous run had both findings (stored as currentSnapshot, not truncated)
       (ctx as unknown as { readResource: () => Promise<unknown> })
         .readResource = () =>
           Promise.resolve({
-            findings: [
-              { arn: finding1.Id },
-              { arn: finding2.Id },
+            currentSnapshot: [
+              {
+                arn: finding1.Id,
+                id: "f1",
+                type: "T",
+                severity: "HIGH",
+                severityScore: 8,
+                title: "t",
+                description: "",
+                accountId: "123",
+                region: "us-east-1",
+                productName: "GD",
+                productArn: "",
+                resourceType: null,
+                resourceId: null,
+                workflowStatus: "NEW",
+                recordState: "ACTIVE",
+                createdAt: "",
+                updatedAt: "",
+              },
+              {
+                arn: finding2.Id,
+                id: "f2",
+                type: "T",
+                severity: "MEDIUM",
+                severityScore: 5,
+                title: "t",
+                description: "",
+                accountId: "456",
+                region: "us-east-2",
+                productName: "GD",
+                productArn: "",
+                resourceType: null,
+                resourceId: null,
+                workflowStatus: "NEW",
+                recordState: "ACTIVE",
+                createdAt: "",
+                updatedAt: "",
+              },
             ],
+            snapshotTruncated: false,
           });
       await model.methods.diff_findings.execute(
         { startTime: "24h", limit: 100 },
         ctx,
       );
-      const diffData = ctx.written[1].data as {
+      const diffData = ctx.written[0].data as {
         newCount: number;
         resolvedCount: number;
       };
       assertEquals(diffData.newCount, 0);
       assertEquals(diffData.resolvedCount, 1); // finding2 resolved
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "diff_findings suppresses both new and resolved when previous was truncated",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub(() => ({
+      Findings: [finding1], // only finding1 in current
+    }));
+    try {
+      const ctx = createMockContext();
+      // Previous run was truncated — stored snapshot is incomplete
+      (ctx as unknown as { readResource: () => Promise<unknown> })
+        .readResource = () =>
+          Promise.resolve({
+            currentSnapshot: [
+              { arn: finding2.Id },
+            ],
+            truncated: true, // previous was truncated
+          });
+      await model.methods.diff_findings.execute(
+        { startTime: "24h", limit: 100 },
+        ctx,
+      );
+      const diffData = ctx.written[0].data as {
+        newCount: number;
+        resolvedCount: number;
+      };
+      // Both should be 0 — can't trust diff when either side is truncated
+      assertEquals(diffData.newCount, 0);
+      assertEquals(diffData.resolvedCount, 0);
     } finally {
       restore();
     }

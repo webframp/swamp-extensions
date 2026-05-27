@@ -1,0 +1,83 @@
+id: 74349b0e-bd34-4ffa-ad2f-b5b1c0baad6a
+name: securityhub-triage
+description: |
+  On-demand Security Hub findings triage workflow.
+  Collects severity summary, critical/high findings, and diff since last run
+  from a single Security Hub delegated admin model instance.
+
+  Usage:
+    AWS_PROFILE="jw-cd-security-tooling/ReadOnlyPlus" \
+      swamp workflow run securityhub-triage --input modelName=sh-findings
+
+    # Custom time window:
+    AWS_PROFILE="jw-cd-security-tooling/ReadOnlyPlus" \
+      swamp workflow run securityhub-triage --input modelName=sh-findings --input startTime=7d
+tags:
+  security: "true"
+  triage: "true"
+inputs:
+  properties:
+    modelName:
+      type: string
+      default: "sh-findings"
+      description: Name of the securityhub-findings model instance
+    startTime:
+      type: string
+      default: "24h"
+      description: Time window for findings (relative or ISO)
+  required: []
+reports:
+  require:
+    - "@webframp/securityhub-triage-report"
+jobs:
+  - name: collect
+    description: Collect findings data from Security Hub
+    steps:
+      - name: severity_summary
+        description: Get severity counts across all accounts
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: get_severity_summary
+          inputs:
+            startTime: ${{ inputs.startTime }}
+      - name: critical_findings
+        description: List CRITICAL severity findings
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: list_findings
+          inputs:
+            severityLabel: CRITICAL
+            startTime: ${{ inputs.startTime }}
+            limit: 50
+      - name: high_findings
+        description: List HIGH severity findings
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: list_findings
+          inputs:
+            severityLabel: HIGH
+            startTime: ${{ inputs.startTime }}
+            limit: 50
+      - name: diff_findings
+        description: Identify new and resolved findings since last run
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: diff_findings
+          inputs:
+            startTime: ${{ inputs.startTime }}
+            limit: 100
+      - name: by_type
+        description: Group findings by type for pattern analysis
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: list_findings_by_type
+          inputs:
+            startTime: ${{ inputs.startTime }}
+            limit: 100
+    dependsOn: []
+version: 1
