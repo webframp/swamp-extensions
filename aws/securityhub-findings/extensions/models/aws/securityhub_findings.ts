@@ -110,6 +110,7 @@ const SeveritySummarySchema = z.object({
       high: z.number(),
       medium: z.number(),
       low: z.number(),
+      informational: z.number(),
     }),
   ),
   fetchedAt: z.string(),
@@ -147,8 +148,14 @@ function parseRelativeTime(input: string): string {
     return input;
   }
   const [, value, unit] = match;
+  const magnitude = parseInt(value);
+  if (magnitude === 0) {
+    throw new Error(
+      `Invalid time format: "${input}". Magnitude must be greater than 0.`,
+    );
+  }
   const ms = { m: 60_000, h: 3_600_000, d: 86_400_000 }[unit] ?? 0;
-  return new Date(Date.now() - parseInt(value) * ms).toISOString();
+  return new Date(Date.now() - magnitude * ms).toISOString();
 }
 
 /** Create a SecurityHubClient for the configured region. */
@@ -568,6 +575,7 @@ export const model = {
                 high: c.high,
                 medium: c.medium,
                 low: c.low,
+                informational: c.informational,
               }),
             ),
             fetchedAt: new Date().toISOString(),
@@ -584,7 +592,7 @@ export const model = {
 
           const suffix = hashInstanceName({
             p: args.productName,
-            t: startIso,
+            t: args.startTime,
           });
           const handle = await context.writeResource(
             "severity_summary",
@@ -746,20 +754,25 @@ async function updateWorkflowStatus(
       status,
     });
 
-    // First, retrieve the actual ProductArn for each finding
-    const lookupResp = await client.send(
-      new GetFindingsCommand({
-        Filters: {
-          Id: findingArns.map((arn) => ({
-            Value: arn,
-            Comparison: "EQUALS" as const,
-          })),
-        },
-        MaxResults: 100,
-      }),
-    );
-
-    const foundFindings = lookupResp.Findings ?? [];
+    // Retrieve the actual ProductArn for each finding (paginate if needed)
+    const foundFindings: AwsSecurityFinding[] = [];
+    let lookupToken: string | undefined;
+    do {
+      const lookupResp = await client.send(
+        new GetFindingsCommand({
+          Filters: {
+            Id: findingArns.map((arn) => ({
+              Value: arn,
+              Comparison: "EQUALS" as const,
+            })),
+          },
+          MaxResults: 100,
+          NextToken: lookupToken,
+        }),
+      );
+      foundFindings.push(...(lookupResp.Findings ?? []));
+      lookupToken = lookupResp.NextToken;
+    } while (lookupToken);
     if (foundFindings.length === 0) {
       throw new Error(
         `None of the ${findingArns.length} finding ARNs could be resolved. ` +
