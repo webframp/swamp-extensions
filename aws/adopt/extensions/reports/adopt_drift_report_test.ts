@@ -335,3 +335,57 @@ Deno.test("reports warning when plan data is unreadable", async () => {
   // Must NOT say "No drift detected"
   assertEquals(result.markdown.includes("No drift detected"), false);
 });
+
+Deno.test("no false drift from reordered array elements (Tags)", async () => {
+  const ctx = makeContext(
+    [
+      {
+        jobName: "plan",
+        stepName: "plan-resources",
+        modelName: "adopt-test",
+        modelType: "@webframp/aws/adopt",
+        modelId: "m-adopt",
+        methodName: "plan_stack_adoption",
+        status: "succeeded",
+        dataHandles: [{ name: "plan-my-stack", dataId: "d1", version: 1 }],
+      },
+      {
+        jobName: "sync-all",
+        stepName: "sync-TestVpc",
+        modelName: "test-vpc-123",
+        modelType: "@swamp/aws/ec2/vpc",
+        modelId: "m-vpc",
+        methodName: "sync",
+        status: "succeeded",
+        dataHandles: [{ name: "test-vpc-123", dataId: "d2", version: 2 }],
+      },
+    ],
+    {
+      "plan-my-stack@1": {
+        stackName: "my-stack",
+        mapped: [
+          {
+            logicalId: "TestVpc",
+            modelName: "test-vpc-123",
+            cfnType: "AWS::EC2::VPC",
+            physicalId: "vpc-123",
+          },
+        ],
+        orphans: [],
+      },
+      // Tags array in different order between versions — should NOT be drift
+      "test-vpc-123@2": {
+        VpcId: "vpc-123",
+        Tags: [{ Key: "Env", Value: "prod" }, { Key: "Name", Value: "my-vpc" }],
+      },
+      "test-vpc-123@1": {
+        VpcId: "vpc-123",
+        Tags: [{ Key: "Name", Value: "my-vpc" }, { Key: "Env", Value: "prod" }],
+      },
+    },
+  );
+
+  const result = await report.execute(ctx);
+  assertEquals(result.json.summary.drifted, 0);
+  assertEquals(result.json.summary.unchanged, 1);
+});

@@ -100,13 +100,20 @@ function truncateValue(value: unknown, maxLen = 40): string {
 }
 
 /**
- * Recursively serialize a value with sorted object keys for stable comparison.
- * Ensures {a:1, b:2} and {b:2, a:1} produce identical strings.
+ * Recursively serialize a value with sorted object keys and sorted arrays
+ * for stable comparison. Ensures:
+ * - {a:1, b:2} and {b:2, a:1} produce identical strings (key reordering)
+ * - [{Key:"A"},{Key:"B"}] and [{Key:"B"},{Key:"A"}] produce identical
+ *   strings (array element reordering, common in AWS tag arrays)
  */
 function canonicalJson(v: unknown): string {
   if (v === null || v === undefined) return "null";
   if (Array.isArray(v)) {
-    return "[" + v.map(canonicalJson).join(",") + "]";
+    // Sort array elements by their canonical representation so that
+    // non-deterministic ordering (e.g., AWS Tags) doesn't produce false drift.
+    const elements = v.map(canonicalJson);
+    elements.sort();
+    return "[" + elements.join(",") + "]";
   }
   if (typeof v === "object") {
     const obj = v as Record<string, unknown>;

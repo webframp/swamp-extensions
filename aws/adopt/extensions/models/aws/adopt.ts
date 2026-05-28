@@ -905,7 +905,7 @@ const MappedResourceSchema = z.object({
   modelName: z.string(),
   parentStackName: z.string(),
   depth: z.number(),
-  setupCommand: z.string(),
+  setupCommandTemplate: z.string(),
   getCommand: z.string(),
 });
 
@@ -1047,8 +1047,9 @@ async function listStackResourcesRecursive(
         options.includeNested &&
         currentDepth < options.maxDepth
       ) {
-        // PhysicalResourceId for a nested stack is its full ARN. Extract
-        // the stack name (last path segment of the arn).
+        // PhysicalResourceId for a nested stack is its full ARN:
+        // arn:aws:cloudformation:region:account:stack/<name>/<uuid>
+        // Extract the stack name (second-to-last segment after splitting on /).
         const arnParts = physicalId.split("/");
         const nestedName = arnParts.length >= 2
           ? arnParts[arnParts.length - 2]
@@ -1080,15 +1081,20 @@ async function listStackResourcesRecursive(
 }
 
 /**
- * Build a swamp `model create` command for a mapped resource. The command
- * is shell-safe (single-quoted, with embedded quotes escaped).
+ * Build a swamp `model create` command template for a mapped resource.
+ * Intentionally includes only the `name` global-arg (required by all types).
+ * Most types need additional args (VpcId, CidrBlock, Engine, etc.) that are
+ * not available from ListStackResources alone — the operator must consult
+ * `swamp model type describe <type>` to fill in required args.
  */
 function buildSetupCommand(
   swampType: string,
   modelName: string,
 ): string {
   return `swamp model create ${swampType} ${shellQuote(modelName)} ` +
-    `--global-arg name=${shellQuote(modelName)}`;
+    `--global-arg name=${
+      shellQuote(modelName)
+    } # add required global-args per type`;
 }
 
 /**
@@ -1846,7 +1852,7 @@ export const model = {
               modelName,
               parentStackName: r.parentStackName,
               depth: r.depth,
-              setupCommand: buildSetupCommand(swampType, modelName),
+              setupCommandTemplate: buildSetupCommand(swampType, modelName),
               getCommand: buildGetCommand(modelName, r.physicalId),
             });
           }
