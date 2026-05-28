@@ -311,3 +311,27 @@ Deno.test("no false drift from reordered object keys", async () => {
   assertEquals(result.json.summary.drifted, 0);
   assertEquals(result.json.summary.unchanged, 1);
 });
+
+Deno.test("reports warning when plan data is unreadable", async () => {
+  const ctx = makeContext(
+    [
+      {
+        jobName: "plan",
+        stepName: "plan-resources",
+        modelName: "adopt-test",
+        modelType: "@webframp/aws/adopt",
+        modelId: "m-adopt",
+        methodName: "plan_stack_adoption",
+        status: "succeeded",
+        dataHandles: [{ name: "plan-my-stack", dataId: "d1", version: 1 }],
+      },
+    ],
+    {}, // No data in store — simulates GC or read failure
+  );
+
+  const result = await report.execute(ctx);
+  assertStringIncludes(result.markdown, "plan data is unreadable");
+  assertEquals(result.json.summary.total, 0);
+  // Must NOT say "No drift detected"
+  assertEquals(result.markdown.includes("No drift detected"), false);
+});

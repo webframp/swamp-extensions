@@ -233,14 +233,37 @@ export const report = {
       planStep.dataHandles[0].version,
     );
 
-    const stackName = (planData?.stackName as string) ?? "unknown";
-    const mapped = (planData?.mapped ?? []) as Array<{
+    if (!planData) {
+      sections.push(
+        "# Drift Report\n\n⚠️ Plan step succeeded but plan data is unreadable — cannot generate drift report.",
+      );
+      return {
+        markdown: sections.join("\n"),
+        json: {
+          summary: {
+            timestamp,
+            stackName: "unknown",
+            total: 0,
+            unchanged: 0,
+            drifted: 0,
+            missing: 0,
+            syncFailed: 0,
+            orphans: 0,
+            newResources: 0,
+          },
+          resources: [],
+        },
+      };
+    }
+
+    const stackName = (planData.stackName as string) ?? "unknown";
+    const mapped = (planData.mapped ?? []) as Array<{
       logicalId: string;
       modelName: string;
       cfnType: string;
       physicalId: string;
     }>;
-    const orphans = (planData?.orphans ?? []) as Array<{ modelName: string }>;
+    const orphans = (planData.orphans ?? []) as Array<{ modelName: string }>;
 
     // Process each sync step to detect drift.
     const syncSteps = context.stepExecutions.filter(
@@ -366,6 +389,10 @@ export const report = {
     }
 
     // Build summary.
+    const newResources = resources.filter((r) =>
+      r.status === "sync-failed" &&
+      r.error?.includes("model may not exist")
+    ).length;
     const summary: DriftSummary = {
       timestamp,
       stackName,
@@ -373,9 +400,12 @@ export const report = {
       unchanged: resources.filter((r) => r.status === "unchanged").length,
       drifted: resources.filter((r) => r.status === "drifted").length,
       missing: resources.filter((r) => r.status === "missing").length,
-      syncFailed: resources.filter((r) => r.status === "sync-failed").length,
+      syncFailed: resources.filter((r) =>
+        r.status === "sync-failed" &&
+        !r.error?.includes("model may not exist")
+      ).length,
       orphans: orphans.length,
-      newResources: 0,
+      newResources,
     };
 
     // Render markdown.
@@ -390,6 +420,7 @@ export const report = {
     sections.push(`| ⚠️ Drifted | ${summary.drifted} |`);
     sections.push(`| ❌ Missing | ${summary.missing} |`);
     sections.push(`| 🔄 Sync Failed | ${summary.syncFailed} |`);
+    sections.push(`| 🆕 New (not yet adopted) | ${summary.newResources} |`);
     sections.push(`| 👻 Orphans | ${summary.orphans} |`);
     sections.push(`| **Total** | **${summary.total}** |`);
 
@@ -455,7 +486,8 @@ export const report = {
 
     // No drift message.
     if (
-      summary.drifted === 0 && summary.missing === 0 && summary.syncFailed === 0
+      summary.drifted === 0 && summary.missing === 0 &&
+      summary.syncFailed === 0 && summary.newResources === 0
     ) {
       sections.push(
         "\n---\n✅ **No drift detected.** All adopted resources match live state.",
