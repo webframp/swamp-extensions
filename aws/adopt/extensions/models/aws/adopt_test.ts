@@ -1135,7 +1135,7 @@ Deno.test({
               physicalId: "vpc-current1",
               cfnType: "AWS::EC2::VPC",
               swampType: "@swamp/aws/ec2/vpc",
-              modelName: "adopt-vpc-current1",
+              modelName: "adopt-vpc-e05d7693",
               parentStackName: "my-stack",
               depth: 0,
               setupCommand: "",
@@ -1146,7 +1146,7 @@ Deno.test({
               physicalId: "vpc-removed1",
               cfnType: "AWS::EC2::VPC",
               swampType: "@swamp/aws/ec2/vpc",
-              modelName: "adopt-vpc-removed1",
+              modelName: "adopt-vpc-0eaa033c",
               parentStackName: "my-stack",
               depth: 0,
               setupCommand: "",
@@ -1168,7 +1168,7 @@ Deno.test({
         orphans: Array<{ modelName: string }>;
       };
       assertEquals(data.orphans.length, 1);
-      assertEquals(data.orphans[0].modelName, "adopt-vpc-removed1");
+      assertEquals(data.orphans[0].modelName, "adopt-vpc-0eaa033c");
     } finally {
       restore();
     }
@@ -1319,7 +1319,7 @@ Deno.test({
               physicalId: "vpc-current1",
               cfnType: "AWS::EC2::VPC",
               swampType: "@swamp/aws/ec2/vpc",
-              modelName: "adopt-vpc-current1",
+              modelName: "adopt-vpc-e05d7693",
               parentStackName: "my-stack",
               depth: 0,
               setupCommand: "",

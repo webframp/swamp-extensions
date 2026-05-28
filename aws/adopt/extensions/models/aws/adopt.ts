@@ -844,22 +844,23 @@ function shortNameForCfnType(cfnType: string): string {
 }
 
 /**
- * Compute a deterministic 9-character suffix for a model name from any
- * physical resource ID. Falls back to the logical ID if physical ID is
- * unsuitable (e.g., contains characters that break shell quoting).
+ * Compute a deterministic collision-resistant suffix for a model name from
+ * a physical resource ID. Uses FNV-1a hash of the full ID to avoid collisions
+ * when multiple resources share trailing characters (e.g., Lambda functions
+ * with common suffixes like "service-handler").
  */
 function modelNameSuffixFromPhysicalId(
   physicalId: string,
-  logicalId: string,
+  _logicalId: string,
 ): string {
-  // Strip ARN prefix if present, take last segment.
-  const tail = physicalId.split(/[/:]/).pop() ?? physicalId;
-  const cleaned = tail.replace(/[^a-zA-Z0-9-]/g, "");
-  if (cleaned.length >= 4) {
-    // Take last 9 chars but trim any leading hyphens to avoid "-foo" suffixes.
-    return cleaned.slice(-9).replace(/^-+/, "");
+  // FNV-1a 32-bit hash → 8 hex chars. Collision-resistant for typical
+  // stack sizes (< 500 resources).
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < physicalId.length; i++) {
+    hash ^= physicalId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
   }
-  return logicalId.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 9);
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 /**

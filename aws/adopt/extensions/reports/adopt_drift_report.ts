@@ -89,7 +89,12 @@ function escapeCell(value: string): string {
 }
 
 function truncateValue(value: unknown, maxLen = 40): string {
-  const s = JSON.stringify(value) ?? "null";
+  let s: string;
+  try {
+    s = JSON.stringify(value) ?? "null";
+  } catch {
+    s = "[unserializable]";
+  }
   if (s.length <= maxLen) return s;
   return s.slice(0, maxLen - 3) + "...";
 }
@@ -268,6 +273,12 @@ export const report = {
 
       const handle = syncStep.dataHandles[0];
       const currentVersion = handle.version;
+      // NOTE: This assumes sequential version numbering where version N-1
+      // is the pre-sync state. If concurrent operations write intermediate
+      // versions, this comparison may produce false drift. A future
+      // improvement would store the pre-run version explicitly in the
+      // workflow's plan data. In practice, the per-model lock prevents
+      // concurrent writes during a single workflow run.
       const previousVersion = currentVersion > 1 ? currentVersion - 1 : null;
 
       const liveData = await readModelData(
