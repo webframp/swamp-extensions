@@ -1,0 +1,66 @@
+id: 7b52035f-ceb3-40cb-aa52-d46b6cb76e20
+name: "@webframp/adopt-drift-check"
+description: |
+  Check for drift on all resources adopted from a CloudFormation stack.
+  Re-runs the adoption plan to detect stack changes, then syncs each
+  adopted model to refresh live state. The drift report compares the
+  previous stored state against the fresh sync to surface differences.
+
+  Usage:
+    AWS_PROFILE=my-account/ReadOnlyPlus \
+      swamp workflow run @webframp/adopt-drift-check \
+        --input modelName=my-adopt \
+        --input stackName=my-prod-stack
+tags:
+  aws: "true"
+  adoption: "true"
+  drift: "true"
+reports:
+  require:
+    - "@webframp/adopt-drift-report"
+inputs:
+  properties:
+    modelName:
+      type: string
+      description: Name of the @webframp/aws/adopt model instance
+    stackName:
+      type: string
+      description: CloudFormation stack name to check for drift
+    prefix:
+      type: string
+      default: adopt
+      description: Prefix used when models were created
+  required:
+    - modelName
+    - stackName
+jobs:
+  - name: plan
+    description: Re-enumerate stack resources to detect additions/removals
+    steps:
+      - name: plan-resources
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: plan_stack_adoption
+          inputs:
+            stackName: ${{ inputs.stackName }}
+            prefix: ${{ inputs.prefix }}
+
+  - name: sync-all
+    description: Sync each adopted model to refresh live state
+    dependsOn:
+      - job: plan
+        condition:
+          type: completed
+    steps:
+      - name: sync-${{ self.resource.logicalId }}
+        description: Sync ${{ self.resource.modelName }}
+        forEach:
+          item: resource
+          in: ${{ data.latest(inputs.modelName, "plan-" + inputs.stackName).attributes.mapped }}
+        task:
+          type: model_method
+          modelIdOrName: ${{ self.resource.modelName }}
+          methodName: sync
+        allowFailure: true
+version: 1

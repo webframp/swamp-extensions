@@ -68,6 +68,78 @@ All methods respect the `vpcId` global argument for filtering EC2 resources. RDS
 and Secrets Manager methods discover all resources in the region regardless of
 VPC filter.
 
+## CloudFormation Stack Adoption
+
+For environments managed by CloudFormation, `plan_stack_adoption` enumerates a
+stack's resources and produces an adoption plan that maps each `AWS::*` type to
+its corresponding `@swamp/aws/*` model.
+
+### Method
+
+| Method                | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `plan_stack_adoption` | Map all stack resources (recursive into nested) to swamp types |
+
+Inputs:
+
+- `stackName` (required): CloudFormation stack name or ID
+- `includeNested` (default: `true`): recurse into `AWS::CloudFormation::Stack`
+  children
+- `maxDepth` (default: `3`): nested stack recursion limit
+- `prefix` (default: `adopt`): prefix for generated swamp model names
+
+Output (stored as the `stackPlan` resource):
+
+- `mapped[]` — resources with a known swamp type, model name, physical ID,
+  and `getCommand` for adoption
+- `unmapped[]` — resources with no swamp equivalent (e.g.,
+  `AWS::Kinesis::Stream`, `Custom::*` resources)
+- `skipped[]` — resources in unstable states (`CREATE_IN_PROGRESS`,
+  `DELETE_IN_PROGRESS`, etc.) where `PhysicalResourceId` is unreliable
+- `orphans[]` — resources from a previous plan that are missing from the
+  current stack (compared against the previous run's plan stored in this
+  model)
+- `summary` — counts and `coveragePercent`
+
+### Workflow
+
+`@webframp/adopt-cfn-stack` orchestrates the two-phase adoption:
+
+```bash
+swamp workflow run @webframp/adopt-cfn-stack \
+  --input modelName=my-adopt \
+  --input stackName=my-prod-stack
+```
+
+The workflow produces the plan, then runs `get` on each mapped resource's
+swamp model. Models that don't yet exist will surface as failed steps (with
+`allowFailure: true` so the workflow continues). Create the required models
+using `swamp model type describe <swampType>` to determine required
+global-args, then re-run the workflow — on the second pass, all `get` calls
+succeed and live state is captured.
+
+### Supported CloudFormation types
+
+| `AWS::*` type                 | Maps to `@swamp/*` type            |
+| ----------------------------- | ---------------------------------- |
+| `AWS::EC2::VPC`               | `@swamp/aws/ec2/vpc`               |
+| `AWS::EC2::Subnet`            | `@swamp/aws/ec2/subnet`            |
+| `AWS::EC2::InternetGateway`   | `@swamp/aws/ec2/internet-gateway`  |
+| `AWS::EC2::RouteTable`        | `@swamp/aws/ec2/route-table`       |
+| `AWS::EC2::SecurityGroup`     | `@swamp/aws/ec2/security-group`    |
+| `AWS::EC2::NatGateway`        | `@swamp/aws/ec2/nat-gateway`       |
+| `AWS::EC2::EIP`               | `@swamp/aws/ec2/eip`               |
+| `AWS::RDS::DBCluster`         | `@swamp/aws/rds/dbcluster`         |
+| `AWS::RDS::DBInstance`        | `@swamp/aws/rds/dbinstance`        |
+| `AWS::RDS::DBSubnetGroup`     | `@swamp/aws/rds/dbsubnet-group`    |
+| `AWS::SecretsManager::Secret` | `@swamp/aws/secretsmanager/secret` |
+| `AWS::S3::Bucket`             | `@swamp/aws/s3/bucket`             |
+| `AWS::Lambda::Function`       | `@swamp/aws/lambda/function`       |
+| `AWS::IAM::Role`              | `@swamp/aws/iam/role`              |
+| `AWS::CloudFormation::Stack`  | _recursed, not adopted as a model_ |
+
+Adding a new type is a one-line PR to `CFN_TO_SWAMP_TYPE_MAP` in `adopt.ts`.
+
 ## Model Naming Convention
 
 Generated model names follow the pattern:
@@ -99,6 +171,7 @@ and Secrets Manager resources use the full identifier or name.
 - `rds:DescribeDBInstances`
 - `rds:DescribeDBSubnetGroups`
 - `secretsmanager:ListSecrets`
+- `cloudformation:ListStackResources` (for `plan_stack_adoption` only)
 
 **Management (workflow adoption):**
 

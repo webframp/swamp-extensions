@@ -79,7 +79,7 @@ type WrittenResource = any;
 
 Deno.test("model type and version are correct", () => {
   assertEquals(model.type, "@webframp/aws/adopt");
-  assertEquals(model.version, "2026.05.21.1");
+  assertEquals(model.version, "2026.05.28.1");
 });
 
 // =============================================================================
@@ -717,4 +717,663 @@ Deno.test({
       restore();
     }
   },
+});
+
+// =============================================================================
+// CloudFormation Stack Adoption Tests
+// =============================================================================
+
+import { CloudFormationClient } from "npm:@aws-sdk/client-cloudformation@3.1010.0";
+import { CFN_TO_SWAMP_TYPE_MAP, model as modelForCfn } from "./adopt.ts";
+
+/**
+ * Mock the CloudFormation client `send` method. Accepts a function that
+ * receives each command and returns the response.
+ */
+function mockCfnClient(
+  responseFor: (cmd: unknown) => unknown,
+): () => void {
+  const originalSend = CloudFormationClient.prototype.send;
+  const originalDestroy = CloudFormationClient.prototype.destroy;
+  CloudFormationClient.prototype.destroy = function () {};
+  // deno-lint-ignore no-explicit-any
+  CloudFormationClient.prototype.send = function (cmd: any) {
+    return Promise.resolve(responseFor(cmd));
+  } as typeof originalSend;
+  return () => {
+    CloudFormationClient.prototype.send = originalSend;
+    CloudFormationClient.prototype.destroy = originalDestroy;
+  };
+}
+
+// -----------------------------------------------------------------------------
+// CFN_TO_SWAMP_TYPE_MAP — static map sanity tests
+// -----------------------------------------------------------------------------
+
+Deno.test("CFN_TO_SWAMP_TYPE_MAP includes core EC2 types", () => {
+  assertEquals(CFN_TO_SWAMP_TYPE_MAP["AWS::EC2::VPC"], "@swamp/aws/ec2/vpc");
+  assertEquals(
+    CFN_TO_SWAMP_TYPE_MAP["AWS::EC2::Subnet"],
+    "@swamp/aws/ec2/subnet",
+  );
+  assertEquals(
+    CFN_TO_SWAMP_TYPE_MAP["AWS::EC2::SecurityGroup"],
+    "@swamp/aws/ec2/security-group",
+  );
+});
+
+Deno.test("CFN_TO_SWAMP_TYPE_MAP includes RDS types", () => {
+  assertEquals(
+    CFN_TO_SWAMP_TYPE_MAP["AWS::RDS::DBCluster"],
+    "@swamp/aws/rds/dbcluster",
+  );
+  assertEquals(
+    CFN_TO_SWAMP_TYPE_MAP["AWS::RDS::DBInstance"],
+    "@swamp/aws/rds/dbinstance",
+  );
+});
+
+Deno.test("CFN_TO_SWAMP_TYPE_MAP is frozen (cannot be mutated)", () => {
+  const map = CFN_TO_SWAMP_TYPE_MAP as Record<string, string>;
+  let threw = false;
+  try {
+    map["AWS::Test::Type"] = "@test/type";
+  } catch {
+    threw = true;
+  }
+  // In strict mode, mutation throws; in non-strict, it silently fails.
+  // Either way, the map must not have grown.
+  assertEquals(threw || map["AWS::Test::Type"] === undefined, true);
+});
+
+// -----------------------------------------------------------------------------
+// plan_stack_adoption — happy path
+// -----------------------------------------------------------------------------
+
+function makeCfnContext() {
+  return createModelTestContext({
+    globalArgs: { region: "us-east-1" },
+    definition: {
+      id: "test-cfn-id",
+      name: "adopt-cfn-test",
+      version: 1,
+      tags: {},
+    },
+  });
+}
+
+Deno.test({
+  name: "plan_stack_adoption maps known CFN types to swamp types",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "MyVpc",
+          PhysicalResourceId: "vpc-0b4f6dd0dfd8c5339",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+        {
+          LogicalResourceId: "MySubnet",
+          PhysicalResourceId: "subnet-abc1234567890",
+          ResourceType: "AWS::EC2::Subnet",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const resources = getWrittenResources() as WrittenResource[];
+      assertEquals(resources.length, 1);
+      const data = resources[0].data as {
+        mapped: Array<
+          { cfnType: string; swampType: string; modelName: string }
+        >;
+        summary: { mapped: number; unmapped: number; coveragePercent: number };
+      };
+      assertEquals(data.mapped.length, 2);
+      assertEquals(data.mapped[0].cfnType, "AWS::EC2::VPC");
+      assertEquals(data.mapped[0].swampType, "@swamp/aws/ec2/vpc");
+      assertEquals(data.mapped[0].modelName.startsWith("adopt-vpc-"), true);
+      assertEquals(data.summary.coveragePercent, 100);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption flags unknown CFN types as unmapped",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "MyKinesis",
+          PhysicalResourceId: "kinesis-stream-1",
+          ResourceType: "AWS::Kinesis::Stream",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+        {
+          LogicalResourceId: "MyVpc",
+          PhysicalResourceId: "vpc-aaa111",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        mapped: unknown[];
+        unmapped: Array<{ cfnType: string; reason: string }>;
+      };
+      assertEquals(data.mapped.length, 1);
+      assertEquals(data.unmapped.length, 1);
+      assertEquals(data.unmapped[0].cfnType, "AWS::Kinesis::Stream");
+      assertEquals(
+        data.unmapped[0].reason.includes("no swamp type"),
+        true,
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption skips resources with unstable status",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "PendingVpc",
+          PhysicalResourceId: "",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_IN_PROGRESS",
+        },
+        {
+          LogicalResourceId: "GoodVpc",
+          PhysicalResourceId: "vpc-good123",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        mapped: unknown[];
+        skipped: Array<{ resourceStatus: string; reason: string }>;
+      };
+      assertEquals(data.mapped.length, 1);
+      assertEquals(data.skipped.length, 1);
+      assertEquals(data.skipped[0].resourceStatus, "CREATE_IN_PROGRESS");
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption flags Custom:: resources as unmapped",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "MyCustom",
+          PhysicalResourceId: "custom-abc",
+          ResourceType: "Custom::MyResource",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        unmapped: Array<{ reason: string }>;
+      };
+      assertEquals(data.unmapped.length, 1);
+      assertEquals(
+        data.unmapped[0].reason.includes("custom resource"),
+        true,
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption recurses into nested AWS::CloudFormation::Stack",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((cmd) => {
+      // deno-lint-ignore no-explicit-any
+      const stackName = (cmd as any).input?.StackName ?? "unknown";
+      if (stackName === "parent-stack") {
+        return {
+          StackResourceSummaries: [
+            {
+              LogicalResourceId: "ParentVpc",
+              PhysicalResourceId: "vpc-parent111",
+              ResourceType: "AWS::EC2::VPC",
+              ResourceStatus: "CREATE_COMPLETE",
+            },
+            {
+              LogicalResourceId: "ChildStack",
+              PhysicalResourceId:
+                "arn:aws:cloudformation:us-east-1:123:stack/child-stack/uuid",
+              ResourceType: "AWS::CloudFormation::Stack",
+              ResourceStatus: "CREATE_COMPLETE",
+            },
+          ],
+        };
+      }
+      if (stackName === "child-stack") {
+        return {
+          StackResourceSummaries: [
+            {
+              LogicalResourceId: "ChildSubnet",
+              PhysicalResourceId: "subnet-child222",
+              ResourceType: "AWS::EC2::Subnet",
+              ResourceStatus: "CREATE_COMPLETE",
+            },
+          ],
+        };
+      }
+      return { StackResourceSummaries: [] };
+    });
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "parent-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        mapped: Array<{ logicalId: string; depth: number }>;
+        nestedStacksProcessed: number;
+      };
+      assertEquals(data.mapped.length, 2);
+      assertEquals(data.nestedStacksProcessed, 1);
+      const child = data.mapped.find((r) => r.logicalId === "ChildSubnet");
+      assertEquals(child?.depth, 1);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption respects maxDepth",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((cmd) => {
+      // deno-lint-ignore no-explicit-any
+      const stackName = (cmd as any).input?.StackName ?? "unknown";
+      if (stackName === "parent-stack") {
+        return {
+          StackResourceSummaries: [
+            {
+              LogicalResourceId: "ChildStack",
+              PhysicalResourceId:
+                "arn:aws:cloudformation:us-east-1:123:stack/child-stack/uuid",
+              ResourceType: "AWS::CloudFormation::Stack",
+              ResourceStatus: "CREATE_COMPLETE",
+            },
+          ],
+        };
+      }
+      // Should not be reached when maxDepth=0
+      return {
+        StackResourceSummaries: [
+          {
+            LogicalResourceId: "ChildVpc",
+            PhysicalResourceId: "vpc-child999",
+            ResourceType: "AWS::EC2::VPC",
+            ResourceStatus: "CREATE_COMPLETE",
+          },
+        ],
+      };
+    });
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "parent-stack",
+          includeNested: true,
+          maxDepth: 0,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        mapped: unknown[];
+        nestedStacksProcessed: number;
+      };
+      // Nested stack itself filtered out (it's AWS::CloudFormation::Stack).
+      // Child resources not fetched because maxDepth=0.
+      assertEquals(data.mapped.length, 0);
+      assertEquals(data.nestedStacksProcessed, 0);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "plan_stack_adoption detects orphans when previous plan has resources missing from current",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "Vpc1",
+          PhysicalResourceId: "vpc-current1",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      // Inject a previous plan via readResource. swamp-testing's
+      // createModelTestContext exposes a method to set canned reads;
+      // if it doesn't, we wrap context.readResource directly.
+      // deno-lint-ignore no-explicit-any
+      const ctxAny = context as any;
+      ctxAny.readResource = (_instance: string) =>
+        Promise.resolve({
+          mapped: [
+            {
+              logicalId: "Vpc1",
+              physicalId: "vpc-current1",
+              cfnType: "AWS::EC2::VPC",
+              swampType: "@swamp/aws/ec2/vpc",
+              modelName: "adopt-vpc-e05d7693",
+              parentStackName: "my-stack",
+              depth: 0,
+              getCommand: "",
+            },
+            {
+              logicalId: "OldVpc",
+              physicalId: "vpc-removed1",
+              cfnType: "AWS::EC2::VPC",
+              swampType: "@swamp/aws/ec2/vpc",
+              modelName: "adopt-vpc-0eaa033c",
+              parentStackName: "my-stack",
+              depth: 0,
+              getCommand: "",
+            },
+          ],
+        });
+
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        ctxAny as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        orphans: Array<{ modelName: string }>;
+      };
+      assertEquals(data.orphans.length, 1);
+      assertEquals(data.orphans[0].modelName, "adopt-vpc-0eaa033c");
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption produces shell-quoted setup and get commands",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "MyVpc",
+          PhysicalResourceId: "vpc-0b4f6dd0dfd8c5339",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const mapped = ((getWrittenResources() as WrittenResource[])[0].data as {
+        mapped: Array<
+          { getCommand: string; swampType: string; modelName: string }
+        >;
+      }).mapped;
+      assertEquals(
+        mapped[0].swampType,
+        "@swamp/aws/ec2/vpc",
+      );
+      assertEquals(
+        mapped[0].modelName.startsWith("adopt-vpc-"),
+        true,
+      );
+      assertEquals(
+        mapped[0].getCommand.includes(
+          "swamp model method run 'adopt-vpc-",
+        ),
+        true,
+      );
+      assertEquals(
+        mapped[0].getCommand.includes(
+          "--input identifier='vpc-0b4f6dd0dfd8c5339'",
+        ),
+        true,
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption summary computes coverage percent correctly",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "GoodVpc",
+          PhysicalResourceId: "vpc-1",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+        {
+          LogicalResourceId: "BadType",
+          PhysicalResourceId: "id-1",
+          ResourceType: "AWS::Kinesis::Stream",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+        {
+          LogicalResourceId: "Pending",
+          PhysicalResourceId: "",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_IN_PROGRESS",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        context as ExecuteContext,
+      );
+      const summary = ((getWrittenResources() as WrittenResource[])[0].data as {
+        summary: {
+          totalResources: number;
+          mapped: number;
+          unmapped: number;
+          skipped: number;
+          coveragePercent: number;
+        };
+      }).summary;
+      // 1 mapped + 1 unmapped + 1 skipped = 3 total; 1/3 = 33%
+      assertEquals(summary.totalResources, 3);
+      assertEquals(summary.mapped, 1);
+      assertEquals(summary.unmapped, 1);
+      assertEquals(summary.skipped, 1);
+      assertEquals(summary.coveragePercent, 33);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "plan_stack_adoption carries forward previously-flagged orphans across runs",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient((_cmd) => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "Vpc1",
+          PhysicalResourceId: "vpc-current1",
+          ResourceType: "AWS::EC2::VPC",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      // Inject a previous plan that ALREADY had an orphan (from run N-1).
+      // The current run's mapped does not include the orphan, so the orphan
+      // should be carried forward in the new plan's orphans[].
+      // deno-lint-ignore no-explicit-any
+      const ctxAny = context as any;
+      ctxAny.readResource = (_instance: string) =>
+        Promise.resolve({
+          mapped: [
+            {
+              logicalId: "Vpc1",
+              physicalId: "vpc-current1",
+              cfnType: "AWS::EC2::VPC",
+              swampType: "@swamp/aws/ec2/vpc",
+              modelName: "adopt-vpc-e05d7693",
+              parentStackName: "my-stack",
+              depth: 0,
+              getCommand: "",
+            },
+          ],
+          orphans: [
+            {
+              modelName: "adopt-vpc-orphan-from-prior-run",
+              cfnType: "AWS::EC2::VPC",
+              physicalId: "vpc-old999",
+              note: "in previous plan but missing from current stack",
+            },
+          ],
+        });
+
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        {
+          stackName: "my-stack",
+          includeNested: true,
+          maxDepth: 3,
+          prefix: "adopt",
+        },
+        ctxAny as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        orphans: Array<{ modelName: string }>;
+      };
+      // The previously-flagged orphan should still be in orphans[].
+      assertEquals(data.orphans.length, 1);
+      assertEquals(
+        data.orphans[0].modelName,
+        "adopt-vpc-orphan-from-prior-run",
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test("plan_stack_adoption schema rejects ARN as stackName", () => {
+  const result = modelForCfn.methods.plan_stack_adoption.arguments.safeParse({
+    stackName:
+      "arn:aws:cloudformation:us-east-1:123456789012:stack/my-stack/uuid",
+    includeNested: true,
+    maxDepth: 3,
+    prefix: "adopt",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("plan_stack_adoption schema accepts valid CFN stack name", () => {
+  const result = modelForCfn.methods.plan_stack_adoption.arguments.safeParse({
+    stackName: "my-prod-stack",
+    includeNested: true,
+    maxDepth: 3,
+    prefix: "adopt",
+  });
+  assertEquals(result.success, true);
 });

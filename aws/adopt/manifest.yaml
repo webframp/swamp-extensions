@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/adopt"
-version: "2026.05.21.1"
+version: "2026.05.28.1"
 description: |
   Brownfield adoption of existing AWS infrastructure into swamp models.
   Discovers resources via native SDK calls, generates setup commands,
@@ -26,8 +26,11 @@ models:
   - aws/adopt.ts
 workflows:
   - adopt-stack.yaml
+  - adopt-cfn-stack.yaml
+  - adopt-drift-check.yaml
 reports:
   - adopt_report.ts
+  - adopt_drift_report.ts
 platforms:
   - linux-x86_64
   - linux-aarch64

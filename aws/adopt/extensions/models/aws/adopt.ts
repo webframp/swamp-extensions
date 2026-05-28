@@ -2,6 +2,10 @@
 
 import { z } from "npm:zod@4.3.6";
 import {
+  CloudFormationClient,
+  ListStackResourcesCommand,
+} from "npm:@aws-sdk/client-cloudformation@3.1010.0";
+import {
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
@@ -787,19 +791,352 @@ type MethodContext = {
     instance: string,
     data: unknown,
   ) => Promise<{ name: string }>;
+  readResource?: (
+    instance: string,
+    version?: number,
+  ) => Promise<Record<string, unknown> | null>;
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
+    warn?: (msg: string, props: Record<string, unknown>) => void;
   };
 };
 
 // =============================================================================
-// Model Definition
+// CloudFormation Stack Adoption
 // =============================================================================
+
+/**
+ * Static map of CloudFormation resource types to swamp model types.
+ *
+ * This map is intentionally manual: swamp method context does not expose
+ * a runtime type registry. Adding a new entry is a one-line PR.
+ *
+ * Types not in this map will surface in the plan's `unmapped[]` list,
+ * with a clear reason — they are not silent.
+ */
+export const CFN_TO_SWAMP_TYPE_MAP: Readonly<Record<string, string>> = Object
+  .freeze({
+    "AWS::EC2::VPC": "@swamp/aws/ec2/vpc",
+    "AWS::EC2::Subnet": "@swamp/aws/ec2/subnet",
+    "AWS::EC2::InternetGateway": "@swamp/aws/ec2/internet-gateway",
+    "AWS::EC2::RouteTable": "@swamp/aws/ec2/route-table",
+    "AWS::EC2::SecurityGroup": "@swamp/aws/ec2/security-group",
+    "AWS::EC2::NatGateway": "@swamp/aws/ec2/nat-gateway",
+    "AWS::EC2::EIP": "@swamp/aws/ec2/eip",
+    "AWS::RDS::DBCluster": "@swamp/aws/rds/dbcluster",
+    "AWS::RDS::DBInstance": "@swamp/aws/rds/dbinstance",
+    "AWS::RDS::DBSubnetGroup": "@swamp/aws/rds/dbsubnet-group",
+    "AWS::SecretsManager::Secret": "@swamp/aws/secretsmanager/secret",
+    "AWS::S3::Bucket": "@swamp/aws/s3/bucket",
+    "AWS::Lambda::Function": "@swamp/aws/lambda/function",
+    "AWS::IAM::Role": "@swamp/aws/iam/role",
+  });
+
+/**
+ * Short-name suffix derived from a CFN resource type. Used to construct
+ * deterministic swamp model names from a stack's logical IDs.
+ */
+function shortNameForCfnType(cfnType: string): string {
+  // "AWS::EC2::VPC" -> "vpc", "AWS::SecretsManager::Secret" -> "secret"
+  const parts = cfnType.split("::");
+  const last = parts[parts.length - 1] ?? cfnType;
+  return last.toLowerCase();
+}
+
+/**
+ * Compute a deterministic collision-resistant suffix for a model name from
+ * a physical resource ID. Uses FNV-1a hash of the full ID to avoid collisions
+ * when multiple resources share trailing characters (e.g., Lambda functions
+ * with common suffixes like "service-handler").
+ */
+function modelNameSuffixFromPhysicalId(
+  physicalId: string,
+  _logicalId: string,
+): string {
+  // FNV-1a 32-bit hash → 8 hex chars. Collision-resistant for typical
+  // stack sizes (< 500 resources).
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < physicalId.length; i++) {
+    hash ^= physicalId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * Resource statuses where PhysicalResourceId may be unreliable or missing.
+ * Resources in these states are placed in `skipped[]` rather than `mapped[]`
+ * so the operator can re-run the plan after the stack stabilizes.
+ */
+const UNSTABLE_RESOURCE_STATUSES: ReadonlySet<string> = new Set([
+  "CREATE_IN_PROGRESS",
+  "CREATE_FAILED",
+  "DELETE_IN_PROGRESS",
+  "DELETE_COMPLETE",
+  "DELETE_FAILED",
+  "UPDATE_IN_PROGRESS",
+  "UPDATE_FAILED",
+  "UPDATE_ROLLBACK_IN_PROGRESS",
+  "UPDATE_ROLLBACK_FAILED",
+  "ROLLBACK_IN_PROGRESS",
+  "ROLLBACK_FAILED",
+  "IMPORT_IN_PROGRESS",
+  "IMPORT_FAILED",
+  "IMPORT_ROLLBACK_IN_PROGRESS",
+  "IMPORT_ROLLBACK_FAILED",
+]);
+
+/** A single stack resource as returned by ListStackResources. */
+interface RawStackResource {
+  logicalId: string;
+  physicalId: string;
+  cfnType: string;
+  resourceStatus: string;
+  parentStackName: string;
+  depth: number;
+}
+
+/** Schema for a mapped resource entry in the plan output. */
+const MappedResourceSchema = z.object({
+  logicalId: z.string(),
+  physicalId: z.string(),
+  cfnType: z.string(),
+  swampType: z.string(),
+  modelName: z.string(),
+  parentStackName: z.string(),
+  depth: z.number(),
+  getCommand: z.string(),
+});
+
+/** Schema for an unmapped resource (no swamp type known). */
+const UnmappedResourceSchema = z.object({
+  logicalId: z.string(),
+  physicalId: z.string(),
+  cfnType: z.string(),
+  parentStackName: z.string(),
+  depth: z.number(),
+  reason: z.string(),
+});
+
+/** Schema for a skipped resource (unstable status, missing physical ID). */
+const SkippedResourceSchema = z.object({
+  logicalId: z.string(),
+  cfnType: z.string(),
+  resourceStatus: z.string(),
+  parentStackName: z.string(),
+  reason: z.string(),
+});
+
+/** Schema for an orphan: present in previous plan but missing from current. */
+const OrphanResourceSchema = z.object({
+  modelName: z.string(),
+  cfnType: z.string(),
+  physicalId: z.string(),
+  note: z.string(),
+});
+
+/** Schema for the full stack adoption plan stored as data. */
+const StackAdoptionPlanSchema = z.object({
+  stackName: z.string(),
+  region: z.string(),
+  fetchedAt: z.string(),
+  truncated: z.boolean(),
+  nestedStacksProcessed: z.number(),
+  mapped: z.array(MappedResourceSchema),
+  unmapped: z.array(UnmappedResourceSchema),
+  skipped: z.array(SkippedResourceSchema),
+  orphans: z.array(OrphanResourceSchema),
+  summary: z.object({
+    totalResources: z.number(),
+    mapped: z.number(),
+    unmapped: z.number(),
+    skipped: z.number(),
+    orphans: z.number(),
+    coveragePercent: z.number(),
+    byCfnType: z.record(z.string(), z.number()),
+  }),
+});
+
+/**
+ * Maximum number of pages to fetch per ListStackResources call.
+ * AWS returns up to 100 resources per page; 5 pages = 500 resources per
+ * stack, which is well above CFN's per-stack limit (500). We still cap to
+ * surface unexpectedly large results as `truncated`.
+ */
+const MAX_LIST_RESOURCES_PAGES = 10;
+
+/**
+ * Recursively list all resources in a CloudFormation stack and its nested
+ * stacks. Filters resources with unstable statuses into a separate list
+ * with their reason recorded.
+ *
+ * Returns:
+ * - resources[]: stable resources usable for mapping
+ * - skipped[]: resources with unstable status or missing physicalId
+ * - truncated: true if any single stack hit MAX_LIST_RESOURCES_PAGES
+ * - nestedCount: number of nested stacks recursed into
+ */
+async function listStackResourcesRecursive(
+  cfn: CloudFormationClient,
+  stackName: string,
+  options: {
+    includeNested: boolean;
+    maxDepth: number;
+    currentDepth?: number;
+    visited?: Set<string>;
+  },
+): Promise<{
+  resources: RawStackResource[];
+  skipped: z.infer<typeof SkippedResourceSchema>[];
+  truncated: boolean;
+  nestedCount: number;
+}> {
+  const currentDepth = options.currentDepth ?? 0;
+  const visited = options.visited ?? new Set<string>();
+
+  if (visited.has(stackName)) {
+    return { resources: [], skipped: [], truncated: false, nestedCount: 0 };
+  }
+  visited.add(stackName);
+
+  const resources: RawStackResource[] = [];
+  const skipped: z.infer<typeof SkippedResourceSchema>[] = [];
+  const nestedStackNames: string[] = [];
+  let nextToken: string | undefined;
+  let pages = 0;
+  let truncated = false;
+  let nestedCount = 0;
+
+  do {
+    const response = await cfn.send(
+      new ListStackResourcesCommand({
+        StackName: stackName,
+        NextToken: nextToken,
+      }),
+    );
+    for (const r of response.StackResourceSummaries ?? []) {
+      if (!r.LogicalResourceId || !r.ResourceType) continue;
+      const status = r.ResourceStatus ?? "UNKNOWN";
+      const physicalId = r.PhysicalResourceId ?? "";
+
+      if (!physicalId || UNSTABLE_RESOURCE_STATUSES.has(status)) {
+        skipped.push({
+          logicalId: r.LogicalResourceId,
+          cfnType: r.ResourceType,
+          resourceStatus: status,
+          parentStackName: stackName,
+          reason: !physicalId
+            ? `no PhysicalResourceId (status: ${status})`
+            : `unstable status: ${status}`,
+        });
+        continue;
+      }
+
+      resources.push({
+        logicalId: r.LogicalResourceId,
+        physicalId,
+        cfnType: r.ResourceType,
+        resourceStatus: status,
+        parentStackName: stackName,
+        depth: currentDepth,
+      });
+
+      if (
+        r.ResourceType === "AWS::CloudFormation::Stack" &&
+        options.includeNested &&
+        currentDepth < options.maxDepth
+      ) {
+        // PhysicalResourceId for a nested stack is its full ARN:
+        // arn:aws:cloudformation:region:account:stack/<name>/<uuid>
+        // Extract the stack name (second-to-last segment after splitting on /).
+        const arnParts = physicalId.split("/");
+        const nestedName = arnParts.length >= 2
+          ? arnParts[arnParts.length - 2]
+          : physicalId;
+        if (nestedName) nestedStackNames.push(nestedName);
+      }
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < MAX_LIST_RESOURCES_PAGES);
+
+  if (nextToken) truncated = true;
+
+  for (const nested of nestedStackNames) {
+    nestedCount++;
+    const sub = await listStackResourcesRecursive(cfn, nested, {
+      includeNested: options.includeNested,
+      maxDepth: options.maxDepth,
+      currentDepth: currentDepth + 1,
+      visited,
+    });
+    resources.push(...sub.resources);
+    skipped.push(...sub.skipped);
+    if (sub.truncated) truncated = true;
+    nestedCount += sub.nestedCount;
+  }
+
+  return { resources, skipped, truncated, nestedCount };
+}
+
+/**
+ * Build a swamp `model method run get` command for a mapped resource.
+ * The identifier is the CFN PhysicalResourceId.
+ */
+function buildGetCommand(
+  modelName: string,
+  physicalId: string,
+): string {
+  return `swamp model method run ${shellQuote(modelName)} get ` +
+    `--input identifier=${shellQuote(physicalId)}`;
+}
+
+/**
+ * Compare a previous plan's `mapped[]` against the current one and return
+ * orphans — resources that were in the previous plan but are no longer
+ * present in the current stack. Comparison key is `modelName`.
+ */
+function findOrphans(
+  previous: z.infer<typeof MappedResourceSchema>[] | undefined,
+  current: z.infer<typeof MappedResourceSchema>[],
+): z.infer<typeof OrphanResourceSchema>[] {
+  if (!previous || previous.length === 0) return [];
+  const currentNames = new Set(current.map((r) => r.modelName));
+  const orphans: z.infer<typeof OrphanResourceSchema>[] = [];
+  for (const prev of previous) {
+    if (!currentNames.has(prev.modelName)) {
+      orphans.push({
+        modelName: prev.modelName,
+        cfnType: prev.cfnType,
+        physicalId: prev.physicalId,
+        note: "in previous plan but missing from current stack",
+      });
+    }
+  }
+  return orphans;
+}
+
+/**
+ * Sanitize a stack name for use as a swamp data instance name.
+ *
+ * CloudFormation stack names are restricted to `[a-zA-Z][-a-zA-Z0-9]*`
+ * (max 128 chars), which is already a valid swamp instance name. This
+ * function is a defense-in-depth no-op for valid inputs; it only matters
+ * if a caller bypasses the input schema and passes a stack ARN or other
+ * non-standard identifier. The workflow CEL expression in
+ * `@webframp/adopt-cfn-stack` constructs the same name without
+ * sanitization, so passing non-standard inputs will cause the workflow's
+ * data lookup to miss — the input schema rejects such inputs to prevent
+ * that mismatch.
+ */
+function planInstanceName(stackName: string): string {
+  return `plan-${stackName.replace(/[^a-zA-Z0-9-]/g, "-")}`;
+}
 
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.05.21.1",
+  version: "2026.05.28.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -814,6 +1151,13 @@ export const model = {
       description: "Single resource-type discovery result",
       schema: PartialDiscoverySchema,
       lifetime: "24h" as const,
+      garbageCollection: 10,
+    },
+    stackPlan: {
+      description:
+        "CloudFormation stack adoption plan with mapped/unmapped/skipped/orphan resources",
+      schema: StackAdoptionPlanSchema,
+      lifetime: "7d" as const,
       garbageCollection: 10,
     },
   },
@@ -1354,6 +1698,238 @@ export const model = {
           ec2.destroy();
           rds.destroy();
           sm.destroy();
+        }
+      },
+    },
+
+    plan_stack_adoption: {
+      description:
+        "Enumerate all resources in a CloudFormation stack, map to swamp types, and build an adoption plan",
+      arguments: z.object({
+        stackName: z.string()
+          .min(1)
+          .max(128)
+          .regex(
+            /^[a-zA-Z][-a-zA-Z0-9]*$/,
+            "stackName must match CloudFormation stack name format: " +
+              "start with a letter, then alphanumerics and hyphens. " +
+              "Pass the stack name, not its ARN.",
+          )
+          .describe("CloudFormation stack name (not ARN)"),
+        includeNested: z.boolean()
+          .default(true)
+          .describe("Recurse into AWS::CloudFormation::Stack resources"),
+        maxDepth: z.number()
+          .int()
+          .min(0)
+          .max(10)
+          .default(3)
+          .describe("Nested stack recursion limit"),
+        prefix: z.string()
+          .regex(
+            /^[a-z0-9][a-z0-9-]*$/,
+            "prefix must be lowercase alphanumeric and hyphens only",
+          )
+          .default("adopt")
+          .describe("Prefix for generated swamp model names"),
+      }),
+      execute: async (
+        args: {
+          stackName: string;
+          includeNested: boolean;
+          maxDepth: number;
+          prefix: string;
+        },
+        context: MethodContext,
+      ) => {
+        const region = context.globalArgs.region;
+        const cfn = new CloudFormationClient({ region });
+
+        try {
+          context.logger.info(
+            "Planning CFN stack adoption: {stackName} ({region})",
+            { stackName: args.stackName, region },
+          );
+
+          // Read previous plan for orphan detection (best-effort).
+          // Orphans are computed against the union of the previous plan's
+          // mapped[] and orphans[] so resources stay flagged across runs
+          // until the operator either adopts them or removes the model
+          // manually. If we only checked mapped[], an orphan flagged in
+          // run N would silently disappear from run N+1's plan.
+          const instanceName = planInstanceName(args.stackName);
+          let previousMapped:
+            | z.infer<typeof MappedResourceSchema>[]
+            | undefined;
+          let previousOrphans:
+            | z.infer<typeof OrphanResourceSchema>[]
+            | undefined;
+          if (context.readResource) {
+            try {
+              const prev = await context.readResource(instanceName);
+              if (prev && Array.isArray(prev.mapped)) {
+                previousMapped = prev.mapped as z.infer<
+                  typeof MappedResourceSchema
+                >[];
+              }
+              if (prev && Array.isArray(prev.orphans)) {
+                previousOrphans = prev.orphans as z.infer<
+                  typeof OrphanResourceSchema
+                >[];
+              }
+            } catch {
+              // No previous plan, or unreadable. Proceed without orphan info.
+            }
+          }
+
+          // Enumerate stack resources (recursive into nested stacks).
+          const { resources, skipped, truncated, nestedCount } =
+            await listStackResourcesRecursive(cfn, args.stackName, {
+              includeNested: args.includeNested,
+              maxDepth: args.maxDepth,
+            });
+
+          // Map each resource to a swamp type or mark as unmapped.
+          const mapped: z.infer<typeof MappedResourceSchema>[] = [];
+          const unmapped: z.infer<typeof UnmappedResourceSchema>[] = [];
+          for (const r of resources) {
+            // Nested stacks are recursed into, not adopted as a model.
+            if (r.cfnType === "AWS::CloudFormation::Stack") continue;
+            // Custom resources (no AWS:: prefix or Custom:: prefix) are not
+            // mappable to a generic swamp type — flag for operator review.
+            if (r.cfnType.startsWith("Custom::")) {
+              unmapped.push({
+                logicalId: r.logicalId,
+                physicalId: r.physicalId,
+                cfnType: r.cfnType,
+                parentStackName: r.parentStackName,
+                depth: r.depth,
+                reason: "custom resource (no swamp type)",
+              });
+              continue;
+            }
+            const swampType = CFN_TO_SWAMP_TYPE_MAP[r.cfnType];
+            if (!swampType) {
+              unmapped.push({
+                logicalId: r.logicalId,
+                physicalId: r.physicalId,
+                cfnType: r.cfnType,
+                parentStackName: r.parentStackName,
+                depth: r.depth,
+                reason: `no swamp type registered for ${r.cfnType}`,
+              });
+              continue;
+            }
+            const shortName = shortNameForCfnType(r.cfnType);
+            const suffix = modelNameSuffixFromPhysicalId(
+              r.physicalId,
+              r.logicalId,
+            );
+            const modelName = `${args.prefix}-${shortName}-${suffix}`;
+            mapped.push({
+              logicalId: r.logicalId,
+              physicalId: r.physicalId,
+              cfnType: r.cfnType,
+              swampType,
+              modelName,
+              parentStackName: r.parentStackName,
+              depth: r.depth,
+              getCommand: buildGetCommand(modelName, r.physicalId),
+            });
+          }
+
+          // Detect orphans: in previous plan but not in current.
+          // Carry forward previously-flagged orphans that are still missing
+          // so the operator sees them every run until acted upon.
+          const newOrphans = findOrphans(previousMapped, mapped);
+          const currentNames = new Set(mapped.map((r) => r.modelName));
+          const carriedOrphans = (previousOrphans ?? []).filter(
+            (o) => !currentNames.has(o.modelName),
+          );
+          // Merge by modelName, preferring the new orphan entry (fresher note).
+          const orphanMap = new Map<
+            string,
+            z.infer<typeof OrphanResourceSchema>
+          >();
+          for (const o of carriedOrphans) orphanMap.set(o.modelName, o);
+          for (const o of newOrphans) orphanMap.set(o.modelName, o);
+          const orphans = Array.from(orphanMap.values());
+
+          // Build summary.
+          // byCfnType counts only resources that contributed to the plan
+          // (mapped, unmapped, skipped). AWS::CloudFormation::Stack
+          // containers are filtered (recursed into, not adopted) so they
+          // are intentionally excluded from this count to keep the
+          // totalResources sum consistent.
+          const byCfnType: Record<string, number> = {};
+          for (const r of resources) {
+            if (r.cfnType === "AWS::CloudFormation::Stack") continue;
+            byCfnType[r.cfnType] = (byCfnType[r.cfnType] ?? 0) + 1;
+          }
+          for (const r of skipped) {
+            if (r.cfnType === "AWS::CloudFormation::Stack") continue;
+            byCfnType[r.cfnType] = (byCfnType[r.cfnType] ?? 0) + 1;
+          }
+          // totalResources excludes AWS::CloudFormation::Stack entries
+          // (they are recursed into, not adopted) so the sum of byCfnType
+          // values equals totalResources and coveragePercent is accurate.
+          const skippedCount = skipped.filter(
+            (r) => r.cfnType !== "AWS::CloudFormation::Stack",
+          ).length;
+          const totalResources = mapped.length + unmapped.length +
+            skippedCount;
+          const coveragePercent = totalResources > 0
+            ? Math.round((mapped.length / totalResources) * 100)
+            : 0;
+
+          const handle = await context.writeResource(
+            "stackPlan",
+            instanceName,
+            {
+              stackName: args.stackName,
+              region,
+              fetchedAt: new Date().toISOString(),
+              truncated,
+              nestedStacksProcessed: nestedCount,
+              mapped,
+              unmapped,
+              skipped,
+              orphans,
+              summary: {
+                totalResources,
+                mapped: mapped.length,
+                unmapped: unmapped.length,
+                skipped: skippedCount,
+                orphans: orphans.length,
+                coveragePercent,
+                byCfnType,
+              },
+            },
+          );
+
+          context.logger.info(
+            "Stack adoption plan ready: {mapped} mapped, {unmapped} unmapped, " +
+              "{skipped} skipped, {orphans} orphans ({coverage}% coverage)",
+            {
+              mapped: mapped.length,
+              unmapped: unmapped.length,
+              skipped: skipped.length,
+              orphans: orphans.length,
+              coverage: coveragePercent,
+              stackName: args.stackName,
+            },
+          );
+
+          if (truncated && context.logger.warn) {
+            context.logger.warn(
+              "Stack resource listing was truncated — increase MAX_LIST_RESOURCES_PAGES or reduce stack size",
+              { stackName: args.stackName },
+            );
+          }
+
+          return { dataHandles: [handle] };
+        } finally {
+          cfn.destroy();
         }
       },
     },
