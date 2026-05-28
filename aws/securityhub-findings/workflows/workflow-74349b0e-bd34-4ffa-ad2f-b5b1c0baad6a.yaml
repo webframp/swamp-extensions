@@ -62,6 +62,7 @@ jobs:
             startTime: ${{ inputs.startTime }}
             limit: 50
       - name: diff_findings
+        allowFailure: true
         description: Identify new and resolved findings since last run
         task:
           type: model_method
@@ -72,6 +73,7 @@ jobs:
             limit: 100
       - name: by_type
         description: Group findings by type for pattern analysis
+        allowFailure: true
         task:
           type: model_method
           modelIdOrName: ${{ inputs.modelName }}
