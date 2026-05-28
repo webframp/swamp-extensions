@@ -905,7 +905,6 @@ const MappedResourceSchema = z.object({
   modelName: z.string(),
   parentStackName: z.string(),
   depth: z.number(),
-  setupCommandTemplate: z.string(),
   getCommand: z.string(),
 });
 
@@ -1078,23 +1077,6 @@ async function listStackResourcesRecursive(
   }
 
   return { resources, skipped, truncated, nestedCount };
-}
-
-/**
- * Build a swamp `model create` command template for a mapped resource.
- * Intentionally includes only the `name` global-arg (required by all types).
- * Most types need additional args (VpcId, CidrBlock, Engine, etc.) that are
- * not available from ListStackResources alone — the operator must consult
- * `swamp model type describe <type>` to fill in required args.
- */
-function buildSetupCommand(
-  swampType: string,
-  modelName: string,
-): string {
-  return `swamp model create ${swampType} ${shellQuote(modelName)} ` +
-    `--global-arg name=${
-      shellQuote(modelName)
-    } # add required global-args per type`;
 }
 
 /**
@@ -1852,7 +1834,6 @@ export const model = {
               modelName,
               parentStackName: r.parentStackName,
               depth: r.depth,
-              setupCommandTemplate: buildSetupCommand(swampType, modelName),
               getCommand: buildGetCommand(modelName, r.physicalId),
             });
           }
@@ -1889,8 +1870,14 @@ export const model = {
             if (r.cfnType === "AWS::CloudFormation::Stack") continue;
             byCfnType[r.cfnType] = (byCfnType[r.cfnType] ?? 0) + 1;
           }
+          // totalResources excludes AWS::CloudFormation::Stack entries
+          // (they are recursed into, not adopted) so the sum of byCfnType
+          // values equals totalResources and coveragePercent is accurate.
+          const skippedCount = skipped.filter(
+            (r) => r.cfnType !== "AWS::CloudFormation::Stack",
+          ).length;
           const totalResources = mapped.length + unmapped.length +
-            skipped.length;
+            skippedCount;
           const coveragePercent = totalResources > 0
             ? Math.round((mapped.length / totalResources) * 100)
             : 0;
@@ -1912,7 +1899,7 @@ export const model = {
                 totalResources,
                 mapped: mapped.length,
                 unmapped: unmapped.length,
-                skipped: skipped.length,
+                skipped: skippedCount,
                 orphans: orphans.length,
                 coveragePercent,
                 byCfnType,

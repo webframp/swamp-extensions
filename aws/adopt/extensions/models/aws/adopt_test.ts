@@ -1138,7 +1138,6 @@ Deno.test({
               modelName: "adopt-vpc-e05d7693",
               parentStackName: "my-stack",
               depth: 0,
-              setupCommandTemplate: "",
               getCommand: "",
             },
             {
@@ -1149,7 +1148,6 @@ Deno.test({
               modelName: "adopt-vpc-0eaa033c",
               parentStackName: "my-stack",
               depth: 0,
-              setupCommandTemplate: "",
               getCommand: "",
             },
           ],
@@ -1201,16 +1199,16 @@ Deno.test({
         context as ExecuteContext,
       );
       const mapped = ((getWrittenResources() as WrittenResource[])[0].data as {
-        mapped: Array<{ setupCommandTemplate: string; getCommand: string }>;
+        mapped: Array<
+          { getCommand: string; swampType: string; modelName: string }
+        >;
       }).mapped;
       assertEquals(
-        mapped[0].setupCommandTemplate.includes(
-          "swamp model create @swamp/aws/ec2/vpc",
-        ),
-        true,
+        mapped[0].swampType,
+        "@swamp/aws/ec2/vpc",
       );
       assertEquals(
-        mapped[0].setupCommandTemplate.includes("'adopt-vpc-"),
+        mapped[0].modelName.startsWith("adopt-vpc-"),
         true,
       );
       assertEquals(
@@ -1322,7 +1320,6 @@ Deno.test({
               modelName: "adopt-vpc-e05d7693",
               parentStackName: "my-stack",
               depth: 0,
-              setupCommandTemplate: "",
               getCommand: "",
             },
           ],

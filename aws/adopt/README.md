@@ -90,9 +90,8 @@ Inputs:
 
 Output (stored as the `stackPlan` resource):
 
-- `mapped[]` — resources with a known swamp type, including pre-built
-  `setupCommandTemplate` (requires additional global-args per type) and
-  `getCommand` strings
+- `mapped[]` — resources with a known swamp type, model name, physical ID,
+  and `getCommand` for adoption
 - `unmapped[]` — resources with no swamp equivalent (e.g.,
   `AWS::Kinesis::Stream`, `Custom::*` resources)
 - `skipped[]` — resources in unstable states (`CREATE_IN_PROGRESS`,
@@ -114,11 +113,10 @@ swamp workflow run @webframp/adopt-cfn-stack \
 
 The workflow produces the plan, then runs `get` on each mapped resource's
 swamp model. Models that don't yet exist will surface as failed steps (with
-`allowFailure: true` so the workflow continues). Inspect the plan output, use
-the `setupCommandTemplate` strings as a starting point (adding required
-global-args per type via `swamp model type describe <type>`), then re-run
-the workflow — on the second pass, all `get` calls succeed and live state is
-captured.
+`allowFailure: true` so the workflow continues). Create the required models
+using `swamp model type describe <swampType>` to determine required
+global-args, then re-run the workflow — on the second pass, all `get` calls
+succeed and live state is captured.
 
 ### Supported CloudFormation types
 
