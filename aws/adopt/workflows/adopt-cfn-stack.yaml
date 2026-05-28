@@ -1,0 +1,95 @@
+id: c0875484-1d77-4a65-8779-d5e5c4626b81
+name: "@webframp/adopt-cfn-stack"
+description: |
+  Adopt all resources defined in a CloudFormation stack into swamp typed
+  data, comparing the stack's resource list against live AWS state.
+
+  How it works:
+  - Job 1 runs plan_stack_adoption to enumerate stack resources (recursively
+    into nested stacks), map them to swamp types, and produce an adoption plan.
+  - Job 2 iterates over the plan's mapped[] resources and runs `get` on each
+    pre-existing swamp model to refresh its live state. Steps allow failure
+    so missing models on the first run don't fail the entire workflow.
+
+  Two-run pattern:
+  - First run: the plan is produced; execute job will skip steps whose target
+    swamp model doesn't yet exist. Inspect the plan and run the printed
+    setupCommands to create models.
+  - Second run: all swamp models exist; execute job adopts live state for
+    every mapped resource.
+
+  Usage:
+    swamp workflow run @webframp/adopt-cfn-stack \
+      --input modelName=my-adopt \
+      --input stackName=my-prod-stack
+
+    # Larger stack with nested stacks (override defaults):
+    swamp workflow run @webframp/adopt-cfn-stack \
+      --input modelName=my-adopt \
+      --input stackName=parent-stack \
+      --input maxDepth=5 \
+      --input prefix=prod
+tags:
+  aws: "true"
+  adoption: "true"
+  brownfield: "true"
+  cloudformation: "true"
+inputs:
+  properties:
+    modelName:
+      type: string
+      description: Name of the @webframp/aws/adopt model instance to use
+    stackName:
+      type: string
+      description: CloudFormation stack name or ID to adopt
+    includeNested:
+      type: boolean
+      default: true
+      description: Recurse into nested AWS::CloudFormation::Stack resources
+    maxDepth:
+      type: integer
+      default: 3
+      description: Nested stack recursion limit
+    prefix:
+      type: string
+      default: adopt
+      description: Prefix for generated swamp model names
+  required:
+    - modelName
+    - stackName
+jobs:
+  - name: plan
+    description: Enumerate stack resources and build adoption plan
+    steps:
+      - name: plan-resources
+        description: Map CloudFormation resources to swamp types
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: plan_stack_adoption
+          inputs:
+            stackName: ${{ inputs.stackName }}
+            includeNested: ${{ inputs.includeNested }}
+            maxDepth: ${{ inputs.maxDepth }}
+            prefix: ${{ inputs.prefix }}
+
+  - name: execute
+    description: Refresh live state on each mapped swamp model
+    dependsOn:
+      - job: plan
+        condition:
+          type: completed
+    steps:
+      - name: get-${{ self.resource.logicalId }}
+        description: Adopt ${{ self.resource.cfnType }} via its swamp model
+        forEach:
+          item: resource
+          in: ${{ data.latest(inputs.modelName, "plan-" + inputs.stackName).attributes.mapped }}
+        task:
+          type: model_method
+          modelIdOrName: ${{ self.resource.modelName }}
+          methodName: get
+          inputs:
+            identifier: ${{ self.resource.physicalId }}
+        allowFailure: true
+version: 1
