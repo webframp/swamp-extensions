@@ -100,8 +100,28 @@ function truncateValue(value: unknown, maxLen = 40): string {
 }
 
 /**
+ * Recursively serialize a value with sorted object keys for stable comparison.
+ * Ensures {a:1, b:2} and {b:2, a:1} produce identical strings.
+ */
+function canonicalJson(v: unknown): string {
+  if (v === null || v === undefined) return "null";
+  if (Array.isArray(v)) {
+    return "[" + v.map(canonicalJson).join(",") + "]";
+  }
+  if (typeof v === "object") {
+    const obj = v as Record<string, unknown>;
+    return "{" + Object.keys(obj).sort()
+      .map((k) => JSON.stringify(k) + ":" + canonicalJson(obj[k]))
+      .join(",") +
+      "}";
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+/**
  * Deep-diff two plain objects. Returns a list of field paths that differ.
- * Only compares top-level and one level deep (sufficient for AWS resource state).
+ * Uses canonical JSON serialization (sorted keys) to avoid false positives
+ * from non-deterministic key ordering in AWS SDK responses.
  */
 function diffObjects(
   stored: Record<string, unknown>,
@@ -113,7 +133,7 @@ function diffObjects(
   for (const key of allKeys) {
     const a = stored[key];
     const b = live[key];
-    if (JSON.stringify(a) !== JSON.stringify(b)) {
+    if (canonicalJson(a) !== canonicalJson(b)) {
       diffs.push({ field: key, stored: a, live: b });
     }
   }
@@ -322,6 +342,9 @@ export const report = {
       );
 
       if (!storedData) {
+        // Previous version may have been garbage-collected. We cannot
+        // determine drift without a baseline, so report as unchanged
+        // with a note that history was unavailable.
         resources.push({
           modelName: resource.modelName,
           logicalId: resource.logicalId,

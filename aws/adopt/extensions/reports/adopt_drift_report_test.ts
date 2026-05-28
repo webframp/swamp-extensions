@@ -255,3 +255,59 @@ Deno.test("handles failed plan step gracefully", async () => {
   assertStringIncludes(result.markdown, "Plan step did not succeed");
   assertEquals(result.json.summary.total, 0);
 });
+
+Deno.test("no false drift from reordered object keys", async () => {
+  const ctx = makeContext(
+    [
+      {
+        jobName: "plan",
+        stepName: "plan-resources",
+        modelName: "adopt-test",
+        modelType: "@webframp/aws/adopt",
+        modelId: "m-adopt",
+        methodName: "plan_stack_adoption",
+        status: "succeeded",
+        dataHandles: [{ name: "plan-my-stack", dataId: "d1", version: 1 }],
+      },
+      {
+        jobName: "sync-all",
+        stepName: "sync-TestSg",
+        modelName: "test-sg-abc",
+        modelType: "@swamp/aws/ec2/security-group",
+        modelId: "m-sg",
+        methodName: "sync",
+        status: "succeeded",
+        dataHandles: [{ name: "test-sg-abc", dataId: "d2", version: 2 }],
+      },
+    ],
+    {
+      "plan-my-stack@1": {
+        stackName: "my-stack",
+        mapped: [
+          {
+            logicalId: "TestSg",
+            modelName: "test-sg-abc",
+            cfnType: "AWS::EC2::SecurityGroup",
+            physicalId: "sg-1",
+          },
+        ],
+        orphans: [],
+      },
+      // Keys in different order between versions — should NOT be flagged as drift
+      "test-sg-abc@2": {
+        GroupId: "sg-1",
+        Tags: { app: "web", env: "prod" },
+        VpcId: "vpc-1",
+      },
+      "test-sg-abc@1": {
+        VpcId: "vpc-1",
+        GroupId: "sg-1",
+        Tags: { env: "prod", app: "web" },
+      },
+    },
+  );
+
+  const result = await report.execute(ctx);
+  assertEquals(result.json.summary.drifted, 0);
+  assertEquals(result.json.summary.unchanged, 1);
+});

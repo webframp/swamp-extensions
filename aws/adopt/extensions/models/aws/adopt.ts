@@ -1880,6 +1880,7 @@ export const model = {
             byCfnType[r.cfnType] = (byCfnType[r.cfnType] ?? 0) + 1;
           }
           for (const r of skipped) {
+            if (r.cfnType === "AWS::CloudFormation::Stack") continue;
             byCfnType[r.cfnType] = (byCfnType[r.cfnType] ?? 0) + 1;
           }
           const totalResources = mapped.length + unmapped.length +
