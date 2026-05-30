@@ -176,6 +176,8 @@ Deno.test("model defines all expected methods", () => {
     "list_s3",
     "list_ebs",
     "inventory_all",
+    "inventory_scan",
+    "inventory_diff",
   ];
   for (const method of expectedMethods) {
     assertEquals(method in model.methods, true, `missing method: ${method}`);
@@ -668,6 +670,404 @@ Deno.test({
       };
       assertEquals(data.resources.s3, undefined);
       assertEquals(data.count, 4);
+    } finally {
+      restore();
+    }
+  },
+});
+
+// =============================================================================
+// inventory_scan and inventory_diff Tests
+// =============================================================================
+
+import { ResourceExplorer2Client } from "npm:@aws-sdk/client-resource-explorer-2@3.1010.0";
+import { ConfigServiceClient } from "npm:@aws-sdk/client-config-service@3.1010.0";
+import { ResourceGroupsTaggingAPIClient } from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1010.0";
+
+function mockScanClients(overrides: {
+  re2?: (cmd: unknown) => unknown;
+  config?: (cmd: unknown) => unknown;
+  tag?: (cmd: unknown) => unknown;
+}): () => void {
+  const originals = {
+    re2: ResourceExplorer2Client.prototype.send,
+    config: ConfigServiceClient.prototype.send,
+    tag: ResourceGroupsTaggingAPIClient.prototype.send,
+    re2Destroy: ResourceExplorer2Client.prototype.destroy,
+    configDestroy: ConfigServiceClient.prototype.destroy,
+    tagDestroy: ResourceGroupsTaggingAPIClient.prototype.destroy,
+  };
+  ResourceExplorer2Client.prototype.destroy = function () {};
+  ConfigServiceClient.prototype.destroy = function () {};
+  ResourceGroupsTaggingAPIClient.prototype.destroy = function () {};
+  if (overrides.re2) {
+    // deno-lint-ignore no-explicit-any
+    ResourceExplorer2Client.prototype.send = function (_c: any) {
+      return Promise.resolve(overrides.re2!(_c));
+    } as typeof originals.re2;
+  } else {
+    // deno-lint-ignore no-explicit-any
+    ResourceExplorer2Client.prototype.send = function (_c: any) {
+      return Promise.reject(new Error("ResourceExplorer not enabled"));
+    } as typeof originals.re2;
+  }
+  if (overrides.config) {
+    // deno-lint-ignore no-explicit-any
+    ConfigServiceClient.prototype.send = function (_c: any) {
+      return Promise.resolve(overrides.config!(_c));
+    } as typeof originals.config;
+  } else {
+    // deno-lint-ignore no-explicit-any
+    ConfigServiceClient.prototype.send = function (_c: any) {
+      return Promise.reject(new Error("Config not enabled"));
+    } as typeof originals.config;
+  }
+  if (overrides.tag) {
+    // deno-lint-ignore no-explicit-any
+    ResourceGroupsTaggingAPIClient.prototype.send = function (_c: any) {
+      return Promise.resolve(overrides.tag!(_c));
+    } as typeof originals.tag;
+  }
+  return () => {
+    ResourceExplorer2Client.prototype.send = originals.re2;
+    ConfigServiceClient.prototype.send = originals.config;
+    ResourceGroupsTaggingAPIClient.prototype.send = originals.tag;
+    ResourceExplorer2Client.prototype.destroy = originals.re2Destroy;
+    ConfigServiceClient.prototype.destroy = originals.configDestroy;
+    ResourceGroupsTaggingAPIClient.prototype.destroy = originals.tagDestroy;
+  };
+}
+
+function makeScanContext() {
+  return createModelTestContext({
+    globalArgs: { region: "us-east-1" },
+    definition: {
+      id: "test-scan",
+      name: "inv-scan-test",
+      version: 1,
+      tags: {},
+    },
+  });
+}
+
+// deno-lint-ignore no-explicit-any
+type AnyContext = any;
+
+Deno.test({
+  name: "inventory_scan uses Resource Explorer when available",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockScanClients({
+      re2: () => ({
+        Resources: [
+          {
+            Arn: "arn:aws:ec2:us-east-1:123456789012:vpc/vpc-abc",
+            ResourceType: "ec2:vpc",
+            Properties: [],
+          },
+          {
+            Arn: "arn:aws:ecs:us-east-1:123456789012:service/my-svc",
+            ResourceType: "ecs:service",
+            Properties: [],
+          },
+        ],
+      }),
+    });
+    try {
+      const { context, getWrittenResources } = makeScanContext();
+      await model.methods.inventory_scan.execute(
+        { source: "auto" },
+        context as AnyContext,
+      );
+      // deno-lint-ignore no-explicit-any
+      const data = (getWrittenResources() as any[])[0].data as any;
+      assertEquals(data.source, "resource-explorer");
+      assertEquals(data.coverage, "full");
+      assertEquals(data.summary.total, 2);
+      assertEquals(data.summary.modelableCount, 1); // VPC
+      assertEquals(data.summary.unmodeledCount, 1); // ECS::Service
+      assertEquals(data.unmodeledTypes[0].resourceType, "AWS::ECS::Service");
+      assertEquals(data.unmodeledTypes[0].recommendation, "build-extension");
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "inventory_scan falls back to Config when Resource Explorer unavailable",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockScanClients({
+      config: () => ({
+        Results: [
+          JSON.stringify({
+            arn: "arn:aws:s3:::my-bucket",
+            resourceType: "AWS::S3::Bucket",
+            awsRegion: "us-east-1",
+            accountId: "123",
+            tags: { Name: "test" },
+          }),
+        ],
+      }),
+    });
+    try {
+      const { context, getWrittenResources } = makeScanContext();
+      await model.methods.inventory_scan.execute(
+        { source: "auto" },
+        context as AnyContext,
+      );
+      // deno-lint-ignore no-explicit-any
+      const data = (getWrittenResources() as any[])[0].data as any;
+      assertEquals(data.source, "config");
+      assertEquals(data.coverage, "config-tracked");
+      assertEquals(data.summary.total, 1);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "inventory_scan falls back to Tag API when both RE2 and Config unavailable",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockScanClients({
+      tag: () => ({
+        ResourceTagMappingList: [
+          {
+            ResourceARN: "arn:aws:lambda:us-east-1:123:function:my-fn",
+            Tags: [{ Key: "env", Value: "prod" }],
+          },
+        ],
+      }),
+    });
+    try {
+      const { context, getWrittenResources } = makeScanContext();
+      await model.methods.inventory_scan.execute(
+        { source: "auto" },
+        context as AnyContext,
+      );
+      // deno-lint-ignore no-explicit-any
+      const data = (getWrittenResources() as any[])[0].data as any;
+      assertEquals(data.source, "tag-api");
+      assertEquals(data.coverage, "tagged-only");
+      assertEquals(data.summary.total, 1);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "inventory_scan classifies unmodeled types with correct hints",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockScanClients({
+      re2: () => ({
+        Resources: [
+          {
+            Arn: "arn:aws:ec2:us-east-1:123:vpc/vpc-1",
+            ResourceType: "ec2:vpc",
+            Properties: [],
+          },
+          {
+            Arn: "arn:aws:ec2:us-east-1:123:transit-gateway/tgw-1",
+            ResourceType: "ec2:transit-gateway",
+            Properties: [],
+          },
+          {
+            Arn: "arn:aws:medialive:us-east-1:123:channel/ch-1",
+            ResourceType: "medialive:channel",
+            Properties: [],
+          },
+        ],
+      }),
+    });
+    try {
+      const { context, getWrittenResources } = makeScanContext();
+      await model.methods.inventory_scan.execute(
+        { source: "auto" },
+        context as AnyContext,
+      );
+      // deno-lint-ignore no-explicit-any
+      const data = (getWrittenResources() as any[])[0].data as any;
+      const tgw = data.unmodeledTypes.find((t: { resourceType: string }) =>
+        t.resourceType === "AWS::EC2::TransitGateway"
+      );
+      const ml = data.unmodeledTypes.find((t: { resourceType: string }) =>
+        t.resourceType === "AWS::Medialive::Channel"
+      );
+      assertEquals(tgw.recommendation, "extend-existing"); // EC2 namespace exists
+      assertEquals(ml.recommendation, "build-extension"); // MediaLive namespace doesn't exist
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "inventory_diff detects new and removed resources",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockScanClients({
+      re2: () => ({
+        Resources: [
+          {
+            Arn: "arn:aws:ec2:us-east-1:123:vpc/vpc-1",
+            ResourceType: "ec2:vpc",
+            Properties: [],
+          },
+          {
+            Arn: "arn:aws:ec2:us-east-1:123:vpc/vpc-new",
+            ResourceType: "ec2:vpc",
+            Properties: [],
+          },
+        ],
+      }),
+    });
+    try {
+      const { context, getWrittenResources } = makeScanContext();
+      // Inject previous scan via readResource
+      // deno-lint-ignore no-explicit-any
+      const ctxAny = context as any;
+      ctxAny.readResource = (_instance: string) =>
+        Promise.resolve({
+          fetchedAt: "2026-05-28T00:00:00Z",
+          resources: [
+            {
+              arn: "arn:aws:ec2:us-east-1:123:vpc/vpc-1",
+              resourceType: "AWS::EC2::VPC",
+              region: "us-east-1",
+              accountId: "123",
+              tags: {},
+            },
+            {
+              arn: "arn:aws:ec2:us-east-1:123:vpc/vpc-old",
+              resourceType: "AWS::EC2::VPC",
+              region: "us-east-1",
+              accountId: "123",
+              tags: {},
+            },
+          ],
+        });
+
+      await model.methods.inventory_diff.execute(
+        {},
+        ctxAny as AnyContext,
+      );
+      // deno-lint-ignore no-explicit-any
+      const resources = getWrittenResources() as any[];
+      // Find the scanDiff output (not the scan baseline)
+      const diffData = resources.find((r) => r.specName === "scanDiff")?.data;
+      assertEquals(diffData.summary.newCount, 1); // vpc-new
+      assertEquals(diffData.summary.removedCount, 1); // vpc-old
+      assertEquals(
+        diffData.newResources[0].arn,
+        "arn:aws:ec2:us-east-1:123:vpc/vpc-new",
+      );
+      assertEquals(
+        diffData.removedResources[0].arn,
+        "arn:aws:ec2:us-east-1:123:vpc/vpc-old",
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "inventory_diff suppresses output when current scan is truncated",
+  sanitizeResources: false,
+  fn: async () => {
+    // Return enough pages to trigger truncation by returning NextToken
+    let callCount = 0;
+    const restore = mockScanClients({
+      re2: () => {
+        callCount++;
+        if (callCount <= 20) {
+          return {
+            Resources: [{
+              Arn: `arn:aws:ec2:us-east-1:123:vpc/vpc-${callCount}`,
+              ResourceType: "ec2:vpc",
+              Properties: [],
+            }],
+            NextToken: "always-more",
+          };
+        }
+        return { Resources: [] };
+      },
+    });
+    try {
+      const { context, getWrittenResources } = makeScanContext();
+      // deno-lint-ignore no-explicit-any
+      const ctxAny = context as any;
+      ctxAny.readResource = (_instance: string) =>
+        Promise.resolve({
+          fetchedAt: "2026-05-28T00:00:00Z",
+          resources: [
+            {
+              arn: "arn:aws:ec2:us-east-1:123:vpc/vpc-old",
+              resourceType: "AWS::EC2::VPC",
+              region: "us-east-1",
+              accountId: "123",
+              tags: {},
+            },
+          ],
+        });
+
+      await model.methods.inventory_diff.execute(
+        {},
+        ctxAny as AnyContext,
+      );
+      // deno-lint-ignore no-explicit-any
+      const resources = getWrittenResources() as any[];
+      const diffData = resources.find((r) => r.specName === "scanDiff")?.data;
+      // Truncated → suppressed
+      assertEquals(diffData.truncated, true);
+      assertEquals(diffData.noBaseline, false);
+      assertEquals(diffData.summary.newCount, 0);
+      assertEquals(diffData.summary.removedCount, 0);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "inventory_scan Tag API correctly classifies S3 buckets",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockScanClients({
+      tag: () => ({
+        ResourceTagMappingList: [
+          {
+            ResourceARN: "arn:aws:s3:::my-production-bucket",
+            Tags: [{ Key: "env", Value: "prod" }],
+          },
+          {
+            ResourceARN: "arn:aws:s3:::my-staging-bucket",
+            Tags: [{ Key: "env", Value: "staging" }],
+          },
+        ],
+      }),
+    });
+    try {
+      const { context, getWrittenResources } = makeScanContext();
+      await model.methods.inventory_scan.execute(
+        { source: "tag-api" },
+        context as AnyContext,
+      );
+      // deno-lint-ignore no-explicit-any
+      const data = (getWrittenResources() as any[])[0].data as any;
+      // Both S3 buckets should have the same type, not per-bucket types
+      assertEquals(data.resources[0].resourceType, "AWS::S3::Bucket");
+      assertEquals(data.resources[1].resourceType, "AWS::S3::Bucket");
+      // S3::Bucket is in the type map, so both should be modelable
+      assertEquals(data.summary.modelableCount, 2);
+      assertEquals(data.summary.unmodeledCount, 0);
     } finally {
       restore();
     }
