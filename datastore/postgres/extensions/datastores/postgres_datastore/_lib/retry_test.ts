@@ -2,10 +2,7 @@
 // ABOUTME: abort signal support, and PostgreSQL error code classification.
 
 import { assertEquals, assertRejects } from "@std/assert";
-import {
-  isRetryablePgError,
-  retryable,
-} from "./retry.ts";
+import { isRetryablePgError, retryable } from "./retry.ts";
 
 Deno.test("isRetryablePgError: serialization_failure is retryable", () => {
   const err = Object.assign(new Error("serialization"), { code: "40001" });
@@ -156,7 +153,8 @@ Deno.test("retryable: respects abort signal during backoff", async () => {
 
 Deno.test("retryable: maxAttempts must be >= 1", async () => {
   await assertRejects(
-    () => retryable(() => Promise.resolve("x"), { maxAttempts: 0, baseDelayMs: 1 }),
+    () =>
+      retryable(() => Promise.resolve("x"), { maxAttempts: 0, baseDelayMs: 1 }),
     Error,
     "maxAttempts must be >= 1",
   );
