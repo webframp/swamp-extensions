@@ -32,9 +32,9 @@ Deno.test("isRetryablePgError: connection_does_not_exist is retryable", () => {
   assertEquals(isRetryablePgError(err), true);
 });
 
-Deno.test("isRetryablePgError: query_canceled is retryable", () => {
+Deno.test("isRetryablePgError: query_canceled (statement_timeout) is NOT retryable", () => {
   const err = Object.assign(new Error("cancel"), { code: "57014" });
-  assertEquals(isRetryablePgError(err), true);
+  assertEquals(isRetryablePgError(err), false);
 });
 
 Deno.test("isRetryablePgError: auth failure is NOT retryable", () => {

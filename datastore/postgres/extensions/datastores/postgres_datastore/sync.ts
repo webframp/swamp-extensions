@@ -128,6 +128,11 @@ export function createSyncService(
   const sidecar = new Sidecar(cachePath);
   const trace = tracerFromEnv();
 
+  if (!filesTable.endsWith(".files")) {
+    throw new Error(
+      `createSyncService: filesTable must end with ".files", got "${filesTable}"`,
+    );
+  }
   const syncStateTable = filesTable.replace(/\.files$/, ".sync_state");
 
   async function ensureSchema(): Promise<void> {
@@ -563,40 +568,54 @@ export function createSyncService(
       await ready();
       const signal = options?.signal;
 
-      // Snapshot dirty state WITHOUT clearing — only clear after successful push.
-      const state = await sidecar.read();
-      const snap = {
-        dirtyPaths: [...state.dirtyPaths],
-        bulkInvalidated: state.bulkInvalidated,
-        lastPulledAt: state.lastPulledAt,
-        lazyPullActive: state.lazyPullActive,
+      // Serialized snapshot via update() — ensures concurrent recordDirty
+      // calls either land before or after this snapshot, never lost.
+      const snap = await sidecar.update((state) => {
+        (state as unknown as Record<string, unknown>).__snap = {
+          dirtyPaths: [...state.dirtyPaths],
+          bulkInvalidated: state.bulkInvalidated,
+          lastPulledAt: state.lastPulledAt,
+          lazyPullActive: state.lazyPullActive,
+        };
+      });
+      const snapshot = (snap as unknown as Record<string, unknown>).__snap as {
+        dirtyPaths: string[];
+        bulkInvalidated: boolean;
+        lastPulledAt: string | null;
+        lazyPullActive: boolean;
       };
 
-      const lazy = snap.lazyPullActive;
+      const lazy = snapshot.lazyPullActive;
 
       let changes: number;
-      if (snap.bulkInvalidated) {
-        changes = await fullWalkPush(snap.lastPulledAt, lazy, signal);
-      } else if (snap.dirtyPaths.length === 0) {
+      if (snapshot.bulkInvalidated) {
+        changes = await fullWalkPush(snapshot.lastPulledAt, lazy, signal);
+      } else if (snapshot.dirtyPaths.length === 0) {
         return 0;
       } else {
         changes = 0;
-        for (const relPath of snap.dirtyPaths) {
+        for (const relPath of snapshot.dirtyPaths) {
           signal?.throwIfAborted();
-          changes += await pushOneRel(relPath, snap.lastPulledAt, lazy, signal);
+          changes += await pushOneRel(
+            relPath,
+            snapshot.lastPulledAt,
+            lazy,
+            signal,
+          );
         }
         trace.summary(
           "push_incremental",
           Math.round(performance.now() - pushStart),
           {
             files: changes,
-            paths: snap.dirtyPaths.length,
+            paths: snapshot.dirtyPaths.length,
           },
         );
       }
 
-      // Push succeeded — clear the dirty state we just pushed.
-      await sidecar.clearDirty();
+      // Selectively clear only the paths we just pushed — preserves any
+      // dirty marks added by concurrent recordDirty() during the push.
+      await sidecar.clearPushed(snapshot);
       return changes;
     },
 

@@ -128,6 +128,21 @@ export class Sidecar {
     });
   }
 
+  clearPushed(pushed: {
+    dirtyPaths: string[];
+    bulkInvalidated: boolean;
+  }): Promise<SidecarState> {
+    return this.update((state) => {
+      if (pushed.bulkInvalidated) {
+        state.bulkInvalidated = false;
+        state.dirtyPaths = [];
+      } else {
+        const pushedSet = new Set(pushed.dirtyPaths);
+        state.dirtyPaths = state.dirtyPaths.filter((p) => !pushedSet.has(p));
+      }
+    });
+  }
+
   setLastPulledAt(iso: string): Promise<SidecarState> {
     return this.update((state) => {
       state.lastPulledAt = iso;

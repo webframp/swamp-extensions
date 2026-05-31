@@ -1,8 +1,9 @@
 // ABOUTME: Unit tests for sidecar dirty tracking, sync service contract,
 // ABOUTME: and datastore provider interface conformance.
 
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals, assertExists, assertThrows } from "@std/assert";
 import { Sidecar } from "./sidecar.ts";
+import { createSyncService } from "./sync.ts";
 import { datastore } from "./mod.ts";
 
 Deno.test("sidecar: fresh state has bulkInvalidated true", async () => {
@@ -172,6 +173,48 @@ Deno.test("sidecar: dirty paths cap triggers bulkInvalidated", async () => {
   }
 });
 
+Deno.test("sidecar: clearPushed removes only pushed paths", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    await sidecar.clearDirty();
+    await sidecar.recordDirty("data/a/1/raw");
+    await sidecar.recordDirty("data/b/2/raw");
+    await sidecar.recordDirty("data/c/3/raw");
+
+    await sidecar.clearPushed({
+      dirtyPaths: ["data/a/1/raw", "data/b/2/raw"],
+      bulkInvalidated: false,
+    });
+
+    const state = await sidecar.read();
+    assertEquals(state.dirtyPaths, ["data/c/3/raw"]);
+    assertEquals(state.bulkInvalidated, false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("sidecar: clearPushed with bulkInvalidated clears all", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    await sidecar.clearDirty();
+    await sidecar.recordDirty("data/a/1/raw");
+
+    await sidecar.clearPushed({
+      dirtyPaths: [],
+      bulkInvalidated: true,
+    });
+
+    const state = await sidecar.read();
+    assertEquals(state.dirtyPaths, []);
+    assertEquals(state.bulkInvalidated, false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
 Deno.test("createProvider includes createSyncService", () => {
   const provider = datastore.createProvider({
     connectionString: "postgres://user:pass@localhost:5432/swamp",
@@ -210,4 +253,14 @@ Deno.test({
     assertEquals(caps.scopedSync, true);
     assertEquals(caps.lazyHydration, true);
   },
+});
+
+Deno.test("createSyncService rejects filesTable not ending in .files", () => {
+  // deno-lint-ignore no-explicit-any
+  const fakeSql = {} as any;
+  assertThrows(
+    () => createSyncService(fakeSql, "myschema.records", "/tmp/cache"),
+    Error,
+    'must end with ".files"',
+  );
 });

@@ -5,7 +5,6 @@ const RETRYABLE_PG_CODES = new Set([
   "40001", // serialization_failure
   "40P01", // deadlock_detected
   "57P03", // cannot_connect_now
-  "57014", // query_canceled (statement timeout)
   "08000", // connection_exception
   "08001", // sqlclient_unable_to_establish_sqlconnection
   "08003", // connection_does_not_exist
