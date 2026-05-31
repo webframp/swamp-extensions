@@ -133,12 +133,10 @@ export class Sidecar {
     bulkInvalidated: boolean;
   }): Promise<SidecarState> {
     return this.update((state) => {
-      if (pushed.bulkInvalidated) {
+      const pushedSet = new Set(pushed.dirtyPaths);
+      state.dirtyPaths = state.dirtyPaths.filter((p) => !pushedSet.has(p));
+      if (pushed.bulkInvalidated && state.dirtyPaths.length === 0) {
         state.bulkInvalidated = false;
-        state.dirtyPaths = [];
-      } else {
-        const pushedSet = new Set(pushed.dirtyPaths);
-        state.dirtyPaths = state.dirtyPaths.filter((p) => !pushedSet.has(p));
       }
     });
   }

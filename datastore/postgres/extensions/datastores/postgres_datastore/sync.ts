@@ -219,7 +219,7 @@ export function createSyncService(
           )
         );
         if (stateRow) {
-          const dbPushedAt = String(stateRow.value).replace(/^"|"$/g, "");
+          const dbPushedAt = String(stateRow.value);
           if (new Date(dbPushedAt) <= new Date(state.lastPulledAt)) {
             trace.summary("pull", 0, { files: 0, skipped: "no_changes" });
             return 0;
@@ -568,22 +568,22 @@ export function createSyncService(
       await ready();
       const signal = options?.signal;
 
-      // Serialized snapshot via update() — ensures concurrent recordDirty
-      // calls either land before or after this snapshot, never lost.
-      const snap = await sidecar.update((state) => {
-        (state as unknown as Record<string, unknown>).__snap = {
+      // Capture snapshot inside the serialized update chain — ensures
+      // concurrent recordDirty calls either land before or after this read.
+      let snapshot!: {
+        dirtyPaths: string[];
+        bulkInvalidated: boolean;
+        lastPulledAt: string | null;
+        lazyPullActive: boolean;
+      };
+      await sidecar.update((state) => {
+        snapshot = {
           dirtyPaths: [...state.dirtyPaths],
           bulkInvalidated: state.bulkInvalidated,
           lastPulledAt: state.lastPulledAt,
           lazyPullActive: state.lazyPullActive,
         };
       });
-      const snapshot = (snap as unknown as Record<string, unknown>).__snap as {
-        dirtyPaths: string[];
-        bulkInvalidated: boolean;
-        lastPulledAt: string | null;
-        lazyPullActive: boolean;
-      };
 
       const lazy = snapshot.lazyPullActive;
 
