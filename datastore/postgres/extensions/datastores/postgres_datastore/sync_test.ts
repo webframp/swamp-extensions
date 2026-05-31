@@ -1,8 +1,9 @@
-// Sidecar and Sync Service Tests
-// SPDX-License-Identifier: Apache-2.0
+// ABOUTME: Unit tests for sidecar dirty tracking, sync service contract,
+// ABOUTME: and datastore provider interface conformance.
 
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals, assertExists, assertThrows } from "@std/assert";
 import { Sidecar } from "./sidecar.ts";
+import { createSyncService } from "./sync.ts";
 import { datastore } from "./mod.ts";
 
 Deno.test("sidecar: fresh state has bulkInvalidated true", async () => {
@@ -146,6 +147,121 @@ Deno.test("sidecar: filters traversal paths from deserialized state", async () =
   }
 });
 
+Deno.test("sidecar: dirty paths cap triggers bulkInvalidated", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    // Clear initial bulkInvalidated
+    await sidecar.clearDirty();
+
+    // Fill to cap
+    for (let i = 0; i < 200; i++) {
+      await sidecar.recordDirty(`data/t/m/d/${i}/raw`);
+    }
+    let state = await sidecar.read();
+    assertEquals(state.dirtyPaths.length, 200);
+    assertEquals(state.bulkInvalidated, false);
+
+    // One more triggers bulk invalidation instead of growing the list
+    await sidecar.recordDirty("data/t/m/d/overflow/raw");
+    state = await sidecar.read();
+    assertEquals(state.bulkInvalidated, true);
+    // dirtyPaths stays at 200 (not 201) — the overflow path is not added
+    assertEquals(state.dirtyPaths.length, 200);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("sidecar: clearPushed removes only pushed paths", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    await sidecar.clearDirty();
+    await sidecar.recordDirty("data/a/1/raw");
+    await sidecar.recordDirty("data/b/2/raw");
+    await sidecar.recordDirty("data/c/3/raw");
+
+    await sidecar.clearPushed({
+      dirtyPaths: ["data/a/1/raw", "data/b/2/raw"],
+      bulkInvalidated: false,
+    });
+
+    const state = await sidecar.read();
+    assertEquals(state.dirtyPaths, ["data/c/3/raw"]);
+    assertEquals(state.bulkInvalidated, false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("sidecar: clearPushed bulk preserves concurrent dirty marks", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    // Start with bulkInvalidated=true (fresh install state)
+    // Then simulate concurrent recordDirty during push
+    await sidecar.recordDirty("data/a/1/raw");
+
+    // Snapshot had bulkInvalidated=true, dirtyPaths=[]
+    // (snapshot was taken before the concurrent recordDirty)
+    await sidecar.clearPushed({
+      dirtyPaths: [],
+      bulkInvalidated: true,
+    });
+
+    const state = await sidecar.read();
+    // Path survives because it wasn't in the pushed set
+    assertEquals(state.dirtyPaths, ["data/a/1/raw"]);
+    // bulkInvalidated NOT cleared because surviving paths exist
+    assertEquals(state.bulkInvalidated, true);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("sidecar: clearPushed bulk clears flag when no new paths", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    await sidecar.clearDirty();
+    // No paths added — simulates clean bulk push with nothing concurrent
+    await sidecar.recordDirty(undefined);
+
+    await sidecar.clearPushed({
+      dirtyPaths: [],
+      bulkInvalidated: true,
+    });
+
+    const state = await sidecar.read();
+    assertEquals(state.dirtyPaths, []);
+    assertEquals(state.bulkInvalidated, false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
+Deno.test("sidecar: clearPushed bulk with matching paths removes them", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    await sidecar.clearDirty();
+    await sidecar.recordDirty("data/a/1/raw");
+    await sidecar.recordDirty("data/b/2/raw");
+
+    await sidecar.clearPushed({
+      dirtyPaths: ["data/a/1/raw", "data/b/2/raw"],
+      bulkInvalidated: true,
+    });
+
+    const state = await sidecar.read();
+    assertEquals(state.dirtyPaths, []);
+    assertEquals(state.bulkInvalidated, false);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
 Deno.test("createProvider includes createSyncService", () => {
   const provider = datastore.createProvider({
     connectionString: "postgres://user:pass@localhost:5432/swamp",
@@ -184,4 +300,14 @@ Deno.test({
     assertEquals(caps.scopedSync, true);
     assertEquals(caps.lazyHydration, true);
   },
+});
+
+Deno.test("createSyncService rejects filesTable not ending in .files", () => {
+  // deno-lint-ignore no-explicit-any
+  const fakeSql = {} as any;
+  assertThrows(
+    () => createSyncService(fakeSql, "myschema.records", "/tmp/cache"),
+    Error,
+    'must end with ".files"',
+  );
 });

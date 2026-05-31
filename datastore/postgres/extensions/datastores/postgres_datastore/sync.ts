@@ -1,8 +1,10 @@
-// PostgreSQL Datastore Sync Service
-// SPDX-License-Identifier: Apache-2.0
+// ABOUTME: PostgreSQL sync service — transaction-wrapped push with batched inserts,
+// ABOUTME: team-safe watermarking via sync_state table, retry on transient errors.
 
 import type postgres from "npm:postgres@3.4.7";
 import { Sidecar } from "./sidecar.ts";
+import { retryable } from "./_lib/retry.ts";
+import { tracerFromEnv } from "./_lib/trace.ts";
 
 export interface SyncContext {
   models?: ReadonlyArray<{ modelType: string; modelId: string }>;
@@ -124,9 +126,18 @@ export function createSyncService(
   cachePath: string,
 ): DatastoreSyncService {
   const sidecar = new Sidecar(cachePath);
+  const trace = tracerFromEnv();
+
+  if (!filesTable.endsWith(".files")) {
+    throw new Error(
+      `createSyncService: filesTable must end with ".files", got "${filesTable}"`,
+    );
+  }
+  const syncStateTable = filesTable.replace(/\.files$/, ".sync_state");
 
   async function ensureSchema(): Promise<void> {
-    await sql.unsafe(`
+    await retryable(() =>
+      sql.unsafe(`
       CREATE TABLE IF NOT EXISTS ${filesTable} (
         path       TEXT PRIMARY KEY,
         hash       TEXT NOT NULL,
@@ -135,13 +146,25 @@ export function createSyncService(
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         deleted_at TIMESTAMPTZ
       )
-    `);
-    await sql.unsafe(`
+    `)
+    );
+    await retryable(() =>
+      sql.unsafe(`
       CREATE INDEX IF NOT EXISTS idx_${
-      filesTable.replaceAll(".", "_")
-    }_updated_at
+        filesTable.replaceAll(".", "_")
+      }_updated_at
       ON ${filesTable} (updated_at)
-    `);
+    `)
+    );
+    await retryable(() =>
+      sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS ${syncStateTable} (
+        key        TEXT PRIMARY KEY,
+        value      JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `)
+    );
   }
 
   let schemaEnsured = false;
@@ -152,9 +175,8 @@ export function createSyncService(
     }
   }
 
-  /** Get server time for watermark (avoids client/server clock skew). */
   async function serverNow(): Promise<string> {
-    const [row] = await sql.unsafe(`SELECT now()::text AS ts`);
+    const [row] = await retryable(() => sql.unsafe(`SELECT now()::text AS ts`));
     return row.ts as string;
   }
 
@@ -163,6 +185,7 @@ export function createSyncService(
     metadataOnly?: boolean;
     signal?: AbortSignal;
   }): Promise<number> {
+    const pullStart = performance.now();
     await ready();
     const prefixes = opts?.prefixes;
     const metadataOnly = opts?.metadataOnly === true;
@@ -187,6 +210,24 @@ export function createSyncService(
       });
       conditions.push(`(${orClauses.join(" OR ")})`);
     } else if (state.lastPulledAt !== null) {
+      // Skip pull entirely if nothing was pushed since our last pull.
+      // The DB watermark is authoritative for team-wide changes.
+      try {
+        const [stateRow] = await retryable(() =>
+          sql.unsafe(
+            `SELECT value FROM ${syncStateTable} WHERE key = 'last_pushed_at'`,
+          )
+        );
+        if (stateRow) {
+          const dbPushedAt = String(stateRow.value);
+          if (new Date(dbPushedAt) <= new Date(state.lastPulledAt)) {
+            trace.summary("pull", 0, { files: 0, skipped: "no_changes" });
+            return 0;
+          }
+        }
+      } catch {
+        // sync_state table might not exist yet — continue with full scan
+      }
       params.push(state.lastPulledAt);
       conditions.push(`updated_at >= $${paramIdx++}`);
     }
@@ -199,11 +240,14 @@ export function createSyncService(
       ? `WHERE ${conditions.join(" AND ")}`
       : "";
 
-    // Phase 1: metadata scan
-    const metaRows: postgres.Row[] = await sql.unsafe(
-      `SELECT path, hash, deleted_at FROM ${filesTable} ${where}`,
-      params,
+    const metaScanDone = trace.startTimer("pull", "metadata_scan");
+    const metaRows: postgres.Row[] = await retryable(() =>
+      sql.unsafe(
+        `SELECT path, hash, deleted_at FROM ${filesTable} ${where}`,
+        params,
+      )
     );
+    metaScanDone();
 
     signal?.throwIfAborted();
 
@@ -234,14 +278,17 @@ export function createSyncService(
     }
 
     // Phase 2: fetch content only for changed/missing files
+    const contentFetchDone = trace.startTimer("pull", "content_fetch");
     const BATCH_SIZE = 100;
     for (let i = 0; i < needContent.length; i += BATCH_SIZE) {
       signal?.throwIfAborted();
       const batch = needContent.slice(i, i + BATCH_SIZE);
       const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(", ");
-      const contentRows: postgres.Row[] = await sql.unsafe(
-        `SELECT path, content FROM ${filesTable} WHERE path IN (${placeholders}) AND deleted_at IS NULL`,
-        batch,
+      const contentRows: postgres.Row[] = await retryable(() =>
+        sql.unsafe(
+          `SELECT path, content FROM ${filesTable} WHERE path IN (${placeholders}) AND deleted_at IS NULL`,
+          batch,
+        )
       );
       for (const row of contentRows) {
         signal?.throwIfAborted();
@@ -251,11 +298,18 @@ export function createSyncService(
         changes++;
       }
     }
+    contentFetchDone();
 
     if (!scoped && !metadataOnly) {
       await sidecar.setLastPulledAt(pullStartTime);
       await sidecar.setLazyPullActive(false);
     }
+
+    trace.summary("pull", Math.round(performance.now() - pullStart), {
+      files: changes,
+      scanned: metaRows.length,
+      fetched: needContent.length,
+    });
 
     return changes;
   }
@@ -265,13 +319,17 @@ export function createSyncService(
     lazyPullActive: boolean,
     signal?: AbortSignal,
   ): Promise<number> {
+    const pushStart = performance.now();
     await ready();
-    let changes = 0;
 
     // Fetch remote manifest for diff (metadata only, no content)
-    const remoteRows: postgres.Row[] = await sql.unsafe(
-      `SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE deleted_at IS NULL`,
+    const manifestDone = trace.startTimer("push", "manifest_fetch");
+    const remoteRows: postgres.Row[] = await retryable(() =>
+      sql.unsafe(
+        `SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE deleted_at IS NULL`,
+      )
     );
+    manifestDone();
     const remotePaths = new Map<
       string,
       { hash: string; deletedAt: unknown; updatedAt: Date }
@@ -284,45 +342,91 @@ export function createSyncService(
       });
     }
 
+    // Collect all files that need pushing (diff against remote)
     const localPaths = new Set<string>();
-
-    const onFile = async (relPath: string, bytes: Uint8Array) => {
-      signal?.throwIfAborted();
-      localPaths.add(relPath);
-      const hash = await sha256Hex(bytes);
-      const existing = remotePaths.get(relPath);
-      if (existing && existing.deletedAt === null && existing.hash === hash) {
-        return;
-      }
-      await sql.unsafe(
-        `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
-         VALUES ($1, $2, $3, $4, now(), NULL)
-         ON CONFLICT (path) DO UPDATE SET
-           hash = EXCLUDED.hash, size = EXCLUDED.size,
-           content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
-        [relPath, hash, bytes.byteLength, bytes],
-      );
-      changes++;
-    };
+    const toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }> =
+      [];
 
     for (const sub of DATASTORE_SUBDIRS) {
       signal?.throwIfAborted();
-      await walkAndPush(`${cachePath}/${sub}`, sub, onFile, signal);
+      await walkAndPush(
+        `${cachePath}/${sub}`,
+        sub,
+        async (relPath, bytes) => {
+          signal?.throwIfAborted();
+          localPaths.add(relPath);
+          const hash = await sha256Hex(bytes);
+          const existing = remotePaths.get(relPath);
+          if (
+            existing && existing.deletedAt === null && existing.hash === hash
+          ) {
+            return;
+          }
+          toPush.push({ relPath, hash, bytes });
+        },
+        signal,
+      );
     }
 
-    // Tombstone pass — skip when lazyPullActive
+    // Collect tombstones
+    const toTombstone: string[] = [];
     if (lastPulledAt !== null && !lazyPullActive) {
       const watermark = new Date(lastPulledAt);
       for (const [relPath, doc] of remotePaths) {
         if (localPaths.has(relPath) || doc.deletedAt !== null) continue;
         if (doc.updatedAt > watermark) continue;
-        await sql.unsafe(
-          `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
-          [relPath],
-        );
-        changes++;
+        toTombstone.push(relPath);
       }
     }
+
+    if (toPush.length === 0 && toTombstone.length === 0) {
+      trace.summary("push", Math.round(performance.now() - pushStart), {
+        files: 0,
+        tombstones: 0,
+      });
+      return 0;
+    }
+
+    // Execute all writes in a single transaction
+    const txDone = trace.startTimer("push", "transaction");
+    const changes = await retryable(async () => {
+      let count = 0;
+      await sql.begin(async (tx) => {
+        // Batch upsert files
+        for (const f of toPush) {
+          await tx.unsafe(
+            `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
+             VALUES ($1, $2, $3, $4, now(), NULL)
+             ON CONFLICT (path) DO UPDATE SET
+               hash = EXCLUDED.hash, size = EXCLUDED.size,
+               content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
+            [f.relPath, f.hash, f.bytes.byteLength, f.bytes],
+          );
+          count++;
+        }
+        // Tombstone deleted files
+        for (const path of toTombstone) {
+          await tx.unsafe(
+            `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
+            [path],
+          );
+          count++;
+        }
+        // Update team-global watermark
+        await tx.unsafe(
+          `INSERT INTO ${syncStateTable} (key, value, updated_at)
+           VALUES ('last_pushed_at', to_jsonb(now()::text), now())
+           ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
+        );
+      });
+      return count;
+    });
+    txDone();
+
+    trace.summary("push", Math.round(performance.now() - pushStart), {
+      files: toPush.length,
+      tombstones: toTombstone.length,
+    });
 
     return changes;
   }
@@ -362,10 +466,12 @@ export function createSyncService(
     }
 
     // Fetch remote state for this subtree (escaped LIKE)
-    const remoteRows: postgres.Row[] = await sql.unsafe(
-      `SELECT path, hash, deleted_at, updated_at FROM ${filesTable}
+    const remoteRows: postgres.Row[] = await retryable(() =>
+      sql.unsafe(
+        `SELECT path, hash, deleted_at, updated_at FROM ${filesTable}
        WHERE path = $1 OR path LIKE $2 ESCAPE '\\'`,
-      [relPath, escapeLike(relPath) + "/%"],
+        [relPath, escapeLike(relPath) + "/%"],
+      )
     );
     const remotePaths = new Map<
       string,
@@ -379,38 +485,62 @@ export function createSyncService(
       });
     }
 
-    let changes = 0;
+    // Diff: find files to push and paths to tombstone
+    const toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }> =
+      [];
     for (const f of localFiles) {
       signal?.throwIfAborted();
       const existing = remotePaths.get(f.relPath);
       if (existing && existing.deletedAt === null && existing.hash === f.hash) {
         continue;
       }
-      await sql.unsafe(
-        `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
-         VALUES ($1, $2, $3, $4, now(), NULL)
-         ON CONFLICT (path) DO UPDATE SET
-           hash = EXCLUDED.hash, size = EXCLUDED.size,
-           content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
-        [f.relPath, f.hash, f.bytes.byteLength, f.bytes],
-      );
-      changes++;
+      toPush.push(f);
     }
 
-    // Tombstone — skip when lazyPullActive
+    const toTombstone: string[] = [];
     if (lastPulledAt !== null && !lazyPullActive) {
       const watermark = new Date(lastPulledAt);
       const localPathSet = new Set(localFiles.map((f) => f.relPath));
       for (const [path, doc] of remotePaths) {
         if (localPathSet.has(path) || doc.deletedAt !== null) continue;
         if (doc.updatedAt > watermark) continue;
-        await sql.unsafe(
-          `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
-          [path],
-        );
-        changes++;
+        toTombstone.push(path);
       }
     }
+
+    if (toPush.length === 0 && toTombstone.length === 0) return 0;
+
+    // Execute all writes in a single transaction
+    const changes = await retryable(async () => {
+      let count = 0;
+      await sql.begin(async (tx) => {
+        for (const f of toPush) {
+          await tx.unsafe(
+            `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
+             VALUES ($1, $2, $3, $4, now(), NULL)
+             ON CONFLICT (path) DO UPDATE SET
+               hash = EXCLUDED.hash, size = EXCLUDED.size,
+               content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
+            [f.relPath, f.hash, f.bytes.byteLength, f.bytes],
+          );
+          count++;
+        }
+        for (const path of toTombstone) {
+          await tx.unsafe(
+            `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
+            [path],
+          );
+          count++;
+        }
+        // Update team-global watermark
+        await tx.unsafe(
+          `INSERT INTO ${syncStateTable} (key, value, updated_at)
+           VALUES ('last_pushed_at', to_jsonb(now()::text), now())
+           ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
+        );
+      });
+      return count;
+    });
 
     return changes;
   }
@@ -434,43 +564,58 @@ export function createSyncService(
     },
 
     async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
+      const pushStart = performance.now();
       await ready();
       const signal = options?.signal;
 
-      // Atomic snapshot-and-clear: grab dirty state and reset in one
-      // serialized operation so concurrent markDirty calls aren't lost.
-      const snapshot = await sidecar.update((state) => {
-        const snap = {
+      // Capture snapshot inside the serialized update chain — ensures
+      // concurrent recordDirty calls either land before or after this read.
+      let snapshot!: {
+        dirtyPaths: string[];
+        bulkInvalidated: boolean;
+        lastPulledAt: string | null;
+        lazyPullActive: boolean;
+      };
+      await sidecar.update((state) => {
+        snapshot = {
           dirtyPaths: [...state.dirtyPaths],
           bulkInvalidated: state.bulkInvalidated,
           lastPulledAt: state.lastPulledAt,
           lazyPullActive: state.lazyPullActive,
         };
-        state.dirtyPaths = [];
-        state.bulkInvalidated = false;
-        // Store snapshot in a side channel via the return
-        (state as unknown as Record<string, unknown>).__snapshot = snap;
       });
-      const snap = (snapshot as unknown as Record<string, unknown>)
-        .__snapshot as {
-          dirtyPaths: string[];
-          bulkInvalidated: boolean;
-          lastPulledAt: string | null;
-          lazyPullActive: boolean;
-        };
 
-      const lazy = snap.lazyPullActive;
+      const lazy = snapshot.lazyPullActive;
 
-      if (snap.bulkInvalidated) {
-        return await fullWalkPush(snap.lastPulledAt, lazy, signal);
+      let changes: number;
+      if (snapshot.bulkInvalidated) {
+        changes = await fullWalkPush(snapshot.lastPulledAt, lazy, signal);
+      } else if (snapshot.dirtyPaths.length === 0) {
+        return 0;
+      } else {
+        changes = 0;
+        for (const relPath of snapshot.dirtyPaths) {
+          signal?.throwIfAborted();
+          changes += await pushOneRel(
+            relPath,
+            snapshot.lastPulledAt,
+            lazy,
+            signal,
+          );
+        }
+        trace.summary(
+          "push_incremental",
+          Math.round(performance.now() - pushStart),
+          {
+            files: changes,
+            paths: snapshot.dirtyPaths.length,
+          },
+        );
       }
 
-      if (snap.dirtyPaths.length === 0) return 0;
-      let changes = 0;
-      for (const relPath of snap.dirtyPaths) {
-        signal?.throwIfAborted();
-        changes += await pushOneRel(relPath, snap.lastPulledAt, lazy, signal);
-      }
+      // Selectively clear only the paths we just pushed — preserves any
+      // dirty marks added by concurrent recordDirty() during the push.
+      await sidecar.clearPushed(snapshot);
       return changes;
     },
 
@@ -480,9 +625,11 @@ export function createSyncService(
     ): Promise<boolean> {
       if (isTraversal(relPath)) return false;
       await ready();
-      const rows: postgres.Row[] = await sql.unsafe(
-        `SELECT content FROM ${filesTable} WHERE path = $1 AND deleted_at IS NULL`,
-        [relPath],
+      const rows: postgres.Row[] = await retryable(() =>
+        sql.unsafe(
+          `SELECT content FROM ${filesTable} WHERE path = $1 AND deleted_at IS NULL`,
+          [relPath],
+        )
       );
       if (rows.length === 0) return false;
 
