@@ -1,9 +1,9 @@
-// Sync-state sidecar for per-path dirty tracking and lazy hydration.
-// Lives at <cachePath>/.datastore-sync-state.json.
-// SPDX-License-Identifier: Apache-2.0
+// ABOUTME: Local-only sync-state sidecar for per-path dirty tracking.
+// ABOUTME: Tracks pending local changes until pushed; DB holds team-global watermark.
 
 const SIDECAR_FILENAME = ".datastore-sync-state.json";
 const SCHEMA_VERSION = 1;
+const DIRTY_PATHS_CAP = 200;
 
 export interface SidecarState {
   version: number;
@@ -112,7 +112,11 @@ export class Sidecar {
       if (relPath === undefined) {
         state.bulkInvalidated = true;
       } else if (!isTraversal(relPath) && !state.dirtyPaths.includes(relPath)) {
-        state.dirtyPaths.push(relPath);
+        if (state.dirtyPaths.length >= DIRTY_PATHS_CAP) {
+          state.bulkInvalidated = true;
+        } else {
+          state.dirtyPaths.push(relPath);
+        }
       }
     });
   }

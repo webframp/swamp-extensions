@@ -146,6 +146,32 @@ Deno.test("sidecar: filters traversal paths from deserialized state", async () =
   }
 });
 
+Deno.test("sidecar: dirty paths cap triggers bulkInvalidated", async () => {
+  const tempDir = await Deno.makeTempDir();
+  try {
+    const sidecar = new Sidecar(tempDir);
+    // Clear initial bulkInvalidated
+    await sidecar.clearDirty();
+
+    // Fill to cap
+    for (let i = 0; i < 200; i++) {
+      await sidecar.recordDirty(`data/t/m/d/${i}/raw`);
+    }
+    let state = await sidecar.read();
+    assertEquals(state.dirtyPaths.length, 200);
+    assertEquals(state.bulkInvalidated, false);
+
+    // One more triggers bulk invalidation instead of growing the list
+    await sidecar.recordDirty("data/t/m/d/overflow/raw");
+    state = await sidecar.read();
+    assertEquals(state.bulkInvalidated, true);
+    // dirtyPaths stays at 200 (not 201) — the overflow path is not added
+    assertEquals(state.dirtyPaths.length, 200);
+  } finally {
+    await Deno.remove(tempDir, { recursive: true });
+  }
+});
+
 Deno.test("createProvider includes createSyncService", () => {
   const provider = datastore.createProvider({
     connectionString: "postgres://user:pass@localhost:5432/swamp",

@@ -1,5 +1,5 @@
-// PostgreSQL Datastore Extension
-// SPDX-License-Identifier: Apache-2.0
+// ABOUTME: PostgreSQL datastore extension for swamp — provides row-based distributed
+// ABOUTME: locking, team-safe sync, and ACID-backed storage for shared datastores.
 
 import { z } from "npm:zod@4.3.6";
 import postgres from "npm:postgres@3.4.7";
@@ -22,11 +22,13 @@ interface LockOptions {
   ttlMs?: number;
   retryIntervalMs?: number;
   maxWaitMs?: number;
+  signal?: AbortSignal;
 }
 
 interface DistributedLock {
   acquire(): Promise<void>;
   release(): Promise<void>;
+  heartbeat(): Promise<boolean>;
   withLock<T>(fn: () => Promise<T>): Promise<T>;
   inspect(): Promise<LockInfo | null>;
   forceRelease(expectedNonce: string): Promise<boolean>;
@@ -117,14 +119,19 @@ function createPostgresLock(
     if (nonce !== undefined) {
       throw new Error("Lock already acquired; call release() first");
     }
+    const signal = options?.signal;
     const start = Date.now();
     nonce = crypto.randomUUID();
     try {
       const holder = `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`;
       const hostname = Deno.hostname();
       const pid = Deno.pid;
+      let attempt = 0;
 
       while (Date.now() - start < maxWaitMs) {
+        if (signal?.aborted) {
+          throw new DOMException("Lock acquisition aborted", "AbortError");
+        }
         const rows: postgres.Row[] = await sql.unsafe(
           `INSERT INTO ${locksTable} (key, holder, hostname, pid, acquired_at, ttl_ms, nonce)
            VALUES ($1, $2, $3, $4, now(), $5, $6)
@@ -152,9 +159,38 @@ function createPostgresLock(
               // Connection lost — lock will expire via TTL
             }
           }, ttlMs / 3);
+          // Unref so the timer doesn't prevent process exit if release is never called
+          Deno.unrefTimer(heartbeatId);
           return;
         }
-        await new Promise((r) => setTimeout(r, retryIntervalMs));
+        // Jittered backoff: base interval * (1 + random * 0.5), capped at 2x base
+        const backoff = Math.min(
+          retryIntervalMs * Math.pow(1.5, Math.min(attempt, 4)),
+          retryIntervalMs * 2,
+        );
+        const jitter = backoff * (0.5 + Math.random() * 0.5);
+        const delay = Math.floor(jitter);
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            resolve();
+          }, delay);
+          const onAbort = () => {
+            clearTimeout(timer);
+            reject(new DOMException("Lock acquisition aborted", "AbortError"));
+          };
+          if (signal) {
+            if (signal.aborted) {
+              clearTimeout(timer);
+              reject(
+                new DOMException("Lock acquisition aborted", "AbortError"),
+              );
+              return;
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
+          }
+        });
+        attempt++;
       }
     } catch (e) {
       nonce = undefined;
@@ -185,6 +221,15 @@ function createPostgresLock(
   return {
     acquire,
     release,
+
+    heartbeat: async (): Promise<boolean> => {
+      if (!nonce) return false;
+      const result = await sql.unsafe(
+        `UPDATE ${locksTable} SET acquired_at = now() WHERE key = $1 AND nonce = $2`,
+        [key, nonce],
+      );
+      return Number(result.count) > 0;
+    },
 
     withLock: async <T>(fn: () => Promise<T>): Promise<T> => {
       await acquire();
