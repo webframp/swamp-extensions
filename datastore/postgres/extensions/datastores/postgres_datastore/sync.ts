@@ -171,9 +171,7 @@ export function createSyncService(
   }
 
   async function serverNow(): Promise<string> {
-    const [row] = await retryable(() =>
-      sql.unsafe(`SELECT now()::text AS ts`)
-    );
+    const [row] = await retryable(() => sql.unsafe(`SELECT now()::text AS ts`));
     return row.ts as string;
   }
 
@@ -378,7 +376,8 @@ export function createSyncService(
 
     if (toPush.length === 0 && toTombstone.length === 0) {
       trace.summary("push", Math.round(performance.now() - pushStart), {
-        files: 0, tombstones: 0,
+        files: 0,
+        tombstones: 0,
       });
       return 0;
     }
@@ -420,7 +419,8 @@ export function createSyncService(
     txDone();
 
     trace.summary("push", Math.round(performance.now() - pushStart), {
-      files: toPush.length, tombstones: toTombstone.length,
+      files: toPush.length,
+      tombstones: toTombstone.length,
     });
 
     return changes;
@@ -585,9 +585,14 @@ export function createSyncService(
           signal?.throwIfAborted();
           changes += await pushOneRel(relPath, snap.lastPulledAt, lazy, signal);
         }
-        trace.summary("push_incremental", Math.round(performance.now() - pushStart), {
-          files: changes, paths: snap.dirtyPaths.length,
-        });
+        trace.summary(
+          "push_incremental",
+          Math.round(performance.now() - pushStart),
+          {
+            files: changes,
+            paths: snap.dirtyPaths.length,
+          },
+        );
       }
 
       // Push succeeded — clear the dirty state we just pushed.

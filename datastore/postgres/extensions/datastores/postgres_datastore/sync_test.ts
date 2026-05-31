@@ -1,5 +1,5 @@
-// Sidecar and Sync Service Tests
-// SPDX-License-Identifier: Apache-2.0
+// ABOUTME: Unit tests for sidecar dirty tracking, sync service contract,
+// ABOUTME: and datastore provider interface conformance.
 
 import { assertEquals, assertExists } from "@std/assert";
 import { Sidecar } from "./sidecar.ts";

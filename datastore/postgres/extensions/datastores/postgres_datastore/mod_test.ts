@@ -1,5 +1,5 @@
-// PostgreSQL Datastore Extension Tests
-// SPDX-License-Identifier: Apache-2.0
+// ABOUTME: Unit tests for postgres-datastore export conformance, config schema
+// ABOUTME: validation, and lock/verifier interface structure.
 
 import { assertEquals, assertExists, assertRejects } from "@std/assert";
 import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
@@ -179,6 +179,7 @@ Deno.test("createLock returns DistributedLock interface", () => {
 
   assertExists(lock.acquire);
   assertExists(lock.release);
+  assertExists(lock.heartbeat);
   assertExists(lock.withLock);
   assertExists(lock.inspect);
   assertExists(lock.forceRelease);

@@ -30,7 +30,8 @@ function defaultSink(event: TraceEvent): void {
 }
 
 function formatEventInternal(event: TraceEvent): string {
-  let line = `[pg-sync] ${event.operation}.${event.phase} ${event.durationMs}ms`;
+  let line =
+    `[pg-sync] ${event.operation}.${event.phase} ${event.durationMs}ms`;
   if (event.details) {
     const parts = Object.entries(event.details).map(
       ([k, v]) => `${k}=${v}`,
