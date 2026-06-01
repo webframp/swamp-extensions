@@ -1,0 +1,56 @@
+id: ce880421-89da-4e8e-a7d2-a6df6ba4c141
+name: "@webframp/copilot-monthly-review"
+description: |
+  Monthly Copilot governance review workflow.
+  Collects budget status, usage summary, seat assignments, and usage diff
+  to produce a comprehensive governance report.
+
+  Usage:
+    swamp workflow run @webframp/copilot-monthly-review \
+      --input modelName=copilot-gov
+tags:
+  github: "true"
+  copilot: "true"
+  governance: "true"
+  billing: "true"
+inputs:
+  properties:
+    modelName:
+      type: string
+      description: Name of the @webframp/github-copilot-governance model instance
+  required:
+    - modelName
+jobs:
+  - name: collect
+    description: Gather budget, usage, and seat data
+    steps:
+      - name: budgets
+        description: List all budgets
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: list_budgets
+
+      - name: usage
+        description: Get current usage summary
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: get_usage_summary
+
+      - name: diff
+        description: Compare usage against previous period
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: diff_usage
+        allowFailure: true
+
+      - name: seats
+        description: List seat assignments and activity
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: list_seats
+    dependsOn: []
+version: 1
