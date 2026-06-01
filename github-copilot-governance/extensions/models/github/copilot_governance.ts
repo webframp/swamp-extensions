@@ -88,7 +88,7 @@ const SeatsSchema = z.object({
   totalSeats: z.number(),
   seats: z.array(
     z.object({
-      username: z.string(),
+      assignee: z.object({ login: z.string() }),
       created_at: z.string(),
       last_activity_at: z.string().nullable(),
       last_activity_editor: z.string().nullable(),
@@ -296,6 +296,12 @@ export const model = {
     "tier-sync": {
       description: "Result of tier budget synchronization",
       schema: TierSyncSchema,
+      lifetime: "7d" as const,
+      garbageCollection: 5,
+    },
+    config: {
+      description: "Copilot configuration and policy data",
+      schema: z.object({}).passthrough(),
       lifetime: "7d" as const,
       garbageCollection: 5,
     },
@@ -529,6 +535,12 @@ export const model = {
             will_alert: args.alertRecipients.length > 0,
             alert_recipients: args.alertRecipients,
           };
+        }
+
+        if (Object.keys(body).length === 0) {
+          throw new Error(
+            "update_budget: at least one field (budgetAmount, preventFurtherUsage, alertRecipients) must be provided",
+          );
         }
 
         if (args.dryRun) {
@@ -816,7 +828,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "budget",
+          "config",
           "copilot-settings",
           {
             org,
@@ -845,7 +857,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "budget",
+          "config",
           "model-policies",
           {
             enterprise,
