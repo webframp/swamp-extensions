@@ -13,8 +13,16 @@ import { z } from "npm:zod@4.3.6";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  enterprise: z.string().describe("Enterprise slug"),
-  org: z.string().describe("Organization name for usage/seat queries"),
+  enterprise: z.string().regex(
+    /^[a-zA-Z0-9-]+$/,
+    "Enterprise slug must be alphanumeric with hyphens",
+  )
+    .describe("Enterprise slug"),
+  org: z.string().regex(
+    /^[a-zA-Z0-9-]+$/,
+    "Org name must be alphanumeric with hyphens",
+  )
+    .describe("Organization name for usage/seat queries"),
   token: z.string().meta({ sensitive: true })
     .describe(
       "vault:// reference to classic PAT with enterprise billing scope",
@@ -44,6 +52,7 @@ const BudgetListSchema = z.object({
   fetchedAt: z.string(),
   budgets: z.array(BudgetSchema),
   totalCount: z.number(),
+  truncated: z.boolean(),
 });
 
 const UsageSummarySchema = z.object({
@@ -97,6 +106,7 @@ const SeatsSchema = z.object({
     }),
   ),
   reportingLagNote: z.string(),
+  truncated: z.boolean(),
 });
 
 const TierSyncSchema = z.object({
@@ -110,7 +120,14 @@ const TierSyncSchema = z.object({
     targetAmount: z.number(),
     currentAmount: z.number().nullable(),
     budgetId: z.string().nullable(),
-    action: z.enum(["created", "updated", "unchanged", "error"]),
+    action: z.enum([
+      "created",
+      "updated",
+      "unchanged",
+      "would-create",
+      "would-update",
+      "error",
+    ]),
     error: z.string().optional(),
   })),
 });
@@ -338,6 +355,7 @@ export const model = {
           fetchedAt: new Date().toISOString(),
           budgets,
           totalCount: budgets.length,
+          truncated: budgets.length >= 100,
         });
 
         context.logger.info("Found {count} budgets", { count: budgets.length });
@@ -660,7 +678,6 @@ export const model = {
             totalCostUsd: raw.total_cost_usd ?? 0,
             byUser: raw.by_user ?? [],
             byModel: raw.by_model ?? [],
-            raw,
           },
         );
 
@@ -750,13 +767,37 @@ export const model = {
           : ((current.total_ai_credits as number) ?? 0) -
             ((previousSummary?.totalAiCredits as number) ?? 0);
 
+        // Compute per-user deltas
+        const currentUsers = (current.by_user ?? []) as Array<
+          Record<string, unknown>
+        >;
+        const previousUsers = (previousSummary?.byUser ?? []) as Array<
+          Record<string, unknown>
+        >;
+        const prevByName = new Map(
+          previousUsers.map((u) => [u.username as string, u]),
+        );
+        const byUser = cycleBoundary ? [] : currentUsers.map((u) => {
+          const username = (u.username as string) ?? (u.login as string) ?? "";
+          const currentCredits = (u.aiCredits as number) ??
+            (u.ai_credits as number) ?? 0;
+          const prev = prevByName.get(username);
+          const previousCredits = prev ? ((prev.aiCredits as number) ?? 0) : 0;
+          return {
+            username,
+            previousCredits,
+            currentCredits,
+            delta: currentCredits - previousCredits,
+          };
+        });
+
         const handle = await context.writeResource("usage-diff", "result", {
           currentPeriod,
           previousPeriod,
           cycleBoundary,
           fetchedAt: new Date().toISOString(),
           totalDelta: cycleBoundary ? 0 : totalDelta,
-          byUser: [],
+          byUser,
         });
 
         // Update the stored summary for next diff
@@ -799,6 +840,7 @@ export const model = {
           org,
           fetchedAt: new Date().toISOString(),
           totalSeats: seats.length,
+          truncated: seats.length >= 2000,
           seats,
           reportingLagNote:
             "Activity data may lag 24-48 hours. Do not revoke seats based solely on recent inactivity.",
@@ -961,7 +1003,7 @@ export const model = {
                   targetAmount,
                   currentAmount,
                   budgetId: match.id,
-                  action: "updated",
+                  action: args.dryRun ? "would-update" : "updated",
                 });
               }
             } else {
@@ -992,7 +1034,7 @@ export const model = {
                 targetAmount,
                 currentAmount: null,
                 budgetId: null,
-                action: "created",
+                action: args.dryRun ? "would-create" : "created",
               });
             }
           } catch (e) {
