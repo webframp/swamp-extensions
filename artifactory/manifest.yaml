@@ -1,0 +1,42 @@
+manifestVersion: 1
+name: "@webframp/artifactory"
+version: "2026.06.02.1"
+description: |
+  Query and monitor JFrog Artifactory from a package consumer perspective.
+  AQL-powered package search, repository health checks, and service status
+  monitoring with diff detection for tracking package changes over time.
+
+  ## Authentication
+
+  Uses a JFrog Identity Token or Access Token stored in a swamp vault.
+  Generate a token via the Artifactory UI or REST API.
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/artifactory packages \
+    --global-arg url=https://packages.example.com \
+    --global-arg 'token=vault://my-vault/artifactory-token'
+
+  swamp model method run packages system_health
+  swamp model method run packages list_repos
+  swamp model method run packages query_packages --input 'query=items.find({"repo":"my-repo"})'
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - jfrog/artifactory.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - jfrog
+  - artifactory
+  - packages
+  - artifacts
+  - aql
+  - devops
