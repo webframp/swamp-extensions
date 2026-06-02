@@ -113,7 +113,10 @@ const TierSyncSchema = z.object({
   fetchedAt: z.string(),
   dryRun: z.boolean(),
   tiers: z.array(z.object({
-    teamSlug: z.string(),
+    teamSlug: z.string().regex(
+      /^[a-zA-Z0-9._-]+$/,
+      "Team slug must be alphanumeric with hyphens, dots, or underscores",
+    ),
     costCenterName: z.string(),
     memberCount: z.number(),
     perUserBudget: z.number(),
@@ -168,12 +171,14 @@ async function githubApi(
   const status = resp.status;
 
   if (status === 401) {
+    await resp.body?.cancel();
     throw new Error(
       "GitHub API authentication failed (401). Token may be expired or invalid. " +
         "Refresh the token in your vault and retry.",
     );
   }
   if (status === 403) {
+    await resp.body?.cancel();
     throw new Error(
       "GitHub API permission denied (403). The token lacks required scope. " +
         "Budget endpoints require enterprise admin or billing manager permissions.",
@@ -389,7 +394,7 @@ export const model = {
 
     create_budget: {
       description:
-        "Create a budget (upsert — returns existing if matching scope/entity/sku found)",
+        "Create a budget (upsert — returns existing if match found). Not atomic: concurrent calls for the same entity may create duplicates. Serialize concurrent creates.",
       arguments: z.object({
         budgetAmount: z.number().int().min(0)
           .describe("Budget in whole dollars"),
@@ -616,7 +621,9 @@ export const model = {
           await githubApi("DELETE", path, opts);
           context.logger.info("Deleted budget {id}", { id: args.budgetId });
         } catch (e) {
-          if ((e as Error).message.includes("404")) {
+          if (
+            (e as Error).message.startsWith("GitHub API resource not found")
+          ) {
             context.logger.info("Budget {id} already deleted", {
               id: args.budgetId,
             });
@@ -704,7 +711,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "usage-summary",
+          "config",
           "premium",
           {
             org,
@@ -916,7 +923,8 @@ export const model = {
         "Reconcile cost center budgets based on team membership × per-user amount (idempotent)",
       arguments: z.object({
         tiers: z.array(z.object({
-          teamSlug: z.string().describe("GitHub team slug"),
+          teamSlug: z.string().regex(/^[a-zA-Z0-9._-]+$/, "Invalid team slug")
+            .describe("GitHub team slug"),
           perUserBudget: z.number().describe("Dollars per user in this tier"),
           costCenterName: z.string().describe("Cost center entity name"),
           productSku: z.string().default("copilot"),
