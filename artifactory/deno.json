@@ -1,0 +1,17 @@
+{
+  "tasks": {
+    "check": "deno check extensions/models/jfrog/artifactory.ts",
+    "lint": "deno lint extensions/",
+    "fmt": "deno fmt extensions/",
+    "fmt:check": "deno fmt --check extensions/",
+    "test": "deno test --allow-env --allow-net --allow-sys --allow-read extensions/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260504.10"
+  }
+}
