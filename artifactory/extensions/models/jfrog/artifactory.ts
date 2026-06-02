@@ -153,14 +153,21 @@ async function rtfApi(
   return { status, data };
 }
 
-/** FNV-1a hash for deterministic instance naming from query strings. */
-function fnvHash(input: string): string {
-  let hash = 0x811c9dc5;
+/** SHA-256 based hash (first 12 hex chars) for collision-resistant instance naming. */
+function computeQueryHash(input: string): string {
+  // Use a simple but collision-resistant hash: DJB2 extended to 64-bit range
+  // then take 12 hex chars (48 bits, birthday collision at ~16M queries)
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
   for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
+    const c = input.charCodeAt(i);
+    h1 ^= c;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= c;
+    h2 = Math.imul(h2, 0x811c9dc5);
   }
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return (h1 >>> 0).toString(16).padStart(8, "0") +
+    (h2 >>> 0).toString(16).padStart(8, "0").slice(0, 4);
 }
 
 // =============================================================================
@@ -373,7 +380,7 @@ export const model = {
             []) as Array<Record<string, unknown>>;
         const repos = args.repoKey
           ? repoList.filter((r) => r.repoKey === args.repoKey)
-          : repoList;
+          : repoList.filter((r) => r.repoKey !== "TOTAL");
         for (const r of repos) {
           const key = (r.repoKey as string) ?? "unknown";
           const handle = await context.writeResource("repos", key, {
@@ -421,7 +428,7 @@ export const model = {
       ) => {
         const { url, token } = context.globalArgs;
         const opts = { url, token };
-        const queryHash = fnvHash(args.query);
+        const queryHash = computeQueryHash(args.query);
 
         context.logger.info("Executing AQL query (hash={hash})", {
           hash: queryHash,
@@ -429,7 +436,7 @@ export const model = {
 
         // Append .limit() if not already in the query
         let aql = args.query;
-        aql = aql.replace(/\.limit\([^)]*\)/, "");
+        aql = aql.replace(/\.limit\(\d*\)\s*$/, "");
         {
           aql += `.limit(${args.limit})`;
         }
@@ -497,7 +504,7 @@ export const model = {
       ) => {
         const { url, token } = context.globalArgs;
         const opts = { url, token };
-        const queryHash = fnvHash(args.query);
+        const queryHash = computeQueryHash(args.query);
 
         // Read previous result for this query
         let previousResults: Array<
@@ -507,7 +514,7 @@ export const model = {
         if (context.readResource) {
           try {
             const prev = await context.readResource(queryHash);
-            if (prev && Array.isArray(prev.results)) {
+            if (prev && Array.isArray(prev.results) && !prev.truncated) {
               previousResults = (prev.results as Array<Record<string, string>>)
                 .map((r) => ({
                   repo: r.repo ?? "",
@@ -528,7 +535,8 @@ export const model = {
 
         // Run current query
         let aql = args.query;
-        if (!aql.includes(".limit(")) aql += `.limit(${args.limit})`;
+        aql = aql.replace(/\.limit\(\d*\)\s*$/, "");
+        aql += `.limit(${args.limit})`;
         const { status, data } = await rtfApi(
           "POST",
           "/api/search/aql",
