@@ -244,7 +244,11 @@ export const model = {
         try {
           const { status } = await rtfApi("GET", "/api/system/ping", opts);
           if (status === 200) ping = "ok";
-        } catch { /* ping failed */ }
+        } catch (e) {
+          if (
+            (e as Error).message.startsWith("Artifactory authentication failed")
+          ) throw e;
+        }
         const pingLatencyMs = Date.now() - pingStart;
 
         // Health details (may 403 for non-admin)
@@ -350,6 +354,18 @@ export const model = {
         context.logger.info("Fetching repo health data", {});
         const { status, data } = await rtfApi("GET", "/api/storageinfo", opts);
         if (status !== 200) {
+          if (status === 403) {
+            const h = await context.writeResource("repos", "error", {
+              repoKey: "all",
+              fetchedAt: new Date().toISOString(),
+              artifactCount: 0,
+              usedSpaceBytes: 0,
+              usedSpace: "unknown",
+              status: "error",
+              error: "Storage info requires admin token (403)",
+            });
+            return { dataHandles: [h] };
+          }
           throw new Error(`Storage info failed: HTTP ${status}`);
         }
         const repoList =
@@ -413,7 +429,8 @@ export const model = {
 
         // Append .limit() if not already in the query
         let aql = args.query;
-        if (!aql.includes(".limit(")) {
+        aql = aql.replace(/\.limit\([^)]*\)/, "");
+        {
           aql += `.limit(${args.limit})`;
         }
 
@@ -450,7 +467,7 @@ export const model = {
           query: args.query,
           fetchedAt: new Date().toISOString(),
           results: mapped,
-          totalCount: mapped.length,
+          totalCount,
           truncated,
         });
 
@@ -526,7 +543,8 @@ export const model = {
         const raw = data as Record<string, unknown>;
         const results = (raw.results ?? []) as Array<Record<string, unknown>>;
         const range = raw.range as Record<string, number> | undefined;
-        const truncated = (range?.total ?? 0) > results.length;
+        const totalCount = range?.total ?? results.length;
+        const truncated = totalCount > results.length;
 
         const currentResults = results.map((r) => ({
           repo: (r.repo as string) ?? "",
@@ -536,7 +554,7 @@ export const model = {
 
         // Diff by repo+path+name composite key
         const toKey = (r: { repo: string; path: string; name: string }) =>
-          `${r.repo}/${r.path}/${r.name}`;
+          `${r.repo}\x00${r.path}\x00${r.name}`;
         const previousKeys = new Set(previousResults.map(toKey));
         const currentKeys = new Set(currentResults.map(toKey));
 
@@ -551,22 +569,25 @@ export const model = {
           ? []
           : previousResults.filter((r) => !currentKeys.has(toKey(r)));
 
-        // Store current as new baseline
-        await context.writeResource("packages", queryHash, {
-          queryHash,
-          query: args.query,
-          fetchedAt: new Date().toISOString(),
-          results: results.map((r) => ({
-            repo: (r.repo as string) ?? "",
-            path: (r.path as string) ?? "",
-            name: (r.name as string) ?? "",
-            size: (r.size as number) ?? 0,
-            modified: (r.modified as string) ?? "",
-            sha256: (r.actual_sha256 as string) ?? undefined,
-          })),
-          totalCount: currentResults.length,
-          truncated,
-        });
+        // Only update baseline when current fetch is complete (not truncated).
+        // Writing a truncated result as baseline corrupts future diffs.
+        if (!truncated) {
+          await context.writeResource("packages", queryHash, {
+            queryHash,
+            query: args.query,
+            fetchedAt: new Date().toISOString(),
+            results: results.map((r) => ({
+              repo: (r.repo as string) ?? "",
+              path: (r.path as string) ?? "",
+              name: (r.name as string) ?? "",
+              size: (r.size as number) ?? 0,
+              modified: (r.modified as string) ?? "",
+              sha256: (r.actual_sha256 as string) ?? undefined,
+            })),
+            totalCount,
+            truncated: false,
+          });
+        }
 
         const diffHandle = await context.writeResource(
           "package-diff",
@@ -654,7 +675,9 @@ export const model = {
           });
           return { dataHandles: [handle] };
         } catch (e) {
-          if ((e as Error).message.includes("401")) throw e;
+          if (
+            (e as Error).message.startsWith("Artifactory authentication failed")
+          ) throw e;
           const handle = await context.writeResource("storage", "result", {
             fetchedAt: new Date().toISOString(),
             usedSpace: "unknown",
