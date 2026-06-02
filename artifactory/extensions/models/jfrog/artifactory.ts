@@ -123,7 +123,7 @@ async function rtfApi(
   opts: ApiOpts,
   body?: string,
 ): Promise<{ status: number; data: unknown }> {
-  const fullUrl = `${opts.url}${path}`;
+  const fullUrl = `${opts.url.replace(/\/$/, "")}${path}`;
   const headers: Record<string, string> = {
     "Authorization": `Bearer ${opts.token}`,
   };
@@ -155,7 +155,7 @@ async function rtfApi(
 
 /** Dual FNV-1a hash (48-bit / 12 hex chars) for collision-resistant instance naming. */
 function computeQueryHash(input: string): string {
-  // Use a simple but collision-resistant hash: DJB2 extended to 64-bit range
+  // Dual FNV-1a: two independent 32-bit FNV-1a passes with swapped constants
   // then take 12 hex chars (48 bits, birthday collision at ~16M queries)
   let h1 = 0x811c9dc5;
   let h2 = 0x01000193;
@@ -598,7 +598,8 @@ export const model = {
               name: (r.name as string) ?? "",
               size: (r.size as number) ?? 0,
               modified: (r.modified as string) ?? "",
-              sha256: (r.actual_sha256 as string) ?? undefined,
+              sha256: (r.actual_sha256 as string) ?? (r.sha256 as string) ??
+                undefined,
             })),
             totalCount,
             truncated: false,
