@@ -153,7 +153,7 @@ async function rtfApi(
   return { status, data };
 }
 
-/** SHA-256 based hash (first 12 hex chars) for collision-resistant instance naming. */
+/** Dual FNV-1a hash (48-bit / 12 hex chars) for collision-resistant instance naming. */
 function computeQueryHash(input: string): string {
   // Use a simple but collision-resistant hash: DJB2 extended to 64-bit range
   // then take 12 hex chars (48 bits, birthday collision at ~16M queries)
@@ -287,7 +287,12 @@ export const model = {
             health.note =
               "Health details require admin token (403). Ping succeeded.";
           }
-        } catch {
+        } catch (e) {
+          if (
+            (e as Error).message.startsWith(
+              "Artifactory authentication failed",
+            )
+          ) throw e;
           health.note =
             "Health endpoint unreachable. Ping status used as fallback.";
         }
@@ -331,11 +336,13 @@ export const model = {
           description: (r.description as string) ?? "",
         }));
 
-        const handle = await context.writeResource("repos", "all", {
+        const handle = await context.writeResource("repos", "repo-list", {
           url,
           fetchedAt: new Date().toISOString(),
           repos,
           totalCount: repos.length,
+          // /api/repositories returns all repos in a single non-paginated array.
+          // There is no pagination envelope, token, or total in the response.
           truncated: false,
         });
 
@@ -362,7 +369,7 @@ export const model = {
         const { status, data } = await rtfApi("GET", "/api/storageinfo", opts);
         if (status !== 200) {
           if (status === 403) {
-            const h = await context.writeResource("repos", "error", {
+            const h = await context.writeResource("repos", "_error", {
               repoKey: "all",
               fetchedAt: new Date().toISOString(),
               artifactCount: 0,
@@ -379,7 +386,9 @@ export const model = {
           ((data as Record<string, unknown>)?.repositoriesSummaryList ??
             []) as Array<Record<string, unknown>>;
         const repos = args.repoKey
-          ? repoList.filter((r) => r.repoKey === args.repoKey)
+          ? repoList.filter((r) =>
+            r.repoKey === args.repoKey && r.repoKey !== "TOTAL"
+          )
           : repoList.filter((r) => r.repoKey !== "TOTAL");
         for (const r of repos) {
           const key = (r.repoKey as string) ?? "unknown";
@@ -436,10 +445,8 @@ export const model = {
 
         // Append .limit() if not already in the query
         let aql = args.query;
-        aql = aql.replace(/\.limit\(\d*\)\s*$/, "");
-        {
-          aql += `.limit(${args.limit})`;
-        }
+        aql = aql.replace(/(?<=\))\.limit\(\d+\)/, "");
+        aql += `.limit(${args.limit})`;
 
         const { status, data } = await rtfApi(
           "POST",
@@ -511,10 +518,12 @@ export const model = {
           { repo: string; path: string; name: string }
         > = [];
         let previousFetchedAt = "";
+        let hasPriorScan = false;
         if (context.readResource) {
           try {
             const prev = await context.readResource(queryHash);
             if (prev && Array.isArray(prev.results) && !prev.truncated) {
+              hasPriorScan = true;
               previousResults = (prev.results as Array<Record<string, string>>)
                 .map((r) => ({
                   repo: r.repo ?? "",
@@ -535,7 +544,7 @@ export const model = {
 
         // Run current query
         let aql = args.query;
-        aql = aql.replace(/\.limit\(\d*\)\s*$/, "");
+        aql = aql.replace(/(?<=\))\.limit\(\d+\)/, "");
         aql += `.limit(${args.limit})`;
         const { status, data } = await rtfApi(
           "POST",
@@ -566,8 +575,7 @@ export const model = {
         const previousKeys = new Set(previousResults.map(toKey));
         const currentKeys = new Set(currentResults.map(toKey));
 
-        const noBaseline = previousResults.length === 0 &&
-          currentResults.length > 0;
+        const noBaseline = !hasPriorScan;
         const suppressDiff = truncated || noBaseline;
 
         const newPackages = suppressDiff
