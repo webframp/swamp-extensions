@@ -23,7 +23,9 @@ const ConfigSchema = z.object({
   address: z.string().url().describe(
     "Vault server address (e.g., https://vault.example.com:8200)",
   ),
-  token: z.string().describe("Vault authentication token"),
+  token: z.string().optional().describe(
+    "Vault authentication token. If omitted, resolves from VAULT_TOKEN env var or ~/.vault-token file.",
+  ),
   mount: z.string().default("secret").describe("Secrets engine mount path"),
   kvVersion: z.enum(["1", "2"]).default("2").describe(
     "KV secrets engine version",
@@ -32,6 +34,38 @@ const ConfigSchema = z.object({
     "Vault namespace (Enterprise only)",
   ),
 });
+
+/**
+ * Resolve the Vault token using the standard credential chain:
+ * 1. Explicit config token (highest priority)
+ * 2. VAULT_TOKEN environment variable
+ * 3. ~/.vault-token file (written by `vault login`)
+ *
+ * Throws with an actionable error if no token is found.
+ */
+function resolveToken(configToken: string | undefined): string {
+  if (configToken) return configToken;
+
+  const envToken = Deno.env.get("VAULT_TOKEN");
+  if (envToken) return envToken;
+
+  try {
+    const home = Deno.env.get("HOME") ?? Deno.env.get("USERPROFILE") ?? "";
+    if (home) {
+      const fileToken = Deno.readTextFileSync(`${home}/.vault-token`).trim();
+      if (fileToken) return fileToken;
+    }
+  } catch {
+    // File doesn't exist or isn't readable — fall through
+  }
+
+  throw new Error(
+    "No Vault token found. Provide one via: " +
+      "(1) config 'token' field, " +
+      "(2) VAULT_TOKEN environment variable, or " +
+      "(3) ~/.vault-token file (run 'vault login' to create it).",
+  );
+}
 
 /**
  * Vault provider definition for HashiCorp Vault.
@@ -51,10 +85,11 @@ export const vault = {
   ): VaultProviderInstance => {
     const parsed = ConfigSchema.parse(config);
     const baseUrl = parsed.address.replace(/\/$/, "");
+    const token = resolveToken(parsed.token);
 
     const headers = (): Record<string, string> => {
       const h: Record<string, string> = {
-        "X-Vault-Token": parsed.token,
+        "X-Vault-Token": token,
         "Content-Type": "application/json",
       };
       if (parsed.namespace) {
