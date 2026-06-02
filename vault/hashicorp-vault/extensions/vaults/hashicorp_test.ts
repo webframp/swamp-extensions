@@ -31,7 +31,6 @@ Deno.test("vault export conforms to VaultProvider contract", () => {
     ],
     invalidConfigs: [
       {}, // Missing required fields
-      { address: "https://vault.example.com" }, // Missing token
       { token: "hvs.xxx" }, // Missing address
       { address: "not-a-url", token: "hvs.xxx" }, // Invalid URL
     ],
@@ -45,14 +44,25 @@ Deno.test("createProvider throws on missing address", () => {
   );
 });
 
-Deno.test("createProvider throws on missing token", () => {
-  assertThrows(
-    () =>
-      vault.createProvider("bad-vault", {
-        address: "https://vault.example.com",
-      }),
-    Error,
-  );
+Deno.test("createProvider throws on missing token when no env or file", () => {
+  const originalToken = Deno.env.get("VAULT_TOKEN");
+  const originalHome = Deno.env.get("HOME");
+  Deno.env.delete("VAULT_TOKEN");
+  // Point HOME to a nonexistent dir so ~/.vault-token won't be found
+  Deno.env.set("HOME", "/tmp/nonexistent-vault-test-dir");
+  try {
+    assertThrows(
+      () =>
+        vault.createProvider("bad-vault", {
+          address: "https://vault.example.com",
+        }),
+      Error,
+      "No Vault token found",
+    );
+  } finally {
+    if (originalToken) Deno.env.set("VAULT_TOKEN", originalToken);
+    if (originalHome) Deno.env.set("HOME", originalHome);
+  }
 });
 
 Deno.test("createProvider accepts valid config", () => {
