@@ -36,7 +36,7 @@ const BudgetAlertingSchema = z.object({
   alert_recipients: z.array(z.string()),
 });
 
-const BudgetSchema = z.object({
+const _BudgetSchema = z.object({
   id: z.string(),
   budget_type: z.string(),
   budget_product_skus: z.array(z.string()),
@@ -45,14 +45,6 @@ const BudgetSchema = z.object({
   budget_amount: z.number(),
   prevent_further_usage: z.boolean(),
   budget_alerting: BudgetAlertingSchema,
-});
-
-const BudgetListSchema = z.object({
-  enterprise: z.string(),
-  fetchedAt: z.string(),
-  budgets: z.array(BudgetSchema),
-  totalCount: z.number(),
-  truncated: z.boolean(),
 });
 
 const UsageSummarySchema = z.object({
@@ -218,7 +210,7 @@ async function paginateAll(
   dataKey: string,
   maxPages = 20,
   perPage = 100,
-): Promise<unknown[]> {
+): Promise<{ items: unknown[]; truncated: boolean }> {
   const results: unknown[] = [];
   let page = 1;
   let hasMore = true;
@@ -251,7 +243,8 @@ async function paginateAll(
       hasMore = false;
     }
   }
-  return results;
+  // Truncated = we hit the page cap while more data was available
+  return { items: results, truncated: hasMore && page > maxPages };
 }
 
 // =============================================================================
@@ -292,8 +285,8 @@ export const model = {
 
   resources: {
     budget: {
-      description: "Budget configuration state",
-      schema: BudgetListSchema,
+      description: "Budget configuration state (list, single, or tombstone)",
+      schema: z.object({}).passthrough(),
       lifetime: "7d" as const,
       garbageCollection: 10,
     },
@@ -353,14 +346,20 @@ export const model = {
         if (args.scope) path += `?scope=${args.scope}`;
 
         context.logger.info("Listing budgets for {enterprise}", { enterprise });
-        const budgets = await paginateAll(path, opts, "budgets", 10, 10);
+        const { items: budgets, truncated } = await paginateAll(
+          path,
+          opts,
+          "budgets",
+          10,
+          10,
+        );
 
         const handle = await context.writeResource("budget", "all", {
           enterprise,
           fetchedAt: new Date().toISOString(),
           budgets,
           totalCount: budgets.length,
-          truncated: budgets.length >= 100,
+          truncated,
         });
 
         context.logger.info("Found {count} budgets", { count: budgets.length });
@@ -371,7 +370,8 @@ export const model = {
     get_budget: {
       description: "Get a specific budget by ID",
       arguments: z.object({
-        budgetId: z.string().describe("Budget UUID"),
+        budgetId: z.string().regex(/^[0-9a-f-]{36}$/, "Must be a valid UUID")
+          .describe("Budget UUID"),
       }),
       execute: async (
         args: { budgetId: string },
@@ -430,15 +430,15 @@ export const model = {
         const opts = { token, apiVersion };
 
         // Check for existing budget with same scope/entity/sku (upsert)
-        const existing = await paginateAll(
+        const { items: existing } = await paginateAll(
           `/enterprises/${enterprise}/settings/billing/budgets?scope=${args.budgetScope}`,
           opts,
           "budgets",
           10,
           10,
-        ) as Array<Record<string, unknown>>;
+        );
 
-        const match = existing.find((b) =>
+        const match = (existing as Array<Record<string, unknown>>).find((b) =>
           b.budget_scope === args.budgetScope &&
           // Only match on entity name when it's non-empty (enterprise-scope
           // budgets have no entity name and should match by scope+sku alone)
@@ -525,7 +525,8 @@ export const model = {
     update_budget: {
       description: "Update an existing budget",
       arguments: z.object({
-        budgetId: z.string().describe("Budget UUID"),
+        budgetId: z.string().regex(/^[0-9a-f-]{36}$/, "Must be a valid UUID")
+          .describe("Budget UUID"),
         budgetAmount: z.number().int().min(0).optional(),
         preventFurtherUsage: z.boolean().optional(),
         alertRecipients: z.array(z.string()).optional(),
@@ -594,7 +595,8 @@ export const model = {
     delete_budget: {
       description: "Delete a budget (idempotent — succeeds if already gone)",
       arguments: z.object({
-        budgetId: z.string().describe("Budget UUID"),
+        budgetId: z.string().regex(/^[0-9a-f-]{36}$/, "Must be a valid UUID")
+          .describe("Budget UUID"),
         dryRun: z.boolean().default(false),
       }),
       execute: async (
@@ -782,14 +784,19 @@ export const model = {
           Record<string, unknown>
         >;
         const prevByName = new Map(
-          previousUsers.map((u) => [u.username as string, u]),
+          previousUsers.map((u) => [
+            (u.username as string) ?? (u.login as string) ?? "",
+            u,
+          ]),
         );
         const byUser = cycleBoundary ? [] : currentUsers.map((u) => {
           const username = (u.username as string) ?? (u.login as string) ?? "";
           const currentCredits = (u.aiCredits as number) ??
             (u.ai_credits as number) ?? 0;
           const prev = prevByName.get(username);
-          const previousCredits = prev ? ((prev.aiCredits as number) ?? 0) : 0;
+          const previousCredits = prev
+            ? ((prev.aiCredits as number) ?? (prev.ai_credits as number) ?? 0)
+            : 0;
           return {
             username,
             previousCredits,
@@ -807,16 +814,19 @@ export const model = {
           byUser,
         });
 
-        // Update the stored summary for next diff
-        await context.writeResource("usage-summary", "usage-latest", {
-          org,
-          fetchedAt: new Date().toISOString(),
-          billingPeriod: currentPeriod,
-          totalAiCredits: current.total_ai_credits ?? 0,
-          totalCostUsd: current.total_cost_usd ?? 0,
-          byUser: current.by_user ?? [],
-          byModel: current.by_model ?? [],
-        });
+        // Only update stored summary when billing period is present.
+        // An empty period poisons future diffs with false cycle boundaries.
+        if (currentPeriod.start) {
+          await context.writeResource("usage-summary", "usage-latest", {
+            org,
+            fetchedAt: new Date().toISOString(),
+            billingPeriod: currentPeriod,
+            totalAiCredits: current.total_ai_credits ?? 0,
+            totalCostUsd: current.total_cost_usd ?? 0,
+            byUser: current.by_user ?? [],
+            byModel: current.by_model ?? [],
+          });
+        }
 
         context.logger.info(
           "Usage diff: delta={delta} credits (cycleBoundary={boundary})",
@@ -837,7 +847,7 @@ export const model = {
         const opts = { token, apiVersion: "2022-11-28" };
 
         context.logger.info("Listing Copilot seats for {org}", { org });
-        const seats = await paginateAll(
+        const { items: seats, truncated: seatsTruncated } = await paginateAll(
           `/orgs/${org}/copilot/billing/seats`,
           opts,
           "seats",
@@ -847,7 +857,7 @@ export const model = {
           org,
           fetchedAt: new Date().toISOString(),
           totalSeats: seats.length,
-          truncated: seats.length >= 2000,
+          truncated: seatsTruncated,
           seats,
           reportingLagNote:
             "Activity data may lag 24-48 hours. Do not revoke seats based solely on recent inactivity.",
@@ -952,20 +962,20 @@ export const model = {
         });
 
         // Fetch all existing cost_center budgets
-        const existingBudgets = await paginateAll(
+        const { items: existingBudgets } = await paginateAll(
           `/enterprises/${enterprise}/settings/billing/budgets?scope=cost_center`,
           billingOpts,
           "budgets",
           10,
           10,
-        ) as Array<Record<string, unknown>>;
+        );
 
         const results: Array<Record<string, unknown>> = [];
 
         for (const tier of args.tiers) {
           try {
             // Get team member count (paginated for teams >100)
-            const teamMembers = await paginateAll(
+            const { items: teamMembers } = await paginateAll(
               `/orgs/${org}/teams/${tier.teamSlug}/members`,
               teamOpts,
               "",
@@ -974,12 +984,13 @@ export const model = {
             const targetAmount = memberCount * tier.perUserBudget;
 
             // Find existing budget for this cost center + sku
-            const match = existingBudgets.find((b) =>
-              b.budget_scope === "cost_center" &&
-              b.budget_entity_name === tier.costCenterName &&
-              Array.isArray(b.budget_product_skus) &&
-              (b.budget_product_skus as string[]).includes(tier.productSku)
-            );
+            const match = (existingBudgets as Array<Record<string, unknown>>)
+              .find((b) =>
+                b.budget_scope === "cost_center" &&
+                b.budget_entity_name === tier.costCenterName &&
+                Array.isArray(b.budget_product_skus) &&
+                (b.budget_product_skus as string[]).includes(tier.productSku)
+              );
 
             if (match) {
               const currentAmount = match.budget_amount as number;
@@ -1034,6 +1045,13 @@ export const model = {
                   },
                 );
               }
+              // Track created budget to prevent duplicates within same run
+              (existingBudgets as Array<Record<string, unknown>>).push({
+                budget_scope: "cost_center",
+                budget_entity_name: tier.costCenterName,
+                budget_product_skus: [tier.productSku],
+                budget_amount: targetAmount,
+              });
               results.push({
                 teamSlug: tier.teamSlug,
                 costCenterName: tier.costCenterName,
