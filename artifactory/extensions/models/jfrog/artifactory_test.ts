@@ -267,6 +267,7 @@ Deno.test({
       (context as any).readResource = () =>
         Promise.resolve({
           fetchedAt: "2026-05-31T00:00:00Z",
+          truncated: false,
           results: [
             {
               repo: "npm",

@@ -83,7 +83,7 @@ const PackageResultSchema = z.object({
 const PackageDiffSchema = z.object({
   queryHash: z.string(),
   fetchedAt: z.string(),
-  previousFetchedAt: z.string(),
+  previousFetchedAt: z.string().optional(),
   newPackages: z.array(
     z.object({ repo: z.string(), path: z.string(), name: z.string() }),
   ),
@@ -286,6 +286,8 @@ export const model = {
           } else if (status === 403) {
             health.note =
               "Health details require admin token (403). Ping succeeded.";
+          } else {
+            health.note = `Health endpoint returned HTTP ${status}`;
           }
         } catch (e) {
           if (
@@ -445,7 +447,7 @@ export const model = {
 
         // Append .limit() if not already in the query
         let aql = args.query;
-        aql = aql.replace(/(?<=\))\.limit\(\d+\)/, "");
+        aql = aql.replace(/(?<=\))\s*\.limit\(\d+\)/g, "");
         aql += `.limit(${args.limit})`;
 
         const { status, data } = await rtfApi(
@@ -517,7 +519,7 @@ export const model = {
         let previousResults: Array<
           { repo: string; path: string; name: string }
         > = [];
-        let previousFetchedAt = "";
+        let previousFetchedAt: string | undefined;
         let hasPriorScan = false;
         if (context.readResource) {
           try {
@@ -530,7 +532,7 @@ export const model = {
                   path: r.path ?? "",
                   name: r.name ?? "",
                 }));
-              previousFetchedAt = (prev.fetchedAt as string) ?? "";
+              previousFetchedAt = (prev.fetchedAt as string) ?? undefined;
             }
           } catch {
             if (context.logger.warn) {
@@ -544,7 +546,7 @@ export const model = {
 
         // Run current query
         let aql = args.query;
-        aql = aql.replace(/(?<=\))\.limit\(\d+\)/, "");
+        aql = aql.replace(/(?<=\))\s*\.limit\(\d+\)/g, "");
         aql += `.limit(${args.limit})`;
         const { status, data } = await rtfApi(
           "POST",
@@ -608,7 +610,7 @@ export const model = {
 
         const diffHandle = await context.writeResource(
           "package-diff",
-          queryHash,
+          `diff-${queryHash}`,
           {
             queryHash,
             fetchedAt: new Date().toISOString(),
@@ -682,7 +684,11 @@ export const model = {
             usedSpace: (d.usedSpace as string) ?? "unknown",
             freeSpace: (d.freeSpace as string) ?? "unknown",
             totalSpace: (d.totalSpace as string) ?? "unknown",
-            repoCount: Array.isArray(repos) ? repos.length : 0,
+            repoCount: Array.isArray(repos)
+              ? (repos as Array<Record<string, unknown>>).filter((r) =>
+                r.repoKey !== "TOTAL"
+              ).length
+              : 0,
             status: "ok",
           });
 
