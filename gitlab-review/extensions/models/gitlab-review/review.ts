@@ -28,6 +28,7 @@ const MrDiffSchema = z.object({
   project: z.string(),
   iid: z.number(),
   title: z.string(),
+  state: z.string(),
   description: z.string().nullable(),
   sourceBranch: z.string(),
   targetBranch: z.string(),
@@ -89,6 +90,27 @@ function instanceName(prefix: string, project: string, iid: number): string {
   return `${prefix}-${encodeURIComponent(project)}-${iid}`;
 }
 
+async function assertMrOpen(
+  context: ModelContext,
+  project: string,
+  iid: number,
+): Promise<void> {
+  const diffData = await context.readResource(
+    instanceName("mrDiff", project, iid),
+  );
+  if (!diffData) {
+    throw new Error(
+      `No MR data for ${project}!${iid}. Run get_mr_diff first to fetch MR state.`,
+    );
+  }
+  const state = (diffData.state as string) ?? "unknown";
+  if (state !== "opened") {
+    throw new Error(
+      `MR ${project}!${iid} is ${state}. Cannot post or approve a ${state} MR.`,
+    );
+  }
+}
+
 async function gitlabFetch(
   host: string,
   token: string,
@@ -137,7 +159,7 @@ async function contextFetch(
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via REST API. */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.06.04.1",
+  version: "2026.06.04.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     mrDiff: {
@@ -223,6 +245,7 @@ export const model = {
           project: args.project,
           iid: args.iid,
           title: mr.title ?? "",
+          state: mr.state ?? "unknown",
           description: mr.description ?? null,
           sourceBranch: mr.source_branch ?? "",
           targetBranch: mr.target_branch ?? "",
@@ -321,6 +344,7 @@ export const model = {
         args: { project: string; iid: number },
         context: ModelContext,
       ) => {
+        await assertMrOpen(context, args.project, args.iid);
         const { host, token } = context.globalArgs;
         const pid = encodeProject(args.project);
         await contextFetch(
@@ -350,6 +374,7 @@ export const model = {
         args: { project: string; iid: number },
         context: ModelContext,
       ) => {
+        await assertMrOpen(context, args.project, args.iid);
         const { host, token } = context.globalArgs;
         const pid = encodeProject(args.project);
         await contextFetch(
@@ -447,6 +472,7 @@ export const model = {
         args: { project: string; iid: number; action: string },
         context: ModelContext,
       ) => {
+        await assertMrOpen(context, args.project, args.iid);
         const { host, token } = context.globalArgs;
         const draftName = instanceName("reviewDraft", args.project, args.iid);
         const draft = await context.readResource(draftName);
