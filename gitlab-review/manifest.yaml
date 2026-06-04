@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab-review"
-version: "2026.06.04.1"
+version: "2026.06.04.2"
 description: |
   AI-assisted GitLab merge request code review with human approval gate.
   Uses native fetch() against the GitLab REST API (no CLI dependencies).

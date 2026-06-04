@@ -206,6 +206,19 @@ Deno.test("post_review writes reviewPosted before approve — partial failure pr
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: { host: "gitlab.example.com", token: "test-token" },
     storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: {
+        project: "group/repo",
+        iid: 1,
+        title: "Test",
+        state: "opened",
+        description: null,
+        sourceBranch: "a",
+        targetBranch: "b",
+        author: "x",
+        diffs: [],
+        fetchedAt: "2026-01-01T00:00:00Z",
+        truncated: false,
+      },
       [`reviewDraft-${encodeURIComponent("group/repo")}-1`]: {
         body: "Test review",
         project: "group/repo",
@@ -272,4 +285,91 @@ Deno.test("edit_draft creates new version of draft", async () => {
   assertEquals(resources.length, 1);
   const data = resources[0].data as { body: string };
   assertEquals(data.body, "Revised review");
+});
+
+Deno.test("post_review rejects merged MR", async () => {
+  const restore = mockFetch({
+    "POST /api/v4/projects/group%2Frepo/merge_requests/99/notes": {
+      status: 201,
+      body: { id: 1 },
+    },
+  });
+
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-99`]: {
+        project: "group/repo",
+        iid: 99,
+        title: "Old MR",
+        state: "merged",
+        description: null,
+        sourceBranch: "a",
+        targetBranch: "b",
+        author: "x",
+        diffs: [],
+        fetchedAt: "2026-01-01T00:00:00Z",
+        truncated: false,
+      },
+      [`reviewDraft-${encodeURIComponent("group/repo")}-99`]: {
+        body: "Review text",
+        project: "group/repo",
+        iid: 99,
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+    },
+  });
+
+  try {
+    await assertRejects(
+      // deno-lint-ignore no-explicit-any
+      () =>
+        model.methods.post_review.execute(
+          { project: "group/repo", iid: 99, action: "comment" },
+          context as any,
+        ),
+      Error,
+      "is merged",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("approve_mr rejects closed MR", async () => {
+  const restore = mockFetch({});
+
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-50`]: {
+        project: "group/repo",
+        iid: 50,
+        title: "Closed MR",
+        state: "closed",
+        description: null,
+        sourceBranch: "a",
+        targetBranch: "b",
+        author: "x",
+        diffs: [],
+        fetchedAt: "2026-01-01T00:00:00Z",
+        truncated: false,
+      },
+    },
+  });
+
+  try {
+    await assertRejects(
+      // deno-lint-ignore no-explicit-any
+      () =>
+        model.methods.approve_mr.execute(
+          { project: "group/repo", iid: 50 },
+          context as any,
+        ),
+      Error,
+      "is closed",
+    );
+  } finally {
+    restore();
+  }
 });
