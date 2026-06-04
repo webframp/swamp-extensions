@@ -170,6 +170,22 @@ truncated tracking, .max() on arguments), you MUST verify it is applied CONSISTE
 across ALL methods in the same file that use the same pattern. Inconsistency between
 sibling methods is a HIGH finding. Check every execute() method, not just the first one.
 
+## CRITICAL RULE: PARTIAL FAILURE & IDEMPOTENCY
+For every method that performs multiple side-effects (e.g., POST then approve, write
+then delete), trace what happens when the FIRST succeeds but the SECOND throws:
+- Is the first operation's result recorded BEFORE the second is attempted?
+- Can a retry detect that the first already succeeded and skip it?
+- Does the error propagation leave the system in a state where the user can recover?
+A method that posts a comment then approves MUST record the comment's ID before
+attempting the approval. Otherwise a retry creates duplicates. This is HIGH.
+
+## CRITICAL RULE: PROJECT CONVENTIONS ARE BLOCKERS
+The PROJECT CONVENTIONS section above contains HARD RULES. Violations are HIGH findings,
+not style suggestions. Specifically enforce:
+- If conventions require test files, their absence is HIGH.
+- If conventions ban \`|| defaultValue\` in favor of \`?? defaultValue\`, violations are HIGH.
+- If conventions require version bumps, their absence blocks merge.
+
 ## Review Rules
 - Be SPECIFIC. Include file:line, what's wrong, a concrete breaking example, and fix.
 - Classify as CRITICAL/HIGH (blocks merge), MEDIUM (warning), LOW (theoretical).
