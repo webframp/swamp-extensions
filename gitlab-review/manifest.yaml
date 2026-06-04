@@ -1,0 +1,39 @@
+manifestVersion: 1
+name: "@webframp/gitlab-review"
+version: "2026.06.04.1"
+description: |
+  AI-assisted GitLab merge request code review with human approval gate.
+  Uses native fetch() against the GitLab REST API (no CLI dependencies).
+  Designed to pair with @dougschaefer/writing-voice for tone-consistent
+  reviews driven from an agent harness.
+
+  ## Authentication
+
+  Requires a GitLab personal access token with `api` scope, stored in a
+  swamp vault.
+
+  ## Methods
+
+  - **get_mr_diff** — Fetch MR metadata and file diffs
+  - **analyze** — Store an AI-generated review draft
+  - **edit_draft** — Revise the draft (versioned, retains history)
+  - **update_review** — Edit an existing comment on the MR
+  - **approve_mr** — Approve the MR without posting a comment
+  - **unapprove_mr** — Remove approval (request changes)
+  - **post_review** — Post draft as comment, optionally approve/unapprove
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - gitlab-review/review.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - gitlab
+  - code-review
+  - merge-request
+  - ai-assisted
