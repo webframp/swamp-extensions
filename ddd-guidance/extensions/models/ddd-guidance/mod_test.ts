@@ -472,6 +472,30 @@ Deno.test("boundaries throws when contexts array is empty", async () => {
   );
 });
 
+Deno.test("boundaries throws when specified context not in map", async () => {
+  const { context } = createDddContext({
+    current: {
+      contexts: [{
+        name: "orders",
+        purpose: "Manage orders",
+        ubiquitousLanguageTerms: [],
+        coreSubdomain: true,
+      }],
+      relationships: [],
+      overloadedTerms: [],
+      discoveredAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  await assertRejects(
+    () =>
+      // deno-lint-ignore no-explicit-any
+      model.methods.boundaries.execute({ context: "payments" }, context as any),
+    Error,
+    'Context "payments" not found in context map',
+  );
+});
+
 Deno.test("boundaries uses first context from map when none specified", async () => {
   const { context, getLogsByLevel } = createDddContext({
     current: {

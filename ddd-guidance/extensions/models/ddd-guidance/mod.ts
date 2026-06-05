@@ -459,6 +459,14 @@ identity references, and eventual consistency rules.`,
         const contexts = contextMap.contexts as Array<{ name: string }>;
         const targetContext = args.context ?? contexts[0].name;
 
+        if (!contexts.some((c) => c.name === targetContext)) {
+          throw new Error(
+            `Context "${targetContext}" not found in context map. Known contexts: ${
+              contexts.map((c) => c.name).join(", ")
+            }`,
+          );
+        }
+
         const boundariesData = {
           aggregates: [] as z.infer<typeof AggregateDesignSchema>[],
           eventualConsistencyRules: [] as Array<{
@@ -541,9 +549,10 @@ Guide the conversation through these phases:
    evolution — teams can query "what did we believe 3 months ago?"
    to understand how their domain model matured.
 
-Update all affected resources (contextMap, domainGlossary, boundaries)
-with the revised understanding. The previous versions remain queryable
-through the datastore's version history.`,
+After identifying what changed, re-run the relevant methods (contexts,
+language, boundaries) to write updated resource versions. This method
+identifies what needs revision; the other methods perform the actual
+writes. The version history (via GC retention) preserves the evolution.`,
       arguments: z.object({
         scope: z
           .enum(["all", "contexts", "language", "boundaries"])
