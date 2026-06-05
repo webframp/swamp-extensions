@@ -9,6 +9,7 @@ description: |
 
   Configurable scales via globalArguments allow teams to
   anchor scoring in their own context.
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - rice-scoring/mod.ts
 labels:
@@ -21,3 +22,6 @@ platforms:
   - linux-aarch64
   - darwin-x86_64
   - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
