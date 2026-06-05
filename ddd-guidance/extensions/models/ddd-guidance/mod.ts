@@ -203,15 +203,17 @@ Guide the discussion through these phases:
    - Independence from other contexts for most changes
 
 5. RELATIONSHIP MAPPING
-   For each pair of related contexts, determine the relationship type:
-   - Partnership: teams cooperate, evolve together
-   - Customer-Supplier: downstream has veto power over upstream changes
-   - Conformist: downstream accepts upstream's model as-is
-   - Anticorruption Layer: downstream translates upstream concepts
-   - Shared Kernel: small shared model both teams maintain
-   - Open Host Service: upstream provides a protocol for many consumers
-   - Published Language: shared interchange format (JSON schema, protobuf)
-   - Separate Ways: no integration, independent
+   For each pair of related contexts, determine the relationship type
+   (use these exact values in the resource):
+   - partnership: teams cooperate, evolve together
+   - customer-supplier: downstream has veto power over upstream changes
+   - conformist: downstream accepts upstream's model as-is
+   - anticorruption-layer: downstream translates upstream concepts
+   - shared-kernel: small shared model both teams maintain
+   - open-host-service: upstream provides a protocol for many consumers
+   - published-language: shared interchange format (JSON schema, protobuf)
+   - separate-ways: no integration, independent
+   - big-ball-of-mud: no clear boundaries (identify to improve)
 
 6. CORE DOMAIN IDENTIFICATION
    Ask: "Which of these contexts represents your competitive advantage
@@ -314,8 +316,8 @@ for one context. Run repeatedly to build vocabulary across contexts.`,
       ) => {
         const contextMap = await ctx.readResource("current");
 
-        const contexts = contextMap
-          ? (contextMap.contexts as Array<{ name: string }>) ?? []
+        const contexts = (contextMap && Array.isArray(contextMap.contexts))
+          ? contextMap.contexts as Array<{ name: string }>
           : [];
 
         const targetContext = args.context ??
@@ -417,13 +419,13 @@ identity references, and eventual consistency rules.`,
           "current",
         ) as Record<string, unknown> | null;
 
-        if (!contextMap) {
+        if (!contextMap || !Array.isArray(contextMap.contexts)) {
           throw new Error(
             "No context map found. Run 'contexts' method first to discover bounded contexts.",
           );
         }
 
-        const contexts = (contextMap.contexts as Array<{ name: string }>) ?? [];
+        const contexts = contextMap.contexts as Array<{ name: string }>;
         const targetContext = args.context ??
           contexts[0]?.name ??
           "unknown-context";
