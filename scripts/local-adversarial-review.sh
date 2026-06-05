@@ -179,6 +179,27 @@ then delete), trace what happens when the FIRST succeeds but the SECOND throws:
 A method that posts a comment then approves MUST record the comment's ID before
 attempting the approval. Otherwise a retry creates duplicates. This is HIGH.
 
+## CRITICAL RULE: ADVERTISED USE CASES MUST WORK
+For every feature described in the README, description, or code comments, verify the
+code actually supports that use case end-to-end. Specifically:
+- If the README says "optional API key for private forums", trace the auth code path
+  with a user-level key. Does it work, or does a hardcoded value break it?
+- If global args have defaults, are those defaults correct for ALL valid configurations?
+- Hardcoded values that assume a specific auth level (admin, system) when the docs
+  advertise user-level access are HIGH.
+
+## CRITICAL RULE: FIELD NAMES MUST BE HONEST
+Resource field names must accurately describe what they contain. A field named
+`totalCount` that stores a page-sized number (not the actual total) misleads every
+downstream consumer. If the API doesn't provide totals, name it `pageCount` or
+`resultCount`. Dishonest field names are MEDIUM.
+
+## CRITICAL RULE: EVERY METHOD EXECUTE PATH MUST BE TESTED
+Every method in the model must have at least one execute-path test that exercises its
+unique logic (branching, hashing, pagination, error handling). Schema and export tests
+are not sufficient. An untested execute path for a method with non-trivial logic
+(branching on input length, crypto operations, conditional truncation) is MEDIUM.
+
 ## CRITICAL RULE: PROJECT CONVENTIONS ARE BLOCKERS
 The PROJECT CONVENTIONS section above contains HARD RULES. Violations are HIGH findings,
 not style suggestions. Specifically enforce:

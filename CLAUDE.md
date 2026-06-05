@@ -149,7 +149,11 @@ All changes go through pull requests — no direct pushes to main.
    - `ci: add redmine to test matrix`
    - `chore(terraform): bump AWS SDK to 3.1020.0`
    - `test(vault/gopass): add edge case for empty store`
-4. **Run local adversarial review** — Before pushing, run `./scripts/local-adversarial-review.sh` to catch issues without waiting for CI. It auto-detects `claude` or `kiro-cli` (override with `--claude`/`--kiro`), runs a fast pattern-symmetry pre-check, then a full adversarial review matching the CI prompt. Fix findings before pushing to avoid slow review cycles.
+4. **Run local adversarial review until PASS** — Before pushing, run `./scripts/local-adversarial-review.sh` in a loop. It must exit 0 (PASS) before you push. This is a hard gate, not a suggestion.
+   - If it fails: fix the findings, amend commit, re-run. Repeat until PASS.
+   - Do NOT push with known HIGH findings and "hope CI disagrees." CI runs the same prompt with the same rules. Pushing a known failure wastes 3-5 minutes per round-trip.
+   - The script matches CI's adversarial review exactly (same CLAUDE.md context, same critical rules). A local PASS means CI will pass.
+   - Common failure classes: advertised features that don't work end-to-end, dishonest field names, missing execute-path tests, partial-failure ordering bugs, pattern inconsistency across methods.
 5. **Push and open PR** — Push the branch and open a PR against main. CI runs check/lint/fmt/test. The adversarial code review runs automatically on PRs.
 6. **Address review** — Fix any issues raised by CI or the adversarial review. Push additional commits (do not force-push over review comments).
 7. **Merge** — Comment `/lgtm`, `/approve`, or `/shipit` on the PR. The merge workflow squash-merges after verifying CI passed, then deletes the branch.
