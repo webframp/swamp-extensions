@@ -335,8 +335,8 @@ for one context. Run repeatedly to build vocabulary across contexts.`,
           "glossary",
         ) as Record<string, unknown> | null;
 
-        const entries = existing
-          ? (existing.entries as z.infer<typeof GlossaryEntrySchema>[])
+        const entries = Array.isArray(existing?.entries)
+          ? (existing!.entries as z.infer<typeof GlossaryEntrySchema>[])
           : [];
 
         const glossary = {
@@ -447,16 +447,17 @@ identity references, and eventual consistency rules.`,
           "current",
         ) as Record<string, unknown> | null;
 
-        if (!contextMap || !Array.isArray(contextMap.contexts)) {
+        if (
+          !contextMap || !Array.isArray(contextMap.contexts) ||
+          contextMap.contexts.length === 0
+        ) {
           throw new Error(
-            "No context map found. Run 'contexts' method first to discover bounded contexts.",
+            "No bounded contexts discovered yet. Complete the 'contexts' method first.",
           );
         }
 
         const contexts = contextMap.contexts as Array<{ name: string }>;
-        const targetContext = args.context ??
-          contexts[0]?.name ??
-          "unknown-context";
+        const targetContext = args.context ?? contexts[0].name;
 
         const boundariesData = {
           aggregates: [] as z.infer<typeof AggregateDesignSchema>[],
@@ -552,10 +553,10 @@ through the datastore's version history.`,
           ),
       }),
       execute: async (
-        args: { scope?: string },
+        args: { scope: string },
         ctx: MethodContext,
       ) => {
-        const scope = args.scope ?? "all";
+        const scope = args.scope;
 
         const contextMap = await ctx.readResource(
           "current",

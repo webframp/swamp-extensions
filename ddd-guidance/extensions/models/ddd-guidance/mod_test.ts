@@ -304,6 +304,36 @@ Deno.test("language handles gracefully when no context map exists", async () => 
   assertEquals(getWrittenResources().length, 1);
 });
 
+Deno.test("language handles malformed glossary without entries field", async () => {
+  const { context, getWrittenResources } = createDddContext({
+    current: {
+      contexts: [{
+        name: "orders",
+        purpose: "test",
+        ubiquitousLanguageTerms: [],
+        coreSubdomain: true,
+      }],
+      relationships: [],
+      overloadedTerms: [],
+      discoveredAt: "2026-06-05T00:00:00Z",
+    },
+    glossary: {
+      updatedAt: "2026-06-01T00:00:00Z",
+    },
+  });
+
+  const result = await model.methods.language.execute(
+    { context: "orders" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertExists(result.dataHandles);
+  const resources = getWrittenResources();
+  const data = resources[0].data as { entries: unknown[] };
+  assertEquals(data.entries.length, 0);
+});
+
 Deno.test("language preserves existing glossary entries", async () => {
   const { context, getWrittenResources } = createDddContext({
     current: {
@@ -420,7 +450,25 @@ Deno.test("boundaries throws when no context map exists", async () => {
     // deno-lint-ignore no-explicit-any
     () => model.methods.boundaries.execute({}, context as any),
     Error,
-    "No context map found",
+    "No bounded contexts discovered yet",
+  );
+});
+
+Deno.test("boundaries throws when contexts array is empty", async () => {
+  const { context } = createDddContext({
+    current: {
+      contexts: [],
+      relationships: [],
+      overloadedTerms: [],
+      discoveredAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  await assertRejects(
+    // deno-lint-ignore no-explicit-any
+    () => model.methods.boundaries.execute({}, context as any),
+    Error,
+    "No bounded contexts discovered yet",
   );
 });
 
@@ -487,7 +535,7 @@ Deno.test("revisit throws when no context map exists", async () => {
 
   await assertRejects(
     // deno-lint-ignore no-explicit-any
-    () => model.methods.revisit.execute({}, context as any),
+    () => model.methods.revisit.execute({ scope: "all" }, context as any),
     Error,
     "No existing resources found",
   );
@@ -554,7 +602,7 @@ Deno.test("revisit returns empty dataHandles", async () => {
   });
 
   const result = await model.methods.revisit.execute(
-    {},
+    { scope: "all" },
     // deno-lint-ignore no-explicit-any
     context as any,
   );

@@ -28,6 +28,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/reddit/moderation`](reddit/) | Reddit moderation — modqueue, reports, modlog, comments, posts, user info | None (uses fetch + OAuth2) |
 | [`@webframp/rice-scoring`](rice-scoring/) | RICE scoring methodology as an agent-guided framework — configurable scales, structured interviews, ranked scorecards | None (concept model) |
 | [`@webframp/swamp-adoption`](swamp-adoption/) | Guides new users through mapping their domain onto swamp primitives — discovery interviews, extension designs, scaffolds | None (concept model) |
+| [`@webframp/ddd-guidance`](ddd-guidance/) | Domain-Driven Design guidance — bounded context discovery, ubiquitous language capture, aggregate boundary design using Vernon's rules | None (concept model) |
 
 ## Workflow + Report Extensions
 
@@ -84,6 +85,7 @@ swamp extension pull @webframp/terraform
 swamp extension pull @webframp/reddit/moderation
 swamp extension pull @webframp/rice-scoring
 swamp extension pull @webframp/swamp-adoption
+swamp extension pull @webframp/ddd-guidance
 
 # Workflow + report extensions (auto-pull model dependencies)
 swamp extension pull @webframp/sre
