@@ -1,0 +1,6 @@
+swampVersion: 20260605.000321.0
+initializedAt: '2026-06-05T00:00:00.000Z'
+repoId: swamp-adoption-ext
+gitignoreManaged: true
+tools:
+  - claude
