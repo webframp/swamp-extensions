@@ -354,7 +354,13 @@ Each generated file includes TODO comments marking where the user adds real logi
           "current-design",
         ) as Record<string, unknown> | null;
 
-        const extName = (design?.name as string) ?? "@webframp/my-extension";
+        if (!design) {
+          throw new Error(
+            "No extension design found. Run 'design' method first.",
+          );
+        }
+
+        const extName = (design.name as string) ?? "@webframp/my-extension";
         const shortName = extName.replace("@webframp/", "");
 
         const manifestContent = [
@@ -500,15 +506,30 @@ Does not write any resource — purely advisory.`,
         const landscape = await context.readResource(
           "current",
         ) as Record<string, unknown> | null;
+
+        if (!landscape) {
+          throw new Error(
+            "No landscape found. Run 'discover' method first to map your systems.",
+          );
+        }
+
+        const systems = (landscape.systems as Array<{
+          name: string;
+          interactions?: Array<{ pain?: string }>;
+        }>) ?? [];
+
         const design = await context.readResource(
           "current-design",
         ) as Record<string, unknown> | null;
 
-        const systems = (landscape?.systems as Array<{ name: string }>) ?? [];
-        const designedName = (design?.name as string) ?? null;
+        const designedSystems = new Set<string>();
+        if (design?.name) {
+          const name = design.name as string;
+          designedSystems.add(name.replace("@webframp/", ""));
+        }
 
         const remaining = systems.filter(
-          (s) => !designedName?.includes(s.name),
+          (s) => !designedSystems.has(s.name),
         );
 
         if (remaining.length === 0) {
@@ -516,7 +537,17 @@ Does not write any resource — purely advisory.`,
             "All discovered systems have designs. Consider running discover again to expand scope.",
           );
         } else {
-          const suggestion = remaining[0];
+          const sorted = [...remaining].sort((a, b) => {
+            const painOrder: Record<string, number> = {
+              high: 0,
+              medium: 1,
+              low: 2,
+            };
+            const aPain = a.interactions?.[0]?.pain ?? "low";
+            const bPain = b.interactions?.[0]?.pain ?? "low";
+            return (painOrder[aPain] ?? 2) - (painOrder[bPain] ?? 2);
+          });
+          const suggestion = sorted[0];
           context.logger.info(
             "Next suggested extension: {name}. {count} systems remain without designs.",
             { name: suggestion.name, count: remaining.length },

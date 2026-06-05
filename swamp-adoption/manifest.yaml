@@ -9,7 +9,7 @@ description: |
   Uses swamp to teach swamp — the adoption journey itself is modeled
   as typed, versioned state.
 models:
-  - swamp-adoption/mod.ts
+  - extensions/models/swamp-adoption/mod.ts
 labels:
   - onboarding
   - adoption

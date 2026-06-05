@@ -1,7 +1,7 @@
 // Swamp Adoption Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists } from "jsr:@std/assert@1";
+import { assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./mod.ts";
 
@@ -356,6 +356,21 @@ Deno.test("scaffold stdout format returns empty dataHandles", async () => {
   assertEquals(logs.length > 0, true);
 });
 
+Deno.test("scaffold throws when no design exists", async () => {
+  const { context } = createAdoptionContext();
+
+  await assertRejects(
+    // deno-lint-ignore no-explicit-any
+    () =>
+      model.methods.scaffold.execute(
+        { outputFormat: "resource" },
+        context as any,
+      ),
+    Error,
+    "No extension design found",
+  );
+});
+
 Deno.test("next reads resources and logs advisory output", async () => {
   const { context, getWrittenResources, getLogsByLevel } =
     createAdoptionContext({
@@ -385,14 +400,13 @@ Deno.test("next reads resources and logs advisory output", async () => {
   assertEquals(logs.length > 0, true);
 });
 
-Deno.test("next handles no landscape gracefully", async () => {
-  const { context, getLogsByLevel } = createAdoptionContext();
+Deno.test("next throws when no landscape exists", async () => {
+  const { context } = createAdoptionContext();
 
-  // deno-lint-ignore no-explicit-any
-  const result = await model.methods.next.execute({} as any, context as any);
-
-  assertEquals(result.dataHandles.length, 0);
-
-  const logs = getLogsByLevel("info");
-  assertEquals(logs.length > 0, true);
+  await assertRejects(
+    // deno-lint-ignore no-explicit-any
+    () => model.methods.next.execute({} as any, context as any),
+    Error,
+    "No landscape found",
+  );
 });
