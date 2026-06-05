@@ -35,7 +35,7 @@ Deno.test("model has correct type string", () => {
 });
 
 Deno.test("model has correct version", () => {
-  assertEquals(model.version, "2026.06.05.1");
+  assertEquals(model.version, "2026.06.05.2");
 });
 
 Deno.test("model exports globalArguments schema", () => {
@@ -52,6 +52,7 @@ Deno.test("model defines expected methods", () => {
   assertExists(model.methods.contexts);
   assertExists(model.methods.language);
   assertExists(model.methods.boundaries);
+  assertExists(model.methods.revisit);
 });
 
 // =============================================================================
@@ -449,4 +450,114 @@ Deno.test("boundaries uses first context from map when none specified", async ()
   const logs = getLogsByLevel("info");
   const meta = logs[0].args[0] as { context: string };
   assertEquals(meta.context, "fulfillment");
+});
+
+// =============================================================================
+// Execute Tests — revisit
+// =============================================================================
+
+Deno.test("revisit method has execute function", () => {
+  assertEquals(typeof model.methods.revisit.execute, "function");
+});
+
+Deno.test("revisit accepts empty object (defaults to all)", () => {
+  const result = model.methods.revisit.arguments.safeParse({});
+  assertEquals(result.success, true);
+  if (result.success) {
+    assertEquals(result.data.scope, "all");
+  }
+});
+
+Deno.test("revisit accepts valid scope values", () => {
+  for (const scope of ["all", "contexts", "language", "boundaries"]) {
+    const result = model.methods.revisit.arguments.safeParse({ scope });
+    assertEquals(result.success, true);
+  }
+});
+
+Deno.test("revisit rejects invalid scope", () => {
+  const result = model.methods.revisit.arguments.safeParse({
+    scope: "everything",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("revisit throws when no context map exists", async () => {
+  const { context } = createDddContext();
+
+  await assertRejects(
+    // deno-lint-ignore no-explicit-any
+    () => model.methods.revisit.execute({}, context as any),
+    Error,
+    "No existing resources found",
+  );
+});
+
+Deno.test("revisit logs context names and timestamps", async () => {
+  const { context, getLogsByLevel } = createDddContext({
+    current: {
+      contexts: [
+        {
+          name: "orders",
+          purpose: "Manage orders",
+          ubiquitousLanguageTerms: [],
+          coreSubdomain: true,
+        },
+        {
+          name: "shipping",
+          purpose: "Ship things",
+          ubiquitousLanguageTerms: [],
+          coreSubdomain: false,
+        },
+      ],
+      relationships: [],
+      overloadedTerms: [],
+      discoveredAt: "2026-06-01T00:00:00Z",
+    },
+    glossary: {
+      entries: [],
+      updatedAt: "2026-06-02T00:00:00Z",
+    },
+  });
+
+  await model.methods.revisit.execute(
+    { scope: "contexts" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const logs = getLogsByLevel("info");
+  assertEquals(logs.length, 1);
+  const meta = logs[0].args[0] as {
+    scope: string;
+    contexts: string;
+    discoveredAt: string;
+  };
+  assertEquals(meta.scope, "contexts");
+  assertEquals(meta.contexts, "orders, shipping");
+  assertEquals(meta.discoveredAt, "2026-06-01T00:00:00Z");
+});
+
+Deno.test("revisit returns empty dataHandles", async () => {
+  const { context } = createDddContext({
+    current: {
+      contexts: [{
+        name: "test",
+        purpose: "test",
+        ubiquitousLanguageTerms: [],
+        coreSubdomain: false,
+      }],
+      relationships: [],
+      overloadedTerms: [],
+      discoveredAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  const result = await model.methods.revisit.execute(
+    {},
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertEquals(result.dataHandles, []);
 });

@@ -39,9 +39,23 @@ relationships. Results accumulate in the `domainGlossary` resource.
 swamp model @webframp/ddd-guidance method run boundaries my-project --input context="inventory"
 ```
 
-Using Vernon's four rules of thumb, the agent guides invariant discovery,
-aggregate sizing, reference strategy, and consistency boundary decisions.
-Results are stored per-context in the `boundaries` resource.
+Using Vernon's four rules of thumb, the agent guides aggregate candidate
+clustering (translating glossary terms into candidate aggregates), invariant
+discovery, aggregate sizing, reference strategy, and consistency boundary
+decisions. Results are stored per-context in the `boundaries` resource.
+
+### Revisit existing decisions
+
+```bash
+swamp model @webframp/ddd-guidance method run revisit my-project
+swamp model @webframp/ddd-guidance method run revisit my-project --input scope="contexts"
+```
+
+Domain understanding evolves. After new services, team reorgs, or incidents
+that revealed hidden coupling, run `revisit` to review prior decisions.
+The agent guides a structured review of context boundaries, language drift,
+and aggregate pressure, then updates affected resources. Previous versions
+remain queryable through the datastore's version history.
 
 ## Resources
 

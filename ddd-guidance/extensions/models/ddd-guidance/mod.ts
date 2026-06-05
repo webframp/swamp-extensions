@@ -145,7 +145,7 @@ type MethodContext = {
 /** DDD guidance model — bounded context discovery, ubiquitous language capture, aggregate boundary design. */
 export const model = {
   type: "@webframp/ddd-guidance",
-  version: "2026.06.05.1",
+  version: "2026.06.05.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -303,6 +303,13 @@ Guide the conversation through these phases:
      should describe the domain, not the technology
    - Passive ("is processed", "gets handled") — find the actor and the verb
 
+7. CROSS-RESOURCE FEEDBACK
+   If any term discovered in this session is used in OTHER contexts with
+   a different meaning, update the contextMap resource's overloadedTerms
+   array. Read the current contextMap, append the new overloaded term with
+   its per-context meanings, and write it back. The contextMap should always
+   reflect the latest understanding of where language diverges.
+
 Write or update the domainGlossary resource. Each invocation adds entries
 for one context. Run repeatedly to build vocabulary across contexts.`,
       arguments: z.object({
@@ -363,31 +370,52 @@ Rules of Thumb:
    its terms. Ask: "Which context should we design aggregate boundaries
    for?" If a 'context' argument is provided, use that directly.
 
-2. INVARIANT DISCOVERY
-   For each cluster of related terms, ask: "What rules MUST be true at
-   all times? What would constitute an invalid state?" These are your
-   true invariants — the things that must be transactionally consistent.
+2. AGGREGATE CANDIDATE CLUSTERING
+   Before applying Vernon's rules, help the team translate glossary terms
+   into candidate aggregates. Present the glossary entries for this context
+   and ask: "Which of these terms cluster together — which ones are always
+   discussed together, always change together, or make no sense without
+   each other?" Group the terms into 2-5 clusters.
+
+   For each cluster, ask: "What is the 'main thing' in this cluster — the
+   one concept that the others describe or qualify?" That main thing is
+   the candidate aggregate root. The others are candidate entities or
+   value objects within it.
+
+   Teams that think in database tables: ask "Which table would you query
+   first? The other tables in this cluster — are they always JOINed with
+   it, or can they be queried independently?" Tables always JOINed suggest
+   one aggregate. Independently queryable tables suggest separate aggregates.
+
+   Present the candidate aggregates before proceeding. The team should
+   agree these are reasonable starting points before applying invariant
+   analysis.
+
+3. INVARIANT DISCOVERY
+   For each candidate aggregate from step 2, ask: "What rules MUST be
+   true at all times? What would constitute an invalid state?" These are
+   your true invariants — the things that must be transactionally consistent.
 
    Vernon's Rule: "Model true invariants in consistency boundaries."
    An invariant is a business rule that must always be consistent with
    other rules within the same aggregate. If two things must be
    atomically consistent, they belong in the same aggregate.
 
-3. AGGREGATE SIZING
+4. AGGREGATE SIZING
    Vernon's Rule: "Design small aggregates."
    Ask: "Could this aggregate be smaller? Does every entity and value
    object here participate in the SAME invariant?" If not, split it.
    Large aggregates cause transaction contention, memory pressure,
    and merge conflicts. Prefer one root entity with value objects.
 
-4. REFERENCE STRATEGY
+5. REFERENCE STRATEGY
    Vernon's Rule: "Reference other aggregates by identity only."
    Ask: "When this aggregate needs data from another, does it need
    the entire object graph, or just an ID to look it up?" Direct object
    references create coupling. Identity references enable independent
    scaling and evolution.
 
-5. CONSISTENCY BOUNDARY DECISIONS
+6. CONSISTENCY BOUNDARY DECISIONS
    Vernon's Rule: "Use eventual consistency outside the boundary."
    For each cross-aggregate rule, ask: "Whose job is it to enforce
    this? The user doing the action, or the system afterward?" If it's
@@ -397,7 +425,7 @@ Rules of Thumb:
    ever immediately consistent?" The answer is almost always no.
    Ask: "How many seconds/minutes/hours of delay is tolerable?"
 
-6. EVENT IDENTIFICATION
+7. EVENT IDENTIFICATION
    Where eventual consistency is chosen, identify the domain events
    that trigger cross-aggregate updates. Name them in past tense
    (OrderPlaced, InventoryReserved, PaymentConfirmed). Each event
@@ -453,6 +481,113 @@ identity references, and eventual consistency rules.`,
         );
 
         return { dataHandles: [handle] };
+      },
+    },
+
+    revisit: {
+      description: `Review existing DDD decisions against recent system changes.
+
+Domain understanding evolves. New services appear, teams reorganize, incidents
+reveal hidden coupling, and business priorities shift. This method guides a
+structured review of prior context, language, and boundary decisions to
+determine what still holds and what needs updating.
+
+Guide the conversation through these phases:
+
+1. CHANGE INVENTORY
+   Read all three resources (contextMap, domainGlossary, boundaries).
+   Present the current state and its discoveredAt/updatedAt timestamps.
+   Ask: "What has changed since these were last updated? Consider:
+   - New services, APIs, or integrations added
+   - Teams reorganized or ownership transferred
+   - Incidents that revealed unexpected coupling
+   - Features that were hard to build because they crossed boundaries
+   - Terms the team argues about or uses inconsistently"
+
+2. BOUNDARY STRESS TEST
+   For each bounded context in the contextMap, ask: "Has this context's
+   rate of change shifted? Is it still owned by the same team? Has its
+   purpose expanded or contracted?" Contexts that have grown to serve
+   multiple purposes or multiple teams are candidates for splitting.
+
+   For each relationship, ask: "Is this still the right relationship
+   type? Has a partnership become a customer-supplier? Has a conformist
+   relationship developed enough friction to justify an anticorruption
+   layer?"
+
+3. LANGUAGE DRIFT
+   For the domainGlossary, ask: "Are there terms the team has stopped
+   using? New terms that have emerged? Definitions that no longer match
+   how the team actually talks about the system?"
+
+   Pay attention to terms that have silently changed meaning — the
+   definition in the glossary says one thing, but the team uses the word
+   differently now. These are signals of unacknowledged context shifts.
+
+4. AGGREGATE PRESSURE
+   For stored boundaries, ask: "Have any aggregates grown? Are there
+   new invariants that were not present before? Have tolerable delays
+   changed — is something that was eventually consistent now causing
+   user-visible problems because the delay is too long?"
+
+   Look for aggregates that have accumulated entities since the last
+   review. Each addition should be justified by a shared invariant.
+
+5. DECISION RECORD
+   For each change identified, record: what changed, why it changed,
+   and what resource to update. Write updated versions of affected
+   resources. The version history (via GC retention) preserves the
+   evolution — teams can query "what did we believe 3 months ago?"
+   to understand how their domain model matured.
+
+Update all affected resources (contextMap, domainGlossary, boundaries)
+with the revised understanding. The previous versions remain queryable
+through the datastore's version history.`,
+      arguments: z.object({
+        scope: z
+          .enum(["all", "contexts", "language", "boundaries"])
+          .default("all")
+          .describe(
+            "Which aspect to review: all resources, or focus on one",
+          ),
+      }),
+      execute: async (
+        args: { scope?: string },
+        ctx: MethodContext,
+      ) => {
+        const scope = args.scope ?? "all";
+
+        const contextMap = await ctx.readResource(
+          "current",
+        ) as Record<string, unknown> | null;
+
+        if (!contextMap) {
+          throw new Error(
+            "No existing resources found. Run 'contexts' method first to establish a baseline.",
+          );
+        }
+
+        const glossary = await ctx.readResource(
+          "glossary",
+        ) as Record<string, unknown> | null;
+
+        const contextNames = Array.isArray(contextMap.contexts)
+          ? (contextMap.contexts as Array<{ name: string }>).map((c) => c.name)
+          : [];
+
+        ctx.logger.info(
+          "Revisit session started for scope {scope}. Contexts: [{contexts}]. Last discovered: {discoveredAt}",
+          {
+            scope,
+            contexts: contextNames.join(", "),
+            discoveredAt: (contextMap.discoveredAt as string) ?? "unknown",
+            glossaryUpdatedAt: glossary
+              ? (glossary.updatedAt as string) ?? "unknown"
+              : "no glossary",
+          },
+        );
+
+        return { dataHandles: [] };
       },
     },
   },
