@@ -1,0 +1,22 @@
+manifestVersion: 1
+name: "@webframp/swamp-adoption"
+version: "2026.06.05.1"
+description: |
+  Guides new users through mapping their domain onto swamp primitives.
+  Conducts structured discovery interviews, produces versioned extension
+  designs, and generates implementation scaffolds.
+
+  Uses swamp to teach swamp — the adoption journey itself is modeled
+  as typed, versioned state.
+models:
+  - swamp-adoption/mod.ts
+labels:
+  - onboarding
+  - adoption
+  - meta
+  - getting-started
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
