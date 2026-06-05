@@ -10,7 +10,7 @@ description: |
   Configurable scales via globalArguments allow teams to
   anchor scoring in their own context.
 models:
-  - rice-scoring/mod.ts
+  - extensions/models/rice-scoring/mod.ts
 labels:
   - prioritization
   - rice

@@ -225,14 +225,13 @@ AGENT GUIDANCE FOR CONDUCTING THE INTERVIEW:
           );
         }
 
-        const items = (stored.items as Array<{
-          name: string;
-          score: number;
-          reach: number;
-          impact: number;
-          confidence: number;
-          effort: number;
-        }>) ?? [];
+        const parsed = ScoresResourceSchema.safeParse(stored);
+        if (!parsed.success) {
+          throw new Error(
+            `Invalid scorecard format: ${parsed.error.message}`,
+          );
+        }
+        const items = parsed.data.items;
 
         if (items.length === 0) {
           context.logger.info("No items in scorecard", {});
