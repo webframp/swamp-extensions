@@ -211,7 +211,7 @@ and reasoning for the suggestion.`,
         const landscape = {
           systems: [] as z.infer<typeof SystemSchema>[],
           dataFlows: [] as z.infer<typeof DataFlowSchema>[],
-          suggestedFirstExtension: `${userContext}-first-extension`,
+          suggestedFirstExtension: currentTools[0] ?? "unknown-system",
           reasoning:
             `Based on context: "${userContext}". Current tools: [${
               currentTools.join(", ")
@@ -317,7 +317,7 @@ Write the extensionDesign resource with the full specification.`,
 
         const handle = await context.writeResource(
           "extensionDesign",
-          targetSystem,
+          "current-design",
           design as unknown as Record<string, unknown>,
         );
 
