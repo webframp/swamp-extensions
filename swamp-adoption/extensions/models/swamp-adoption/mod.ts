@@ -369,12 +369,17 @@ Each generated file includes TODO comments marking where the user adds real logi
 
         const calver = new Date().toISOString().slice(0, 10).replace(/-/g, ".");
 
+        const sanitizeYamlString = (s: string): string =>
+          s.replace(/[\n\r]/g, " ").replace(/"/g, "'");
+
         const manifestContent = [
           "manifestVersion: 1",
           `name: "${extName}"`,
           `version: "${calver}.1"`,
           `description: "${
-            (design?.description as string) ?? "TODO: add description"
+            sanitizeYamlString(
+              (design?.description as string) ?? "TODO: add description",
+            )
           }"`,
           "models:",
           `  - ${shortName}/mod.ts`,

@@ -356,6 +356,50 @@ Deno.test("scaffold stdout format returns empty dataHandles", async () => {
   assertEquals(logs.length > 0, true);
 });
 
+Deno.test("scaffold sanitizes newlines and quotes in description", async () => {
+  const { context, getWrittenResources } = createAdoptionContext({
+    "current-design": {
+      name: "@webframp/injected",
+      description: 'Evil\nmodels:\n  - evil/mod.ts\nwith "quotes"',
+      globalArguments: [],
+      methods: [],
+      resources: [],
+      dependencies: [],
+      vaultNeeded: false,
+      labels: ["injected"],
+      designedAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  const result = await model.methods.scaffold.execute(
+    { outputFormat: "resource" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertExists(result.dataHandles);
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    files: Array<{ path: string; content: string }>;
+  };
+  const manifest = data.files.find((f) => f.path === "manifest.yaml");
+  assertExists(manifest);
+  // Description should be on a single line with no newlines
+  const descLine = manifest.content.split("\n").find((l) =>
+    l.startsWith("description:")
+  );
+  assertExists(descLine);
+  assertEquals(descLine.includes("\n"), false);
+  assertEquals(descLine.includes('"Evil'), true);
+  // No injected YAML stanza — models: should appear exactly once
+  const modelsCount = manifest.content.split("\n").filter((l) =>
+    l.startsWith("models:")
+  ).length;
+  assertEquals(modelsCount, 1);
+  // Quotes should be escaped to single quotes
+  assertEquals(descLine.includes("'quotes'"), true);
+});
+
 Deno.test("scaffold throws when no design exists", async () => {
   const { context } = createAdoptionContext();
 
