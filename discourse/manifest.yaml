@@ -1,0 +1,41 @@
+manifestVersion: 1
+name: "@webframp/discourse"
+version: "2026.06.05.1"
+description: |
+  Query Discourse forums via the public REST API. List categories, browse
+  topics, read full posts, and search. Supports optional API key for
+  authenticated access.
+
+  ## Authentication
+
+  Public forums need no authentication. For private instances, provide an
+  API key via the `apiKey` global argument (store in a swamp vault).
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/discourse security-forum
+  # Set host in the model definition globalArguments
+
+  swamp model method run security-forum list_categories
+  swamp model method run security-forum list_latest
+  swamp model method run security-forum list_category_topics --input slug=cyber-news --input categoryId=8
+  swamp model method run security-forum get_topic --input topicId=170
+  swamp model method run security-forum search --input query=CVE
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - discourse/discourse.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - discourse
+  - forum
+  - security
+  - news
