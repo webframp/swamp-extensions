@@ -10,6 +10,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/github`](github/) | GitHub operations via the `gh` CLI — repos, PRs, issues, releases, workflows | None (shells out to `gh`) |
 | [`@webframp/gitlab`](gitlab/) | GitLab operations via REST API — projects, merge requests, issues, pipelines | None (uses fetch) |
 | [`@webframp/gitlab-review`](gitlab-review/) | AI-assisted GitLab MR code review with human approval gate — fetch diffs, draft reviews, post comments, approve/unapprove | None (uses fetch) |
+| [`@webframp/discourse`](discourse/) | Discourse forum queries — categories, topics, posts, search | None (uses fetch) |
 | [`@webframp/system`](system/) | Local system diagnostics — disk usage, memory, uptime/load | None (shells out to OS commands) |
 | [`@webframp/network`](network/) | Network probes — HTTP checks, TLS cert inspection, DNS lookup, whois, port scanning | None (shells out to `curl`, `openssl`, `dig`, `whois`) |
 | [`@webframp/aws/pricing`](aws/pricing/) | AWS Pricing API for service cost lookups | `@aws-sdk/client-pricing` |
@@ -74,6 +75,7 @@ swamp extension pull @webframp/cloudflare
 swamp extension pull @webframp/github
 swamp extension pull @webframp/gitlab
 swamp extension pull @webframp/gitlab-review
+swamp extension pull @webframp/discourse
 swamp extension pull @webframp/system
 swamp extension pull @webframp/network
 swamp extension pull @webframp/terraform
