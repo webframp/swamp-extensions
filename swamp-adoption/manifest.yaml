@@ -8,8 +8,9 @@ description: |
 
   Uses swamp to teach swamp — the adoption journey itself is modeled
   as typed, versioned state.
+repository: "https://github.com/webframp/swamp-extensions"
 models:
-  - extensions/models/swamp-adoption/mod.ts
+  - swamp-adoption/mod.ts
 labels:
   - onboarding
   - adoption
@@ -20,3 +21,6 @@ platforms:
   - linux-aarch64
   - darwin-x86_64
   - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md

@@ -138,6 +138,7 @@ type MethodContext = {
 // Model Definition
 // =============================================================================
 
+/** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
   version: "2026.06.05.1",
@@ -361,14 +362,17 @@ Each generated file includes TODO comments marking where the user adds real logi
         }
 
         const extName = (design.name as string) ?? "@webframp/my-extension";
-        const shortName = extName.replace("@webframp/", "");
+        const shortName = extName.replace("@webframp/", "")
+          .replace(/\.\./g, "")
+          .replace(/^\/+/, "")
+          .replace(/[^a-z0-9_\-/]/gi, "");
+
+        const calver = new Date().toISOString().slice(0, 10).replace(/-/g, ".");
 
         const manifestContent = [
           "manifestVersion: 1",
           `name: "${extName}"`,
-          `version: "${
-            new Date().toISOString().slice(0, 10).replace(/-/g, ".")
-          }.1"`,
+          `version: "${calver}.1"`,
           `description: "${
             (design?.description as string) ?? "TODO: add description"
           }"`,
@@ -395,9 +399,7 @@ Each generated file includes TODO comments marking where the user adds real logi
           "",
           "export const model = {",
           `  type: "${extName}",`,
-          `  version: "${
-            new Date().toISOString().slice(0, 10).replace(/-/g, ".")
-          }.1",`,
+          `  version: "${calver}.1",`,
           "  globalArguments: GlobalArgsSchema,",
           "  resources: {},",
           "  methods: {},",
@@ -487,14 +489,13 @@ Each generated file includes TODO comments marking where the user adds real logi
 
     next: {
       description:
-        `Suggest the next extension to build based on landscape analysis and completed designs.
+        `Suggest the next extension to build based on landscape analysis and the current design.
 
-Reads both the landscape and extensionDesign resources. Compares the full
-system inventory against designs already produced. Ranks remaining systems by:
+Reads the landscape and the current extensionDesign resource. Filters out the
+system covered by the current design, then ranks remaining systems by:
 
 1. Pain level (blocking > significant > minor > none)
-2. Dependencies (systems that feed into already-designed extensions rank higher)
-3. Complexity curve (suggest simpler extensions early to build confidence)
+2. Uses the highest pain across all interactions per system
 
 Logs advisory output with the recommendation and reasoning.
 Does not write any resource — purely advisory.`,
@@ -537,15 +538,24 @@ Does not write any resource — purely advisory.`,
             "All discovered systems have designs. Consider running discover again to expand scope.",
           );
         } else {
+          const painOrder: Record<string, number> = {
+            blocking: 0,
+            significant: 1,
+            minor: 2,
+            none: 3,
+          };
+
+          const maxPain = (
+            interactions: Array<{ pain?: string }> | undefined,
+          ): number => {
+            if (!interactions || interactions.length === 0) return 3;
+            return Math.min(
+              ...interactions.map((i) => painOrder[i.pain ?? "none"] ?? 3),
+            );
+          };
+
           const sorted = [...remaining].sort((a, b) => {
-            const painOrder: Record<string, number> = {
-              high: 0,
-              medium: 1,
-              low: 2,
-            };
-            const aPain = a.interactions?.[0]?.pain ?? "low";
-            const bPain = b.interactions?.[0]?.pain ?? "low";
-            return (painOrder[aPain] ?? 2) - (painOrder[bPain] ?? 2);
+            return maxPain(a.interactions) - maxPain(b.interactions);
           });
           const suggestion = sorted[0];
           context.logger.info(

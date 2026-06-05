@@ -360,10 +360,10 @@ Deno.test("scaffold throws when no design exists", async () => {
   const { context } = createAdoptionContext();
 
   await assertRejects(
-    // deno-lint-ignore no-explicit-any
     () =>
       model.methods.scaffold.execute(
         { outputFormat: "resource" },
+        // deno-lint-ignore no-explicit-any
         context as any,
       ),
     Error,
@@ -398,6 +398,45 @@ Deno.test("next reads resources and logs advisory output", async () => {
 
   const logs = getLogsByLevel("info");
   assertEquals(logs.length > 0, true);
+});
+
+Deno.test("next ranks systems by pain level using correct vocabulary", async () => {
+  const { context, getLogsByLevel } = createAdoptionContext({
+    current: {
+      systems: [
+        {
+          name: "low-pain",
+          type: "cli-tool",
+          interactions: [{ verb: "run", direction: "outbound", frequency: "daily", pain: "none" }],
+        },
+        {
+          name: "high-pain",
+          type: "api",
+          interactions: [
+            { verb: "deploy", direction: "outbound", frequency: "hourly", pain: "blocking" },
+            { verb: "monitor", direction: "inbound", frequency: "hourly", pain: "significant" },
+          ],
+        },
+        {
+          name: "mid-pain",
+          type: "saas",
+          interactions: [{ verb: "sync", direction: "bidirectional", frequency: "daily", pain: "minor" }],
+        },
+      ],
+      dataFlows: [],
+      suggestedFirstExtension: "low-pain",
+      reasoning: "test",
+      discoveredAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  // deno-lint-ignore no-explicit-any
+  await model.methods.next.execute({} as any, context as any);
+
+  const logs = getLogsByLevel("info");
+  assertEquals(logs.length, 1);
+  const meta = logs[0].args[0] as { name: string };
+  assertEquals(meta.name, "high-pain");
 });
 
 Deno.test("next throws when no landscape exists", async () => {
