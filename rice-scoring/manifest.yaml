@@ -1,0 +1,23 @@
+manifestVersion: 1
+name: "@webframp/rice-scoring"
+version: "2026.06.05.1"
+description: |
+  RICE scoring methodology as an agent-guided framework.
+  Accepts items, conducts structured interviews to derive
+  Reach, Impact, Confidence, and Effort values, produces
+  ranked versioned scorecards.
+
+  Configurable scales via globalArguments allow teams to
+  anchor scoring in their own context.
+models:
+  - rice-scoring/mod.ts
+labels:
+  - prioritization
+  - rice
+  - planning
+  - scoring
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
