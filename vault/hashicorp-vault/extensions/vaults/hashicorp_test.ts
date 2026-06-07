@@ -342,6 +342,62 @@ Deno.test({
 });
 
 Deno.test({
+  name: "hashicorp vault: list returns empty array for empty KV v2 mount",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+
+      const keys = await provider.list();
+      assertEquals(keys, []);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "hashicorp vault: list handles 200 with missing keys field (KV v2)",
+  sanitizeResources: false,
+  fn: async () => {
+    // Simulates Vault returning 200 with {"data":{}} when ?list=true is used
+    // on an empty KV v2 mount (Vault 1.19+ behavior)
+    const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+      if (req.method === "LIST") {
+        return Response.json({
+          request_id: "test",
+          data: {},
+          warnings: ["Endpoint ignored these unrecognized parameters: [list]"],
+        });
+      }
+      return Response.json({ errors: ["not found"] }, { status: 404 });
+    });
+
+    const addr = server.addr as Deno.NetAddr;
+    const url = `http://localhost:${addr.port}`;
+
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        mount: "secret",
+        kvVersion: "2",
+      });
+
+      const keys = await provider.list();
+      assertEquals(keys, []);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "hashicorp vault: custom mount path is used",
   sanitizeResources: false,
   fn: async () => {
