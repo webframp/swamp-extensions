@@ -210,8 +210,12 @@ export const vault = {
           }
 
           const data = (await handleResponse(response, "list")) as {
-            data: { keys: string[] };
+            data: { keys?: string[] };
           };
+
+          if (!data.data?.keys) {
+            return;
+          }
 
           for (const key of data.data.keys) {
             if (allKeys.length >= MAX_KEYS) break;
