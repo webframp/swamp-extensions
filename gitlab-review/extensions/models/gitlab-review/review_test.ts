@@ -90,7 +90,8 @@ function mockFetch(
       : (input as Request).url;
     const method = _init?.method ?? "GET";
     const path = new URL(url).pathname;
-    const key = `${method} ${path}`;
+    const search = new URL(url).search;
+    const key = `${method} ${path}${search}`;
     const route = routes[key];
     if (route) {
       return Promise.resolve(
@@ -119,19 +120,22 @@ Deno.test("get_mr_diff fetches and stores MR diff data", async () => {
         author: { username: "testuser" },
       },
     },
-    "GET /api/v4/projects/group%2Frepo/merge_requests/42/diffs": {
-      status: 200,
-      body: [
-        {
-          old_path: "file.ts",
-          new_path: "file.ts",
-          diff: "@@ -1 +1 @@\n-old\n+new",
-          new_file: false,
-          renamed_file: false,
-          deleted_file: false,
+    "GET /api/v4/projects/group%2Frepo/merge_requests/42/changes?access_raw_diffs=true":
+      {
+        status: 200,
+        body: {
+          changes: [
+            {
+              old_path: "file.ts",
+              new_path: "file.ts",
+              diff: "@@ -1 +1 @@\n-old\n+new",
+              new_file: false,
+              renamed_file: false,
+              deleted_file: false,
+            },
+          ],
         },
-      ],
-    },
+      },
   });
 
   const { context, getWrittenResources } = createModelTestContext({
@@ -159,33 +163,90 @@ Deno.test("get_mr_diff fetches and stores MR diff data", async () => {
   }
 });
 
-Deno.test("get_mr_diff throws on non-array diffs response", async () => {
+Deno.test("get_mr_diff handles non-array changes gracefully", async () => {
   const restore = mockFetch({
     "GET /api/v4/projects/group%2Frepo/merge_requests/1": {
       status: 200,
-      body: { title: "MR", source_branch: "a", target_branch: "b" },
+      body: {
+        title: "MR",
+        source_branch: "a",
+        target_branch: "b",
+        state: "opened",
+      },
     },
-    "GET /api/v4/projects/group%2Frepo/merge_requests/1/diffs": {
-      status: 200,
-      body: { error: "something went wrong" },
-    },
+    "GET /api/v4/projects/group%2Frepo/merge_requests/1/changes?access_raw_diffs=true":
+      {
+        status: 200,
+        body: { changes: false, overflow: false },
+      },
   });
 
-  const { context } = createModelTestContext({
+  const { context, getWrittenResources } = createModelTestContext({
     globalArgs: { host: "gitlab.example.com", token: "test-token" },
   });
 
   try {
-    await assertRejects(
-      // deno-lint-ignore no-explicit-any
-      () =>
-        model.methods.get_mr_diff.execute(
-          { project: "group/repo", iid: 1 },
-          context as any,
-        ),
-      Error,
-      "expected array of diffs",
+    // deno-lint-ignore no-explicit-any
+    await model.methods.get_mr_diff.execute(
+      { project: "group/repo", iid: 1 },
+      context as any,
     );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    const data = resources[0].data as { diffs: unknown[]; truncated: boolean };
+    assertEquals(data.diffs.length, 0);
+    assertEquals(data.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_mr_diff sets truncated when overflow is true", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/merge_requests/1": {
+      status: 200,
+      body: {
+        title: "MR",
+        source_branch: "a",
+        target_branch: "b",
+        state: "opened",
+        author: { username: "dev" },
+      },
+    },
+    "GET /api/v4/projects/group%2Frepo/merge_requests/1/changes?access_raw_diffs=true":
+      {
+        status: 200,
+        body: {
+          changes: [
+            {
+              old_path: "a.ts",
+              new_path: "a.ts",
+              diff: "+x",
+              new_file: false,
+              renamed_file: false,
+              deleted_file: false,
+            },
+          ],
+          overflow: true,
+        },
+      },
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+  });
+
+  try {
+    // deno-lint-ignore no-explicit-any
+    await model.methods.get_mr_diff.execute(
+      { project: "group/repo", iid: 1 },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    const data = resources[0].data as { diffs: unknown[]; truncated: boolean };
+    assertEquals(data.diffs.length, 1);
+    assertEquals(data.truncated, true);
   } finally {
     restore();
   }

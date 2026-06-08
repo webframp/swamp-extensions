@@ -159,7 +159,7 @@ async function contextFetch(
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via REST API. */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.06.04.2",
+  version: "2026.06.08.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     mrDiff: {
@@ -205,32 +205,22 @@ export const model = {
         );
         const mr = await mrResp.json();
 
-        // Fetch diffs (paginated, capped at 10 pages)
-        const allRawDiffs: Record<string, unknown>[] = [];
-        let page = 1;
-        const maxPages = 10;
-        let truncated = false;
-        while (page <= maxPages) {
-          const diffsResp = await contextFetch(
-            `get_mr_diff ${args.project}!${args.iid} diffs page ${page}`,
-            host,
-            token,
-            `/projects/${pid}/merge_requests/${args.iid}/diffs?page=${page}&per_page=100`,
-          );
-          const batch = await diffsResp.json();
-          if (!Array.isArray(batch)) {
-            throw new Error(
-              `get_mr_diff ${args.project}!${args.iid}: expected array of diffs, got: ${
-                JSON.stringify(batch).slice(0, 200)
-              }`,
-            );
-          }
-          if (batch.length === 0) break;
-          allRawDiffs.push(...batch);
-          if (batch.length < 100) break;
-          page++;
-        }
-        if (page > maxPages) truncated = true;
+        // Fetch diffs via /changes?access_raw_diffs=true to bypass GitLab's
+        // collapsed-diff behavior for large files.
+        const changesResp = await contextFetch(
+          `get_mr_diff ${args.project}!${args.iid} changes`,
+          host,
+          token,
+          `/projects/${pid}/merge_requests/${args.iid}/changes?access_raw_diffs=true`,
+        );
+        const changesData = await changesResp.json();
+        const raw = (changesData as Record<string, unknown>).changes;
+        const allRawDiffs: Record<string, unknown>[] = Array.isArray(raw)
+          ? raw
+          : [];
+        const truncated = !!(
+          (changesData as Record<string, unknown>).overflow
+        );
 
         const diffs = allRawDiffs.map((d: Record<string, unknown>) => ({
           oldPath: (d.old_path as string) ?? "",
