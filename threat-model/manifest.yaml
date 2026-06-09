@@ -1,0 +1,30 @@
+manifestVersion: 1
+name: "@webframp/threat-model"
+version: "2026.06.09.1"
+description: |
+  Agile threat modeling as an agent-guided concept model.
+  Guides structured threat assessment through progressive discovery:
+  scope, identify, evaluate, mitigate, posture. Stores versioned
+  threat models with automatic risk matrix computation, control
+  coverage tracking, and a compact posture snapshot for monitoring.
+
+  Follows the discipline's methodology: identify threats, assess
+  likelihood × impact, define compensating controls, and track
+  residual risk through mitigated/accepted/deferred/unaddressed
+  status per scenario.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - threat-model/mod.ts
+labels:
+  - security
+  - threat-modeling
+  - risk-assessment
+  - devsecops
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md

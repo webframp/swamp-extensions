@@ -1,0 +1,7 @@
+swampVersion: 20260609.191701.0
+initializedAt: '2026-06-09T00:00:00.000Z'
+repoId: threat-model-ext
+gitignoreManaged: true
+tools:
+  - claude
+  - kiro
