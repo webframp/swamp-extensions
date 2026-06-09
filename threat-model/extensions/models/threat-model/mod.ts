@@ -218,7 +218,7 @@ interface ModelContext {
 /** Agile threat modeling concept model. */
 export const model = {
   type: "@webframp/threat-model",
-  version: "2026.06.09.1",
+  version: "2026.06.09.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -449,15 +449,23 @@ AGENT GUIDANCE:
           });
         }
 
+        const existingQuestions =
+          (Array.isArray(existing.openQuestions)
+            ? existing.openQuestions
+            : []) as string[];
+        const mergedQuestions = [
+          ...new Set([...existingQuestions, ...args.openQuestions]),
+        ];
+
         const handle = await ctx.writeResource("assessment", "current", {
           ...existing,
           threats,
-          openQuestions: args.openQuestions,
+          openQuestions: mergedQuestions,
           updatedAt: new Date().toISOString(),
         });
 
         ctx.logger.info("Evaluated risk matrix. Open questions: {count}", {
-          count: args.openQuestions.length,
+          count: mergedQuestions.length,
         });
         return { dataHandles: [handle] };
       },
@@ -543,9 +551,14 @@ Call with controls, acceptances, and recommendation.`,
 
         // Determine which threats are mitigated by controls
         const mitigatedByControl = new Set<string>();
+        const partiallyMitigated = new Set<string>();
         for (const c of args.controls) {
           for (const tid of c.mitigates) {
             if (c.effectiveness === "full") mitigatedByControl.add(tid);
+            else if (c.effectiveness === "partial") {
+              partiallyMitigated.add(tid);
+            }
+            // minimal controls do NOT change threat status
           }
         }
 
@@ -557,32 +570,53 @@ Call with controls, acceptances, and recommendation.`,
           if (mitigatedByControl.has(t.id)) {
             return { ...t, status: "mitigated" as const };
           }
+          if (partiallyMitigated.has(t.id)) {
+            return { ...t, status: "mitigated" as const };
+          }
           if (acceptedIds.has(t.id)) {
             return { ...t, status: "accepted" as const };
           }
           if (deferredIds.has(t.id)) {
             return { ...t, status: "deferred" as const };
           }
-          // Partial controls: mark mitigated if any control addresses it
-          const partiallyControlled = args.controls.some((c) =>
-            c.mitigates.includes(t.id)
-          );
-          if (partiallyControlled) {
-            return { ...t, status: "mitigated" as const };
-          }
           return t;
         });
+
+        // Merge controls and acceptances with existing (dedup by ID)
+        const existingControls =
+          (Array.isArray(existing.controls) ? existing.controls : []) as Array<
+            { id: string }
+          >;
+        const existingAcceptances =
+          (Array.isArray(existing.acceptances)
+            ? existing.acceptances
+            : []) as Array<{ threatId: string }>;
+
+        const newControlIds = new Set(args.controls.map((c) => c.id));
+        const mergedControls = [
+          ...existingControls.filter((c) => !newControlIds.has(c.id)),
+          ...args.controls,
+        ];
 
         const acceptanceRecords = args.acceptances.map((a) => ({
           ...a,
           acceptedAt: now,
         }));
+        const newAcceptanceIds = new Set(
+          args.acceptances.map((a) => a.threatId),
+        );
+        const mergedAcceptances = [
+          ...existingAcceptances.filter((a) =>
+            !newAcceptanceIds.has(a.threatId)
+          ),
+          ...acceptanceRecords,
+        ];
 
         const handle = await ctx.writeResource("assessment", "current", {
           ...existing,
           threats,
-          controls: args.controls,
-          acceptances: acceptanceRecords,
+          controls: mergedControls,
+          acceptances: mergedAcceptances,
           recommendation: args.recommendation,
           updatedAt: now,
         });
@@ -601,8 +635,8 @@ Call with controls, acceptances, and recommendation.`,
     posture: {
       description:
         "Compute and write a compact risk posture snapshot. Reads the current " +
-        "assessment, calculates residual risk per threat, surfaces unmitigated " +
-        "threats above threshold, and reports overall posture. Idempotent — " +
+        "assessment, surfaces unmitigated threats above threshold, reports " +
+        "control coverage, and determines overall posture. Idempotent — " +
         "writes to the posture resource only.",
       arguments: z.object({}),
       execute: async (
