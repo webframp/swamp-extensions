@@ -56,7 +56,6 @@ const ThreatScenarioSchema = z.object({
   exploitation: z.string().describe("How an attacker would exploit this"),
   mitigatingFactors: z.string().describe("What limits the blast radius"),
   status: ThreatStatusEnum.default("unaddressed"),
-  residualRisk: RiskLevelEnum.optional(),
 });
 
 const ControlSchema = z.object({
@@ -218,7 +217,7 @@ interface ModelContext {
 /** Agile threat modeling concept model. */
 export const model = {
   type: "@webframp/threat-model",
-  version: "2026.06.09.2",
+  version: "2026.06.09.3",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -375,9 +374,16 @@ to add threats as they are discovered.`,
           status: "unaddressed" as const,
         }));
 
+        // Upsert: new threats with existing IDs replace the old entry
+        const newIds = new Set(newThreats.map((t) => t.id));
+        const merged = [
+          ...currentThreats.filter((t) => !newIds.has(t.id)),
+          ...newThreats,
+        ];
+
         const handle = await ctx.writeResource("assessment", "current", {
           ...existing,
-          threats: [...currentThreats, ...newThreats],
+          threats: merged,
           updatedAt: new Date().toISOString(),
         });
 
@@ -549,16 +555,14 @@ Call with controls, acceptances, and recommendation.`,
           typeof ThreatScenarioSchema
         >[];
 
-        // Determine which threats are mitigated by controls
+        // Determine which threats are fully mitigated by controls.
+        // Only "full" effectiveness changes threat status to "mitigated".
+        // Partial and minimal controls are recorded but do NOT flip status —
+        // the threat remains visible in posture calculations.
         const mitigatedByControl = new Set<string>();
-        const partiallyMitigated = new Set<string>();
         for (const c of args.controls) {
           for (const tid of c.mitigates) {
             if (c.effectiveness === "full") mitigatedByControl.add(tid);
-            else if (c.effectiveness === "partial") {
-              partiallyMitigated.add(tid);
-            }
-            // minimal controls do NOT change threat status
           }
         }
 
@@ -568,9 +572,6 @@ Call with controls, acceptances, and recommendation.`,
 
         threats = threats.map((t) => {
           if (mitigatedByControl.has(t.id)) {
-            return { ...t, status: "mitigated" as const };
-          }
-          if (partiallyMitigated.has(t.id)) {
             return { ...t, status: "mitigated" as const };
           }
           if (acceptedIds.has(t.id)) {

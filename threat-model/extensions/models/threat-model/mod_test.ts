@@ -478,3 +478,90 @@ Deno.test("posture is unacceptable with unaddressed high threats", async () => {
   await model.methods.posture.execute({}, ctx);
   assertEquals(written[0].data.overallPosture, "unacceptable");
 });
+
+Deno.test("mitigate: partial controls do NOT mark threat as mitigated", async () => {
+  const { ctx, written } = createMockContext({
+    subject: "T",
+    scope: "s",
+    currentPosture: "p",
+    assessedAt: "2026-01-01",
+    assets: [],
+    threats: [{
+      id: "T1",
+      title: "critical threat",
+      description: "d",
+      likelihood: "certain",
+      impact: "critical",
+      inherentRisk: "critical",
+      exploitation: "e",
+      mitigatingFactors: "m",
+      status: "unaddressed",
+    }],
+    controls: [],
+    acceptances: [],
+    recommendation: "",
+    openQuestions: [],
+    updatedAt: "2026-01-01",
+  });
+  await model.methods.mitigate.execute(
+    {
+      controls: [{
+        id: "C1",
+        description: "partial ctrl",
+        mitigates: ["T1"],
+        effectiveness: "partial",
+        implemented: true,
+      }],
+      acceptances: [],
+      deferred: [],
+      recommendation: "Partial reduction only",
+    },
+    ctx,
+  );
+  const threats = written[0].data.threats as Array<Record<string, unknown>>;
+  assertEquals(threats[0].status, "unaddressed");
+});
+
+Deno.test("identify deduplicates by threat ID (upsert)", async () => {
+  const { ctx, written } = createMockContext({
+    subject: "T",
+    scope: "s",
+    currentPosture: "p",
+    assessedAt: "2026-01-01",
+    assets: [],
+    threats: [{
+      id: "T1",
+      title: "original",
+      description: "d",
+      likelihood: "certain",
+      impact: "high",
+      inherentRisk: "high",
+      exploitation: "e",
+      mitigatingFactors: "m",
+      status: "unaddressed",
+    }],
+    controls: [],
+    acceptances: [],
+    recommendation: "",
+    openQuestions: [],
+    updatedAt: "2026-01-01",
+  });
+  await model.methods.identify.execute(
+    {
+      threats: [{
+        id: "T1",
+        title: "updated",
+        description: "revised desc",
+        likelihood: "possible",
+        impact: "low",
+        exploitation: "e2",
+        mitigatingFactors: "m2",
+      }],
+    },
+    ctx,
+  );
+  const threats = written[0].data.threats as Array<Record<string, unknown>>;
+  assertEquals(threats.length, 1);
+  assertEquals(threats[0].title, "updated");
+  assertEquals(threats[0].inherentRisk, "negligible");
+});
