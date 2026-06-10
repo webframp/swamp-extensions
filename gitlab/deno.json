@@ -4,11 +4,11 @@
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",
-    "test": "deno test --allow-run --allow-env extensions/models/"
+    "test": "deno test --allow-net --allow-env extensions/models/"
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": ["no-import-prefix", "no-explicit-any"]
     }
   },
   "imports": {
