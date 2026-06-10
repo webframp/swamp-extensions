@@ -217,7 +217,7 @@ interface ModelContext {
 /** Agile threat modeling concept model. */
 export const model = {
   type: "@webframp/threat-model",
-  version: "2026.06.09.3",
+  version: "2026.06.09.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
