@@ -103,14 +103,23 @@ interface TerraformState {
 }
 
 /**
- * Wrap raw content in a Terraform state envelope
+ * Wrap raw content in a Terraform state envelope.
+ * Uses chunked base64 encoding to avoid stack overflow on large files.
  */
 function wrapInTerraformState(
   content: Uint8Array,
   serial: number = 1,
   lineage?: string,
 ): string {
-  const base64Content = btoa(String.fromCharCode(...content));
+  // Chunked base64 encoding to avoid call stack overflow from spread operator
+  const CHUNK_SIZE = 8192;
+  let base64Content = "";
+  for (let i = 0; i < content.length; i += CHUNK_SIZE) {
+    const chunk = content.subarray(i, i + CHUNK_SIZE);
+    base64Content += String.fromCharCode(...chunk);
+  }
+  base64Content = btoa(base64Content);
+
   const state: TerraformState = {
     version: 4,
     terraform_version: "1.0.0",
@@ -858,10 +867,12 @@ class GitLabSyncService implements DatastoreSyncService {
         throw error;
       }
 
+      // Skip files exceeding GitLab's practical state size limit (4MB).
+      // These are typically binary artifacts that don't need remote sync.
+      const MAX_FILE_SIZE = 4 * 1024 * 1024;
+      if (content.length > MAX_FILE_SIZE) return;
+
       // Hash-based skip: same hash means no change since last push.
-      // Note: if a remote state is deleted externally (outside swamp),
-      // this skip prevents re-upload until the local file changes.
-      // Acceptable when swamp is the sole writer to this datastore.
       const hash = await sha256Hex(content);
       if (syncState.hashes[relativePath] === hash) return;
 
@@ -888,23 +899,51 @@ class GitLabSyncService implements DatastoreSyncService {
         !processed.has(p)
       );
     } else {
-      // Full walk fallback
-      const walkDir = async (dir: string, base: string): Promise<void> => {
+      // Directories that contain local-only build artifacts regenerated
+      // from pulled extensions. Never need to cross the wire.
+      const EXCLUDED_DIRS = new Set([
+        "bundles",
+        "vault-bundles",
+        "driver-bundles",
+        "datastore-bundles",
+        "report-bundles",
+        "cache",
+        "telemetry",
+        "logs",
+      ]);
+
+      // Excluded file patterns (SQLite databases and journals)
+      const isExcludedFile = (name: string): boolean =>
+        name === "_extension_catalog.db" ||
+        name.endsWith(".db-shm") ||
+        name.endsWith(".db-wal");
+
+      // Iterative directory walk to avoid stack overflow from deep recursion
+      const queue: Array<{ dir: string; base: string }> = [
+        { dir: this.cachePath, base: "" },
+      ];
+
+      while (queue.length > 0) {
+        signal?.throwIfAborted();
+        const { dir, base } = queue.shift()!;
+
         try {
           for await (const entry of Deno.readDir(dir)) {
-            signal?.throwIfAborted();
             const fullPath = `${dir}/${entry.name}`;
             const relativePath = base ? `${base}/${entry.name}` : entry.name;
 
             if (entry.isDirectory) {
+              if (EXCLUDED_DIRS.has(entry.name)) continue;
               if (
-                scopeFilter && !couldMatchScope(relativePath, options?.context)
+                scopeFilter &&
+                !couldMatchScope(relativePath, options?.context)
               ) {
                 continue;
               }
-              await walkDir(fullPath, relativePath);
+              queue.push({ dir: fullPath, base: relativePath });
             } else if (entry.isFile) {
               if (relativePath === SYNC_STATE_FILE) continue;
+              if (isExcludedFile(entry.name)) continue;
               if (scopeFilter && !scopeFilter(relativePath)) continue;
               await pushFile(relativePath);
             }
@@ -914,9 +953,7 @@ class GitLabSyncService implements DatastoreSyncService {
             throw error;
           }
         }
-      };
-
-      await walkDir(this.cachePath, "");
+      }
     }
 
     // Clear dirty state after successful push.
