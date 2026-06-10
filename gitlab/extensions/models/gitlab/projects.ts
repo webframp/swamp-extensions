@@ -21,7 +21,7 @@ const GlobalArgsSchema = z.object({
   host: z.string().min(1).describe(
     "GitLab hostname (e.g. git.bethelservice.org)",
   ),
-  token: z.string().min(1).describe(
+  token: z.string().min(1).meta({ sensitive: true }).describe(
     "GitLab personal access token with api scope (use vault reference)",
   ),
 });
@@ -42,6 +42,7 @@ const ProjectSchema = z.object({
 const ProjectListSchema = z.object({
   projects: z.array(ProjectSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -79,6 +80,7 @@ const MergeRequestListSchema = z.object({
   project: z.string(),
   mergeRequests: z.array(MergeRequestSchema),
   count: z.number(),
+  truncated: z.boolean(),
   state: z.string(),
   fetchedAt: z.string(),
 });
@@ -97,6 +99,7 @@ const IssueListSchema = z.object({
   project: z.string(),
   issues: z.array(IssueSchema),
   count: z.number(),
+  truncated: z.boolean(),
   state: z.string(),
   fetchedAt: z.string(),
 });
@@ -126,6 +129,7 @@ const NoteListSchema = z.object({
   noteableIid: z.number(),
   notes: z.array(NoteSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -141,6 +145,7 @@ const ReleaseListSchema = z.object({
   project: z.string(),
   releases: z.array(ReleaseSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -158,19 +163,21 @@ const PipelineListSchema = z.object({
   project: z.string(),
   pipelines: z.array(PipelineSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
 const LabelSchema = z.object({
   name: z.string(),
   color: z.string(),
-  description: z.string(),
+  description: z.string().nullable(),
 });
 
 const LabelListSchema = z.object({
   project: z.string(),
   labels: z.array(LabelSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -184,6 +191,7 @@ const MemberListSchema = z.object({
   project: z.string(),
   members: z.array(MemberSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -197,12 +205,19 @@ const BranchListSchema = z.object({
   project: z.string(),
   branches: z.array(BranchSchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
 // =============================================================================
 // REST API Client
 // =============================================================================
+
+/** Response from a list endpoint including pagination state. */
+interface ListResponse {
+  data: any;
+  truncated: boolean;
+}
 
 class GitLabClient {
   private readonly baseUrl: string;
@@ -221,6 +236,7 @@ class GitLabClient {
     return `${this.baseUrl}/projects/${encodeURIComponent(project)}`;
   }
 
+  /** GET a single object (no pagination). */
   async get(path: string, params?: Record<string, string>): Promise<any> {
     const url = new URL(`${this.baseUrl}${path}`);
     if (params) {
@@ -234,11 +250,46 @@ class GitLabClient {
     return resp.json();
   }
 
-  async getProject(
+  /** GET a list from a top-level path, returning data + truncation flag. */
+  async getList(
+    path: string,
+    params?: Record<string, string>,
+  ): Promise<ListResponse> {
+    const url = new URL(`${this.baseUrl}${path}`);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    }
+    const resp = await fetch(url.toString(), { headers: this.headers() });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`GitLab GET ${path}: ${resp.status} ${body}`);
+    }
+    const nextPage = resp.headers.get("x-next-page");
+    return {
+      data: await resp.json(),
+      truncated: !!nextPage && nextPage !== "",
+    };
+  }
+
+  /** GET a single object scoped to a project. */
+  async getProject(project: string, path: string): Promise<any> {
+    const url = `${this.projectUrl(project)}${path}`;
+    const resp = await fetch(url, { headers: this.headers() });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(
+        `GitLab GET ${project}${path}: ${resp.status} ${body}`,
+      );
+    }
+    return resp.json();
+  }
+
+  /** GET a list scoped to a project, returning data + truncation flag. */
+  async getProjectList(
     project: string,
     path: string,
     params?: Record<string, string>,
-  ): Promise<any> {
+  ): Promise<ListResponse> {
     const url = new URL(`${this.projectUrl(project)}${path}`);
     if (params) {
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -246,9 +297,15 @@ class GitLabClient {
     const resp = await fetch(url.toString(), { headers: this.headers() });
     if (!resp.ok) {
       const body = await resp.text();
-      throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${body}`);
+      throw new Error(
+        `GitLab GET ${project}${path}: ${resp.status} ${body}`,
+      );
     }
-    return resp.json();
+    const nextPage = resp.headers.get("x-next-page");
+    return {
+      data: await resp.json(),
+      truncated: !!nextPage && nextPage !== "",
+    };
   }
 
   async post(
@@ -487,7 +544,7 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.get("/projects", {
+        const { data, truncated } = await client.getList("/projects", {
           membership: "true",
           per_page: "30",
           order_by: "last_activity_at",
@@ -497,6 +554,7 @@ export const model = {
         const handle = await ctx.writeResource("projects", "all", {
           projects,
           count: projects.length,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
         ctx.logger.info("Found {count} projects", { count: projects.length });
@@ -507,14 +565,19 @@ export const model = {
     get_project_info: {
       description: "Get detailed information about a specific project",
       arguments: z.object({
-        project: z.string().describe("Project path (e.g. mygroup/myproject)"),
+        project: z.string().min(1).describe(
+          "Project path (e.g. mygroup/myproject)",
+        ),
       }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const raw = await client.getProject(args.project, "");
+        // Use bare project URL (no trailing path) via get() with encoded path
+        const raw = await client.get(
+          `/projects/${encodeURIComponent(args.project)}`,
+        );
         const info = {
           name: raw.name ?? "",
           pathWithNamespace: raw.path_with_namespace ?? "",
@@ -547,7 +610,7 @@ export const model = {
       description:
         "List merge requests for a project with optional state filter",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         state: z.enum(["opened", "closed", "merged", "all"]).default("opened"),
       }),
       execute: async (
@@ -558,10 +621,11 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(args.project, "/merge_requests", {
-          state: args.state,
-          per_page: "20",
-        });
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          "/merge_requests",
+          { state: args.state, per_page: "20" },
+        );
         const mrs = (data as any[]).map(mapMR);
         const handle = await ctx.writeResource(
           "mergeRequests",
@@ -570,6 +634,7 @@ export const model = {
             project: args.project,
             mergeRequests: mrs,
             count: mrs.length,
+            truncated,
             state: args.state,
             fetchedAt: new Date().toISOString(),
           },
@@ -586,7 +651,7 @@ export const model = {
     list_issues: {
       description: "List issues for a project with optional state filter",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         state: z.enum(["opened", "closed", "all"]).default("opened"),
       }),
       execute: async (
@@ -597,10 +662,11 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(args.project, "/issues", {
-          state: args.state,
-          per_page: "20",
-        });
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          "/issues",
+          { state: args.state, per_page: "20" },
+        );
         const issues = (data as any[]).map(mapIssue);
         const handle = await ctx.writeResource(
           "issues",
@@ -609,6 +675,7 @@ export const model = {
             project: args.project,
             issues,
             count: issues.length,
+            truncated,
             state: args.state,
             fetchedAt: new Date().toISOString(),
           },
@@ -624,15 +691,17 @@ export const model = {
 
     list_releases: {
       description: "List releases for a project",
-      arguments: z.object({ project: z.string() }),
+      arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(args.project, "/releases", {
-          per_page: "10",
-        });
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          "/releases",
+          { per_page: "10" },
+        );
         const releases = (data as any[]).map(mapRelease);
         const handle = await ctx.writeResource(
           "releases",
@@ -641,6 +710,7 @@ export const model = {
             project: args.project,
             releases,
             count: releases.length,
+            truncated,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -654,15 +724,17 @@ export const model = {
 
     list_pipelines: {
       description: "List recent CI/CD pipelines for a project",
-      arguments: z.object({ project: z.string() }),
+      arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(args.project, "/pipelines", {
-          per_page: "10",
-        });
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          "/pipelines",
+          { per_page: "10" },
+        );
         const pipelines = (data as any[]).map(mapPipeline);
         const handle = await ctx.writeResource(
           "pipelines",
@@ -671,6 +743,7 @@ export const model = {
             project: args.project,
             pipelines,
             count: pipelines.length,
+            truncated,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -685,7 +758,7 @@ export const model = {
     create_issue: {
       description: "Create a new issue in a project",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         title: z.string().min(1),
         description: z.string().default(""),
         labels: z.array(z.string()).default([]),
@@ -725,7 +798,7 @@ export const model = {
       description:
         "Update an existing issue (title, description, labels, state)",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         iid: z.number(),
         title: z.string().optional(),
         description: z.string().optional(),
@@ -769,7 +842,7 @@ export const model = {
     add_issue_note: {
       description: "Add a comment to an issue",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         iid: z.number(),
         body: z.string().min(1),
       }),
@@ -786,15 +859,17 @@ export const model = {
           `/issues/${args.iid}/notes`,
           { body: args.body },
         );
+        // Use note-specific instance name to not overwrite the full list
         const handle = await ctx.writeResource(
           "notes",
-          `${sanitizeName(args.project)}-issue-${args.iid}`,
+          `${sanitizeName(args.project)}-issue-${args.iid}-note-${raw.id}`,
           {
             project: args.project,
             noteableType: "issue",
             noteableIid: args.iid,
             notes: [mapNote(raw)],
             count: 1,
+            truncated: false,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -808,7 +883,10 @@ export const model = {
 
     list_issue_notes: {
       description: "List comments on an issue",
-      arguments: z.object({ project: z.string(), iid: z.number() }),
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
       execute: async (
         args: { project: string; iid: number },
         ctx: ModelContext,
@@ -817,7 +895,7 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(
+        const { data, truncated } = await client.getProjectList(
           args.project,
           `/issues/${args.iid}/notes`,
           { per_page: "50", sort: "asc" },
@@ -832,6 +910,7 @@ export const model = {
             noteableIid: args.iid,
             notes,
             count: notes.length,
+            truncated,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -846,7 +925,7 @@ export const model = {
     create_merge_request: {
       description: "Create a new merge request",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         title: z.string().min(1),
         sourceBranch: z.string().min(1),
         targetBranch: z.string().default("main"),
@@ -880,6 +959,7 @@ export const model = {
             project: args.project,
             mergeRequests: [mr],
             count: 1,
+            truncated: false,
             state: "opened",
             fetchedAt: new Date().toISOString(),
           },
@@ -895,7 +975,7 @@ export const model = {
     merge: {
       description: "Merge a merge request",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         iid: z.number(),
         squash: z.boolean().default(false),
       }),
@@ -907,21 +987,42 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        await client.put(args.project, `/merge_requests/${args.iid}/merge`, {
-          squash: args.squash,
-        });
+        const raw = await client.put(
+          args.project,
+          `/merge_requests/${args.iid}/merge`,
+          { squash: args.squash },
+        );
+        // GitLab can return 200 with an error message on merge conflicts
+        if (raw.message) {
+          throw new Error(
+            `GitLab merge failed for !${args.iid}: ${raw.message}`,
+          );
+        }
+        const mr = mapMR(raw);
+        const handle = await ctx.writeResource(
+          "mergeRequests",
+          `${sanitizeName(args.project)}-merged-${args.iid}`,
+          {
+            project: args.project,
+            mergeRequests: [mr],
+            count: 1,
+            truncated: false,
+            state: mr.state,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
         ctx.logger.info("Merged MR !{iid} in {project}", {
           iid: args.iid,
           project: args.project,
         });
-        return { dataHandles: [] };
+        return { dataHandles: [handle] };
       },
     },
 
     add_mr_note: {
       description: "Add a comment to a merge request",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         iid: z.number(),
         body: z.string().min(1),
       }),
@@ -938,15 +1039,17 @@ export const model = {
           `/merge_requests/${args.iid}/notes`,
           { body: args.body },
         );
+        // Use note-specific instance name to not overwrite the full MR notes list
         const handle = await ctx.writeResource(
           "notes",
-          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          `${sanitizeName(args.project)}-mr-${args.iid}-note-${raw.id}`,
           {
             project: args.project,
             noteableType: "merge_request",
             noteableIid: args.iid,
             notes: [mapNote(raw)],
             count: 1,
+            truncated: false,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -960,19 +1063,21 @@ export const model = {
 
     list_labels: {
       description: "List labels for a project",
-      arguments: z.object({ project: z.string() }),
+      arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(args.project, "/labels", {
-          per_page: "100",
-        });
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          "/labels",
+          { per_page: "100" },
+        );
         const labels = (data as any[]).map((raw: any) => ({
           name: raw.name ?? "",
           color: raw.color ?? "",
-          description: raw.description ?? "",
+          description: raw.description ?? null,
         }));
         const handle = await ctx.writeResource(
           "labels",
@@ -981,6 +1086,7 @@ export const model = {
             project: args.project,
             labels,
             count: labels.length,
+            truncated,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -995,7 +1101,7 @@ export const model = {
     create_label: {
       description: "Create a label in a project",
       arguments: z.object({
-        project: z.string(),
+        project: z.string().min(1),
         name: z.string().min(1),
         color: z.string().default("#428BCA"),
         description: z.string().default(""),
@@ -1028,15 +1134,17 @@ export const model = {
 
     list_members: {
       description: "List members of a project",
-      arguments: z.object({ project: z.string() }),
+      arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(args.project, "/members/all", {
-          per_page: "100",
-        });
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          "/members/all",
+          { per_page: "100" },
+        );
         const members = (data as any[]).map((raw: any) => ({
           username: raw.username ?? "",
           name: raw.name ?? "",
@@ -1049,6 +1157,7 @@ export const model = {
             project: args.project,
             members,
             count: members.length,
+            truncated,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -1062,13 +1171,13 @@ export const model = {
 
     list_branches: {
       description: "List branches for a project",
-      arguments: z.object({ project: z.string() }),
+      arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const data = await client.getProject(
+        const { data, truncated } = await client.getProjectList(
           args.project,
           "/repository/branches",
           { per_page: "50" },
@@ -1085,6 +1194,7 @@ export const model = {
             project: args.project,
             branches,
             count: branches.length,
+            truncated,
             fetchedAt: new Date().toISOString(),
           },
         );
