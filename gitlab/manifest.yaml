@@ -1,53 +1,47 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.04.22.3"
+version: "2026.06.10.1"
 description: |
-  Query GitLab data using the glab CLI for project, merge request, issue, release, and pipeline visibility.
+  Read and write GitLab data via the REST API (v4). Projects, merge requests,
+  issues, releases, pipelines, labels, members, and branches. No CLI
+  dependencies — uses native fetch with a personal access token stored in
+  a swamp vault.
 
   ## Authentication
 
-  Uses the glab CLI's built-in authentication. Run `glab auth login` to configure.
-
-  ## Required Tools
-
-  - `glab` CLI (https://gitlab.com/gitlab-org/cli) installed and authenticated
+  Requires a GitLab personal access token with `api` scope, stored in a
+  swamp vault.
 
   ## Usage
 
   ```bash
-  # Create gitlab model (default host from glab config)
-  swamp model create @webframp/gitlab gitlab
+  # Create with vault-stored token
+  swamp model create @webframp/gitlab gitlab \
+    --global-arg host=git.bethelservice.org \
+    --global-arg 'token=${{ vault.get("gitlab", "TOKEN") }}'
 
-  # Create with specific GitLab host
-  swamp model create @webframp/gitlab gitlab --global-arg host=git.example.org
-
-  # List your projects
+  # Read operations
   swamp model method run gitlab list_projects
-
-  # Get detailed project info
-  swamp model method run gitlab get_project_info --input project=group/repo
-
-  # List open merge requests
+  swamp model method run gitlab list_issues --input project=group/repo
   swamp model method run gitlab list_merge_requests --input project=group/repo
 
-  # List closed issues
-  swamp model method run gitlab list_issues --input project=group/repo --input state=closed
-
-  # List releases
-  swamp model method run gitlab list_releases --input project=group/repo
-
-  # List recent CI/CD pipelines
-  swamp model method run gitlab list_pipelines --input project=group/repo
+  # Write operations
+  swamp model method run gitlab create_issue --input project=group/repo --input title="New issue"
+  swamp model method run gitlab add_issue_note --input project=group/repo --input iid=1 --input body="Comment"
+  swamp model method run gitlab create_merge_request --input project=group/repo --input title="MR" --input sourceBranch=feature
   ```
 
   ## Methods
 
-  - **list_projects** - List projects for the authenticated user
-  - **get_project_info** - Get detailed information about a specific project
-  - **list_merge_requests** - List merge requests for a project
-  - **list_issues** - List issues for a project
-  - **list_releases** - List releases for a project
-  - **list_pipelines** - List recent CI/CD pipelines for a project
+  **Read:**
+  - list_projects, get_project_info, list_merge_requests, list_issues
+  - list_releases, list_pipelines, list_issue_notes
+  - list_labels, list_members, list_branches
+
+  **Write:**
+  - create_issue, update_issue, add_issue_note
+  - create_merge_request, merge, add_mr_note
+  - create_label
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gitlab/projects.ts
@@ -64,3 +58,5 @@ labels:
   - git
   - devops
   - ci
+  - issues
+  - api

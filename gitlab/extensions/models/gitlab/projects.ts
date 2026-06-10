@@ -1,13 +1,15 @@
 /**
  * GitLab project operations model for swamp.
  *
- * Queries GitLab data via the `glab` CLI for projects, merge requests,
- * issues, releases, and CI/CD pipelines. Supports self-hosted instances
- * through the `host` global argument.
+ * Queries and mutates GitLab data via the REST API (v4) for projects,
+ * merge requests, issues, releases, and CI/CD pipelines. Supports
+ * self-hosted instances. Auth via personal access token stored in a
+ * swamp vault.
  *
  * @module
  */
 // SPDX-License-Identifier: Apache-2.0
+// deno-lint-ignore-file no-explicit-any
 
 import { z } from "npm:zod@4.3.6";
 
@@ -16,12 +18,12 @@ import { z } from "npm:zod@4.3.6";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  host: z
-    .string()
-    .describe(
-      "GitLab hostname (e.g., gitlab.com or git.example.org). Uses glab's default if omitted.",
-    )
-    .default(""),
+  host: z.string().min(1).describe(
+    "GitLab hostname (e.g. git.bethelservice.org)",
+  ),
+  token: z.string().min(1).describe(
+    "GitLab personal access token with api scope (use vault reference)",
+  ),
 });
 
 const ProjectSchema = z.object({
@@ -99,6 +101,34 @@ const IssueListSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const IssueDetailSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  title: z.string(),
+  description: z.string(),
+  state: z.string(),
+  webUrl: z.string(),
+  labels: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const NoteSchema = z.object({
+  id: z.number(),
+  body: z.string(),
+  author: z.object({ username: z.string() }).nullable(),
+  createdAt: z.string(),
+});
+
+const NoteListSchema = z.object({
+  project: z.string(),
+  noteableType: z.string(),
+  noteableIid: z.number(),
+  notes: z.array(NoteSchema),
+  count: z.number(),
+  fetchedAt: z.string(),
+});
+
 const ReleaseSchema = z.object({
   tagName: z.string(),
   name: z.string(),
@@ -131,41 +161,135 @@ const PipelineListSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const LabelSchema = z.object({
+  name: z.string(),
+  color: z.string(),
+  description: z.string(),
+});
+
+const LabelListSchema = z.object({
+  project: z.string(),
+  labels: z.array(LabelSchema),
+  count: z.number(),
+  fetchedAt: z.string(),
+});
+
+const MemberSchema = z.object({
+  username: z.string(),
+  name: z.string(),
+  accessLevel: z.number(),
+});
+
+const MemberListSchema = z.object({
+  project: z.string(),
+  members: z.array(MemberSchema),
+  count: z.number(),
+  fetchedAt: z.string(),
+});
+
+const BranchSchema = z.object({
+  name: z.string(),
+  protected: z.boolean(),
+  default: z.boolean(),
+});
+
+const BranchListSchema = z.object({
+  project: z.string(),
+  branches: z.array(BranchSchema),
+  count: z.number(),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
-// Helper Functions
+// REST API Client
 // =============================================================================
 
-function buildEnv(host: string): Record<string, string> {
-  const env: Record<string, string> = { ...Deno.env.toObject() };
-  if (host) {
-    env["GITLAB_HOST"] = host;
+class GitLabClient {
+  private readonly baseUrl: string;
+  private readonly token: string;
+
+  constructor(host: string, token: string) {
+    this.baseUrl = `https://${host}/api/v4`;
+    this.token = token;
   }
-  return env;
+
+  private headers(): Record<string, string> {
+    return { "PRIVATE-TOKEN": this.token, "Content-Type": "application/json" };
+  }
+
+  private projectUrl(project: string): string {
+    return `${this.baseUrl}/projects/${encodeURIComponent(project)}`;
+  }
+
+  async get(path: string, params?: Record<string, string>): Promise<any> {
+    const url = new URL(`${this.baseUrl}${path}`);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    }
+    const resp = await fetch(url.toString(), { headers: this.headers() });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`GitLab GET ${path}: ${resp.status} ${body}`);
+    }
+    return resp.json();
+  }
+
+  async getProject(
+    project: string,
+    path: string,
+    params?: Record<string, string>,
+  ): Promise<any> {
+    const url = new URL(`${this.projectUrl(project)}${path}`);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    }
+    const resp = await fetch(url.toString(), { headers: this.headers() });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${body}`);
+    }
+    return resp.json();
+  }
+
+  async post(
+    project: string,
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<any> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab POST ${project}${path}: ${resp.status} ${text}`);
+    }
+    return resp.json();
+  }
+
+  async put(
+    project: string,
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<any> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      method: "PUT",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab PUT ${project}${path}: ${resp.status} ${text}`);
+    }
+    return resp.json();
+  }
 }
 
-async function runGlab(
-  args: string[],
-  host: string,
-): Promise<unknown> {
-  const cmd = new Deno.Command("glab", {
-    args,
-    stdout: "piped",
-    stderr: "piped",
-    env: buildEnv(host),
-  });
-  const output = await cmd.output();
-  if (!output.success) {
-    const err = new TextDecoder().decode(output.stderr);
-    throw new Error(`glab command failed: ${err}`);
-  }
-  const text = new TextDecoder().decode(output.stdout).trim();
-  if (!text) {
-    throw new Error(`glab returned empty output for: glab ${args.join(" ")}`);
-  }
-  return JSON.parse(text);
-}
+// =============================================================================
+// Mappers
+// =============================================================================
 
-// deno-lint-ignore no-explicit-any
 function mapProject(raw: any): z.infer<typeof ProjectSchema> {
   return {
     name: raw.name ?? "",
@@ -181,7 +305,6 @@ function mapProject(raw: any): z.infer<typeof ProjectSchema> {
   };
 }
 
-// deno-lint-ignore no-explicit-any
 function mapMR(raw: any): z.infer<typeof MergeRequestSchema> {
   return {
     iid: raw.iid,
@@ -197,7 +320,6 @@ function mapMR(raw: any): z.infer<typeof MergeRequestSchema> {
   };
 }
 
-// deno-lint-ignore no-explicit-any
 function mapIssue(raw: any): z.infer<typeof IssueSchema> {
   return {
     iid: raw.iid,
@@ -210,7 +332,6 @@ function mapIssue(raw: any): z.infer<typeof IssueSchema> {
   };
 }
 
-// deno-lint-ignore no-explicit-any
 function mapRelease(raw: any): z.infer<typeof ReleaseSchema> {
   return {
     tagName: raw.tag_name ?? "",
@@ -221,7 +342,6 @@ function mapRelease(raw: any): z.infer<typeof ReleaseSchema> {
   };
 }
 
-// deno-lint-ignore no-explicit-any
 function mapPipeline(raw: any): z.infer<typeof PipelineSchema> {
   return {
     iid: raw.iid ?? raw.id,
@@ -234,13 +354,30 @@ function mapPipeline(raw: any): z.infer<typeof PipelineSchema> {
   };
 }
 
-function assertArray(data: unknown): unknown[] {
-  if (!Array.isArray(data)) {
-    throw new Error(
-      `Expected array from glab but got: ${JSON.stringify(data).slice(0, 200)}`,
-    );
-  }
-  return data;
+function mapIssueDetail(
+  project: string,
+  raw: any,
+): z.infer<typeof IssueDetailSchema> {
+  return {
+    project,
+    iid: raw.iid,
+    title: raw.title ?? "",
+    description: raw.description ?? "",
+    state: raw.state ?? "opened",
+    webUrl: raw.web_url ?? "",
+    labels: raw.labels ?? [],
+    createdAt: raw.created_at ?? "",
+    updatedAt: raw.updated_at ?? "",
+  };
+}
+
+function mapNote(raw: any): z.infer<typeof NoteSchema> {
+  return {
+    id: raw.id,
+    body: raw.body ?? "",
+    author: raw.author ? { username: raw.author.username } : null,
+    createdAt: raw.created_at ?? "",
+  };
 }
 
 function sanitizeName(project: string): string {
@@ -252,25 +389,23 @@ function sanitizeName(project: string): string {
 // =============================================================================
 
 type ModelContext = {
-  globalArgs: { host: string };
+  globalArgs: { host: string; token: string };
   writeResource: (
     spec: string,
     instance: string,
     data: unknown,
   ) => Promise<{ name: string }>;
-  logger: {
-    info: (msg: string, props: Record<string, unknown>) => void;
-  };
+  logger: { info: (msg: string, props: Record<string, unknown>) => void };
 };
 
 // =============================================================================
 // Model Definition
 // =============================================================================
 
-/** GitLab projects model — queries project, MR, issue, release, and pipeline data via glab CLI. */
+/** GitLab model — read and write projects, issues, MRs, pipelines via REST API. */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.04.22.3",
+  version: "2026.06.10.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -298,6 +433,18 @@ export const model = {
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
+    issueDetail: {
+      description: "Single issue detail (from create/update)",
+      schema: IssueDetailSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    notes: {
+      description: "Notes/comments on an issue or MR",
+      schema: NoteListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
     releases: {
       description: "List of releases for a project",
       schema: ReleaseListSchema,
@@ -305,10 +452,28 @@ export const model = {
       garbageCollection: 5,
     },
     pipelines: {
-      description: "List of recent CI/CD pipelines for a project",
+      description: "List of recent CI/CD pipelines",
       schema: PipelineListSchema,
       lifetime: "10m" as const,
       garbageCollection: 10,
+    },
+    labels: {
+      description: "Labels for a project",
+      schema: LabelListSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 5,
+    },
+    members: {
+      description: "Members of a project",
+      schema: MemberListSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 5,
+    },
+    branches: {
+      description: "Branches for a project",
+      schema: BranchListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 5,
     },
   },
 
@@ -317,52 +482,40 @@ export const model = {
       description:
         "List projects for the authenticated user with basic metadata",
       arguments: z.object({}),
-      execute: async (
-        _args: Record<string, never>,
-        context: ModelContext,
-      ) => {
-        const data = await runGlab(
-          ["repo", "list", "--mine", "--output", "json", "--per-page", "30"],
-          context.globalArgs.host,
+      execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
         );
-
-        const projects = assertArray(data).map(mapProject);
-
-        const handle = await context.writeResource("projects", "all", {
+        const data = await client.get("/projects", {
+          membership: "true",
+          per_page: "30",
+          order_by: "last_activity_at",
+          sort: "desc",
+        });
+        const projects = (data as any[]).map(mapProject);
+        const handle = await ctx.writeResource("projects", "all", {
           projects,
           count: projects.length,
           fetchedAt: new Date().toISOString(),
         });
-
-        context.logger.info("Found {count} projects", {
-          count: projects.length,
-        });
+        ctx.logger.info("Found {count} projects", { count: projects.length });
         return { dataHandles: [handle] };
       },
     },
 
     get_project_info: {
-      description:
-        "Get detailed information about a specific project including stats and metadata",
+      description: "Get detailed information about a specific project",
       arguments: z.object({
-        project: z
-          .string()
-          .describe(
-            "Project in group/name format (e.g., mygroup/myproject)",
-          ),
+        project: z.string().describe("Project path (e.g. mygroup/myproject)"),
       }),
-      execute: async (
-        args: { project: string },
-        context: ModelContext,
-      ) => {
-        const data = await runGlab(
-          ["repo", "view", args.project, "--output", "json"],
-          context.globalArgs.host,
+      execute: async (args: { project: string }, ctx: ModelContext) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
         );
-
-        // deno-lint-ignore no-explicit-any
-        const raw = data as any;
-        const info: z.infer<typeof ProjectInfoSchema> = {
+        const raw = await client.getProject(args.project, "");
+        const info = {
           name: raw.name ?? "",
           pathWithNamespace: raw.path_with_namespace ?? "",
           description: raw.description ?? null,
@@ -378,14 +531,12 @@ export const model = {
           lastActivityAt: raw.last_activity_at ?? "",
           fetchedAt: new Date().toISOString(),
         };
-
-        const handle = await context.writeResource(
+        const handle = await ctx.writeResource(
           "projectInfo",
           sanitizeName(args.project),
           info,
         );
-
-        context.logger.info("Fetched info for {project}", {
+        ctx.logger.info("Fetched info for {project}", {
           project: args.project,
         });
         return { dataHandles: [handle] };
@@ -396,46 +547,25 @@ export const model = {
       description:
         "List merge requests for a project with optional state filter",
       arguments: z.object({
-        project: z
-          .string()
-          .describe(
-            "Project in group/name format (e.g., mygroup/myproject)",
-          ),
-        state: z
-          .enum(["opened", "closed", "merged", "all"])
-          .default("opened")
-          .describe("Filter by MR state"),
+        project: z.string(),
+        state: z.enum(["opened", "closed", "merged", "all"]).default("opened"),
       }),
       execute: async (
         args: { project: string; state: string },
-        context: ModelContext,
+        ctx: ModelContext,
       ) => {
-        const stateArgs: string[] = [];
-        if (args.state === "closed") stateArgs.push("--closed");
-        else if (args.state === "merged") stateArgs.push("--merged");
-        else if (args.state === "all") stateArgs.push("--all");
-
-        const data = await runGlab(
-          [
-            "mr",
-            "list",
-            "-R",
-            args.project,
-            ...stateArgs,
-            "--output",
-            "json",
-            "--per-page",
-            "20",
-          ],
-          context.globalArgs.host,
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
         );
-
-        const mrs = assertArray(data).map(mapMR);
-        const instanceName = `${sanitizeName(args.project)}-${args.state}`;
-
-        const handle = await context.writeResource(
+        const data = await client.getProject(args.project, "/merge_requests", {
+          state: args.state,
+          per_page: "20",
+        });
+        const mrs = (data as any[]).map(mapMR);
+        const handle = await ctx.writeResource(
           "mergeRequests",
-          instanceName,
+          `${sanitizeName(args.project)}-${args.state}`,
           {
             project: args.project,
             mergeRequests: mrs,
@@ -444,11 +574,11 @@ export const model = {
             fetchedAt: new Date().toISOString(),
           },
         );
-
-        context.logger.info(
-          "Found {count} MRs for {project} ({state})",
-          { count: mrs.length, project: args.project, state: args.state },
-        );
+        ctx.logger.info("Found {count} MRs for {project} ({state})", {
+          count: mrs.length,
+          project: args.project,
+          state: args.state,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -456,45 +586,25 @@ export const model = {
     list_issues: {
       description: "List issues for a project with optional state filter",
       arguments: z.object({
-        project: z
-          .string()
-          .describe(
-            "Project in group/name format (e.g., mygroup/myproject)",
-          ),
-        state: z
-          .enum(["opened", "closed", "all"])
-          .default("opened")
-          .describe("Filter by issue state"),
+        project: z.string(),
+        state: z.enum(["opened", "closed", "all"]).default("opened"),
       }),
       execute: async (
         args: { project: string; state: string },
-        context: ModelContext,
+        ctx: ModelContext,
       ) => {
-        const stateArgs: string[] = [];
-        if (args.state === "closed") stateArgs.push("--closed");
-        else if (args.state === "all") stateArgs.push("--all");
-
-        const data = await runGlab(
-          [
-            "issue",
-            "list",
-            "-R",
-            args.project,
-            ...stateArgs,
-            "--output",
-            "json",
-            "--per-page",
-            "20",
-          ],
-          context.globalArgs.host,
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
         );
-
-        const issues = assertArray(data).map(mapIssue);
-        const instanceName = `${sanitizeName(args.project)}-${args.state}`;
-
-        const handle = await context.writeResource(
+        const data = await client.getProject(args.project, "/issues", {
+          state: args.state,
+          per_page: "20",
+        });
+        const issues = (data as any[]).map(mapIssue);
+        const handle = await ctx.writeResource(
           "issues",
-          instanceName,
+          `${sanitizeName(args.project)}-${args.state}`,
           {
             project: args.project,
             issues,
@@ -503,45 +613,28 @@ export const model = {
             fetchedAt: new Date().toISOString(),
           },
         );
-
-        context.logger.info(
-          "Found {count} issues for {project} ({state})",
-          { count: issues.length, project: args.project, state: args.state },
-        );
+        ctx.logger.info("Found {count} issues for {project} ({state})", {
+          count: issues.length,
+          project: args.project,
+          state: args.state,
+        });
         return { dataHandles: [handle] };
       },
     },
 
     list_releases: {
       description: "List releases for a project",
-      arguments: z.object({
-        project: z
-          .string()
-          .describe(
-            "Project in group/name format (e.g., mygroup/myproject)",
-          ),
-      }),
-      execute: async (
-        args: { project: string },
-        context: ModelContext,
-      ) => {
-        const data = await runGlab(
-          [
-            "release",
-            "list",
-            "-R",
-            args.project,
-            "--output",
-            "json",
-            "--per-page",
-            "10",
-          ],
-          context.globalArgs.host,
+      arguments: z.object({ project: z.string() }),
+      execute: async (args: { project: string }, ctx: ModelContext) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
         );
-
-        const releases = assertArray(data).map(mapRelease);
-
-        const handle = await context.writeResource(
+        const data = await client.getProject(args.project, "/releases", {
+          per_page: "10",
+        });
+        const releases = (data as any[]).map(mapRelease);
+        const handle = await ctx.writeResource(
           "releases",
           sanitizeName(args.project),
           {
@@ -551,8 +644,7 @@ export const model = {
             fetchedAt: new Date().toISOString(),
           },
         );
-
-        context.logger.info("Found {count} releases for {project}", {
+        ctx.logger.info("Found {count} releases for {project}", {
           count: releases.length,
           project: args.project,
         });
@@ -562,34 +654,17 @@ export const model = {
 
     list_pipelines: {
       description: "List recent CI/CD pipelines for a project",
-      arguments: z.object({
-        project: z
-          .string()
-          .describe(
-            "Project in group/name format (e.g., mygroup/myproject)",
-          ),
-      }),
-      execute: async (
-        args: { project: string },
-        context: ModelContext,
-      ) => {
-        const data = await runGlab(
-          [
-            "ci",
-            "list",
-            "-R",
-            args.project,
-            "--output",
-            "json",
-            "--per-page",
-            "10",
-          ],
-          context.globalArgs.host,
+      arguments: z.object({ project: z.string() }),
+      execute: async (args: { project: string }, ctx: ModelContext) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
         );
-
-        const pipelines = assertArray(data).map(mapPipeline);
-
-        const handle = await context.writeResource(
+        const data = await client.getProject(args.project, "/pipelines", {
+          per_page: "10",
+        });
+        const pipelines = (data as any[]).map(mapPipeline);
+        const handle = await ctx.writeResource(
           "pipelines",
           sanitizeName(args.project),
           {
@@ -599,9 +674,422 @@ export const model = {
             fetchedAt: new Date().toISOString(),
           },
         );
-
-        context.logger.info("Found {count} pipelines for {project}", {
+        ctx.logger.info("Found {count} pipelines for {project}", {
           count: pipelines.length,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_issue: {
+      description: "Create a new issue in a project",
+      arguments: z.object({
+        project: z.string(),
+        title: z.string().min(1),
+        description: z.string().default(""),
+        labels: z.array(z.string()).default([]),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          title: string;
+          description: string;
+          labels: string[];
+        },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(args.project, "/issues", {
+          title: args.title,
+          description: args.description,
+          labels: args.labels.join(","),
+        });
+        const handle = await ctx.writeResource(
+          "issueDetail",
+          `${sanitizeName(args.project)}-${raw.iid}`,
+          mapIssueDetail(args.project, raw),
+        );
+        ctx.logger.info("Created issue #{iid} in {project}", {
+          iid: raw.iid,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    update_issue: {
+      description:
+        "Update an existing issue (title, description, labels, state)",
+      arguments: z.object({
+        project: z.string(),
+        iid: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        labels: z.array(z.string()).optional(),
+        stateEvent: z.enum(["close", "reopen"]).optional(),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          iid: number;
+          title?: string;
+          description?: string;
+          labels?: string[];
+          stateEvent?: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const body: Record<string, unknown> = {};
+        if (args.title !== undefined) body.title = args.title;
+        if (args.description !== undefined) body.description = args.description;
+        if (args.labels !== undefined) body.labels = args.labels.join(",");
+        if (args.stateEvent !== undefined) body.state_event = args.stateEvent;
+        const raw = await client.put(args.project, `/issues/${args.iid}`, body);
+        const handle = await ctx.writeResource(
+          "issueDetail",
+          `${sanitizeName(args.project)}-${raw.iid}`,
+          mapIssueDetail(args.project, raw),
+        );
+        ctx.logger.info("Updated issue #{iid} in {project}", {
+          iid: args.iid,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    add_issue_note: {
+      description: "Add a comment to an issue",
+      arguments: z.object({
+        project: z.string(),
+        iid: z.number(),
+        body: z.string().min(1),
+      }),
+      execute: async (
+        args: { project: string; iid: number; body: string },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(
+          args.project,
+          `/issues/${args.iid}/notes`,
+          { body: args.body },
+        );
+        const handle = await ctx.writeResource(
+          "notes",
+          `${sanitizeName(args.project)}-issue-${args.iid}`,
+          {
+            project: args.project,
+            noteableType: "issue",
+            noteableIid: args.iid,
+            notes: [mapNote(raw)],
+            count: 1,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Added note to issue #{iid} in {project}", {
+          iid: args.iid,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_issue_notes: {
+      description: "List comments on an issue",
+      arguments: z.object({ project: z.string(), iid: z.number() }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const data = await client.getProject(
+          args.project,
+          `/issues/${args.iid}/notes`,
+          { per_page: "50", sort: "asc" },
+        );
+        const notes = (data as any[]).map(mapNote);
+        const handle = await ctx.writeResource(
+          "notes",
+          `${sanitizeName(args.project)}-issue-${args.iid}`,
+          {
+            project: args.project,
+            noteableType: "issue",
+            noteableIid: args.iid,
+            notes,
+            count: notes.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Found {count} notes on issue #{iid}", {
+          count: notes.length,
+          iid: args.iid,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_merge_request: {
+      description: "Create a new merge request",
+      arguments: z.object({
+        project: z.string(),
+        title: z.string().min(1),
+        sourceBranch: z.string().min(1),
+        targetBranch: z.string().default("main"),
+        description: z.string().default(""),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          title: string;
+          sourceBranch: string;
+          targetBranch: string;
+          description: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(args.project, "/merge_requests", {
+          title: args.title,
+          source_branch: args.sourceBranch,
+          target_branch: args.targetBranch,
+          description: args.description,
+        });
+        const mr = mapMR(raw);
+        const handle = await ctx.writeResource(
+          "mergeRequests",
+          `${sanitizeName(args.project)}-created-${raw.iid}`,
+          {
+            project: args.project,
+            mergeRequests: [mr],
+            count: 1,
+            state: "opened",
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Created MR !{iid} in {project}", {
+          iid: raw.iid,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    merge: {
+      description: "Merge a merge request",
+      arguments: z.object({
+        project: z.string(),
+        iid: z.number(),
+        squash: z.boolean().default(false),
+      }),
+      execute: async (
+        args: { project: string; iid: number; squash: boolean },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        await client.put(args.project, `/merge_requests/${args.iid}/merge`, {
+          squash: args.squash,
+        });
+        ctx.logger.info("Merged MR !{iid} in {project}", {
+          iid: args.iid,
+          project: args.project,
+        });
+        return { dataHandles: [] };
+      },
+    },
+
+    add_mr_note: {
+      description: "Add a comment to a merge request",
+      arguments: z.object({
+        project: z.string(),
+        iid: z.number(),
+        body: z.string().min(1),
+      }),
+      execute: async (
+        args: { project: string; iid: number; body: string },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(
+          args.project,
+          `/merge_requests/${args.iid}/notes`,
+          { body: args.body },
+        );
+        const handle = await ctx.writeResource(
+          "notes",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            noteableType: "merge_request",
+            noteableIid: args.iid,
+            notes: [mapNote(raw)],
+            count: 1,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Added note to MR !{iid} in {project}", {
+          iid: args.iid,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_labels: {
+      description: "List labels for a project",
+      arguments: z.object({ project: z.string() }),
+      execute: async (args: { project: string }, ctx: ModelContext) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const data = await client.getProject(args.project, "/labels", {
+          per_page: "100",
+        });
+        const labels = (data as any[]).map((raw: any) => ({
+          name: raw.name ?? "",
+          color: raw.color ?? "",
+          description: raw.description ?? "",
+        }));
+        const handle = await ctx.writeResource(
+          "labels",
+          sanitizeName(args.project),
+          {
+            project: args.project,
+            labels,
+            count: labels.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Found {count} labels for {project}", {
+          count: labels.length,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_label: {
+      description: "Create a label in a project",
+      arguments: z.object({
+        project: z.string(),
+        name: z.string().min(1),
+        color: z.string().default("#428BCA"),
+        description: z.string().default(""),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          name: string;
+          color: string;
+          description: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        await client.post(args.project, "/labels", {
+          name: args.name,
+          color: args.color,
+          description: args.description,
+        });
+        ctx.logger.info("Created label {name} in {project}", {
+          name: args.name,
+          project: args.project,
+        });
+        return { dataHandles: [] };
+      },
+    },
+
+    list_members: {
+      description: "List members of a project",
+      arguments: z.object({ project: z.string() }),
+      execute: async (args: { project: string }, ctx: ModelContext) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const data = await client.getProject(args.project, "/members/all", {
+          per_page: "100",
+        });
+        const members = (data as any[]).map((raw: any) => ({
+          username: raw.username ?? "",
+          name: raw.name ?? "",
+          accessLevel: raw.access_level ?? 0,
+        }));
+        const handle = await ctx.writeResource(
+          "members",
+          sanitizeName(args.project),
+          {
+            project: args.project,
+            members,
+            count: members.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Found {count} members for {project}", {
+          count: members.length,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_branches: {
+      description: "List branches for a project",
+      arguments: z.object({ project: z.string() }),
+      execute: async (args: { project: string }, ctx: ModelContext) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const data = await client.getProject(
+          args.project,
+          "/repository/branches",
+          { per_page: "50" },
+        );
+        const branches = (data as any[]).map((raw: any) => ({
+          name: raw.name ?? "",
+          protected: raw.protected ?? false,
+          default: raw.default ?? false,
+        }));
+        const handle = await ctx.writeResource(
+          "branches",
+          sanitizeName(args.project),
+          {
+            project: args.project,
+            branches,
+            count: branches.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Found {count} branches for {project}", {
+          count: branches.length,
           project: args.project,
         });
         return { dataHandles: [handle] };
