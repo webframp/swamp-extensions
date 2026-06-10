@@ -861,6 +861,8 @@ class GitLabSyncService implements DatastoreSyncService {
       const fullPath = `${this.cachePath}/${relativePath}`;
       let content: Uint8Array;
       try {
+        const stat = await Deno.stat(fullPath);
+        if (stat.isDirectory) return; // markDirty may record directories; skip them
         content = await Deno.readFile(fullPath);
       } catch (error) {
         if (error instanceof Deno.errors.NotFound) return;
