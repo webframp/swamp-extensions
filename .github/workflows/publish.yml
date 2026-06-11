@@ -5,16 +5,16 @@ on:
     # NOTE: Must match the `name:` field in ci.yml exactly
     workflows: ["CI"]
     types: [completed]
-    branches: [main]
 
 jobs:
   detect-changes:
     name: Detect changed extensions
     runs-on: ubuntu-latest
-    # Only run when CI succeeded on main
+    # Only run when CI succeeded
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
       extensions: ${{ steps.changes.outputs.extensions }}
+      channel: ${{ steps.changes.outputs.channel }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,6 +23,16 @@ jobs:
       - id: changes
         name: Find extensions with changes
         run: |
+          # Determine channel: main = stable, anything else = beta
+          REF="${{ github.event.workflow_run.head_branch }}"
+          if [ "$REF" = "main" ]; then
+            CHANNEL="stable"
+          else
+            CHANNEL="beta"
+          fi
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "Channel: $CHANNEL (branch: $REF)"
+
           # Compare against the parent commit
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
 
@@ -41,7 +51,7 @@ jobs:
           done
 
           echo "extensions=$EXTENSIONS" >> "$GITHUB_OUTPUT"
-          echo "Extensions to publish: $EXTENSIONS"
+          echo "Extensions to publish: $EXTENSIONS (channel: $CHANNEL)"
 
   publish:
     name: Publish ${{ matrix.extension }}
@@ -80,9 +90,17 @@ jobs:
 
       - name: Publish extension
         working-directory: ${{ matrix.extension }}
-        run: swamp extension push manifest.yaml --yes
+        run: |
+          CHANNEL="${{ needs.detect-changes.outputs.channel }}"
+          if [ "$CHANNEL" = "stable" ]; then
+            swamp extension push manifest.yaml --yes
+          else
+            swamp extension push manifest.yaml --yes --channel "$CHANNEL"
+          fi
 
       - name: Create GitHub release
+        # Only create GH releases for stable channel
+        if: needs.detect-changes.outputs.channel == 'stable'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXT_NAME: ${{ steps.manifest.outputs.name }}
