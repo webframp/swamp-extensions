@@ -303,24 +303,30 @@ export const datastore = {
 
     const locksTable = `${parsed.schema}.locks`;
 
-    let infraReady = false;
-    async function ensureInfrastructure(): Promise<void> {
-      if (infraReady) return;
-      await sql.unsafe(
-        `CREATE SCHEMA IF NOT EXISTS ${parsed.schema}`,
-      );
-      await sql.unsafe(`
-        CREATE TABLE IF NOT EXISTS ${locksTable} (
-          key         TEXT PRIMARY KEY,
-          holder      TEXT NOT NULL,
-          hostname    TEXT NOT NULL,
-          pid         INTEGER NOT NULL,
-          acquired_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-          ttl_ms      INTEGER NOT NULL DEFAULT 30000,
-          nonce       TEXT NOT NULL
-        )
-      `);
-      infraReady = true;
+    let infraPromise: Promise<void> | undefined;
+    function ensureInfrastructure(): Promise<void> {
+      if (!infraPromise) {
+        infraPromise = (async () => {
+          await sql.unsafe(
+            `CREATE SCHEMA IF NOT EXISTS ${parsed.schema}`,
+          );
+          await sql.unsafe(`
+            CREATE TABLE IF NOT EXISTS ${locksTable} (
+              key         TEXT PRIMARY KEY,
+              holder      TEXT NOT NULL,
+              hostname    TEXT NOT NULL,
+              pid         INTEGER NOT NULL,
+              acquired_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              ttl_ms      INTEGER NOT NULL DEFAULT 30000,
+              nonce       TEXT NOT NULL
+            )
+          `);
+        })().catch((e) => {
+          infraPromise = undefined;
+          throw e;
+        });
+      }
+      return infraPromise;
     }
 
     return {

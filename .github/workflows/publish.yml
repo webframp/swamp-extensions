@@ -16,6 +16,15 @@ jobs:
       extensions: ${{ steps.changes.outputs.extensions }}
       channel: ${{ steps.changes.outputs.channel }}
     steps:
+      - name: Verify source repository
+        env:
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::Refusing to publish from fork: $HEAD_REPO"
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -107,6 +116,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXT_NAME: ${{ steps.manifest.outputs.name }}
           EXT_VERSION: ${{ steps.manifest.outputs.version }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           TAG="${EXT_NAME}@${EXT_VERSION}"
 
@@ -119,4 +129,4 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --notes "Published to swamp.club registry" \
-            --target "${{ github.event.workflow_run.head_sha }}"
+            --target "$HEAD_SHA"
