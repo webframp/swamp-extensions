@@ -107,6 +107,7 @@ function createPostgresLock(
   locksTable: string,
   datastorePath: string,
   options?: LockOptions,
+  ensureInfra?: () => Promise<void>,
 ): DistributedLock {
   const key = options?.lockKey ?? datastorePath;
   const ttlMs = options?.ttlMs ?? 30_000;
@@ -119,6 +120,7 @@ function createPostgresLock(
     if (nonce !== undefined) {
       throw new Error("Lock already acquired; call release() first");
     }
+    if (ensureInfra) await ensureInfra();
     const signal = options?.signal;
     const start = Date.now();
     nonce = crypto.randomUUID();
@@ -301,18 +303,51 @@ export const datastore = {
 
     const locksTable = `${parsed.schema}.locks`;
 
+    let infraPromise: Promise<void> | undefined;
+    function ensureInfrastructure(): Promise<void> {
+      if (!infraPromise) {
+        infraPromise = (async () => {
+          await sql.unsafe(
+            `CREATE SCHEMA IF NOT EXISTS ${parsed.schema}`,
+          );
+          await sql.unsafe(`
+            CREATE TABLE IF NOT EXISTS ${locksTable} (
+              key         TEXT PRIMARY KEY,
+              holder      TEXT NOT NULL,
+              hostname    TEXT NOT NULL,
+              pid         INTEGER NOT NULL,
+              acquired_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+              ttl_ms      INTEGER NOT NULL DEFAULT 30000,
+              nonce       TEXT NOT NULL
+            )
+          `);
+        })().catch((e) => {
+          infraPromise = undefined;
+          throw e;
+        });
+      }
+      return infraPromise;
+    }
+
     return {
       createLock: (
         datastorePath: string,
         options?: LockOptions,
       ): DistributedLock => {
-        return createPostgresLock(sql, locksTable, datastorePath, options);
+        return createPostgresLock(
+          sql,
+          locksTable,
+          datastorePath,
+          options,
+          ensureInfrastructure,
+        );
       },
 
       createVerifier: (): DatastoreVerifier => ({
         verify: async (): Promise<DatastoreHealthResult> => {
           const start = performance.now();
           try {
+            await ensureInfrastructure();
             const [row] = await sql`
               SELECT version() AS v,
                      current_setting('server_version') AS sv,
