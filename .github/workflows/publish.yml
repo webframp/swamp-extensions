@@ -22,16 +22,17 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
       - id: changes
         name: Find extensions with changes
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           # Determine channel: main = stable, anything else = beta
-          REF="${{ github.event.workflow_run.head_branch }}"
-          if [ "$REF" = "main" ]; then
+          if [ "$HEAD_BRANCH" = "main" ]; then
             CHANNEL="stable"
           else
             CHANNEL="beta"
           fi
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
-          echo "Channel: $CHANNEL (branch: $REF)"
+          echo "Channel: $CHANNEL (branch: $HEAD_BRANCH)"
 
           # Compare against the parent commit
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
@@ -90,8 +91,9 @@ jobs:
 
       - name: Publish extension
         working-directory: ${{ matrix.extension }}
+        env:
+          CHANNEL: ${{ needs.detect-changes.outputs.channel }}
         run: |
-          CHANNEL="${{ needs.detect-changes.outputs.channel }}"
           if [ "$CHANNEL" = "stable" ]; then
             swamp extension push manifest.yaml --yes
           else
