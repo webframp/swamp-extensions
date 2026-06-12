@@ -69,17 +69,24 @@ async function awsCli(
   return stdout.trim() ? JSON.parse(stdout) : {};
 }
 
-/** Check if an S3 bucket exists. */
+/** Check if an S3 bucket exists. Only treats "not found" as false; rethrows other errors. */
 async function bucketExists(name: string, region: string): Promise<boolean> {
   try {
     await awsCli(["s3api", "head-bucket", "--bucket", name], region);
     return true;
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      msg.includes("404") || msg.includes("NoSuchBucket") ||
+      msg.includes("Not Found")
+    ) {
+      return false;
+    }
+    throw error;
   }
 }
 
-/** Check if an ECR repository exists. */
+/** Check if an ECR repository exists. Only treats "not found" as null; rethrows other errors. */
 async function ecrRepoExists(
   name: string,
   region: string,
@@ -91,8 +98,15 @@ async function ecrRepoExists(
     );
     const repos = result.repositories as Array<Record<string, unknown>>;
     return repos?.[0] ?? null;
-  } catch {
-    return null;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      msg.includes("RepositoryNotFoundException") ||
+      msg.includes("does not exist")
+    ) {
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -229,8 +243,13 @@ export const model = {
           ecrRepo = (result.repository as Record<string, unknown>) ?? {};
         }
 
-        const ecrUri = ecrRepo.repositoryUri as string;
-        const ecrArn = ecrRepo.repositoryArn as string;
+        const ecrUri = ecrRepo.repositoryUri as string | undefined;
+        const ecrArn = ecrRepo.repositoryArn as string | undefined;
+        if (!ecrUri || !ecrArn) {
+          throw new Error(
+            `ECR repository ${ecr_repo_name} exists but returned no URI or ARN`,
+          );
+        }
         const tag = args.imageTag ?? "latest";
         const fullImageTag = `${ecrUri}:${tag}`;
 
@@ -332,19 +351,32 @@ export const model = {
           throw new Error(`Worker image build failed: ${stderr}`);
         }
 
-        // ECR login
+        // ECR login — get password then pipe to docker login without shell interpolation
         context.logger.info("Authenticating to ECR");
-        const loginCmd = new Deno.Command("bash", {
-          args: [
-            "-c",
-            `aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${
-              ecrUri.split("/")[0]
-            }`,
-          ],
+        const registry = ecrUri.split("/")[0];
+        const getPasswordCmd = new Deno.Command("aws", {
+          args: ["ecr", "get-login-password", "--region", region],
           stdout: "piped",
           stderr: "piped",
         });
-        const loginOutput = await loginCmd.output();
+        const passwordOutput = await getPasswordCmd.output();
+        if (!passwordOutput.success) {
+          const stderr = new TextDecoder().decode(passwordOutput.stderr);
+          throw new Error(`ECR get-login-password failed: ${stderr}`);
+        }
+        const password = new TextDecoder().decode(passwordOutput.stdout).trim();
+
+        const dockerLoginCmd = new Deno.Command("docker", {
+          args: ["login", "--username", "AWS", "--password-stdin", registry],
+          stdin: "piped",
+          stdout: "piped",
+          stderr: "piped",
+        });
+        const loginProcess = dockerLoginCmd.spawn();
+        const writer = loginProcess.stdin.getWriter();
+        await writer.write(new TextEncoder().encode(password));
+        await writer.close();
+        const loginOutput = await loginProcess.output();
         if (!loginOutput.success) {
           const stderr = new TextDecoder().decode(loginOutput.stderr);
           throw new Error(`ECR login failed: ${stderr}`);

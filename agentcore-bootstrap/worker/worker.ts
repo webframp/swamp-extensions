@@ -99,10 +99,23 @@ async function writeStatus(
   await writeToS3(bucket, statusKey, JSON.stringify(status));
 }
 
+const TASK_ID_PATTERN = /^[a-zA-Z0-9_-]{1,200}$/;
+
 async function executeTask(manifest: TaskManifest): Promise<Response> {
+  if (!TASK_ID_PATTERN.test(manifest.taskId)) {
+    return new Response(
+      JSON.stringify({ status: "error", error: "Invalid taskId format" }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   const bucket = getBucket(manifest);
   const start = performance.now();
   const logs: string[] = [];
+
+  await Deno.mkdir(WORKER_TMP, { recursive: true });
+  const bundlePath = `${WORKER_TMP}/${manifest.taskId}.ts`;
+  const runnerPath = `${WORKER_TMP}/${manifest.taskId}-runner.ts`;
 
   try {
     await writeStatus(bucket, manifest.statusKey, { state: "running" });
@@ -116,21 +129,12 @@ async function executeTask(manifest: TaskManifest): Promise<Response> {
       new TextDecoder().decode(requestBytes),
     );
 
-    if (request.env) {
-      for (const [k, v] of Object.entries(request.env)) {
-        Deno.env.set(k, v);
-      }
-    }
-
-    await Deno.mkdir(WORKER_TMP, { recursive: true });
-    const bundlePath = `${WORKER_TMP}/${manifest.taskId}.ts`;
     await Deno.writeFile(bundlePath, bundleBytes);
 
     logs.push(
       `[worker] Executing ${request.modelType}::${request.methodName}`,
     );
 
-    const runnerPath = `${WORKER_TMP}/${manifest.taskId}-runner.ts`;
     const runnerCode = `
 import { model } from "./${manifest.taskId}.ts";
 
@@ -160,12 +164,16 @@ console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
 `;
     await Deno.writeTextFile(runnerPath, runnerCode);
 
+    const taskEnv = request.env
+      ? { ...Deno.env.toObject(), ...request.env }
+      : Deno.env.toObject();
+
     const command = new Deno.Command("deno", {
       args: ["run", "--allow-all", runnerPath],
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
-      env: Deno.env.toObject(),
+      env: taskEnv,
     });
 
     const process = command.spawn();
@@ -240,6 +248,11 @@ console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
     return new Response(JSON.stringify({ status: "error", error: msg }), {
       status: 200,
     });
+  } finally {
+    await Promise.allSettled([
+      Deno.remove(bundlePath).catch(() => {}),
+      Deno.remove(runnerPath).catch(() => {}),
+    ]);
   }
 }
 
