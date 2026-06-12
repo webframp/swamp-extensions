@@ -38,11 +38,11 @@ workflows:
 additionalFiles:
   - README.md
   - LICENSE.md
-  - worker/Dockerfile
-  - worker/.dockerignore
   - worker/deno.json
-  - worker/deno.lock
   - worker/worker.ts
+binaries:
+  - worker/Dockerfile
+  - worker/deno.lock
 platforms:
   - linux-x86_64
   - linux-aarch64

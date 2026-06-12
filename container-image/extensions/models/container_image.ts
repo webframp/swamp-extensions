@@ -58,7 +58,9 @@ const LoginArgsSchema = z.object({
     "Registry URL (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com)",
   ),
   username: z.string().default("AWS").describe("Registry username"),
-  password: z.string().describe("Registry password or token"),
+  password: z.string().meta({ sensitive: true }).describe(
+    "Registry password or token",
+  ),
 });
 
 const BuildResultSchema = z.object({

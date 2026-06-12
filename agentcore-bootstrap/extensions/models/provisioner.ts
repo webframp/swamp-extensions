@@ -337,7 +337,9 @@ export const model = {
         const loginCmd = new Deno.Command("bash", {
           args: [
             "-c",
-            `aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${ecrUri.split("/")[0]}`,
+            `aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${
+              ecrUri.split("/")[0]
+            }`,
           ],
           stdout: "piped",
           stderr: "piped",
