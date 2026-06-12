@@ -194,30 +194,32 @@ export const model = {
             );
           }
           await awsCli(bucketArgs, region);
-          await awsCli(
-            [
-              "s3api",
-              "put-public-access-block",
-              "--bucket",
-              bucket_name,
-              "--public-access-block-configuration",
-              "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
-            ],
-            region,
-          );
-          await awsCli(
-            [
-              "s3api",
-              "put-bucket-versioning",
-              "--bucket",
-              bucket_name,
-              "--versioning-configuration",
-              "Status=Enabled",
-            ],
-            region,
-          );
           bucketCreated = true;
         }
+
+        // Ensure bucket configuration regardless of whether it was just created
+        await awsCli(
+          [
+            "s3api",
+            "put-public-access-block",
+            "--bucket",
+            bucket_name,
+            "--public-access-block-configuration",
+            "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true",
+          ],
+          region,
+        );
+        await awsCli(
+          [
+            "s3api",
+            "put-bucket-versioning",
+            "--bucket",
+            bucket_name,
+            "--versioning-configuration",
+            "Status=Enabled",
+          ],
+          region,
+        );
 
         // 2. Create ECR repository if needed
         let ecrRepo = await ecrRepoExists(ecr_repo_name, region);
@@ -262,11 +264,23 @@ export const model = {
             region,
           );
           const role = roleResult.Role as Record<string, unknown>;
-          roleArn = role.Arn as string;
+          const arn = role?.Arn as string | undefined;
+          if (!arn) {
+            throw new Error(
+              `IAM get-role returned no ARN for role ${role_name}`,
+            );
+          }
+          roleArn = arn;
           context.logger.info("IAM role already exists: {arn}", {
             arn: roleArn,
           });
-        } catch {
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (
+            !msg.includes("NoSuchEntity") && !msg.includes("does not exist")
+          ) {
+            throw error;
+          }
           const trustPolicy = JSON.stringify({
             Version: "2012-10-17",
             Statement: [
@@ -290,8 +304,14 @@ export const model = {
             ],
             region,
           );
-          const role = createResult.Role as Record<string, unknown>;
-          roleArn = role.Arn as string;
+          const createdRole = createResult.Role as Record<string, unknown>;
+          const createdArn = createdRole?.Arn as string | undefined;
+          if (!createdArn) {
+            throw new Error(
+              `IAM create-role returned no ARN for role ${role_name}`,
+            );
+          }
+          roleArn = createdArn;
 
           // Attach S3 access policy for coordination bucket
           const s3Policy = JSON.stringify({
@@ -420,7 +440,15 @@ export const model = {
             ],
             region,
           );
-          runtimeArn = runtimeResult.agentRuntimeArn as string;
+          const createdRuntimeArn = runtimeResult.agentRuntimeArn as
+            | string
+            | undefined;
+          if (!createdRuntimeArn) {
+            throw new Error(
+              `create-agent-runtime returned no ARN for ${runtime_name}`,
+            );
+          }
+          runtimeArn = createdRuntimeArn;
         } catch (error: unknown) {
           const msg = error instanceof Error ? error.message : String(error);
           if (msg.includes("already exists")) {
@@ -437,7 +465,15 @@ export const model = {
               ],
               region,
             );
-            runtimeArn = listResult.agentRuntimeArn as string;
+            const existingArn = listResult.agentRuntimeArn as
+              | string
+              | undefined;
+            if (!existingArn) {
+              throw new Error(
+                `get-agent-runtime returned no ARN for ${runtime_name}`,
+              );
+            }
+            runtimeArn = existingArn;
           } else {
             throw error;
           }

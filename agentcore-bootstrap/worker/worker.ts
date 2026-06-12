@@ -116,6 +116,7 @@ async function executeTask(manifest: TaskManifest): Promise<Response> {
   await Deno.mkdir(WORKER_TMP, { recursive: true });
   const bundlePath = `${WORKER_TMP}/${manifest.taskId}.ts`;
   const runnerPath = `${WORKER_TMP}/${manifest.taskId}-runner.ts`;
+  const resultPath = `${WORKER_TMP}/${manifest.taskId}-result.json`;
 
   try {
     await writeStatus(bucket, manifest.statusKey, { state: "running" });
@@ -134,7 +135,6 @@ async function executeTask(manifest: TaskManifest): Promise<Response> {
     logs.push(
       `[worker] Executing ${request.modelType}::${request.methodName}`,
     );
-
     const runnerCode = `
 import { model } from "./${manifest.taskId}.ts";
 
@@ -160,13 +160,30 @@ const context = {
 };
 
 const result = await method.execute(request.methodArgs, context);
-console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
+await Deno.writeTextFile(${
+      JSON.stringify(resultPath)
+    }, JSON.stringify({ outputs, dataHandles: result.dataHandles }));
 `;
     await Deno.writeTextFile(runnerPath, runnerCode);
 
-    const taskEnv = request.env
-      ? { ...Deno.env.toObject(), ...request.env }
-      : Deno.env.toObject();
+    const ENV_BLOCKLIST = new Set([
+      "AWS_ACCESS_KEY_ID",
+      "AWS_SECRET_ACCESS_KEY",
+      "AWS_SESSION_TOKEN",
+      "AWS_PROFILE",
+      "HOME",
+      "PATH",
+      "DENO_DIR",
+    ]);
+    const baseEnv = Deno.env.toObject();
+    let taskEnv = baseEnv;
+    if (request.env) {
+      const filtered: Record<string, string> = {};
+      for (const [k, v] of Object.entries(request.env)) {
+        if (!ENV_BLOCKLIST.has(k)) filtered[k] = v;
+      }
+      taskEnv = { ...baseEnv, ...filtered };
+    }
 
     const command = new Deno.Command("deno", {
       args: ["run", "--allow-all", runnerPath],
@@ -177,7 +194,7 @@ console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
     });
 
     const process = command.spawn();
-    const [stdout, stderr, status] = await Promise.all([
+    const [_stdout, stderr, status] = await Promise.all([
       readStream(process.stdout),
       readStream(process.stderr),
       process.status,
@@ -201,7 +218,8 @@ console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
 
     const outputKeys: string[] = [];
     try {
-      const result = JSON.parse(stdout);
+      const resultJson = await Deno.readTextFile(resultPath);
+      const result = JSON.parse(resultJson);
       if (Array.isArray(result.outputs)) {
         for (let i = 0; i < result.outputs.length; i++) {
           const outputKey = `${manifest.outputPrefix}/output-${i}.json`;
@@ -209,21 +227,18 @@ console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
           outputKeys.push(outputKey);
         }
       }
-    } catch {
-      const outputKey = `${manifest.outputPrefix}/output-0.json`;
-      const specName = Object.keys(request.resourceSpecs)[0] ??
-        request.methodName;
-      await writeToS3(
-        bucket,
-        outputKey,
-        JSON.stringify({
-          specName,
-          name: specName,
-          type: "resource",
-          content: stdout,
-        }),
-      );
-      outputKeys.push(outputKey);
+    } catch (parseError: unknown) {
+      const parseMsg = parseError instanceof Error
+        ? parseError.message
+        : String(parseError);
+      logs.push(`[worker] Failed to read result file: ${parseMsg}`);
+      await writeStatus(bucket, manifest.statusKey, {
+        state: "error",
+        error: `Runner completed but produced no valid result: ${parseMsg}`,
+        logs,
+        durationMs,
+      });
+      return new Response(JSON.stringify({ status: "error" }), { status: 200 });
     }
 
     await writeStatus(bucket, manifest.statusKey, {
@@ -239,12 +254,16 @@ console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
     const durationMs = Math.round(performance.now() - start);
     const msg = error instanceof Error ? error.message : String(error);
     logs.push(`[worker] Error: ${msg}`);
-    await writeStatus(bucket, manifest.statusKey, {
-      state: "error",
-      error: msg,
-      logs,
-      durationMs,
-    });
+    try {
+      await writeStatus(bucket, manifest.statusKey, {
+        state: "error",
+        error: msg,
+        logs,
+        durationMs,
+      });
+    } catch {
+      logs.push("[worker] Failed to write error status to S3");
+    }
     return new Response(JSON.stringify({ status: "error", error: msg }), {
       status: 200,
     });
@@ -252,6 +271,7 @@ console.log(JSON.stringify({ outputs, dataHandles: result.dataHandles }));
     await Promise.allSettled([
       Deno.remove(bundlePath).catch(() => {}),
       Deno.remove(runnerPath).catch(() => {}),
+      Deno.remove(resultPath).catch(() => {}),
     ]);
   }
 }

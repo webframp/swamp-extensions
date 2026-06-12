@@ -32,7 +32,7 @@ const BuildArgsSchema = z.object({
     .string()
     .optional()
     .describe("Path to Dockerfile relative to context (default: Dockerfile)"),
-  tag: z.string().describe(
+  tag: z.string().min(1).describe(
     "Image tag (e.g. 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo:latest)",
   ),
   platform: z
@@ -46,11 +46,11 @@ const BuildArgsSchema = z.object({
 });
 
 const PushArgsSchema = z.object({
-  tag: z.string().describe("Image tag to push"),
+  tag: z.string().min(1).describe("Image tag to push"),
 });
 
 const InspectArgsSchema = z.object({
-  tag: z.string().describe("Image tag to inspect"),
+  tag: z.string().min(1).describe("Image tag to inspect"),
 });
 
 const LoginArgsSchema = z.object({

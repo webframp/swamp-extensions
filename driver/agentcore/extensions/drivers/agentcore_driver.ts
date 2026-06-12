@@ -138,7 +138,12 @@ interface TaskStatus {
 function generateTaskId(request: ExecutionRequest): string {
   const ts = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 8);
-  return `${request.definitionMeta.name}-${request.methodName}-${ts}-${rand}`;
+  const suffix = `-${ts}-${rand}`;
+  const maxPrefix = 200 - suffix.length;
+  const name = request.definitionMeta.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const method = request.methodName.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const prefix = `${name}-${method}`.slice(0, maxPrefix);
+  return `${prefix}${suffix}`;
 }
 
 /** Writes a blob or string to an S3 key. */
