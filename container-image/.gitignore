@@ -14,7 +14,6 @@
 # END swamp managed section
 
 # Local swamp repo state (not part of published extension)
-.swamp.yaml
 .claude/
 CLAUDE.md
 /models/

@@ -1,14 +1,3 @@
-# Swamp local repo state (not part of published extension)
-.swamp/
-.swamp.yaml
-.swamp-sources.yaml
-/models/
-/vaults/
-/workflows/
-
-# Claude Code configuration
-.claude/
-
 # BEGIN swamp managed section - DO NOT EDIT
 
 # Runtime data (not needed in version control)
@@ -23,3 +12,8 @@
 .claude/scheduled_tasks.lock
 .claude/scheduled_tasks.json
 # END swamp managed section
+
+# Local swamp repo state (not part of published extension)
+/models/
+/vaults/
+/workflows/
