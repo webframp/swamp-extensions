@@ -473,7 +473,9 @@ export const model = {
           runtimeArn = createdRuntimeArn;
         } catch (error: unknown) {
           const msg = error instanceof Error ? error.message : String(error);
-          if (msg.includes("ConflictException") || msg.includes("already exists")) {
+          if (
+            msg.includes("ConflictException") || msg.includes("already exists")
+          ) {
             context.logger.warn(
               "Runtime {name} already exists, retrieving ARN",
               { name: runtime_name },
