@@ -291,6 +291,7 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
     }
     todos(state: pending, first: 20) {
       nodes { id action body targetType targetUrl createdAt author { username } project { nameWithNamespace } }
+      pageInfo { hasNextPage }
     }
   }
 }`;
@@ -1388,7 +1389,8 @@ export const model = {
           (showAssigned &&
             user.assignedMergeRequests?.pageInfo?.hasNextPage) ||
           (showAuthored &&
-            user.authoredMergeRequests?.pageInfo?.hasNextPage)
+            user.authoredMergeRequests?.pageInfo?.hasNextPage) ||
+          user.todos?.pageInfo?.hasNextPage
         );
 
         const totalCount = reviewing.length + assigned.length + authored.length;

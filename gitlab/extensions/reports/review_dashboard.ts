@@ -56,7 +56,10 @@ export const report = {
     const DAY = 86400000;
 
     function age(updatedAt: string): number {
-      return Math.floor((now - new Date(updatedAt).getTime()) / DAY);
+      if (!updatedAt) return 0;
+      const ms = new Date(updatedAt).getTime();
+      if (isNaN(ms)) return 0;
+      return Math.floor((now - ms) / DAY);
     }
 
     function priority(
