@@ -1,0 +1,67 @@
+id: a7c3e1f0-4b2d-4e8a-9f1c-6d5a3b2e1c0f
+name: "@webframp/bootstrap-agentcore"
+description: |
+  Provision all AWS infrastructure for the @webframp/agentcore execution
+  driver: S3 coordination bucket, ECR repository, worker container image,
+  IAM role, and AgentCore runtime.
+
+  After completion, configure the driver with the output runtimeArn and
+  bucket name:
+    runtimeArn: ${{ data.latest("agentcore-provisioner", "provision").attributes.runtimeArn }}
+    s3Bucket: ${{ data.latest("agentcore-provisioner", "provision").attributes.bucketName }}
+version: 1
+tags:
+  extension: "@webframp/agentcore-bootstrap"
+  category: "infrastructure"
+inputs:
+  properties:
+    region:
+      type: string
+      description: AWS region for all resources.
+      pattern: "^[a-z0-9-]+$"
+      default: "us-east-1"
+    bucket_name:
+      type: string
+      description: S3 bucket name for task coordination (3-63 chars, AWS naming rules).
+      minLength: 3
+      maxLength: 63
+      pattern: "^[a-z0-9][a-z0-9.\\-]{1,61}[a-z0-9]$"
+    ecr_repo_name:
+      type: string
+      description: ECR repository name for the worker image.
+      default: "swamp-agentcore-worker"
+    runtime_name:
+      type: string
+      description: AgentCore runtime name.
+      default: "swamp-worker"
+    role_name:
+      type: string
+      description: IAM role name for the AgentCore worker.
+      default: "SwampAgentCoreWorkerRole"
+    worker_context_path:
+      type: string
+      description: Path to worker Dockerfile context relative to extension directory.
+      default: "worker"
+    platform:
+      type: string
+      description: Container build platform.
+      default: "linux/arm64"
+  required:
+    - bucket_name
+jobs:
+  - name: provision
+    description: Create all AWS infrastructure and build/push the worker image.
+    steps:
+      - name: bootstrap
+        description: |
+          Run the provisioner model to create S3 bucket, ECR repo, IAM role,
+          build and push the worker image, and deploy the AgentCore runtime.
+          Instance `agentcore-provisioner` must be pre-created with
+          globalArguments wired to the workflow inputs.
+        task:
+          type: model_method
+          modelIdOrName: agentcore-provisioner
+          methodName: provision
+          inputs:
+            workerContextPath: ${{ inputs.worker_context_path }}
+            platform: ${{ inputs.platform }}

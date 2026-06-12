@@ -1,0 +1,9 @@
+swampVersion: 20260611.152058.0
+initializedAt: '2026-06-11T16:08:20.971Z'
+repoId: ce4bcc80-ec3d-4e8a-9432-65f5f9845e5f
+tools:
+  - claude
+gitignoreManaged: true
+trustedCollectives:
+  - swamp
+  - webframp
