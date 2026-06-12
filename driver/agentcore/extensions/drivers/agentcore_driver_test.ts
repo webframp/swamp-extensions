@@ -168,7 +168,9 @@ function createMockAwsServer(): {
     if (req.method === "GET" || req.method === "HEAD") {
       const obj = s3Objects.get(key);
       if (obj) {
-        return new Response(new Uint8Array(obj) as unknown as BodyInit, { status: 200 });
+        return new Response(new Uint8Array(obj) as unknown as BodyInit, {
+          status: 200,
+        });
       }
       return new Response(
         '<?xml version="1.0"?><Error><Code>NoSuchKey</Code><Message>Not found</Message></Error>',
@@ -245,7 +247,10 @@ Deno.test({
           logs: ["[worker] Task completed"],
           durationMs: 150,
         };
-        s3Objects.set(statusKey, new TextEncoder().encode(JSON.stringify(status)));
+        s3Objects.set(
+          statusKey,
+          new TextEncoder().encode(JSON.stringify(status)),
+        );
       }
 
       const result = await executePromise;
@@ -372,10 +377,16 @@ Deno.test({
         const status = {
           state: "error",
           error: "Method 'inventory_all' threw: connection refused",
-          logs: ["[worker] Fetching bundle", "[worker] Error: connection refused"],
+          logs: [
+            "[worker] Fetching bundle",
+            "[worker] Error: connection refused",
+          ],
           durationMs: 80,
         };
-        s3Objects.set(statusKey, new TextEncoder().encode(JSON.stringify(status)));
+        s3Objects.set(
+          statusKey,
+          new TextEncoder().encode(JSON.stringify(status)),
+        );
       }
 
       const result = await executePromise;

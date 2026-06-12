@@ -47,48 +47,41 @@ Separately, you must **deploy the worker infrastructure** into your AWS account:
 - An AgentCore runtime configured to use that image
 - An IAM role granting the runtime S3 access
 
-The `worker/` directory in this repository contains the Dockerfile and worker
-source code for building the container image. It is not included in the
-published extension package.
+Use `@webframp/agentcore-bootstrap` to provision all infrastructure
+automatically.
 
 ## Prerequisites
 
-Deploy the worker infrastructure before using this driver. You need:
+Deploy the worker infrastructure before using this driver. The
+`@webframp/agentcore-bootstrap` extension handles this as a one-shot workflow:
 
-1. **S3 bucket** — coordination bus for task artifacts. Can be the same bucket
-   as your swamp S3 datastore.
+```bash
+swamp extension pull @webframp/agentcore-bootstrap
+swamp model create @webframp/agentcore-bootstrap/provisioner agentcore-provisioner
+swamp workflow run @webframp/bootstrap-agentcore \
+  --input bucket_name=swamp-agentcore-coord-us-east-1 \
+  --input region=us-east-1
+```
 
+This creates the S3 bucket, ECR repository, builds and pushes the worker image,
+creates the IAM role, and deploys the AgentCore runtime. The output provides the
+`runtimeArn` and `bucketName` for driver configuration.
+
+### Manual Prerequisites
+
+If provisioning manually, you need:
+
+1. **S3 bucket** — coordination bus for task artifacts
 2. **ECR repository + worker image** — ARM64 container image running the swamp
-   worker. Build from the `worker/` directory in this repo:
-
-   ```sh
-   docker buildx build --platform linux/arm64 -t <account>.dkr.ecr.<region>.amazonaws.com/<repo>:latest worker/
-   docker push <account>.dkr.ecr.<region>.amazonaws.com/<repo>:latest
-   ```
-
-3. **AgentCore runtime** — deployed via `aws bedrock-agentcore create-runtime`
-   or the `@swamp/aws/bedrock-agentcore` model. Must reference the ECR image
-   and an IAM role trusting `bedrock-agentcore.amazonaws.com`.
-
+   worker (source in `@webframp/agentcore-bootstrap`)
+3. **AgentCore runtime** — deployed via `aws bedrock-agentcore create-runtime`,
+   referencing the ECR image and an IAM role trusting
+   `bedrock-agentcore.amazonaws.com`
 4. **IAM permissions** for the caller:
    - `s3:PutObject`, `s3:GetObject` on the coordination bucket
    - `bedrock-agentcore:InvokeAgentRuntime` on the runtime ARN
-
 5. **IAM permissions** for the worker role:
    - `s3:GetObject`, `s3:PutObject` on the coordination bucket
-
-### Automated Bootstrap
-
-Use the `agentcore-bootstrap` workflow (in the `aws-exploration` repo) to
-provision all infrastructure in one step:
-
-```sh
-swamp workflow run agentcore-bootstrap \
-  --input accountId=123456789012 \
-  --input bucketName=swamp-agentcore-coord-us-east-1 \
-  --input workerContextPath=./driver/agentcore/worker \
-  --input roleArn=arn:aws:iam::123456789012:role/SwampAgentCoreWorkerRole
-```
 
 ## Configuration
 
@@ -98,24 +91,24 @@ driverConfig:
   runtimeArn: "arn:aws:bedrock-agentcore:us-east-1:123456789012:agent-runtime/swamp_worker"
   region: "us-east-1"
   s3Bucket: "my-swamp-coordination-bucket"
-  s3Prefix: "swamp-agentcore/tasks"   # optional, default shown
-  timeout: 900000                      # ms, default 15 min
-  pollInterval: 5000                   # ms, default 5s
-  profile: "my-aws-profile"           # optional, for local credential resolution
-  env:                                 # optional extra env vars for worker
+  s3Prefix: "swamp-agentcore/tasks" # optional, default shown
+  timeout: 900000 # ms, default 15 min
+  pollInterval: 5000 # ms, default 5s
+  profile: "my-aws-profile" # optional, for local credential resolution
+  env: # optional extra env vars for worker
     AWS_PROFILE: "target-account"
 ```
 
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `runtimeArn` | yes | — | ARN of the deployed AgentCore runtime |
-| `region` | no | `us-east-1` | AWS region for S3 and AgentCore calls |
-| `s3Bucket` | yes | — | S3 bucket for task coordination |
-| `s3Prefix` | no | `swamp-agentcore/tasks` | Key prefix for task artifacts |
-| `timeout` | no | `900000` (15m) | Max wait time for worker completion |
-| `pollInterval` | no | `5000` (5s) | Interval between S3 status polls |
-| `profile` | no | — | AWS profile for credential resolution |
-| `env` | no | `{}` | Extra environment variables for the worker |
+| Field          | Required | Default                 | Description                                |
+| -------------- | -------- | ----------------------- | ------------------------------------------ |
+| `runtimeArn`   | yes      | —                       | ARN of the deployed AgentCore runtime      |
+| `region`       | no       | `us-east-1`             | AWS region for S3 and AgentCore calls      |
+| `s3Bucket`     | yes      | —                       | S3 bucket for task coordination            |
+| `s3Prefix`     | no       | `swamp-agentcore/tasks` | Key prefix for task artifacts              |
+| `timeout`      | no       | `900000` (15m)          | Max wait time for worker completion        |
+| `pollInterval` | no       | `5000` (5s)             | Interval between S3 status polls           |
+| `profile`      | no       | —                       | AWS profile for credential resolution      |
+| `env`          | no       | `{}`                    | Extra environment variables for the worker |
 
 ## Usage
 
@@ -201,6 +194,7 @@ invocation boots a fresh microVM — there is no state persistence between
 invocations.
 
 The worker:
+
 1. Receives a task manifest on `POST /invocations`
 2. Pulls the extension bundle from S3
 3. Pulls the request envelope from S3
@@ -208,12 +202,13 @@ The worker:
 5. Writes outputs and status back to S3
 6. Returns 200, microVM terminates
 
-The container image is built and deployed independently of this extension
-package. Source is in the `worker/` directory of the source repository.
+The worker source and container image are maintained in the
+`@webframp/agentcore-bootstrap` extension.
 
 ## S3 Object Lifecycle
 
 Each task creates objects under `s3://<bucket>/<prefix>/<taskId>/`:
+
 - `bundle.js` — the bundled model TypeScript
 - `request.json` — the execution request envelope
 - `status.json` — worker status (written by worker)
@@ -225,20 +220,20 @@ to avoid unbounded growth.
 
 ## When to Use AgentCore vs Other Drivers
 
-| Scenario | Driver |
-|----------|--------|
-| Quick local iteration, <30s methods | `raw` |
-| Network-sensitive AWS API calls in-region | `@webframp/agentcore` |
-| Large fan-out (100+ concurrent sweeps) | `@webframp/agentcore` |
-| Methods that need local filesystem (reports, git) | `raw` |
-| CI/CD pipelines in GitHub Actions | `raw` or `docker` |
-| Methods needing x86_64 or GPU | `docker` |
+| Scenario                                          | Driver                |
+| ------------------------------------------------- | --------------------- |
+| Quick local iteration, <30s methods               | `raw`                 |
+| Network-sensitive AWS API calls in-region         | `@webframp/agentcore` |
+| Large fan-out (100+ concurrent sweeps)            | `@webframp/agentcore` |
+| Methods that need local filesystem (reports, git) | `raw`                 |
+| CI/CD pipelines in GitHub Actions                 | `raw` or `docker`     |
+| Methods needing x86_64 or GPU                     | `docker`              |
 
 ## Rollback
 
-Remove the `driver:` / `driverConfig:` fields or set `driver: raw` to revert
-to local in-process execution. No data migration needed — outputs are written
-to the same datastore regardless of driver.
+Remove the `driver:` / `driverConfig:` fields or set `driver: raw` to revert to
+local in-process execution. No data migration needed — outputs are written to
+the same datastore regardless of driver.
 
 ## License
 

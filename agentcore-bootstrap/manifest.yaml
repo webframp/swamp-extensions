@@ -1,0 +1,56 @@
+manifestVersion: 1
+name: "@webframp/agentcore-bootstrap"
+version: "2026.06.12.1"
+description: |
+  One-shot bootstrap for @webframp/agentcore. Ships a provisioner model
+  that creates an ECR repository, builds and pushes the worker container
+  image, and deploys an AgentCore runtime. The bundled workflow orchestrates
+  provisioning then outputs the runtimeArn and bucket name needed to
+  configure the driver.
+
+  ## Prerequisites
+
+  - AWS credentials with permissions to create ECR repositories, IAM roles,
+    and Bedrock AgentCore runtimes
+  - Docker (or podman/buildah) available locally for building the worker image
+  - @webframp/container-image extension installed
+
+  ## Running
+
+  ```bash
+  swamp extension pull @webframp/agentcore-bootstrap
+
+  swamp model create @webframp/container-image worker-image
+  swamp model create @webframp/agentcore-bootstrap/provisioner agentcore-provisioner
+
+  swamp workflow run @webframp/bootstrap-agentcore \
+    --input region=us-east-1 \
+    --input bucket_name=swamp-agentcore-coord-us-east-1
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+dependencies:
+  - "@webframp/container-image"
+  - "@webframp/agentcore"
+models:
+  - provisioner.ts
+workflows:
+  - bootstrap-agentcore.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.md
+  - worker/Dockerfile
+  - worker/.dockerignore
+  - worker/deno.json
+  - worker/deno.lock
+  - worker/worker.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - bootstrap
+  - aws
+  - agentcore
+  - ecr
+  - microvm

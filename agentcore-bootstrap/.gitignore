@@ -1,0 +1,10 @@
+# Swamp local repo state (not part of published extension)
+.swamp/
+.swamp.yaml
+.swamp-sources.yaml
+/models/
+/vaults/
+/workflows/
+
+# Claude Code configuration
+.claude/
