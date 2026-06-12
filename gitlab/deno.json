@@ -1,9 +1,9 @@
 {
   "tasks": {
-    "check": "deno check extensions/models/gitlab/projects.ts",
-    "lint": "deno lint extensions/models/",
-    "fmt": "deno fmt extensions/models/",
-    "fmt:check": "deno fmt --check extensions/models/",
+    "check": "deno check extensions/models/gitlab/projects.ts extensions/reports/review_dashboard.ts",
+    "lint": "deno lint extensions/",
+    "fmt": "deno fmt extensions/",
+    "fmt:check": "deno fmt --check extensions/",
     "test": "deno test --allow-net --allow-env extensions/models/"
   },
   "lint": {

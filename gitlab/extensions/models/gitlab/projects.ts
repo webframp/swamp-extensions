@@ -209,6 +209,119 @@ const BranchListSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const DashboardMRSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  title: z.string(),
+  author: z.string(),
+  updatedAt: z.string(),
+  draft: z.boolean(),
+  labels: z.array(z.string()),
+  webUrl: z.string(),
+});
+
+const TodoSchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  body: z.string(),
+  targetType: z.string(),
+  targetUrl: z.string(),
+  project: z.string().nullable(),
+  author: z.string(),
+  createdAt: z.string(),
+});
+
+const DashboardSchema = z.object({
+  username: z.string(),
+  reviewing: z.array(DashboardMRSchema),
+  assigned: z.array(DashboardMRSchema),
+  authored: z.array(DashboardMRSchema),
+  todos: z.array(TodoSchema),
+  totalCount: z.number(),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+// =============================================================================
+// GraphQL Client
+// =============================================================================
+
+async function graphqlRequest(
+  host: string,
+  token: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<any> {
+  const resp = await fetch(`https://${host}/api/graphql`, {
+    method: "POST",
+    headers: {
+      "PRIVATE-TOKEN": token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`GraphQL request failed: ${resp.status} ${body}`);
+  }
+  const result = await resp.json();
+  if (result.errors?.length) {
+    throw new Error(
+      `GraphQL errors: ${result.errors.map((e: any) => e.message).join("; ")}`,
+    );
+  }
+  return result.data;
+}
+
+const DASHBOARD_QUERY = `
+query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: Boolean) {
+  currentUser {
+    username
+    reviewRequestedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } }
+      pageInfo { hasNextPage }
+    }
+    assignedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } }
+      pageInfo { hasNextPage }
+    }
+    authoredMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } }
+      pageInfo { hasNextPage }
+    }
+    todos(state: pending, first: 20) {
+      nodes { id action body targetType targetUrl createdAt author { username } project { nameWithNamespace } }
+      pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+function mapDashboardMR(node: any): z.infer<typeof DashboardMRSchema> {
+  return {
+    project: node.project?.fullPath ?? "",
+    iid: typeof node.iid === "string" ? parseInt(node.iid) : node.iid,
+    title: node.title ?? "",
+    author: node.author?.username ?? "",
+    updatedAt: node.updatedAt ?? "",
+    draft: node.draft ?? false,
+    labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
+    webUrl: node.webUrl ?? "",
+  };
+}
+
+function mapTodo(node: any): z.infer<typeof TodoSchema> {
+  return {
+    id: node.id ?? "",
+    action: node.action ?? "",
+    body: node.body ?? "",
+    targetType: node.targetType ?? "",
+    targetUrl: node.targetUrl ?? "",
+    project: node.project?.nameWithNamespace ?? null,
+    author: node.author?.username ?? "",
+    createdAt: node.createdAt ?? "",
+  };
+}
+
 // =============================================================================
 // REST API Client
 // =============================================================================
@@ -462,8 +575,9 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via REST API. */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.10.1",
+  version: "2026.06.12.1",
   globalArguments: GlobalArgsSchema,
+  reports: ["@webframp/review-dashboard"],
 
   resources: {
     projects: {
@@ -531,6 +645,13 @@ export const model = {
       schema: BranchListSchema,
       lifetime: "15m" as const,
       garbageCollection: 5,
+    },
+    dashboard: {
+      description:
+        "Cross-project MR dashboard and todos for the authenticated user",
+      schema: DashboardSchema,
+      lifetime: "30m" as const,
+      garbageCollection: 3,
     },
   },
 
@@ -1202,6 +1323,99 @@ export const model = {
           count: branches.length,
           project: args.project,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_my_merge_requests: {
+      description:
+        "List MRs and todos for the authenticated user via GraphQL (reviewer, assignee, author roles + pending todos)",
+      arguments: z.object({
+        role: z
+          .enum(["reviewer", "assignee", "author", "all"])
+          .default("all")
+          .describe("Filter by role: reviewer, assignee, author, or all"),
+        state: z
+          .enum(["opened", "merged", "closed", "all"])
+          .default("opened")
+          .describe("MR state filter"),
+        includeArchived: z
+          .boolean()
+          .default(false)
+          .describe("Include MRs from archived projects"),
+      }),
+      execute: async (
+        args: { role: string; state: string; includeArchived: boolean },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const variables: Record<string, unknown> = {
+          mrState: args.state === "all" ? undefined : args.state,
+          perPage: 20,
+          includeArchived: args.includeArchived,
+        };
+
+        const data = await graphqlRequest(
+          host,
+          token,
+          DASHBOARD_QUERY,
+          variables,
+        );
+        const user = data.currentUser;
+        if (!user) {
+          throw new Error(
+            "GitLab GraphQL: currentUser is null — verify the token has 'read_api' scope and is not expired",
+          );
+        }
+
+        const showReviewing = args.role === "all" || args.role === "reviewer";
+        const showAssigned = args.role === "all" || args.role === "assignee";
+        const showAuthored = args.role === "all" || args.role === "author";
+
+        const reviewing = showReviewing
+          ? (user.reviewRequestedMergeRequests?.nodes ?? []).map(mapDashboardMR)
+          : [];
+        const assigned = showAssigned
+          ? (user.assignedMergeRequests?.nodes ?? []).map(mapDashboardMR)
+          : [];
+        const authored = showAuthored
+          ? (user.authoredMergeRequests?.nodes ?? []).map(mapDashboardMR)
+          : [];
+        const todos = (user.todos?.nodes ?? []).map(mapTodo);
+
+        const truncated = !!(
+          (showReviewing &&
+            user.reviewRequestedMergeRequests?.pageInfo?.hasNextPage) ||
+          (showAssigned &&
+            user.assignedMergeRequests?.pageInfo?.hasNextPage) ||
+          (showAuthored &&
+            user.authoredMergeRequests?.pageInfo?.hasNextPage) ||
+          user.todos?.pageInfo?.hasNextPage
+        );
+
+        const totalCount = reviewing.length + assigned.length + authored.length;
+        const handle = await ctx.writeResource("dashboard", user.username, {
+          username: user.username,
+          reviewing,
+          assigned,
+          authored,
+          todos,
+          totalCount,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        ctx.logger.info(
+          "Found {total} MRs + {todos} todos for {user} (reviewing={r}, assigned={a}, authored={auth})",
+          {
+            total: totalCount,
+            todos: todos.length,
+            user: user.username,
+            r: reviewing.length,
+            a: assigned.length,
+            auth: authored.length,
+          },
+        );
         return { dataHandles: [handle] };
       },
     },

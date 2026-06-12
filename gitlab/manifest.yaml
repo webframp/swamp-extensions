@@ -1,11 +1,11 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.06.10.1"
+version: "2026.06.12.1"
 description: |
-  Read and write GitLab data via the REST API (v4). Projects, merge requests,
-  issues, releases, pipelines, labels, members, and branches. No CLI
-  dependencies — uses native fetch with a personal access token stored in
-  a swamp vault.
+  Read and write GitLab data via REST API (v4) and GraphQL. Projects, merge
+  requests, issues, releases, pipelines, labels, members, branches, and a
+  cross-project review dashboard with todos. No CLI dependencies — uses native
+  fetch with a personal access token stored in a swamp vault.
 
   ## Authentication
 
@@ -25,6 +25,10 @@ description: |
   swamp model method run gitlab list_issues --input project=group/repo
   swamp model method run gitlab list_merge_requests --input project=group/repo
 
+  # Dashboard (GraphQL)
+  swamp model method run gitlab list_my_merge_requests
+  swamp model method run gitlab list_my_merge_requests --input role=reviewer
+
   # Write operations
   swamp model method run gitlab create_issue --input project=group/repo --input title="New issue"
   swamp model method run gitlab add_issue_note --input project=group/repo --input iid=1 --input body="Comment"
@@ -37,6 +41,7 @@ description: |
   - list_projects, get_project_info, list_merge_requests, list_issues
   - list_releases, list_pipelines, list_issue_notes
   - list_labels, list_members, list_branches
+  - list_my_merge_requests (GraphQL — cross-project dashboard + todos)
 
   **Write:**
   - create_issue, update_issue, add_issue_note
@@ -45,6 +50,8 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gitlab/projects.ts
+reports:
+  - review_dashboard.ts
 platforms:
   - linux-x86_64
   - linux-aarch64
@@ -60,4 +67,5 @@ labels:
   - ci
   - issues
   - api
-# Published via PR #108 — REST API refactor
+  - graphql
+  - dashboard
