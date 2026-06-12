@@ -220,6 +220,28 @@ export const model = {
           ],
           region,
         );
+        // Expire task artifacts after 7 days to prevent unbounded growth
+        const lifecyclePolicy = JSON.stringify({
+          Rules: [
+            {
+              ID: "ExpireTaskArtifacts",
+              Status: "Enabled",
+              Filter: { Prefix: "swamp-agentcore/tasks/" },
+              Expiration: { Days: 7 },
+            },
+          ],
+        });
+        await awsCli(
+          [
+            "s3api",
+            "put-bucket-lifecycle-configuration",
+            "--bucket",
+            bucket_name,
+            "--lifecycle-configuration",
+            lifecyclePolicy,
+          ],
+          region,
+        );
 
         // 2. Create ECR repository if needed
         let ecrRepo = await ecrRepoExists(ecr_repo_name, region);

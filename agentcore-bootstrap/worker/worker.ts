@@ -62,12 +62,21 @@ const s3 = new S3Client({
   region: Deno.env.get("AWS_REGION") ?? "us-east-1",
 });
 
+const EXPECTED_BUCKET = Deno.env.get("SWAMP_S3_BUCKET");
+
 function getBucket(manifest: TaskManifest): string {
-  return manifest.bucket || Deno.env.get("SWAMP_S3_BUCKET") || (() => {
+  const bucket = manifest.bucket || EXPECTED_BUCKET;
+  if (!bucket) {
     throw new Error(
       "Bucket not found in manifest or SWAMP_S3_BUCKET env var",
     );
-  })();
+  }
+  if (EXPECTED_BUCKET && bucket !== EXPECTED_BUCKET) {
+    throw new Error(
+      `Manifest bucket "${bucket}" does not match expected bucket "${EXPECTED_BUCKET}"`,
+    );
+  }
+  return bucket;
 }
 
 async function fetchFromS3(bucket: string, key: string): Promise<Uint8Array> {
@@ -166,26 +175,23 @@ await Deno.writeTextFile(${
 `;
     await Deno.writeTextFile(runnerPath, runnerCode);
 
+    const ENV_BLOCKED_PREFIXES = ["AWS_", "DENO_", "LD_", "DYLD_"];
     const ENV_BLOCKLIST = new Set([
-      "AWS_ACCESS_KEY_ID",
-      "AWS_SECRET_ACCESS_KEY",
-      "AWS_SESSION_TOKEN",
-      "AWS_PROFILE",
-      "AWS_ENDPOINT_URL",
-      "AWS_DEFAULT_REGION",
-      "AWS_ROLE_ARN",
-      "AWS_WEB_IDENTITY_TOKEN_FILE",
-      "AWS_CONTAINER_CREDENTIALS_FULL_URI",
       "HOME",
       "PATH",
-      "DENO_DIR",
+      "NODE_OPTIONS",
+      "NODE_EXTRA_CA_CERTS",
     ]);
     const baseEnv = Deno.env.toObject();
     let taskEnv = baseEnv;
     if (request.env) {
       const filtered: Record<string, string> = {};
       for (const [k, v] of Object.entries(request.env)) {
-        if (!ENV_BLOCKLIST.has(k)) filtered[k] = v;
+        if (
+          ENV_BLOCKLIST.has(k) ||
+          ENV_BLOCKED_PREFIXES.some((p) => k.startsWith(p))
+        ) continue;
+        filtered[k] = v;
       }
       taskEnv = { ...baseEnv, ...filtered };
     }

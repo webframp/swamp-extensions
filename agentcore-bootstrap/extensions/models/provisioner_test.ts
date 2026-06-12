@@ -167,6 +167,9 @@ function awsMockHandler(cmd: string, args: string[]) {
   if (subcommand === "s3api put-bucket-versioning") {
     return { stdout: "", success: true };
   }
+  if (subcommand === "s3api put-bucket-lifecycle-configuration") {
+    return { stdout: "", success: true };
+  }
   if (subcommand === "ecr describe-repositories") {
     return {
       stdout: JSON.stringify({
@@ -230,7 +233,7 @@ Deno.test("provision execute: success path writes resource with all fields", asy
   });
 });
 
-Deno.test("provision execute: IAM NoSuchEntity triggers role creation", async () => {
+Deno.test("provision execute: IAM get-role failure rethrows when stderr lacks NoSuchEntity", async () => {
   await withMockedCommand((cmd, args) => {
     if (cmd === "aws" && args[0] === "iam" && args[1] === "get-role") {
       return {

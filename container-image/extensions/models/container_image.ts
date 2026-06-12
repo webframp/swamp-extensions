@@ -218,7 +218,7 @@ export const model = {
           }
         }
 
-        buildArgs.push(args.contextPath);
+        buildArgs.push("--", args.contextPath);
 
         context.logger.info("Building {tag} from {contextPath}", {
           tag: args.tag,
