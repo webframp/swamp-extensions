@@ -75,6 +75,7 @@ Deno.test("model has all expected methods", () => {
     "list_labels",
     "list_members",
     "list_merge_requests",
+    "list_my_merge_requests",
     "list_pipelines",
     "list_projects",
     "list_releases",
@@ -87,6 +88,7 @@ Deno.test("model has all expected resources", () => {
   const resourceNames = Object.keys(model.resources);
   assertEquals(resourceNames.sort(), [
     "branches",
+    "dashboard",
     "issueDetail",
     "issues",
     "labels",
@@ -734,6 +736,263 @@ Deno.test("API error throws with status and body", async () => {
     });
     await assertRejects(
       () => model.methods.list_projects.execute({} as any, context as any),
+      Error,
+      "401",
+    );
+  } finally {
+    restore();
+  }
+});
+
+// =============================================================================
+// GraphQL / Dashboard Tests
+// =============================================================================
+
+const MOCK_GRAPHQL_RESPONSE = {
+  data: {
+    currentUser: {
+      username: "testuser",
+      reviewRequestedMergeRequests: {
+        nodes: [
+          {
+            iid: 101,
+            title: "Fix auth bug",
+            webUrl: "https://git.example.org/group/proj/-/merge_requests/101",
+            updatedAt: "2026-06-10T10:00:00Z",
+            draft: false,
+            project: { fullPath: "group/proj" },
+            author: { username: "alice" },
+            labels: { nodes: [{ title: "security" }] },
+          },
+        ],
+        pageInfo: { hasNextPage: false },
+      },
+      assignedMergeRequests: {
+        nodes: [
+          {
+            iid: 202,
+            title: "Draft: Refactor service",
+            webUrl: "https://git.example.org/team/svc/-/merge_requests/202",
+            updatedAt: "2026-05-01T00:00:00Z",
+            draft: true,
+            project: { fullPath: "team/svc" },
+            author: { username: "bob" },
+            labels: { nodes: [] },
+          },
+        ],
+        pageInfo: { hasNextPage: false },
+      },
+      authoredMergeRequests: {
+        nodes: [
+          {
+            iid: 303,
+            title: "Add metrics",
+            webUrl: "https://git.example.org/group/proj/-/merge_requests/303",
+            updatedAt: "2026-06-11T00:00:00Z",
+            draft: false,
+            project: { fullPath: "group/proj" },
+            author: { username: "testuser" },
+            labels: { nodes: [{ title: "enhancement" }] },
+          },
+        ],
+        pageInfo: { hasNextPage: false },
+      },
+      todos: {
+        nodes: [
+          {
+            id: "gid://gitlab/Todo/1",
+            action: "mentioned",
+            body: "You were mentioned",
+            targetType: "MERGEREQUEST",
+            targetUrl:
+              "https://git.example.org/group/proj/-/merge_requests/101",
+            createdAt: "2026-06-11T12:00:00Z",
+            author: { username: "alice" },
+            project: { nameWithNamespace: "Group / Proj" },
+          },
+        ],
+      },
+    },
+  },
+};
+
+function mockGraphqlFetch(
+  responseBody: unknown,
+  opts?: { status?: number },
+): () => void {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+
+    // Handle GraphQL calls
+    if (method === "POST" && url.includes("/api/graphql")) {
+      return Promise.resolve(
+        new Response(JSON.stringify(responseBody), {
+          status: opts?.status ?? 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+
+    // Fall through for non-GraphQL
+    return Promise.resolve(
+      new Response(`Not mocked: ${method} ${url}`, { status: 404 }),
+    );
+  };
+  return () => {
+    globalThis.fetch = original;
+  };
+}
+
+Deno.test("list_my_merge_requests argument schema defaults", () => {
+  const result = model.methods.list_my_merge_requests.arguments.safeParse({});
+  assertEquals(result.success, true);
+  if (result.success) {
+    assertEquals(result.data.role, "all");
+    assertEquals(result.data.state, "opened");
+    assertEquals(result.data.includeArchived, false);
+  }
+});
+
+Deno.test("list_my_merge_requests accepts all role values", () => {
+  for (const role of ["reviewer", "assignee", "author", "all"]) {
+    const r = model.methods.list_my_merge_requests.arguments.safeParse({
+      role,
+    });
+    assertEquals(r.success, true, `role '${role}' should be valid`);
+  }
+});
+
+Deno.test("list_my_merge_requests writes dashboard resource with all roles", async () => {
+  const restore = mockGraphqlFetch(MOCK_GRAPHQL_RESPONSE);
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_my_merge_requests.execute(
+      { role: "all", state: "opened", includeArchived: false },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals(resources[0].specName, "dashboard");
+    assertEquals(resources[0].name, "testuser");
+    const data = resources[0].data as any;
+    assertEquals(data.username, "testuser");
+    assertEquals(data.reviewing.length, 1);
+    assertEquals(data.assigned.length, 1);
+    assertEquals(data.authored.length, 1);
+    assertEquals(data.todos.length, 1);
+    assertEquals(data.totalCount, 3);
+    assertEquals(data.truncated, false);
+    // Verify MR mapping
+    assertEquals(data.reviewing[0].iid, 101);
+    assertEquals(data.reviewing[0].project, "group/proj");
+    assertEquals(data.reviewing[0].author, "alice");
+    assertEquals(data.reviewing[0].labels, ["security"]);
+    // Verify assigned draft detection
+    assertEquals(data.assigned[0].draft, true);
+    // Verify todo mapping
+    assertEquals(data.todos[0].action, "mentioned");
+    assertEquals(data.todos[0].targetType, "MERGEREQUEST");
+    assertEquals(data.todos[0].author, "alice");
+    assertEquals(data.todos[0].project, "Group / Proj");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_my_merge_requests filters by role=reviewer", async () => {
+  const restore = mockGraphqlFetch(MOCK_GRAPHQL_RESPONSE);
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_my_merge_requests.execute(
+      { role: "reviewer", state: "opened", includeArchived: false },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as any;
+    assertEquals(data.reviewing.length, 1);
+    assertEquals(data.assigned.length, 0);
+    assertEquals(data.authored.length, 0);
+    assertEquals(data.totalCount, 1);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_my_merge_requests detects truncation", async () => {
+  const truncatedResponse = {
+    data: {
+      currentUser: {
+        username: "testuser",
+        reviewRequestedMergeRequests: {
+          nodes: [],
+          pageInfo: { hasNextPage: true },
+        },
+        assignedMergeRequests: { nodes: [], pageInfo: { hasNextPage: false } },
+        authoredMergeRequests: { nodes: [], pageInfo: { hasNextPage: false } },
+        todos: { nodes: [] },
+      },
+    },
+  };
+  const restore = mockGraphqlFetch(truncatedResponse);
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_my_merge_requests.execute(
+      { role: "all", state: "opened", includeArchived: false },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as any;
+    assertEquals(data.truncated, true);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_my_merge_requests throws on GraphQL errors", async () => {
+  const errorResponse = {
+    errors: [{ message: "Field 'bad' doesn't exist" }],
+  };
+  const restore = mockGraphqlFetch(errorResponse);
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.list_my_merge_requests.execute(
+          { role: "all", state: "opened", includeArchived: false },
+          context as any,
+        ),
+      Error,
+      "GraphQL errors",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_my_merge_requests throws on HTTP failure", async () => {
+  const restore = mockGraphqlFetch({}, { status: 401 });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.list_my_merge_requests.execute(
+          { role: "all", state: "opened", includeArchived: false },
+          context as any,
+        ),
       Error,
       "401",
     );
