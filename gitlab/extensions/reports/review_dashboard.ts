@@ -143,6 +143,9 @@ export const report = {
       return lo !== 0 ? lo : b.days - a.days;
     });
 
+    /** Escape pipe characters to prevent markdown table corruption. */
+    const esc = (s: string) => s.replace(/\|/g, "\\|");
+
     const lines: string[] = [];
     lines.push(`# Review Dashboard — ${data.username}`);
     lines.push("");
@@ -171,7 +174,9 @@ export const report = {
       for (const i of overdue) {
         const draft = i.draft ? " 🚧" : "";
         lines.push(
-          `| ${i.level} | ${i.role} | ${i.project} | ${i.title}${draft} | ${i.days}d | ${i.reason} |`,
+          `| ${i.level} | ${i.role} | ${esc(i.project)} | ${
+            esc(i.title)
+          }${draft} | ${i.days}d | ${i.reason} |`,
         );
       }
       lines.push("");
@@ -185,7 +190,9 @@ export const report = {
       for (const i of aging) {
         const draft = i.draft ? " 🚧" : "";
         lines.push(
-          `| ${i.level} | ${i.role} | ${i.project} | ${i.title}${draft} | ${i.days}d | ${i.reason} |`,
+          `| ${i.level} | ${i.role} | ${esc(i.project)} | ${
+            esc(i.title)
+          }${draft} | ${i.days}d | ${i.reason} |`,
         );
       }
       lines.push("");
@@ -199,7 +206,9 @@ export const report = {
       for (const i of active) {
         const draft = i.draft ? " 🚧" : "";
         lines.push(
-          `| ${i.role} | ${i.project} | ${i.title}${draft} | ${i.days}d |`,
+          `| ${i.role} | ${esc(i.project)} | ${
+            esc(i.title)
+          }${draft} | ${i.days}d |`,
         );
       }
       lines.push("");
@@ -220,7 +229,9 @@ export const report = {
       for (const todo of data.todos) {
         const days = age(todo.createdAt);
         lines.push(
-          `| ${todo.action} | ${todo.targetType} | ${todo.author} | ${days}d |`,
+          `| ${todo.action} | ${todo.targetType} | ${
+            esc(todo.author)
+          } | ${days}d |`,
         );
       }
       lines.push("");

@@ -1361,22 +1361,34 @@ export const model = {
           variables,
         );
         const user = data.currentUser;
+        if (!user) {
+          throw new Error(
+            "GitLab GraphQL: currentUser is null — verify the token has 'read_api' scope and is not expired",
+          );
+        }
 
-        const reviewing = args.role === "all" || args.role === "reviewer"
+        const showReviewing = args.role === "all" || args.role === "reviewer";
+        const showAssigned = args.role === "all" || args.role === "assignee";
+        const showAuthored = args.role === "all" || args.role === "author";
+
+        const reviewing = showReviewing
           ? (user.reviewRequestedMergeRequests?.nodes ?? []).map(mapDashboardMR)
           : [];
-        const assigned = args.role === "all" || args.role === "assignee"
+        const assigned = showAssigned
           ? (user.assignedMergeRequests?.nodes ?? []).map(mapDashboardMR)
           : [];
-        const authored = args.role === "all" || args.role === "author"
+        const authored = showAuthored
           ? (user.authoredMergeRequests?.nodes ?? []).map(mapDashboardMR)
           : [];
         const todos = (user.todos?.nodes ?? []).map(mapTodo);
 
         const truncated = !!(
-          user.reviewRequestedMergeRequests?.pageInfo?.hasNextPage ||
-          user.assignedMergeRequests?.pageInfo?.hasNextPage ||
-          user.authoredMergeRequests?.pageInfo?.hasNextPage
+          (showReviewing &&
+            user.reviewRequestedMergeRequests?.pageInfo?.hasNextPage) ||
+          (showAssigned &&
+            user.assignedMergeRequests?.pageInfo?.hasNextPage) ||
+          (showAuthored &&
+            user.authoredMergeRequests?.pageInfo?.hasNextPage)
         );
 
         const totalCount = reviewing.length + assigned.length + authored.length;

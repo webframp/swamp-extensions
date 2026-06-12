@@ -1000,3 +1000,62 @@ Deno.test("list_my_merge_requests throws on HTTP failure", async () => {
     restore();
   }
 });
+
+Deno.test("list_my_merge_requests throws on null currentUser", async () => {
+  const nullUserResponse = { data: { currentUser: null } };
+  const restore = mockGraphqlFetch(nullUserResponse);
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.list_my_merge_requests.execute(
+          { role: "all", state: "opened", includeArchived: false },
+          context as any,
+        ),
+      Error,
+      "currentUser is null",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_my_merge_requests truncated respects role filter", async () => {
+  const response = {
+    data: {
+      currentUser: {
+        username: "testuser",
+        reviewRequestedMergeRequests: {
+          nodes: [],
+          pageInfo: { hasNextPage: false },
+        },
+        assignedMergeRequests: {
+          nodes: [],
+          pageInfo: { hasNextPage: true },
+        },
+        authoredMergeRequests: {
+          nodes: [],
+          pageInfo: { hasNextPage: true },
+        },
+        todos: { nodes: [] },
+      },
+    },
+  };
+  const restore = mockGraphqlFetch(response);
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    // When role=reviewer, truncated should be false even though assigned has next page
+    await model.methods.list_my_merge_requests.execute(
+      { role: "reviewer", state: "opened", includeArchived: false },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as any;
+    assertEquals(data.truncated, false);
+  } finally {
+    restore();
+  }
+});
