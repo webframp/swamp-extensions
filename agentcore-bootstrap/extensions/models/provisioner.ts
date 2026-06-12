@@ -312,37 +312,37 @@ export const model = {
             );
           }
           roleArn = createdArn;
-
-          // Attach S3 access policy for coordination bucket
-          const s3Policy = JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [
-              {
-                Effect: "Allow",
-                Action: ["s3:GetObject", "s3:PutObject"],
-                Resource: [`arn:aws:s3:::${bucket_name}/*`],
-              },
-              {
-                Effect: "Allow",
-                Action: ["s3:ListBucket"],
-                Resource: [`arn:aws:s3:::${bucket_name}`],
-              },
-            ],
-          });
-          await awsCli(
-            [
-              "iam",
-              "put-role-policy",
-              "--role-name",
-              role_name,
-              "--policy-name",
-              "SwampAgentCoreS3Access",
-              "--policy-document",
-              s3Policy,
-            ],
-            region,
-          );
         }
+
+        // Ensure S3 access policy is attached (idempotent)
+        const s3Policy = JSON.stringify({
+          Version: "2012-10-17",
+          Statement: [
+            {
+              Effect: "Allow",
+              Action: ["s3:GetObject", "s3:PutObject"],
+              Resource: [`arn:aws:s3:::${bucket_name}/*`],
+            },
+            {
+              Effect: "Allow",
+              Action: ["s3:ListBucket"],
+              Resource: [`arn:aws:s3:::${bucket_name}`],
+            },
+          ],
+        });
+        await awsCli(
+          [
+            "iam",
+            "put-role-policy",
+            "--role-name",
+            role_name,
+            "--policy-name",
+            "SwampAgentCoreS3Access",
+            "--policy-document",
+            s3Policy,
+          ],
+          region,
+        );
 
         // 4. Build and push worker image
         context.logger.info(

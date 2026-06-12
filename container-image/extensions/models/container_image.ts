@@ -376,6 +376,9 @@ export const model = {
           );
         }
 
+        if (!result.stdout.trim()) {
+          throw new Error(`Inspect returned empty output for ${args.tag}`);
+        }
         const raw = JSON.parse(result.stdout);
 
         const data = isBuildah(cli)
