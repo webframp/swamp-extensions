@@ -1,9 +1,12 @@
 /**
- * GitLab MR review model — fetches diffs and posts review comments
- * using native fetch() against the GitLab REST API. No CLI dependencies.
+ * GitLab MR review model — fetches diffs and posts review comments.
+ * Uses GraphQL for note operations and MR metadata, REST fallback for
+ * diff content (not available via GraphQL) and approve/unapprove.
+ * No CLI dependencies.
  *
  * @module
  */
+// deno-lint-ignore-file no-explicit-any
 import { z } from "npm:zod@4.3.6";
 
 // =============================================================================
@@ -12,7 +15,9 @@ import { z } from "npm:zod@4.3.6";
 
 const GlobalArgsSchema = z.object({
   host: z.string().describe("GitLab hostname (e.g. gitlab.example.com)"),
-  token: z.string().describe("GitLab personal access token"),
+  token: z.string().meta({ sensitive: true }).describe(
+    "GitLab personal access token",
+  ),
 });
 
 const DiffFileSchema = z.object({
@@ -153,13 +158,70 @@ async function contextFetch(
 }
 
 // =============================================================================
+// GraphQL Client
+// =============================================================================
+
+async function graphqlRequest(
+  host: string,
+  token: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<any> {
+  const resp = await fetch(`https://${host}/api/graphql`, {
+    method: "POST",
+    headers: {
+      "PRIVATE-TOKEN": token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`GraphQL request failed: ${resp.status} ${body}`);
+  }
+  const result = await resp.json();
+  if (result.errors?.length) {
+    throw new Error(
+      `GraphQL errors: ${result.errors.map((e: any) => e.message).join("; ")}`,
+    );
+  }
+  return result.data;
+}
+
+const MR_METADATA_QUERY = `
+query mrMetadata($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    mergeRequest(iid: $iid) {
+      id iid title state description sourceBranch targetBranch
+      author { username }
+    }
+  }
+}`;
+
+const CREATE_NOTE_MUTATION = `
+mutation createNote($noteableId: NoteableID!, $body: String!) {
+  createNote(input: { noteableId: $noteableId, body: $body }) {
+    note { id body }
+    errors
+  }
+}`;
+
+const UPDATE_NOTE_MUTATION = `
+mutation updateNote($id: NoteID!, $body: String!) {
+  updateNote(input: { id: $id, body: $body }) {
+    note { id body }
+    errors
+  }
+}`;
+
+// =============================================================================
 // Model
 // =============================================================================
 
-/** GitLab MR review model — fetch diffs, draft reviews, post comments via REST API. */
+/** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.06.08.1",
+  version: "2026.06.13.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     mrDiff: {
@@ -184,7 +246,7 @@ export const model = {
   methods: {
     get_mr_diff: {
       description:
-        "Fetch MR metadata and file diffs from GitLab REST API via native fetch.",
+        "Fetch MR metadata via GraphQL and file diffs via REST (raw diff content not available in GraphQL).",
       arguments: z.object({
         project: z.string().describe("Project path (e.g. mygroup/myproject)"),
         iid: z.number().describe("Merge request IID"),
@@ -196,17 +258,19 @@ export const model = {
         const { host, token } = context.globalArgs;
         const pid = encodeProject(args.project);
 
-        // Fetch MR metadata
-        const mrResp = await contextFetch(
-          `get_mr_diff ${args.project}!${args.iid}`,
-          host,
-          token,
-          `/projects/${pid}/merge_requests/${args.iid}`,
-        );
-        const mr = await mrResp.json();
+        // Fetch MR metadata via GraphQL
+        const gqlData = await graphqlRequest(host, token, MR_METADATA_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const mr = gqlData.project?.mergeRequest;
+        if (!mr) {
+          throw new Error(
+            `get_mr_diff: MR !${args.iid} not found in ${args.project}`,
+          );
+        }
 
-        // Fetch diffs via /changes?access_raw_diffs=true to bypass GitLab's
-        // collapsed-diff behavior for large files.
+        // Fetch diffs via REST (only place raw diff content is available)
         const changesResp = await contextFetch(
           `get_mr_diff ${args.project}!${args.iid} changes`,
           host,
@@ -235,10 +299,10 @@ export const model = {
           project: args.project,
           iid: args.iid,
           title: mr.title ?? "",
-          state: mr.state ?? "unknown",
+          state: (mr.state ?? "unknown").toLowerCase(),
           description: mr.description ?? null,
-          sourceBranch: mr.source_branch ?? "",
-          targetBranch: mr.target_branch ?? "",
+          sourceBranch: mr.sourceBranch ?? "",
+          targetBranch: mr.targetBranch ?? "",
           author: mr.author?.username ?? "",
           diffs,
           fetchedAt: new Date().toISOString(),
@@ -386,8 +450,7 @@ export const model = {
 
     update_review: {
       description:
-        "Edit an existing review comment on a GitLab MR. Updates the note " +
-        "in place using the current review draft body.",
+        "Edit an existing review comment on a GitLab MR via GraphQL updateNote mutation.",
       arguments: z.object({
         project: z.string().describe("Project path"),
         iid: z.number().describe("Merge request IID"),
@@ -412,17 +475,18 @@ export const model = {
           );
         }
 
-        const pid = encodeProject(args.project);
-        await contextFetch(
-          `update_review ${args.project}!${args.iid} note ${args.noteId}`,
+        const noteGid = `gid://gitlab/Note/${args.noteId}`;
+        const result = await graphqlRequest(
           host,
           token,
-          `/projects/${pid}/merge_requests/${args.iid}/notes/${args.noteId}`,
-          {
-            method: "PUT",
-            body: JSON.stringify({ body }),
-          },
+          UPDATE_NOTE_MUTATION,
+          { id: noteGid, body },
         );
+        if (result.updateNote?.errors?.length) {
+          throw new Error(
+            `updateNote failed: ${result.updateNote.errors.join("; ")}`,
+          );
+        }
 
         const data = {
           project: args.project,
@@ -446,8 +510,8 @@ export const model = {
 
     post_review: {
       description:
-        "Post the current review draft as a comment on the GitLab MR, " +
-        "optionally approving or requesting changes.",
+        "Post the current review draft as a comment via GraphQL createNote, " +
+        "optionally approving or requesting changes (REST).",
       arguments: z.object({
         project: z.string().describe("Project path"),
         iid: z.number().describe("Merge request IID"),
@@ -478,35 +542,44 @@ export const model = {
           );
         }
 
-        const pid = encodeProject(args.project);
-
-        // Post the comment
-        const resp = await contextFetch(
-          `post_review ${args.project}!${args.iid}`,
-          host,
-          token,
-          `/projects/${pid}/merge_requests/${args.iid}/notes`,
-          {
-            method: "POST",
-            body: JSON.stringify({ body }),
-          },
-        );
-        const note = await resp.json();
-        if (typeof note.id !== "number") {
+        // Get MR global ID for createNote
+        const gqlData = await graphqlRequest(host, token, MR_METADATA_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const mrGid = gqlData.project?.mergeRequest?.id;
+        if (!mrGid) {
           throw new Error(
-            `post_review ${args.project}!${args.iid}: expected note id, got: ${
-              JSON.stringify(note).slice(0, 200)
-            }`,
+            `post_review: MR !${args.iid} not found in ${args.project}`,
           );
         }
 
-        // Record the posted note immediately — before approval side-effects.
-        // If approve/unapprove fails, the noteId is still preserved and retries
-        // can detect the existing comment rather than posting a duplicate.
+        // Post note via GraphQL
+        const noteResult = await graphqlRequest(
+          host,
+          token,
+          CREATE_NOTE_MUTATION,
+          { noteableId: mrGid, body },
+        );
+        if (noteResult.createNote?.errors?.length) {
+          throw new Error(
+            `createNote failed: ${noteResult.createNote.errors.join("; ")}`,
+          );
+        }
+        const noteGid = noteResult.createNote?.note?.id ?? "";
+        // Extract numeric ID from gid://gitlab/Note/123
+        const noteId = parseInt(noteGid.split("/").pop() ?? "0", 10);
+        if (!noteId) {
+          throw new Error(
+            `post_review ${args.project}!${args.iid}: expected note id from GraphQL, got: ${noteGid}`,
+          );
+        }
+
+        // Record the posted note immediately
         const data = {
           project: args.project,
           iid: args.iid,
-          noteId: note.id as number,
+          noteId,
           postedAt: new Date().toISOString(),
         };
         const handle = await context.writeResource(
@@ -515,7 +588,8 @@ export const model = {
           data,
         );
 
-        // Apply approval action (best-effort after comment is recorded)
+        // Apply approval action via REST (no GraphQL mutations for approve/unapprove)
+        const pid = encodeProject(args.project);
         if (args.action === "approve") {
           await contextFetch(
             `post_review approve ${args.project}!${args.iid}`,
@@ -545,7 +619,7 @@ export const model = {
         context.logger.info("Posted review to GitLab", {
           project: args.project,
           iid: args.iid,
-          noteId: note.id,
+          noteId,
           action: args.action,
         });
         return { dataHandles: [handle] };

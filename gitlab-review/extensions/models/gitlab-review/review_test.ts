@@ -1,5 +1,6 @@
 // GitLab Review Model - Tests
 // SPDX-License-Identifier: Apache-2.0
+// deno-lint-ignore-file no-explicit-any
 
 import { assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
@@ -108,161 +109,281 @@ function mockFetch(
   };
 }
 
-Deno.test("get_mr_diff fetches and stores MR diff data", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/group%2Frepo/merge_requests/42": {
-      status: 200,
-      body: {
-        title: "Test MR",
-        description: "A test",
-        source_branch: "feature",
-        target_branch: "main",
-        author: { username: "testuser" },
-      },
-    },
-    "GET /api/v4/projects/group%2Frepo/merge_requests/42/changes?access_raw_diffs=true":
-      {
-        status: 200,
-        body: {
-          changes: [
-            {
+Deno.test("get_mr_diff fetches metadata via GraphQL and diffs via REST", async () => {
+  let callCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    callCount++;
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+
+    // First call: GraphQL for MR metadata
+    if (method === "POST" && url.includes("/api/graphql")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              project: {
+                mergeRequest: {
+                  id: "gid://gitlab/MergeRequest/100",
+                  iid: "42",
+                  title: "Test MR",
+                  state: "opened",
+                  description: "A test",
+                  sourceBranch: "feature",
+                  targetBranch: "main",
+                  author: { username: "testuser" },
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+
+    // Second call: REST for /changes
+    if (method === "GET" && url.includes("/changes")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            changes: [{
               old_path: "file.ts",
               new_path: "file.ts",
               diff: "@@ -1 +1 @@\n-old\n+new",
               new_file: false,
               renamed_file: false,
               deleted_file: false,
-            },
-          ],
-        },
-      },
-  });
+            }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
 
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: { host: "gitlab.example.com", token: "test-token" },
   });
 
   try {
-    // deno-lint-ignore no-explicit-any
     await model.methods.get_mr_diff.execute(
       { project: "group/repo", iid: 42 },
       context as any,
     );
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
-    const data = resources[0].data as {
-      title: string;
-      diffs: unknown[];
-      truncated: boolean;
-    };
+    const data = resources[0].data as any;
     assertEquals(data.title, "Test MR");
+    assertEquals(data.state, "opened");
+    assertEquals(data.sourceBranch, "feature");
     assertEquals(data.diffs.length, 1);
     assertEquals(data.truncated, false);
+    assertEquals(callCount, 2); // GraphQL + REST
   } finally {
-    restore();
+    globalThis.fetch = original;
   }
 });
 
 Deno.test("get_mr_diff handles non-array changes gracefully", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/group%2Frepo/merge_requests/1": {
-      status: 200,
-      body: {
-        title: "MR",
-        source_branch: "a",
-        target_branch: "b",
-        state: "opened",
-      },
-    },
-    "GET /api/v4/projects/group%2Frepo/merge_requests/1/changes?access_raw_diffs=true":
-      {
-        status: 200,
-        body: { changes: false, overflow: false },
-      },
-  });
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+    if (method === "POST" && url.includes("/api/graphql")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              project: {
+                mergeRequest: {
+                  id: "gid://gitlab/MergeRequest/1",
+                  iid: "1",
+                  title: "MR",
+                  state: "opened",
+                  sourceBranch: "a",
+                  targetBranch: "b",
+                  author: { username: "dev" },
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    if (method === "GET" && url.includes("/changes")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ changes: false, overflow: false }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
 
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: { host: "gitlab.example.com", token: "test-token" },
   });
 
   try {
-    // deno-lint-ignore no-explicit-any
     await model.methods.get_mr_diff.execute(
       { project: "group/repo", iid: 1 },
       context as any,
     );
-    const resources = getWrittenResources();
-    assertEquals(resources.length, 1);
-    const data = resources[0].data as { diffs: unknown[]; truncated: boolean };
+    const data = getWrittenResources()[0].data as any;
     assertEquals(data.diffs.length, 0);
     assertEquals(data.truncated, false);
   } finally {
-    restore();
+    globalThis.fetch = original;
   }
 });
 
 Deno.test("get_mr_diff sets truncated when overflow is true", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/group%2Frepo/merge_requests/1": {
-      status: 200,
-      body: {
-        title: "MR",
-        source_branch: "a",
-        target_branch: "b",
-        state: "opened",
-        author: { username: "dev" },
-      },
-    },
-    "GET /api/v4/projects/group%2Frepo/merge_requests/1/changes?access_raw_diffs=true":
-      {
-        status: 200,
-        body: {
-          changes: [
-            {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+    if (method === "POST" && url.includes("/api/graphql")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              project: {
+                mergeRequest: {
+                  id: "gid://gitlab/MergeRequest/1",
+                  iid: "1",
+                  title: "MR",
+                  state: "opened",
+                  sourceBranch: "a",
+                  targetBranch: "b",
+                  author: { username: "dev" },
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    if (method === "GET" && url.includes("/changes")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            changes: [{
               old_path: "a.ts",
               new_path: "a.ts",
               diff: "+x",
               new_file: false,
               renamed_file: false,
               deleted_file: false,
-            },
-          ],
-          overflow: true,
-        },
-      },
-  });
+            }],
+            overflow: true,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
 
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: { host: "gitlab.example.com", token: "test-token" },
   });
 
   try {
-    // deno-lint-ignore no-explicit-any
     await model.methods.get_mr_diff.execute(
       { project: "group/repo", iid: 1 },
       context as any,
     );
-    const resources = getWrittenResources();
-    assertEquals(resources.length, 1);
-    const data = resources[0].data as { diffs: unknown[]; truncated: boolean };
+    const data = getWrittenResources()[0].data as any;
     assertEquals(data.diffs.length, 1);
     assertEquals(data.truncated, true);
   } finally {
-    restore();
+    globalThis.fetch = original;
   }
 });
 
 Deno.test("post_review writes reviewPosted before approve — partial failure preserves noteId", async () => {
-  const restore = mockFetch({
-    "POST /api/v4/projects/group%2Frepo/merge_requests/1/notes": {
-      status: 201,
-      body: { id: 999 },
-    },
-    "POST /api/v4/projects/group%2Frepo/merge_requests/1/approve": {
-      status: 403,
-      body: { message: "403 Forbidden" },
-    },
-  });
+  let callCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    callCount++;
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+
+    // GraphQL calls (MR metadata + createNote)
+    if (method === "POST" && url.includes("/api/graphql")) {
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      if (body.query?.includes("mrMetadata")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: {
+                project: {
+                  mergeRequest: {
+                    id: "gid://gitlab/MergeRequest/100",
+                    iid: "1",
+                    title: "Test",
+                    state: "opened",
+                    sourceBranch: "a",
+                    targetBranch: "b",
+                    author: { username: "x" },
+                  },
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
+      // createNote
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              createNote: {
+                note: { id: "gid://gitlab/Note/999", body: "Test review" },
+                errors: [],
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+
+    // REST: approve fails
+    if (method === "POST" && url.includes("/approve")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ message: "403 Forbidden" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
 
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: { host: "gitlab.example.com", token: "test-token" },
@@ -290,10 +411,7 @@ Deno.test("post_review writes reviewPosted before approve — partial failure pr
   });
 
   try {
-    // post_review with action=approve should throw on 403 from /approve
-    // but writeResource should have been called BEFORE the approve attempt
     await assertRejects(
-      // deno-lint-ignore no-explicit-any
       () =>
         model.methods.post_review.execute(
           { project: "group/repo", iid: 1, action: "approve" },
@@ -306,10 +424,10 @@ Deno.test("post_review writes reviewPosted before approve — partial failure pr
     // The noteId was recorded despite the approve failure
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
-    const posted = resources[0].data as { noteId: number };
+    const posted = resources[0].data as any;
     assertEquals(posted.noteId, 999);
   } finally {
-    restore();
+    globalThis.fetch = original;
   }
 });
 
@@ -318,7 +436,6 @@ Deno.test("analyze stores review draft", async () => {
     globalArgs: { host: "localhost", token: "x" },
   });
 
-  // deno-lint-ignore no-explicit-any
   await model.methods.analyze.execute(
     { project: "org/app", iid: 5, body: "Review text here" },
     context as any,
@@ -336,7 +453,6 @@ Deno.test("edit_draft creates new version of draft", async () => {
     globalArgs: { host: "localhost", token: "x" },
   });
 
-  // deno-lint-ignore no-explicit-any
   await model.methods.edit_draft.execute(
     { project: "org/app", iid: 5, body: "Revised review" },
     context as any,
@@ -383,7 +499,6 @@ Deno.test("post_review rejects merged MR", async () => {
 
   try {
     await assertRejects(
-      // deno-lint-ignore no-explicit-any
       () =>
         model.methods.post_review.execute(
           { project: "group/repo", iid: 99, action: "comment" },
@@ -421,7 +536,6 @@ Deno.test("approve_mr rejects closed MR", async () => {
 
   try {
     await assertRejects(
-      // deno-lint-ignore no-explicit-any
       () =>
         model.methods.approve_mr.execute(
           { project: "group/repo", iid: 50 },
