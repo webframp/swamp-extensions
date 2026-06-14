@@ -184,7 +184,7 @@ async function gatherLobstersHottest(count: number) {
     url: item["url"] ? String(item["url"]) : null,
     score: Number(item["score"] ?? 0),
     commentCount: Number(item["comment_count"] ?? 0),
-    tags: (item["tags"] as string[]) ?? [],
+    tags: Array.isArray(item["tags"]) ? (item["tags"] as string[]) : [],
     submitterUser: String(
       (item["submitter_user"] as Record<string, unknown>)?.["username"] ?? "",
     ),
@@ -217,6 +217,7 @@ async function queryArxiv(query: string, maxResults: number) {
     const titleMatch = block.match(/<title[^>]*>([\s\S]*?)<\/title>/);
     const summaryMatch = block.match(/<summary[^>]*>([\s\S]*?)<\/summary>/);
     const publishedMatch = block.match(/<published[^>]*>([^<]+)<\/published>/);
+    const updatedMatch = block.match(/<updated[^>]*>([^<]+)<\/updated>/);
     const categoryMatch = block.match(/<category[^>]*term\s*=\s*"([^"]+)"/);
     const authors: string[] = [];
     const authorRegex =
@@ -229,7 +230,7 @@ async function queryArxiv(query: string, maxResults: number) {
       summary: (summaryMatch?.[1] ?? "").replace(/\s+/g, " ").trim(),
       authors,
       published: publishedMatch?.[1] ?? "",
-      updated: publishedMatch?.[1] ?? "",
+      updated: updatedMatch?.[1] ?? publishedMatch?.[1] ?? "",
       link: `https://arxiv.org/abs/${idVal}`,
       category: categoryMatch?.[1] ?? "",
     });
@@ -273,9 +274,7 @@ async function gatherIfinDiscourse(count: number) {
       id: t.id as number,
       title: t.title as string,
       slug: t.slug as string,
-      tags: ((t.tags ?? []) as (Record<string, unknown> | string)[]).map((s) =>
-        typeof s === "string" ? s : ((s.name || s.slug) as string) || String(s)
-      ),
+      tags: Array.isArray(t.tags) ? (t.tags as string[]).map(String) : [],
       excerpt: ((t.excerpt as string) ?? "").replace(/<[^>]*>/g, "").slice(
         0,
         300,
