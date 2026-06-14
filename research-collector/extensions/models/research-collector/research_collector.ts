@@ -206,7 +206,7 @@ async function queryArxiv(query: string, maxResults: number) {
   const totalResultsMatch = xml.match(
     /<opensearch:totalResults[^>]*>(\d+)<\/opensearch:totalResults>/,
   );
-  void totalResultsMatch;
+  const totalResults = totalResultsMatch ? parseInt(totalResultsMatch[1]) : 0;
   const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
   let m;
   while ((m = entryRegex.exec(xml)) !== null) {
@@ -234,15 +234,18 @@ async function queryArxiv(query: string, maxResults: number) {
       category: categoryMatch?.[1] ?? "",
     });
   }
-  return { entries, totalResults: 0, fetchedAt: new Date().toISOString() };
+  return { entries, totalResults, fetchedAt: new Date().toISOString() };
 }
 
-async function gatherSreWeekly(count: number) {
+async function gatherSreWeekly(
+  count: number,
+): Promise<z.infer<typeof SreWeeklyItemSchema>[]> {
   const xml = await fetchText("https://sreweekly.com/feed/");
+  const stripped = xml.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
   const items: z.infer<typeof SreWeeklyItemSchema>[] = [];
   const re = /<item>([\s\S]*?)<\/item>/g;
   let m;
-  while ((m = re.exec(xml)) !== null) {
+  while ((m = re.exec(stripped)) !== null) {
     const block = m[1];
     const t = block.match(/<title>([^<]*)<\/title>/);
     if (!t) continue;
@@ -287,12 +290,15 @@ async function gatherIfinDiscourse(count: number) {
   );
 }
 
-async function gatherRedmonk(count: number) {
+async function gatherRedmonk(
+  count: number,
+): Promise<z.infer<typeof RedmonkItemSchema>[]> {
   const xml = await fetchText("https://redmonk.com/feed/");
+  const stripped = xml.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
   const items: z.infer<typeof RedmonkItemSchema>[] = [];
   const re = /<item>([\s\S]*?)<\/item>/g;
   let m;
-  while ((m = re.exec(xml)) !== null) {
+  while ((m = re.exec(stripped)) !== null) {
     const block = m[1];
     const t = block.match(/<title>([^<]*)<\/title>/);
     if (!t) continue;
@@ -336,12 +342,20 @@ async function gatherAll(
 > {
   const cfg = ctx.globalArgs;
   ctx.logger.info("Gathering research data from all sources");
+  // Each source is independently wrapped so a single source failure
+  // never kills the entire brief — partial data is better than no data.
   const [hn, lobsters, sre, ifin, redmonk, arxiv] = await Promise.all([
-    gatherHnFrontPage(cfg.hnCount),
-    gatherLobstersHottest(cfg.lobstersCount),
-    gatherSreWeekly(cfg.sreCount),
-    gatherIfinDiscourse(cfg.ifinCount),
-    gatherRedmonk(cfg.redmonkCount),
+    gatherHnFrontPage(cfg.hnCount).catch(() => ({
+      stories: [],
+      fetchedAt: new Date().toISOString(),
+    })),
+    gatherLobstersHottest(cfg.lobstersCount).catch(() => ({
+      stories: [],
+      fetchedAt: new Date().toISOString(),
+    })),
+    gatherSreWeekly(cfg.sreCount).catch(() => []),
+    gatherIfinDiscourse(cfg.ifinCount).catch(() => []),
+    gatherRedmonk(cfg.redmonkCount).catch(() => []),
     gatherArxiv(cfg.arxivCount),
   ]);
   const handle = await ctx.writeResource("research", "brief", {
