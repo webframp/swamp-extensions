@@ -1,0 +1,28 @@
+manifestVersion: 1
+name: '@webframp/hermes-kanban-orchestrator'
+version: '2026.06.14.1'
+description: |
+  Kanban Orchestrator — creates kanban tasks via `hermes kanban create` and
+  records each task as a swamp data resource with its ID, type, assignee, and
+  status. This is the single entry point for creating kanban tasks from swamp
+  workflows, cron, and automation.
+
+  ## Methods
+
+  - **new_task** — Create a kanban task. Supports idempotency-key dedup for
+    daily-journal tasks (keyed on date).
+  - **list_recent** — List recent kanban tasks.
+repository: 'https://github.com/webframp/swamp-extensions'
+models:
+  - hermes-kanban-orchestrator/hermes_kanban_orch.ts
+labels:
+  - kanban
+  - orchestration
+  - automation
+  - hermes
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
