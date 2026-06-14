@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno check extensions/models/network/probe.ts extensions/models/network/probe_test.ts",
+    "check": "deno check extensions/models/research-collector/research_collector.ts",
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",
@@ -8,7 +8,9 @@
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": [
+        "no-import-prefix"
+      ]
     }
   },
   "imports": {
