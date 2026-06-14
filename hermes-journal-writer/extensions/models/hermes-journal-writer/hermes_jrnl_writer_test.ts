@@ -155,9 +155,9 @@ Deno.test("write_daily_entry skips when entry already exists", async () => {
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const orgDate = `${year}-${month}-${
-    String(now.getDate()).padStart(2, "0")
-  } ${days[now.getDay()]}`;
+  const orgDate = `${year}-${month}-${String(now.getDate()).padStart(2, "0")} ${
+    days[now.getDay()]
+  }`;
   const filePath = `/tmp/test-org/journal/${year}-${month}.org`;
   const files: Record<string, string> = {
     [filePath]: `#+TITLE: Test\n\n*** ${orgDate}\nExisting content`,
@@ -172,7 +172,10 @@ Deno.test("write_daily_entry skips when entry already exists", async () => {
       globalArgs: TEST_ARGS,
     });
     await model.methods.write_daily_entry.execute({} as any, context as any);
-    assertEquals((getWrittenResources()[0].data as any).status, "already-exists");
+    assertEquals(
+      (getWrittenResources()[0].data as any).status,
+      "already-exists",
+    );
   } finally {
     restoreFs();
     restoreCmd();
@@ -273,6 +276,24 @@ Deno.test("write_daily_entry expands tilde in orgDir", async () => {
   }
 });
 
+Deno.test("write_daily_entry rejects empty jrnlSubdir", async () => {
+  const restoreFs = mockFs({});
+  const restoreCmd = mockDenoCommand(() => ({ stdout: "", success: false }));
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: { ...TEST_ARGS, jrnlSubdir: "" },
+    });
+    await assertRejects(
+      () => model.methods.write_daily_entry.execute({} as any, context as any),
+      Error,
+      "Invalid jrnlSubdir",
+    );
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
 Deno.test("write_daily_entry handles research data gracefully", async () => {
   const files: Record<string, string> = {};
   const restoreFs = mockFs(files);
@@ -281,7 +302,14 @@ Deno.test("write_daily_entry handles research data gracefully", async () => {
       return {
         stdout: JSON.stringify({
           content: JSON.stringify({
-            hnFrontPage: { stories: [{ title: "Test", score: 10, by: "user", url: "https://example.com" }] },
+            hnFrontPage: {
+              stories: [{
+                title: "Test",
+                score: 10,
+                by: "user",
+                url: "https://example.com",
+              }],
+            },
             lobstersHottest: { stories: [] },
             sreWeekly: { items: [] },
             ifin: { topics: [] },
@@ -299,7 +327,9 @@ Deno.test("write_daily_entry handles research data gracefully", async () => {
     });
     await model.methods.write_daily_entry.execute({} as any, context as any);
     const writtenFile = Object.keys(files)[0];
-    assertEquals(files[writtenFile].includes("Hacker News"), true);
+    assertEquals(files[writtenFile].includes("**** Hacker News"), true);
+    // Verify no bare H2 headings (would be "** X" at line start without leading *)
+    assertEquals(/^\*\* \w/m.test(files[writtenFile]), false);
     assertEquals((getWrittenResources()[0].data as any).status, "written");
   } finally {
     restoreFs();

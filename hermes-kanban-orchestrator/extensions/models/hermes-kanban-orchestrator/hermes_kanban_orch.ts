@@ -94,6 +94,7 @@ async function runHermesKanban(
   repoDir: string,
   board: string,
   args: string[],
+  timeoutMs = 30000,
 ): Promise<{ stdout: string; success: boolean }> {
   const cmd = [
     hermesBin,
@@ -110,7 +111,14 @@ async function runHermesKanban(
     cwd: repoDir,
   });
 
-  const output = await command.output();
+  const child = command.spawn();
+  const timer = setTimeout(() => {
+    try {
+      child.kill();
+    } catch { /* empty */ }
+  }, timeoutMs);
+  const output = await child.output();
+  clearTimeout(timer);
   const stdout = new TextDecoder().decode(output.stdout).trim();
   const stderr = new TextDecoder().decode(output.stderr).trim();
 
@@ -200,14 +208,17 @@ async function newTask(
   }
 
   // Parse the JSON output to extract task ID
-  let taskId = "unknown";
+  let taskId: string;
   try {
     const parsed = JSON.parse(result.stdout);
     taskId = String(parsed.id || parsed.taskId || parsed.task_id || "");
   } catch {
     // Fallback: extract from output text
     const idMatch = result.stdout.match(/[0-9a-f]{12}/);
-    if (idMatch) taskId = idMatch[0];
+    taskId = idMatch ? idMatch[0] : "";
+  }
+  if (!taskId) {
+    taskId = `unresolved-${Date.now()}`;
   }
 
   const handle = await ctx.writeResource("kanbanTask", `task-${taskId}`, {

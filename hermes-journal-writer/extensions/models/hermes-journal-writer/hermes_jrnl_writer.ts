@@ -191,14 +191,16 @@ function buildDailyEntry(data: Record<string, unknown>): string {
   entry += ":PROPERTIES:\n";
   entry += `:SOURCE: research-brief\n`;
   entry += `:TAGS: ${tagList}\n`;
-  entry += `:SOURCES: ${allSources.slice(0, 10).join(", ")}\n`;
+  entry += `:SOURCES: ${
+    allSources.slice(0, 10).map((u) => u.replace(/[\r\n]/g, "")).join(", ")
+  }\n`;
   entry += `:UPDATED: ${ts}\n`;
   entry += ":END:\n\n";
   entry +=
     `Research brief — ${hnStories.length} HN, ${lobStories.length} Lobste.rs, ${sreItems.length} SRE Weekly, ${ifinTopics.length} IFIN, ${redmonkItems.length} RedMonk\n\n`;
 
   if (hnStories.length > 0) {
-    entry += `** Hacker News\n`;
+    entry += `**** Hacker News\n`;
     for (const s of hnStories.slice(0, 10)) {
       const title = s["title"] as string;
       const url = s["url"] as string | null;
@@ -209,7 +211,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
   }
 
   if (lobStories.length > 0) {
-    entry += `** Lobste.rs\n`;
+    entry += `**** Lobste.rs\n`;
     for (const s of lobStories.slice(0, 10)) {
       const title = s["title"] as string;
       const tags = (s["tags"] as string[]) ?? [];
@@ -222,7 +224,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
   }
 
   if (sreItems.length > 0) {
-    entry += `** SRE Weekly\n`;
+    entry += `**** SRE Weekly\n`;
     for (const item of sreItems) {
       const title = item["title"] as string;
       const link = item["link"] as string;
@@ -235,7 +237,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
   }
 
   if (ifinTopics.length > 0) {
-    entry += `** IFIN Security Topics\n`;
+    entry += `**** IFIN Security Topics\n`;
     for (const t of ifinTopics.slice(0, 8)) {
       const title = t["title"] as string;
       const tags = (t["tags"] as string[]) ?? [];
@@ -254,7 +256,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
   }
 
   if (redmonkItems.length > 0) {
-    entry += `** RedMonk\n`;
+    entry += `**** RedMonk\n`;
     for (const item of redmonkItems) {
       const title = item["title"] as string;
       const author = item["author"] as string;
@@ -266,7 +268,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
   }
 
   if (allSources.length > 0) {
-    entry += `** Sources\n`;
+    entry += `**** Sources\n`;
     for (const url of allSources.slice(0, 30)) entry += `- ${url}\n`;
     entry += "\n";
   }
@@ -311,12 +313,17 @@ async function writeDailyEntry(
   ctx.logger.info("Writing daily journal entry");
 
   // Expand ~ and validate paths
-  const orgDir = cfg.orgDir.startsWith("~/")
+  const orgDir = cfg.orgDir === "~"
+    ? (Deno.env.get("HOME") ?? "")
+    : cfg.orgDir.startsWith("~/")
     ? (Deno.env.get("HOME") ?? "") + cfg.orgDir.slice(1)
     : cfg.orgDir;
-  if (cfg.jrnlSubdir.includes("..") || cfg.jrnlSubdir.startsWith("/")) {
+  if (
+    !cfg.jrnlSubdir || cfg.jrnlSubdir.includes("..") ||
+    cfg.jrnlSubdir.startsWith("/")
+  ) {
     throw new Error(
-      `Invalid jrnlSubdir "${cfg.jrnlSubdir}": must be relative without ".." segments`,
+      `Invalid jrnlSubdir "${cfg.jrnlSubdir}": must be a non-empty relative path without ".." segments`,
     );
   }
   // Validate git user inputs
