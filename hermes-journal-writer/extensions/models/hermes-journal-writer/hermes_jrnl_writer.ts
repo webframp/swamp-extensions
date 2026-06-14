@@ -310,6 +310,28 @@ async function writeDailyEntry(
   const now = new Date();
   ctx.logger.info("Writing daily journal entry");
 
+  // Expand ~ and validate paths
+  const orgDir = cfg.orgDir.startsWith("~/")
+    ? (Deno.env.get("HOME") ?? "") + cfg.orgDir.slice(1)
+    : cfg.orgDir;
+  if (cfg.jrnlSubdir.includes("..") || cfg.jrnlSubdir.startsWith("/")) {
+    throw new Error(
+      `Invalid jrnlSubdir "${cfg.jrnlSubdir}": must be relative without ".." segments`,
+    );
+  }
+  // Validate git user inputs
+  const safeNameRe = /^[\w .@+\-]{1,100}$/;
+  if (!safeNameRe.test(cfg.gitUserName)) {
+    throw new Error(
+      `Invalid gitUserName: must match /[\\w .@+-]{1,100}/`,
+    );
+  }
+  if (!safeNameRe.test(cfg.gitUserEmail)) {
+    throw new Error(
+      `Invalid gitUserEmail: must match /[\\w .@+-]{1,100}/`,
+    );
+  }
+
   const data = await readResearchData(cfg.swampBin, cfg.repoDir);
   if (!data) {
     ctx.logger.warn(
@@ -319,10 +341,10 @@ async function writeDailyEntry(
 
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
-  const journalDir = `${cfg.orgDir}/${cfg.jrnlSubdir}`;
+  const journalDir = `${orgDir}/${cfg.jrnlSubdir}`;
   const journalFile = `${journalDir}/${year}-${month}.org`;
 
-  await new Deno.Command("mkdir", { args: ["-p", journalDir] }).output();
+  await Deno.mkdir(journalDir, { recursive: true });
 
   const entry = data
     ? buildDailyEntry(data)
@@ -364,7 +386,7 @@ async function writeDailyEntry(
 
   try {
     await gitCommit(
-      cfg.orgDir,
+      orgDir,
       cfg.jrnlSubdir,
       cfg.gitUserName,
       cfg.gitUserEmail,
@@ -375,7 +397,7 @@ async function writeDailyEntry(
     ctx.logger.warn("Git commit failed", { error: String(e) });
   }
   try {
-    await runCommand(["git", "push"], cfg.orgDir, 30000);
+    await runCommand(["git", "push"], orgDir, 30000);
     ctx.logger.info("Pushed to remote");
   } catch (e) {
     ctx.logger.warn("Git push failed", { error: String(e) });

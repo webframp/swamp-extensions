@@ -165,7 +165,7 @@ async function newTask(
   }
 
   kanbanArgs.push("--json");
-  kanbanArgs.push(args.title);
+  kanbanArgs.push("--", args.title);
 
   const result = await runHermesKanban(
     cfg.hermesBin,
@@ -234,11 +234,10 @@ async function listRecent(
 > {
   ctx.logger.info("Listing recent kanban tasks");
 
-  const kanbanArgs = ["--json"];
+  const kanbanArgs = ["list", "--json"];
   if (args.type) {
     kanbanArgs.push("--type", args.type, "--status", "all");
   }
-  kanbanArgs.push("list");
 
   const result = await runHermesKanban(
     ctx.globalArgs.hermesBin,
