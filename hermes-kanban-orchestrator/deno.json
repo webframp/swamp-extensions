@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno check extensions/models/network/probe.ts extensions/models/network/probe_test.ts",
+    "check": "deno check extensions/models/hermes-kanban-orchestrator/hermes_kanban_orch.ts",
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",

@@ -11,17 +11,17 @@
 import { z } from "npm:zod@4.3.6";
 
 const GlobalArgsSchema = z.object({
-  orgDir: z.string().default("/home/exedev/org")
-    .describe("Root directory of the org repo"),
+  orgDir: z.string().default("~/org")
+    .describe("Root directory of the org repo (supports ~ expansion)"),
   jrnlSubdir: z.string().default("journal")
     .describe("Subdirectory under orgDir for journal entries"),
-  swampBin: z.string().default("/home/exedev/.local/bin/swamp")
-    .describe("Path to the swamp binary"),
-  repoDir: z.string().default("/tmp/swamp-fresh")
+  swampBin: z.string().default("swamp")
+    .describe("Path to the swamp binary (must be on PATH or specify full path)"),
+  repoDir: z.string().default(".")
     .describe("Path to the swamp repo directory"),
-  gitUserName: z.string().default("Hermes Research")
+  gitUserName: z.string().default("Hermes Research Bot")
     .describe("Git commit user name"),
-  gitUserEmail: z.string().default("hermes@tide-wind.exe.xyz")
+  gitUserEmail: z.string().default("hermes@localhost")
     .describe("Git commit user email"),
 }).strict();
 
@@ -200,7 +200,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
     for (const s of hnStories.slice(0, 10)) {
       const title = s["title"] as string;
       const url = s["url"] as string | null;
-      entry += `- **${title}** (${s["score"]}pts by ${s["by"]})\n`;
+      entry += `- *${title}* (${s["score"]}pts by ${s["by"]})\n`;
       if (url) entry += `  ${url}\n`;
     }
     entry += "\n";
@@ -212,7 +212,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
       const title = s["title"] as string;
       const tags = (s["tags"] as string[]) ?? [];
       const url = s["url"] as string | null;
-      entry += `- **${title}** (${s["score"]}pts)\n`;
+      entry += `- *${title}* (${s["score"]}pts)\n`;
       if (tags.length > 0) entry += `  tags: ${tags.join(", ")}\n`;
       if (url) entry += `  ${url}\n`;
     }
@@ -225,7 +225,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
       const title = item["title"] as string;
       const link = item["link"] as string;
       const desc = (item["description"] as string ?? "").slice(0, 150);
-      entry += `- **${title}**\n`;
+      entry += `- *${title}*\n`;
       if (desc) entry += `  ${desc}\n`;
       if (link) entry += `  ${link}\n`;
     }
@@ -239,7 +239,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
       const tags = (t["tags"] as string[]) ?? [];
       const slug = t["slug"] as string;
       const excerpt = (t["excerpt"] as string ?? "").slice(0, 200);
-      entry += `- **${title}** (${t["views"]} views, ${
+      entry += `- *${title}* (${t["views"]} views, ${
         t["posts_count"]
       } posts)\n`;
       if (tags.length > 0) entry += `  tags: ${tags.join(", ")}\n`;
@@ -257,7 +257,7 @@ function buildDailyEntry(data: Record<string, unknown>): string {
       const title = item["title"] as string;
       const author = item["author"] as string;
       const link = item["link"] as string;
-      entry += `- **${title}** by ${author}\n`;
+      entry += `- *${title}* by ${author}\n`;
       if (link) entry += `  ${link}\n`;
     }
     entry += "\n";

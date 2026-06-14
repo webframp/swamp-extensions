@@ -18,9 +18,9 @@ import { z } from "npm:zod@4.3.6";
 const GlobalArgsSchema = z.object({
   board: z.string().default("research")
     .describe("Kanban board slug to create tasks on"),
-  hermesBin: z.string().default("/home/exedev/.local/bin/hermes")
+  hermesBin: z.string().default("hermes")
     .describe("Path to the hermes binary"),
-  repoDir: z.string().default("/tmp/swamp-fresh")
+  repoDir: z.string().default(".")
     .describe("Path to the swamp repo directory"),
 });
 
@@ -236,7 +236,7 @@ async function listRecent(
 
   const kanbanArgs = ["--json"];
   if (args.type) {
-    kanbanArgs.push("--status", "all");
+    kanbanArgs.push("--type", args.type, "--status", "all");
   }
   kanbanArgs.push("list");
 
@@ -258,7 +258,11 @@ async function listRecent(
     const parsed = JSON.parse(result.stdout);
     tasks = Array.isArray(parsed)
       ? parsed
-      : (parsed.tasks ?? [parsed.results] ?? []);
+      : Array.isArray(parsed.tasks)
+        ? parsed.tasks
+        : Array.isArray(parsed.results)
+          ? parsed.results
+          : [];
   } catch {
     ctx.logger.warn("Could not parse kanban list output");
   }
