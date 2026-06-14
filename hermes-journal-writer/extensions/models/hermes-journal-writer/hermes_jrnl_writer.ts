@@ -426,7 +426,7 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.06.14.1",
+  version: "2026.06.14.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     journalEntry: {
@@ -445,7 +445,7 @@ export const model = {
     write_daily_entry: {
       description:
         "Write a daily research journal entry to the org repo with commit/push.",
-      arguments: z.object({}).strict(),
+      arguments: z.object({}),
       execute: writeDailyEntry,
     },
   },
