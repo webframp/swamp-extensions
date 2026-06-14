@@ -1,11 +1,12 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.06.12.1"
+version: "2026.06.13.1"
 description: |
-  Read and write GitLab data via REST API (v4) and GraphQL. Projects, merge
-  requests, issues, releases, pipelines, labels, members, branches, and a
-  cross-project review dashboard with todos. No CLI dependencies — uses native
-  fetch with a personal access token stored in a swamp vault.
+  Read and write GitLab data via GraphQL (REST fallback for branches and
+  merge accept). Projects, merge requests, issues, releases, pipelines,
+  labels, members, branches, and a cross-project review dashboard with
+  todos. No CLI dependencies — uses native fetch with a personal access
+  token stored in a swamp vault.
 
   ## Authentication
 

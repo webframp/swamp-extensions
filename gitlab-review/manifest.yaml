@@ -1,9 +1,10 @@
 manifestVersion: 1
 name: "@webframp/gitlab-review"
-version: "2026.06.08.1"
+version: "2026.06.13.1"
 description: |
   AI-assisted GitLab merge request code review with human approval gate.
-  Uses native fetch() against the GitLab REST API (no CLI dependencies).
+  Uses GraphQL for notes and MR metadata, REST fallback for diff content
+  and approve/unapprove (no CLI dependencies).
   Designed to pair with @dougschaefer/writing-voice for tone-consistent
   reviews driven from an agent harness.
 
@@ -14,13 +15,13 @@ description: |
 
   ## Methods
 
-  - **get_mr_diff** — Fetch MR metadata and file diffs
+  - **get_mr_diff** — Fetch MR metadata (GraphQL) and file diffs (REST)
   - **analyze** — Store an AI-generated review draft
   - **edit_draft** — Revise the draft (versioned, retains history)
-  - **update_review** — Edit an existing comment on the MR
-  - **approve_mr** — Approve the MR without posting a comment
-  - **unapprove_mr** — Remove approval (request changes)
-  - **post_review** — Post draft as comment, optionally approve/unapprove
+  - **update_review** — Edit an existing comment via GraphQL updateNote
+  - **approve_mr** — Approve the MR without posting a comment (REST)
+  - **unapprove_mr** — Remove approval / request changes (REST)
+  - **post_review** — Post draft via GraphQL createNote, optionally approve/unapprove
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gitlab-review/review.ts

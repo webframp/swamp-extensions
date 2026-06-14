@@ -148,24 +148,25 @@ Deno.test("list_issues accepts all state values", () => {
 // Execute Tests (with mocked fetch)
 // =============================================================================
 
-Deno.test("list_projects writes projects resource with truncated=false", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects?membership=true&per_page=30&order_by=last_activity_at&sort=desc":
-      {
-        status: 200,
-        body: [{
+Deno.test("list_projects writes projects resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      projects: {
+        nodes: [{
           name: "TestProject",
-          path_with_namespace: "group/test-project",
+          fullPath: "group/test-project",
           description: "A test",
           visibility: "internal",
-          star_count: 3,
-          forks_count: 1,
-          last_activity_at: "2026-04-13T00:00:00Z",
-          default_branch: "main",
+          starCount: 3,
+          forksCount: 1,
+          lastActivityAt: "2026-04-13T00:00:00Z",
           archived: false,
           topics: [],
+          repository: { rootRef: "main" },
         }],
+        pageInfo: { hasNextPage: false },
       },
+    },
   });
   try {
     const { context, getWrittenResources } = createModelTestContext({
@@ -180,29 +181,30 @@ Deno.test("list_projects writes projects resource with truncated=false", async (
     assertEquals(data.count, 1);
     assertEquals(data.truncated, false);
     assertEquals(data.projects[0].name, "TestProject");
+    assertEquals(data.projects[0].defaultBranch, "main");
   } finally {
     restore();
   }
 });
 
-Deno.test("list_projects sets truncated=true when x-next-page present", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects?membership=true&per_page=30&order_by=last_activity_at&sort=desc":
-      {
-        status: 200,
-        body: [{
+Deno.test("list_projects sets truncated=true when hasNextPage", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      projects: {
+        nodes: [{
           name: "P",
-          path_with_namespace: "g/p",
+          fullPath: "g/p",
           visibility: "private",
-          star_count: 0,
-          forks_count: 0,
-          last_activity_at: "",
-          default_branch: "main",
+          starCount: 0,
+          forksCount: 0,
+          lastActivityAt: "",
           archived: false,
           topics: [],
+          repository: { rootRef: "main" },
         }],
-        headers: { "x-next-page": "2" },
+        pageInfo: { hasNextPage: true },
       },
+    },
   });
   try {
     const { context, getWrittenResources } = createModelTestContext({
@@ -216,24 +218,23 @@ Deno.test("list_projects sets truncated=true when x-next-page present", async ()
   }
 });
 
-Deno.test("get_project_info writes projectInfo resource", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/org%2Fmyrepo": {
-      status: 200,
-      body: {
+Deno.test("get_project_info writes projectInfo resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
         name: "MyRepo",
-        path_with_namespace: "org/myrepo",
+        fullPath: "org/myrepo",
         description: "Desc",
         visibility: "private",
-        default_branch: "main",
-        star_count: 1,
-        forks_count: 0,
-        open_issues_count: 5,
+        starCount: 1,
+        forksCount: 0,
+        openIssuesCount: 5,
         archived: false,
         topics: ["go"],
-        web_url: "https://git.example.org/org/myrepo",
-        created_at: "2025-01-01T00:00:00Z",
-        last_activity_at: "2026-04-01T00:00:00Z",
+        webUrl: "https://git.example.org/org/myrepo",
+        createdAt: "2025-01-01T00:00:00Z",
+        lastActivityAt: "2026-04-01T00:00:00Z",
+        repository: { rootRef: "main" },
       },
     },
   });
@@ -251,29 +252,53 @@ Deno.test("get_project_info writes projectInfo resource", async () => {
     const data = resources[0].data as any;
     assertEquals(data.name, "MyRepo");
     assertEquals(data.webUrl, "https://git.example.org/org/myrepo");
+    assertEquals(data.defaultBranch, "main");
   } finally {
     restore();
   }
 });
 
-Deno.test("list_merge_requests writes mergeRequests resource", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/group%2Frepo/merge_requests?state=opened&per_page=20":
-      {
-        status: 200,
-        body: [{
-          iid: 42,
-          title: "Add feature",
-          state: "opened",
-          author: { username: "dev" },
-          source_branch: "feature",
-          target_branch: "main",
-          draft: false,
-          created_at: "2026-04-13T00:00:00Z",
-          updated_at: "2026-04-13T00:00:00Z",
-          labels: ["enhancement"],
-        }],
+Deno.test("get_project_info throws when project not found", async () => {
+  const restore = mockGraphqlFetch({ data: { project: null } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_project_info.execute(
+          { project: "org/missing" },
+          context as any,
+        ),
+      Error,
+      "Project not found",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_merge_requests writes mergeRequests resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequests: {
+          nodes: [{
+            iid: 42,
+            title: "Add feature",
+            state: "opened",
+            author: { username: "dev" },
+            sourceBranch: "feature",
+            targetBranch: "main",
+            draft: false,
+            createdAt: "2026-04-13T00:00:00Z",
+            updatedAt: "2026-04-13T00:00:00Z",
+            labels: { nodes: [{ title: "enhancement" }] },
+          }],
+          pageInfo: { hasNextPage: false },
+        },
       },
+    },
   });
   try {
     const { context, getWrittenResources } = createModelTestContext({
@@ -290,24 +315,29 @@ Deno.test("list_merge_requests writes mergeRequests resource", async () => {
     assertEquals(data.count, 1);
     assertEquals(data.truncated, false);
     assertEquals(data.mergeRequests[0].sourceBranch, "feature");
+    assertEquals(data.mergeRequests[0].labels, ["enhancement"]);
   } finally {
     restore();
   }
 });
 
-Deno.test("list_issues writes issues resource", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/org%2Frepo/issues?state=opened&per_page=20": {
-      status: 200,
-      body: [{
-        iid: 7,
-        title: "Bug report",
-        state: "opened",
-        author: { username: "tester" },
-        created_at: "2026-04-01T00:00:00Z",
-        updated_at: "2026-04-02T00:00:00Z",
-        labels: ["bug"],
-      }],
+Deno.test("list_issues writes issues resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        issues: {
+          nodes: [{
+            iid: 7,
+            title: "Bug report",
+            state: "opened",
+            author: { username: "tester" },
+            createdAt: "2026-04-01T00:00:00Z",
+            updatedAt: "2026-04-02T00:00:00Z",
+            labels: { nodes: [{ title: "bug" }] },
+          }],
+          pageInfo: { hasNextPage: false },
+        },
+      },
     },
   });
   try {
@@ -321,23 +351,28 @@ Deno.test("list_issues writes issues resource", async () => {
     const data = getWrittenResources()[0].data as any;
     assertEquals(data.count, 1);
     assertEquals(data.issues[0].title, "Bug report");
+    assertEquals(data.issues[0].labels, ["bug"]);
     assertEquals(data.truncated, false);
   } finally {
     restore();
   }
 });
 
-Deno.test("list_releases writes releases resource", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/org%2Frepo/releases?per_page=10": {
-      status: 200,
-      body: [{
-        tag_name: "v1.0.0",
-        name: "First Release",
-        created_at: "2026-03-01T00:00:00Z",
-        released_at: "2026-03-01T00:00:00Z",
-        upcoming_release: false,
-      }],
+Deno.test("list_releases writes releases resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        releases: {
+          nodes: [{
+            tagName: "v1.0.0",
+            name: "First Release",
+            createdAt: "2026-03-01T00:00:00Z",
+            releasedAt: "2026-03-01T00:00:00Z",
+            upcomingRelease: false,
+          }],
+          pageInfo: { hasNextPage: false },
+        },
+      },
     },
   });
   try {
@@ -356,19 +391,22 @@ Deno.test("list_releases writes releases resource", async () => {
   }
 });
 
-Deno.test("list_pipelines writes pipelines resource", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/group%2Frepo/pipelines?per_page=10": {
-      status: 200,
-      body: [{
-        iid: 100,
-        name: "Build",
-        status: "success",
-        source: "push",
-        ref: "main",
-        created_at: "2026-04-13T00:00:00Z",
-        updated_at: "2026-04-13T00:00:00Z",
-      }],
+Deno.test("list_pipelines writes pipelines resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        pipelines: {
+          nodes: [{
+            iid: "100",
+            status: "SUCCESS",
+            source: "PUSH",
+            ref: "main",
+            createdAt: "2026-04-13T00:00:00Z",
+            updatedAt: "2026-04-13T00:00:00Z",
+          }],
+          pageInfo: { hasNextPage: false },
+        },
+      },
     },
   });
   try {
@@ -381,25 +419,28 @@ Deno.test("list_pipelines writes pipelines resource", async () => {
     );
     const data = getWrittenResources()[0].data as any;
     assertEquals(data.pipelines[0].status, "success");
+    assertEquals(data.pipelines[0].iid, 100);
     assertEquals(data.truncated, false);
   } finally {
     restore();
   }
 });
 
-Deno.test("create_issue writes issueDetail resource", async () => {
-  const restore = mockFetch({
-    "POST /api/v4/projects/org%2Frepo/issues": {
-      status: 201,
-      body: {
-        iid: 99,
-        title: "New issue",
-        description: "body",
-        state: "opened",
-        web_url: "https://git.example.org/org/repo/-/issues/99",
-        labels: ["todo"],
-        created_at: "2026-06-10T00:00:00Z",
-        updated_at: "2026-06-10T00:00:00Z",
+Deno.test("create_issue writes issueDetail resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      createIssue: {
+        issue: {
+          iid: 99,
+          title: "New issue",
+          description: "body",
+          state: "opened",
+          webUrl: "https://git.example.org/org/repo/-/issues/99",
+          labels: { nodes: [{ title: "todo" }] },
+          createdAt: "2026-06-10T00:00:00Z",
+          updatedAt: "2026-06-10T00:00:00Z",
+        },
+        errors: [],
       },
     },
   });
@@ -420,27 +461,68 @@ Deno.test("create_issue writes issueDetail resource", async () => {
     assertEquals(resources[0].specName, "issueDetail");
     assertEquals(resources[0].name, "org~repo-99");
     assertEquals((resources[0].data as any).title, "New issue");
+    assertEquals((resources[0].data as any).labels, ["todo"]);
   } finally {
     restore();
   }
 });
 
-Deno.test("update_issue writes issueDetail resource", async () => {
-  const restore = mockFetch({
-    "PUT /api/v4/projects/org%2Frepo/issues/5": {
-      status: 200,
-      body: {
-        iid: 5,
-        title: "Updated",
-        description: "",
-        state: "opened",
-        web_url: "https://git.example.org/org/repo/-/issues/5",
-        labels: [],
-        created_at: "2026-01-01T00:00:00Z",
-        updated_at: "2026-06-10T00:00:00Z",
-      },
+Deno.test("create_issue throws on mutation errors", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      createIssue: { issue: null, errors: ["Title is too short"] },
     },
   });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.create_issue.execute(
+          { project: "org/repo", title: "x", description: "", labels: [] },
+          context as any,
+        ),
+      Error,
+      "createIssue failed",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("update_issue writes issueDetail resource via GraphQL", async () => {
+  // Mock needs to handle two sequential GraphQL calls: first to get issue ID, then to update
+  let callCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: any, _init?: any) => {
+    callCount++;
+    const body = callCount === 1
+      ? { data: { project: { issue: { id: "gid://gitlab/Issue/123" } } } }
+      : {
+        data: {
+          updateIssue: {
+            issue: {
+              iid: 5,
+              title: "Updated",
+              description: "",
+              state: "opened",
+              webUrl: "https://git.example.org/org/repo/-/issues/5",
+              labels: { nodes: [] },
+              createdAt: "2026-01-01T00:00:00Z",
+              updatedAt: "2026-06-10T00:00:00Z",
+            },
+            errors: [],
+          },
+        },
+      };
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
   try {
     const { context, getWrittenResources } = createModelTestContext({
       globalArgs: TEST_GLOBAL_ARGS,
@@ -451,22 +533,37 @@ Deno.test("update_issue writes issueDetail resource", async () => {
     );
     assertEquals((getWrittenResources()[0].data as any).title, "Updated");
   } finally {
-    restore();
+    globalThis.fetch = original;
   }
 });
 
-Deno.test("add_issue_note uses note-specific instance name", async () => {
-  const restore = mockFetch({
-    "POST /api/v4/projects/org%2Frepo/issues/3/notes": {
-      status: 201,
-      body: {
-        id: 777,
-        body: "My comment",
-        author: { username: "me" },
-        created_at: "2026-06-10T00:00:00Z",
-      },
-    },
-  });
+Deno.test("add_issue_note uses note-specific instance name via GraphQL", async () => {
+  let callCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: any, _init?: any) => {
+    callCount++;
+    const body = callCount === 1
+      ? { data: { project: { issue: { id: "gid://gitlab/Issue/123" } } } }
+      : {
+        data: {
+          createNote: {
+            note: {
+              id: "gid://gitlab/Note/777",
+              body: "My comment",
+              author: { username: "me" },
+              createdAt: "2026-06-10T00:00:00Z",
+            },
+            errors: [],
+          },
+        },
+      };
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
   try {
     const { context, getWrittenResources } = createModelTestContext({
       globalArgs: TEST_GLOBAL_ARGS,
@@ -479,28 +576,34 @@ Deno.test("add_issue_note uses note-specific instance name", async () => {
     assertEquals(resources[0].name, "org~repo-issue-3-note-777");
     assertEquals((resources[0].data as any).notes[0].id, 777);
   } finally {
-    restore();
+    globalThis.fetch = original;
   }
 });
 
-Deno.test("list_issue_notes writes notes resource with list instance name", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/org%2Frepo/issues/3/notes?per_page=50&sort=asc": {
-      status: 200,
-      body: [
-        {
-          id: 1,
-          body: "first",
-          author: { username: "a" },
-          created_at: "2026-01-01T00:00:00Z",
+Deno.test("list_issue_notes writes notes resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        issue: {
+          notes: {
+            nodes: [
+              {
+                id: "gid://gitlab/Note/1",
+                body: "first",
+                author: { username: "a" },
+                createdAt: "2026-01-01T00:00:00Z",
+              },
+              {
+                id: "gid://gitlab/Note/2",
+                body: "second",
+                author: { username: "b" },
+                createdAt: "2026-01-02T00:00:00Z",
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
         },
-        {
-          id: 2,
-          body: "second",
-          author: { username: "b" },
-          created_at: "2026-01-02T00:00:00Z",
-        },
-      ],
+      },
     },
   });
   try {
@@ -519,21 +622,23 @@ Deno.test("list_issue_notes writes notes resource with list instance name", asyn
   }
 });
 
-Deno.test("create_merge_request writes mergeRequests resource", async () => {
-  const restore = mockFetch({
-    "POST /api/v4/projects/org%2Frepo/merge_requests": {
-      status: 201,
-      body: {
-        iid: 10,
-        title: "New MR",
-        state: "opened",
-        author: { username: "dev" },
-        source_branch: "feature",
-        target_branch: "main",
-        draft: false,
-        created_at: "2026-06-10T00:00:00Z",
-        updated_at: "2026-06-10T00:00:00Z",
-        labels: [],
+Deno.test("create_merge_request writes mergeRequests resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      mergeRequestCreate: {
+        mergeRequest: {
+          iid: 10,
+          title: "New MR",
+          state: "opened",
+          author: { username: "dev" },
+          sourceBranch: "feature",
+          targetBranch: "main",
+          draft: false,
+          createdAt: "2026-06-10T00:00:00Z",
+          updatedAt: "2026-06-10T00:00:00Z",
+          labels: { nodes: [] },
+        },
+        errors: [],
       },
     },
   });
@@ -559,7 +664,7 @@ Deno.test("create_merge_request writes mergeRequests resource", async () => {
   }
 });
 
-Deno.test("merge writes MR state resource", async () => {
+Deno.test("merge writes MR state resource (REST)", async () => {
   const restore = mockFetch({
     "PUT /api/v4/projects/org%2Frepo/merge_requests/10/merge": {
       status: 200,
@@ -618,18 +723,37 @@ Deno.test("merge throws on error message in response body", async () => {
   }
 });
 
-Deno.test("add_mr_note uses note-specific instance name", async () => {
-  const restore = mockFetch({
-    "POST /api/v4/projects/org%2Frepo/merge_requests/5/notes": {
-      status: 201,
-      body: {
-        id: 888,
-        body: "LGTM",
-        author: { username: "reviewer" },
-        created_at: "2026-06-10T00:00:00Z",
-      },
-    },
-  });
+Deno.test("add_mr_note uses note-specific instance name via GraphQL", async () => {
+  let callCount = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: any, _init?: any) => {
+    callCount++;
+    const body = callCount === 1
+      ? {
+        data: {
+          project: { mergeRequest: { id: "gid://gitlab/MergeRequest/500" } },
+        },
+      }
+      : {
+        data: {
+          createNote: {
+            note: {
+              id: "gid://gitlab/Note/888",
+              body: "LGTM",
+              author: { username: "reviewer" },
+              createdAt: "2026-06-10T00:00:00Z",
+            },
+            errors: [],
+          },
+        },
+      };
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
   try {
     const { context, getWrittenResources } = createModelTestContext({
       globalArgs: TEST_GLOBAL_ARGS,
@@ -641,18 +765,22 @@ Deno.test("add_mr_note uses note-specific instance name", async () => {
     const resources = getWrittenResources();
     assertEquals(resources[0].name, "org~repo-mr-5-note-888");
   } finally {
-    restore();
+    globalThis.fetch = original;
   }
 });
 
-Deno.test("list_labels writes labels resource with nullable description", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/org%2Frepo/labels?per_page=100": {
-      status: 200,
-      body: [
-        { name: "bug", color: "#d9534f", description: "Something broken" },
-        { name: "feature", color: "#5cb85c", description: null },
-      ],
+Deno.test("list_labels writes labels resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        labels: {
+          nodes: [
+            { title: "bug", color: "#d9534f", description: "Something broken" },
+            { title: "feature", color: "#5cb85c", description: null },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+      },
     },
   });
   try {
@@ -666,17 +794,25 @@ Deno.test("list_labels writes labels resource with nullable description", async 
     const data = getWrittenResources()[0].data as any;
     assertEquals(data.labels[0].description, "Something broken");
     assertEquals(data.labels[1].description, null);
+    assertEquals(data.labels[0].name, "bug");
     assertEquals(data.truncated, false);
   } finally {
     restore();
   }
 });
 
-Deno.test("list_members writes members resource", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects/org%2Frepo/members/all?per_page=100": {
-      status: 200,
-      body: [{ username: "dev", name: "Developer", access_level: 30 }],
+Deno.test("list_members writes members resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        projectMembers: {
+          nodes: [{
+            user: { username: "dev", name: "Developer" },
+            accessLevel: { integerValue: 30 },
+          }],
+          pageInfo: { hasNextPage: false },
+        },
+      },
     },
   });
   try {
@@ -695,7 +831,7 @@ Deno.test("list_members writes members resource", async () => {
   }
 });
 
-Deno.test("list_branches writes branches resource", async () => {
+Deno.test("list_branches writes branches resource (REST)", async () => {
   const restore = mockFetch({
     "GET /api/v4/projects/org%2Frepo/repository/branches?per_page=50": {
       status: 200,
@@ -722,14 +858,26 @@ Deno.test("list_branches writes branches resource", async () => {
   }
 });
 
-Deno.test("API error throws with status and body", async () => {
-  const restore = mockFetch({
-    "GET /api/v4/projects?membership=true&per_page=30&order_by=last_activity_at&sort=desc":
-      {
-        status: 401,
-        body: { error: "Unauthorized" },
-      },
+Deno.test("GraphQL error throws with message", async () => {
+  const restore = mockGraphqlFetch({
+    errors: [{ message: "Unauthorized" }],
   });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () => model.methods.list_projects.execute({} as any, context as any),
+      Error,
+      "GraphQL errors",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("GraphQL HTTP failure throws with status", async () => {
+  const restore = mockGraphqlFetch({}, { status: 401 });
   try {
     const { context } = createModelTestContext({
       globalArgs: TEST_GLOBAL_ARGS,

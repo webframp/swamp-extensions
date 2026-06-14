@@ -1,10 +1,9 @@
 /**
  * GitLab project operations model for swamp.
  *
- * Queries and mutates GitLab data via the REST API (v4) for projects,
- * merge requests, issues, releases, and CI/CD pipelines. Supports
- * self-hosted instances. Auth via personal access token stored in a
- * swamp vault.
+ * Queries and mutates GitLab data via GraphQL API with REST fallback
+ * where GraphQL lacks coverage (merge accept). Supports self-hosted
+ * instances. Auth via personal access token stored in a swamp vault.
  *
  * @module
  */
@@ -323,7 +322,225 @@ function mapTodo(node: any): z.infer<typeof TodoSchema> {
 }
 
 // =============================================================================
-// REST API Client
+// GraphQL Queries
+// =============================================================================
+
+const PROJECTS_QUERY = `
+query projects($first: Int!) {
+  projects(membership: true, first: $first, sort: "latest_activity_desc") {
+    nodes {
+      name fullPath description visibility starCount forksCount
+      lastActivityAt archived topics
+      repository { rootRef }
+    }
+    pageInfo { hasNextPage }
+  }
+}`;
+
+const PROJECT_INFO_QUERY = `
+query projectInfo($fullPath: ID!) {
+  project(fullPath: $fullPath) {
+    name fullPath description visibility starCount forksCount
+    archived topics webUrl createdAt lastActivityAt
+    openIssuesCount
+    repository { rootRef }
+  }
+}`;
+
+const MERGE_REQUESTS_QUERY = `
+query mergeRequests($fullPath: ID!, $state: MergeRequestState, $first: Int!) {
+  project(fullPath: $fullPath) {
+    mergeRequests(state: $state, first: $first, sort: UPDATED_DESC) {
+      nodes {
+        iid title state draft createdAt updatedAt
+        sourceBranch targetBranch
+        author { username }
+        labels { nodes { title } }
+      }
+      pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+const ISSUES_QUERY = `
+query issues($fullPath: ID!, $state: IssuableState, $first: Int!) {
+  project(fullPath: $fullPath) {
+    issues(state: $state, first: $first, sort: UPDATED_DESC) {
+      nodes {
+        iid title state createdAt updatedAt
+        author { username }
+        labels { nodes { title } }
+      }
+      pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+const RELEASES_QUERY = `
+query releases($fullPath: ID!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    releases(first: $first, sort: RELEASED_AT_DESC) {
+      nodes { tagName name createdAt releasedAt upcomingRelease }
+      pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+const PIPELINES_QUERY = `
+query pipelines($fullPath: ID!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    pipelines(first: $first) {
+      nodes { iid status source ref createdAt updatedAt }
+      pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+const ISSUE_NOTES_QUERY = `
+query issueNotes($fullPath: ID!, $iid: String!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    issue(iid: $iid) {
+      notes(first: $first) {
+        nodes { id body createdAt author { username } }
+        pageInfo { hasNextPage }
+      }
+    }
+  }
+}`;
+
+const LABELS_QUERY = `
+query labels($fullPath: ID!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    labels(first: $first) {
+      nodes { title color description }
+      pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+const MEMBERS_QUERY = `
+query members($fullPath: ID!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    projectMembers(first: $first) {
+      nodes { user { username name } accessLevel { integerValue } }
+      pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+const CREATE_ISSUE_MUTATION = `
+mutation createIssue($projectPath: ID!, $title: String!, $description: String, $labels: [String!]) {
+  createIssue(input: { projectPath: $projectPath, title: $title, description: $description, labels: $labels }) {
+    issue { iid title description state webUrl labels { nodes { title } } createdAt updatedAt }
+    errors
+  }
+}`;
+
+const UPDATE_ISSUE_MUTATION = `
+mutation updateIssue($id: IssueID!, $title: String, $description: String, $labels: [String!], $stateEvent: IssueStateEvent) {
+  updateIssue(input: { id: $id, title: $title, description: $description, labels: $labels, stateEvent: $stateEvent }) {
+    issue { iid title description state webUrl labels { nodes { title } } createdAt updatedAt }
+    errors
+  }
+}`;
+
+const CREATE_NOTE_MUTATION = `
+mutation createNote($noteableId: NoteableID!, $body: String!) {
+  createNote(input: { noteableId: $noteableId, body: $body }) {
+    note { id body createdAt author { username } }
+    errors
+  }
+}`;
+
+const CREATE_MR_MUTATION = `
+mutation createMR($projectPath: ID!, $title: String!, $sourceBranch: String!, $targetBranch: String!, $description: String) {
+  mergeRequestCreate(input: { projectPath: $projectPath, title: $title, sourceBranch: $sourceBranch, targetBranch: $targetBranch, description: $description }) {
+    mergeRequest { iid title state draft createdAt updatedAt sourceBranch targetBranch author { username } labels { nodes { title } } }
+    errors
+  }
+}`;
+
+const LABEL_CREATE_MUTATION = `
+mutation labelCreate($projectPath: ID!, $title: String!, $color: String!, $description: String) {
+  labelCreate(input: { projectPath: $projectPath, title: $title, color: $color, description: $description }) {
+    label { title color description }
+    errors
+  }
+}`;
+
+// Helpers for extracting GraphQL global IDs
+const ISSUE_ID_QUERY = `
+query issueId($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) { issue(iid: $iid) { id } }
+}`;
+
+const MR_ID_QUERY = `
+query mrId($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) { mergeRequest(iid: $iid) { id } }
+}`;
+
+// =============================================================================
+// GraphQL Mappers
+// =============================================================================
+
+function gqlMapProject(node: any): z.infer<typeof ProjectSchema> {
+  return {
+    name: node.name ?? "",
+    pathWithNamespace: node.fullPath ?? "",
+    description: node.description ?? null,
+    visibility: node.visibility ?? "private",
+    starCount: node.starCount ?? 0,
+    forksCount: node.forksCount ?? 0,
+    lastActivityAt: node.lastActivityAt ?? "",
+    defaultBranch: node.repository?.rootRef ?? null,
+    archived: node.archived ?? false,
+    topics: node.topics ?? [],
+  };
+}
+
+function gqlMapMR(node: any): z.infer<typeof MergeRequestSchema> {
+  return {
+    iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
+    title: node.title ?? "",
+    state: node.state ?? "",
+    author: node.author ? { username: node.author.username } : null,
+    sourceBranch: node.sourceBranch ?? "",
+    targetBranch: node.targetBranch ?? "",
+    draft: node.draft ?? false,
+    createdAt: node.createdAt ?? "",
+    updatedAt: node.updatedAt ?? "",
+    labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
+  };
+}
+
+function gqlMapIssue(node: any): z.infer<typeof IssueSchema> {
+  return {
+    iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
+    title: node.title ?? "",
+    state: node.state ?? "",
+    author: node.author ? { username: node.author.username } : null,
+    createdAt: node.createdAt ?? "",
+    updatedAt: node.updatedAt ?? "",
+    labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
+  };
+}
+
+function gqlMapNote(node: any): z.infer<typeof NoteSchema> {
+  const rawId = node.id ?? "";
+  // Extract numeric ID from gid://gitlab/Note/123
+  const numId = typeof rawId === "string"
+    ? parseInt(rawId.split("/").pop() ?? "0", 10)
+    : rawId;
+  return {
+    id: numId,
+    body: node.body ?? "",
+    author: node.author ? { username: node.author.username } : null,
+    createdAt: node.createdAt ?? "",
+  };
+}
+
+// =============================================================================
+// REST API Client (kept for merge accept + branches which lack GraphQL)
 // =============================================================================
 
 /** Response from a list endpoint including pagination state. */
@@ -347,54 +564,6 @@ class GitLabClient {
 
   private projectUrl(project: string): string {
     return `${this.baseUrl}/projects/${encodeURIComponent(project)}`;
-  }
-
-  /** GET a single object (no pagination). */
-  async get(path: string, params?: Record<string, string>): Promise<any> {
-    const url = new URL(`${this.baseUrl}${path}`);
-    if (params) {
-      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-    }
-    const resp = await fetch(url.toString(), { headers: this.headers() });
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(`GitLab GET ${path}: ${resp.status} ${body}`);
-    }
-    return resp.json();
-  }
-
-  /** GET a list from a top-level path, returning data + truncation flag. */
-  async getList(
-    path: string,
-    params?: Record<string, string>,
-  ): Promise<ListResponse> {
-    const url = new URL(`${this.baseUrl}${path}`);
-    if (params) {
-      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-    }
-    const resp = await fetch(url.toString(), { headers: this.headers() });
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(`GitLab GET ${path}: ${resp.status} ${body}`);
-    }
-    const nextPage = resp.headers.get("x-next-page");
-    return {
-      data: await resp.json(),
-      truncated: !!nextPage && nextPage !== "",
-    };
-  }
-
-  /** GET a single object scoped to a project. */
-  async getProject(project: string, path: string): Promise<any> {
-    const url = `${this.projectUrl(project)}${path}`;
-    const resp = await fetch(url, { headers: this.headers() });
-    if (!resp.ok) {
-      const body = await resp.text();
-      throw new Error(
-        `GitLab GET ${project}${path}: ${resp.status} ${body}`,
-      );
-    }
-    return resp.json();
   }
 
   /** GET a list scoped to a project, returning data + truncation flag. */
@@ -421,23 +590,6 @@ class GitLabClient {
     };
   }
 
-  async post(
-    project: string,
-    path: string,
-    body: Record<string, unknown>,
-  ): Promise<any> {
-    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`GitLab POST ${project}${path}: ${resp.status} ${text}`);
-    }
-    return resp.json();
-  }
-
   async put(
     project: string,
     path: string,
@@ -457,23 +609,8 @@ class GitLabClient {
 }
 
 // =============================================================================
-// Mappers
+// REST Mappers (kept for merge method which uses REST)
 // =============================================================================
-
-function mapProject(raw: any): z.infer<typeof ProjectSchema> {
-  return {
-    name: raw.name ?? "",
-    pathWithNamespace: raw.path_with_namespace ?? "",
-    description: raw.description ?? null,
-    visibility: raw.visibility ?? "private",
-    starCount: raw.star_count ?? 0,
-    forksCount: raw.forks_count ?? 0,
-    lastActivityAt: raw.last_activity_at ?? raw.updated_at ?? "",
-    defaultBranch: raw.default_branch ?? null,
-    archived: raw.archived ?? false,
-    topics: raw.topics ?? raw.tag_list ?? [],
-  };
-}
 
 function mapMR(raw: any): z.infer<typeof MergeRequestSchema> {
   return {
@@ -487,66 +624,6 @@ function mapMR(raw: any): z.infer<typeof MergeRequestSchema> {
     createdAt: raw.created_at ?? "",
     updatedAt: raw.updated_at ?? "",
     labels: raw.labels ?? [],
-  };
-}
-
-function mapIssue(raw: any): z.infer<typeof IssueSchema> {
-  return {
-    iid: raw.iid,
-    title: raw.title ?? "",
-    state: raw.state ?? "",
-    author: raw.author ? { username: raw.author.username } : null,
-    createdAt: raw.created_at ?? "",
-    updatedAt: raw.updated_at ?? "",
-    labels: raw.labels ?? [],
-  };
-}
-
-function mapRelease(raw: any): z.infer<typeof ReleaseSchema> {
-  return {
-    tagName: raw.tag_name ?? "",
-    name: raw.name ?? "",
-    createdAt: raw.created_at ?? "",
-    releasedAt: raw.released_at ?? raw.created_at ?? "",
-    upcoming: raw.upcoming_release ?? false,
-  };
-}
-
-function mapPipeline(raw: any): z.infer<typeof PipelineSchema> {
-  return {
-    iid: raw.iid ?? raw.id,
-    name: raw.name ?? null,
-    status: raw.status ?? "",
-    source: raw.source ?? "",
-    ref: raw.ref ?? "",
-    createdAt: raw.created_at ?? "",
-    updatedAt: raw.updated_at ?? "",
-  };
-}
-
-function mapIssueDetail(
-  project: string,
-  raw: any,
-): z.infer<typeof IssueDetailSchema> {
-  return {
-    project,
-    iid: raw.iid,
-    title: raw.title ?? "",
-    description: raw.description ?? "",
-    state: raw.state ?? "opened",
-    webUrl: raw.web_url ?? "",
-    labels: raw.labels ?? [],
-    createdAt: raw.created_at ?? "",
-    updatedAt: raw.updated_at ?? "",
-  };
-}
-
-function mapNote(raw: any): z.infer<typeof NoteSchema> {
-  return {
-    id: raw.id,
-    body: raw.body ?? "",
-    author: raw.author ? { username: raw.author.username } : null,
-    createdAt: raw.created_at ?? "",
   };
 }
 
@@ -572,10 +649,10 @@ type ModelContext = {
 // Model Definition
 // =============================================================================
 
-/** GitLab model — read and write projects, issues, MRs, pipelines via REST API. */
+/** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.12.1",
+  version: "2026.06.13.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -661,17 +738,13 @@ export const model = {
         "List projects for the authenticated user with basic metadata",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getList("/projects", {
-          membership: "true",
-          per_page: "30",
-          order_by: "last_activity_at",
-          sort: "desc",
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, PROJECTS_QUERY, {
+          first: 30,
         });
-        const projects = (data as any[]).map(mapProject);
+        const nodes = data.projects?.nodes ?? [];
+        const projects = nodes.map(gqlMapProject);
+        const truncated = data.projects?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource("projects", "all", {
           projects,
           count: projects.length,
@@ -691,28 +764,26 @@ export const model = {
         ),
       }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        // Use bare project URL (no trailing path) via get() with encoded path
-        const raw = await client.get(
-          `/projects/${encodeURIComponent(args.project)}`,
-        );
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, PROJECT_INFO_QUERY, {
+          fullPath: args.project,
+        });
+        const p = data.project;
+        if (!p) throw new Error(`Project not found: ${args.project}`);
         const info = {
-          name: raw.name ?? "",
-          pathWithNamespace: raw.path_with_namespace ?? "",
-          description: raw.description ?? null,
-          visibility: raw.visibility ?? "private",
-          defaultBranch: raw.default_branch ?? null,
-          starCount: raw.star_count ?? 0,
-          forksCount: raw.forks_count ?? 0,
-          openIssuesCount: raw.open_issues_count ?? 0,
-          archived: raw.archived ?? false,
-          topics: raw.topics ?? raw.tag_list ?? [],
-          webUrl: raw.web_url ?? "",
-          createdAt: raw.created_at ?? "",
-          lastActivityAt: raw.last_activity_at ?? "",
+          name: p.name ?? "",
+          pathWithNamespace: p.fullPath ?? "",
+          description: p.description ?? null,
+          visibility: p.visibility ?? "private",
+          defaultBranch: p.repository?.rootRef ?? null,
+          starCount: p.starCount ?? 0,
+          forksCount: p.forksCount ?? 0,
+          openIssuesCount: p.openIssuesCount ?? 0,
+          archived: p.archived ?? false,
+          topics: p.topics ?? [],
+          webUrl: p.webUrl ?? "",
+          createdAt: p.createdAt ?? "",
+          lastActivityAt: p.lastActivityAt ?? "",
           fetchedAt: new Date().toISOString(),
         };
         const handle = await ctx.writeResource(
@@ -738,16 +809,15 @@ export const model = {
         args: { project: string; state: string },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getProjectList(
-          args.project,
-          "/merge_requests",
-          { state: args.state, per_page: "20" },
-        );
-        const mrs = (data as any[]).map(mapMR);
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, MERGE_REQUESTS_QUERY, {
+          fullPath: args.project,
+          state: args.state === "all" ? undefined : args.state,
+          first: 20,
+        });
+        const conn = data.project?.mergeRequests;
+        const mrs = (conn?.nodes ?? []).map(gqlMapMR);
+        const truncated = conn?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource(
           "mergeRequests",
           `${sanitizeName(args.project)}-${args.state}`,
@@ -779,16 +849,15 @@ export const model = {
         args: { project: string; state: string },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getProjectList(
-          args.project,
-          "/issues",
-          { state: args.state, per_page: "20" },
-        );
-        const issues = (data as any[]).map(mapIssue);
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, ISSUES_QUERY, {
+          fullPath: args.project,
+          state: args.state === "all" ? undefined : args.state,
+          first: 20,
+        });
+        const conn = data.project?.issues;
+        const issues = (conn?.nodes ?? []).map(gqlMapIssue);
+        const truncated = conn?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource(
           "issues",
           `${sanitizeName(args.project)}-${args.state}`,
@@ -814,16 +883,20 @@ export const model = {
       description: "List releases for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getProjectList(
-          args.project,
-          "/releases",
-          { per_page: "10" },
-        );
-        const releases = (data as any[]).map(mapRelease);
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, RELEASES_QUERY, {
+          fullPath: args.project,
+          first: 10,
+        });
+        const conn = data.project?.releases;
+        const releases = (conn?.nodes ?? []).map((n: any) => ({
+          tagName: n.tagName ?? "",
+          name: n.name ?? "",
+          createdAt: n.createdAt ?? "",
+          releasedAt: n.releasedAt ?? n.createdAt ?? "",
+          upcoming: n.upcomingRelease ?? false,
+        }));
+        const truncated = conn?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource(
           "releases",
           sanitizeName(args.project),
@@ -847,16 +920,22 @@ export const model = {
       description: "List recent CI/CD pipelines for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getProjectList(
-          args.project,
-          "/pipelines",
-          { per_page: "10" },
-        );
-        const pipelines = (data as any[]).map(mapPipeline);
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, PIPELINES_QUERY, {
+          fullPath: args.project,
+          first: 10,
+        });
+        const conn = data.project?.pipelines;
+        const pipelines = (conn?.nodes ?? []).map((n: any) => ({
+          iid: typeof n.iid === "string" ? parseInt(n.iid, 10) : (n.iid ?? 0),
+          name: null,
+          status: (n.status ?? "").toLowerCase(),
+          source: (n.source ?? "").toLowerCase(),
+          ref: n.ref ?? "",
+          createdAt: n.createdAt ?? "",
+          updatedAt: n.updatedAt ?? "",
+        }));
+        const truncated = conn?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource(
           "pipelines",
           sanitizeName(args.project),
@@ -893,22 +972,37 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const raw = await client.post(args.project, "/issues", {
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, CREATE_ISSUE_MUTATION, {
+          projectPath: args.project,
           title: args.title,
-          description: args.description,
-          labels: args.labels.join(","),
+          description: args.description || undefined,
+          labels: args.labels.length ? args.labels : undefined,
         });
+        const result = data.createIssue;
+        if (result.errors?.length) {
+          throw new Error(`createIssue failed: ${result.errors.join("; ")}`);
+        }
+        const issue = result.issue;
         const handle = await ctx.writeResource(
           "issueDetail",
-          `${sanitizeName(args.project)}-${raw.iid}`,
-          mapIssueDetail(args.project, raw),
+          `${sanitizeName(args.project)}-${issue.iid}`,
+          {
+            project: args.project,
+            iid: typeof issue.iid === "string"
+              ? parseInt(issue.iid, 10)
+              : issue.iid,
+            title: issue.title ?? "",
+            description: issue.description ?? "",
+            state: issue.state ?? "opened",
+            webUrl: issue.webUrl ?? "",
+            labels: issue.labels?.nodes?.map((l: any) => l.title) ?? [],
+            createdAt: issue.createdAt ?? "",
+            updatedAt: issue.updatedAt ?? "",
+          },
         );
         ctx.logger.info("Created issue #{iid} in {project}", {
-          iid: raw.iid,
+          iid: issue.iid,
           project: args.project,
         });
         return { dataHandles: [handle] };
@@ -937,20 +1031,55 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
+        const { host, token } = ctx.globalArgs;
+        // Resolve the global issue ID first
+        const idData = await graphqlRequest(host, token, ISSUE_ID_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const issueGid = idData.project?.issue?.id;
+        if (!issueGid) {
+          throw new Error(`Issue #${args.iid} not found in ${args.project}`);
+        }
+        const stateMap: Record<string, string> = {
+          close: "CLOSE",
+          reopen: "REOPEN",
+        };
+        const vars: Record<string, unknown> = { id: issueGid };
+        if (args.title !== undefined) vars.title = args.title;
+        if (args.description !== undefined) vars.description = args.description;
+        if (args.labels !== undefined) vars.labels = args.labels;
+        if (args.stateEvent !== undefined) {
+          vars.stateEvent = stateMap[args.stateEvent] ??
+            args.stateEvent.toUpperCase();
+        }
+        const data = await graphqlRequest(
+          host,
+          token,
+          UPDATE_ISSUE_MUTATION,
+          vars,
         );
-        const body: Record<string, unknown> = {};
-        if (args.title !== undefined) body.title = args.title;
-        if (args.description !== undefined) body.description = args.description;
-        if (args.labels !== undefined) body.labels = args.labels.join(",");
-        if (args.stateEvent !== undefined) body.state_event = args.stateEvent;
-        const raw = await client.put(args.project, `/issues/${args.iid}`, body);
+        const result = data.updateIssue;
+        if (result.errors?.length) {
+          throw new Error(`updateIssue failed: ${result.errors.join("; ")}`);
+        }
+        const issue = result.issue;
         const handle = await ctx.writeResource(
           "issueDetail",
-          `${sanitizeName(args.project)}-${raw.iid}`,
-          mapIssueDetail(args.project, raw),
+          `${sanitizeName(args.project)}-${issue.iid}`,
+          {
+            project: args.project,
+            iid: typeof issue.iid === "string"
+              ? parseInt(issue.iid, 10)
+              : issue.iid,
+            title: issue.title ?? "",
+            description: issue.description ?? "",
+            state: issue.state ?? "opened",
+            webUrl: issue.webUrl ?? "",
+            labels: issue.labels?.nodes?.map((l: any) => l.title) ?? [],
+            createdAt: issue.createdAt ?? "",
+            updatedAt: issue.updatedAt ?? "",
+          },
         );
         ctx.logger.info("Updated issue #{iid} in {project}", {
           iid: args.iid,
@@ -971,24 +1100,33 @@ export const model = {
         args: { project: string; iid: number; body: string },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const raw = await client.post(
-          args.project,
-          `/issues/${args.iid}/notes`,
-          { body: args.body },
-        );
-        // Use note-specific instance name to not overwrite the full list
+        const { host, token } = ctx.globalArgs;
+        // Resolve issue global ID
+        const idData = await graphqlRequest(host, token, ISSUE_ID_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const issueGid = idData.project?.issue?.id;
+        if (!issueGid) {
+          throw new Error(`Issue #${args.iid} not found in ${args.project}`);
+        }
+        const data = await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
+          noteableId: issueGid,
+          body: args.body,
+        });
+        const result = data.createNote;
+        if (result.errors?.length) {
+          throw new Error(`createNote failed: ${result.errors.join("; ")}`);
+        }
+        const note = gqlMapNote(result.note);
         const handle = await ctx.writeResource(
           "notes",
-          `${sanitizeName(args.project)}-issue-${args.iid}-note-${raw.id}`,
+          `${sanitizeName(args.project)}-issue-${args.iid}-note-${note.id}`,
           {
             project: args.project,
             noteableType: "issue",
             noteableIid: args.iid,
-            notes: [mapNote(raw)],
+            notes: [note],
             count: 1,
             truncated: false,
             fetchedAt: new Date().toISOString(),
@@ -1012,16 +1150,15 @@ export const model = {
         args: { project: string; iid: number },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getProjectList(
-          args.project,
-          `/issues/${args.iid}/notes`,
-          { per_page: "50", sort: "asc" },
-        );
-        const notes = (data as any[]).map(mapNote);
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, ISSUE_NOTES_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+          first: 50,
+        });
+        const conn = data.project?.issue?.notes;
+        const notes = (conn?.nodes ?? []).map(gqlMapNote);
+        const truncated = conn?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource(
           "notes",
           `${sanitizeName(args.project)}-issue-${args.iid}`,
@@ -1062,20 +1199,24 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const raw = await client.post(args.project, "/merge_requests", {
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, CREATE_MR_MUTATION, {
+          projectPath: args.project,
           title: args.title,
-          source_branch: args.sourceBranch,
-          target_branch: args.targetBranch,
-          description: args.description,
+          sourceBranch: args.sourceBranch,
+          targetBranch: args.targetBranch,
+          description: args.description || undefined,
         });
-        const mr = mapMR(raw);
+        const result = data.mergeRequestCreate;
+        if (result.errors?.length) {
+          throw new Error(
+            `mergeRequestCreate failed: ${result.errors.join("; ")}`,
+          );
+        }
+        const mr = gqlMapMR(result.mergeRequest);
         const handle = await ctx.writeResource(
           "mergeRequests",
-          `${sanitizeName(args.project)}-created-${raw.iid}`,
+          `${sanitizeName(args.project)}-created-${mr.iid}`,
           {
             project: args.project,
             mergeRequests: [mr],
@@ -1086,7 +1227,7 @@ export const model = {
           },
         );
         ctx.logger.info("Created MR !{iid} in {project}", {
-          iid: raw.iid,
+          iid: mr.iid,
           project: args.project,
         });
         return { dataHandles: [handle] };
@@ -1151,24 +1292,33 @@ export const model = {
         args: { project: string; iid: number; body: string },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const raw = await client.post(
-          args.project,
-          `/merge_requests/${args.iid}/notes`,
-          { body: args.body },
-        );
-        // Use note-specific instance name to not overwrite the full MR notes list
+        const { host, token } = ctx.globalArgs;
+        // Resolve MR global ID
+        const idData = await graphqlRequest(host, token, MR_ID_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const mrGid = idData.project?.mergeRequest?.id;
+        if (!mrGid) {
+          throw new Error(`MR !${args.iid} not found in ${args.project}`);
+        }
+        const data = await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
+          noteableId: mrGid,
+          body: args.body,
+        });
+        const result = data.createNote;
+        if (result.errors?.length) {
+          throw new Error(`createNote failed: ${result.errors.join("; ")}`);
+        }
+        const note = gqlMapNote(result.note);
         const handle = await ctx.writeResource(
           "notes",
-          `${sanitizeName(args.project)}-mr-${args.iid}-note-${raw.id}`,
+          `${sanitizeName(args.project)}-mr-${args.iid}-note-${note.id}`,
           {
             project: args.project,
             noteableType: "merge_request",
             noteableIid: args.iid,
-            notes: [mapNote(raw)],
+            notes: [note],
             count: 1,
             truncated: false,
             fetchedAt: new Date().toISOString(),
@@ -1186,20 +1336,18 @@ export const model = {
       description: "List labels for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getProjectList(
-          args.project,
-          "/labels",
-          { per_page: "100" },
-        );
-        const labels = (data as any[]).map((raw: any) => ({
-          name: raw.name ?? "",
-          color: raw.color ?? "",
-          description: raw.description ?? null,
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, LABELS_QUERY, {
+          fullPath: args.project,
+          first: 100,
+        });
+        const conn = data.project?.labels;
+        const labels = (conn?.nodes ?? []).map((n: any) => ({
+          name: n.title ?? "",
+          color: n.color ?? "",
+          description: n.description ?? null,
         }));
+        const truncated = conn?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource(
           "labels",
           sanitizeName(args.project),
@@ -1236,15 +1384,17 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        await client.post(args.project, "/labels", {
-          name: args.name,
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, LABEL_CREATE_MUTATION, {
+          projectPath: args.project,
+          title: args.name,
           color: args.color,
-          description: args.description,
+          description: args.description || undefined,
         });
+        const result = data.labelCreate;
+        if (result.errors?.length) {
+          throw new Error(`labelCreate failed: ${result.errors.join("; ")}`);
+        }
         ctx.logger.info("Created label {name} in {project}", {
           name: args.name,
           project: args.project,
@@ -1257,20 +1407,18 @@ export const model = {
       description: "List members of a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
-        const { data, truncated } = await client.getProjectList(
-          args.project,
-          "/members/all",
-          { per_page: "100" },
-        );
-        const members = (data as any[]).map((raw: any) => ({
-          username: raw.username ?? "",
-          name: raw.name ?? "",
-          accessLevel: raw.access_level ?? 0,
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, MEMBERS_QUERY, {
+          fullPath: args.project,
+          first: 100,
+        });
+        const conn = data.project?.projectMembers;
+        const members = (conn?.nodes ?? []).map((n: any) => ({
+          username: n.user?.username ?? "",
+          name: n.user?.name ?? "",
+          accessLevel: n.accessLevel?.integerValue ?? 0,
         }));
+        const truncated = conn?.pageInfo?.hasNextPage ?? false;
         const handle = await ctx.writeResource(
           "members",
           sanitizeName(args.project),
@@ -1294,6 +1442,7 @@ export const model = {
       description: "List branches for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
+        // REST fallback: GitLab GraphQL does not expose repository branch listing
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
