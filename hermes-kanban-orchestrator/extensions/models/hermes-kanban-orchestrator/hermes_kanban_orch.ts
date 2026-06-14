@@ -259,10 +259,10 @@ async function listRecent(
     tasks = Array.isArray(parsed)
       ? parsed
       : Array.isArray(parsed.tasks)
-        ? parsed.tasks
-        : Array.isArray(parsed.results)
-          ? parsed.results
-          : [];
+      ? parsed.tasks
+      : Array.isArray(parsed.results)
+      ? parsed.results
+      : [];
   } catch {
     ctx.logger.warn("Could not parse kanban list output");
   }

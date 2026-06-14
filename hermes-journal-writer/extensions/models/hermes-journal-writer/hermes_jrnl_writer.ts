@@ -16,7 +16,9 @@ const GlobalArgsSchema = z.object({
   jrnlSubdir: z.string().default("journal")
     .describe("Subdirectory under orgDir for journal entries"),
   swampBin: z.string().default("swamp")
-    .describe("Path to the swamp binary (must be on PATH or specify full path)"),
+    .describe(
+      "Path to the swamp binary (must be on PATH or specify full path)",
+    ),
   repoDir: z.string().default(".")
     .describe("Path to the swamp repo directory"),
   gitUserName: z.string().default("Hermes Research Bot")
