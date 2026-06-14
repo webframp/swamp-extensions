@@ -445,7 +445,7 @@ export const model = {
     write_daily_entry: {
       description:
         "Write a daily research journal entry to the org repo with commit/push.",
-      arguments: z.object({}).strict(),
+      arguments: z.object({}),
       execute: writeDailyEntry,
     },
   },
