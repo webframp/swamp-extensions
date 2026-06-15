@@ -1,0 +1,35 @@
+manifestVersion: 1
+name: '@webframp/research-collector'
+version: '2026.06.14.1'
+description: |
+  Research data collector — gathers intelligence from Hacker News, Lobste.rs,
+  SRE Weekly, IFIN Discourse, and RedMonk for daily AI/tech intelligence
+  briefings. Produces typed resources for downstream workflows.
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/research-collector research-collector
+
+  # Gather all sources
+  swamp model method run research-collector gather
+  ```
+
+  ## Methods
+
+  - **gather** — Gather data from HN front page, Lobste.rs hottest, SRE Weekly,
+    IFIN Discourse security topics, and RedMonk analysis.
+repository: 'https://github.com/webframp/swamp-extensions'
+models:
+  - research-collector/research_collector.ts
+labels:
+  - research
+  - news
+  - intelligence
+  - briefing
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
