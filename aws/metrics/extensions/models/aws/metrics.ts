@@ -10,7 +10,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 import {
   CloudWatchClient,
   type Datapoint,
@@ -18,7 +18,7 @@ import {
   GetMetricDataCommand,
   GetMetricStatisticsCommand,
   ListMetricsCommand,
-} from "npm:@aws-sdk/client-cloudwatch@3.1010.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1069.0";
 
 /** Local type for SDK dimension responses where Name and Value are optional in list responses. */
 interface AwsDimension {

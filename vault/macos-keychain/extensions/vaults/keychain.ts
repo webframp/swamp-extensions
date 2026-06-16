@@ -8,7 +8,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 
 /** The shape returned by {@linkcode vault.createProvider}. */
 export interface KeychainVaultProvider {

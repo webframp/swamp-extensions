@@ -2,7 +2,7 @@
 // Guides new users through mapping their domain onto swamp primitives.
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 
 // =============================================================================
 // Schemas
@@ -396,7 +396,7 @@ Each generated file includes TODO comments marking where the user adds real logi
           `// ${extName} Model`,
           "// SPDX-License-Identifier: Apache-2.0",
           "",
-          'import { z } from "npm:zod@4.3.6";',
+          'import { z } from "npm:zod@4.4.3";',
           "",
           "const GlobalArgsSchema = z.object({",
           "  // TODO: add global arguments from design",

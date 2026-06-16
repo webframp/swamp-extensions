@@ -2,7 +2,7 @@
 // ABOUTME: instance. Requires POSTGRES_TEST_URL env var. Tests concurrency and transactions.
 
 import { assertEquals, assertRejects } from "@std/assert";
-import postgres from "npm:postgres@3.4.7";
+import postgres from "npm:postgres@3.4.9";
 import { createSyncService } from "./sync.ts";
 import { datastore } from "./mod.ts";
 

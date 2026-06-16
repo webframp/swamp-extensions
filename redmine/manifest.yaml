@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/redmine"
-version: "2026.04.30.2"
+version: "2026.06.15.1"
 description: |
   Redmine issue tracker integration — workflow-agnostic CRUD model.
 

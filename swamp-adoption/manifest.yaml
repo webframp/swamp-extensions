@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/swamp-adoption"
-version: "2026.06.05.1"
+version: "2026.06.15.1"
 description: |
   Guides new users through mapping their domain onto swamp primitives.
   Conducts structured discovery interviews, produces versioned extension

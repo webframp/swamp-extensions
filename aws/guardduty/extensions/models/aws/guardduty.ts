@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 import {
   type Condition,
   type Finding,
@@ -19,7 +19,7 @@ import {
   ListFindingsCommand,
   ListMembersCommand,
   type Member,
-} from "npm:@aws-sdk/client-guardduty@3.1010.0";
+} from "npm:@aws-sdk/client-guardduty@3.1069.0";
 
 // =============================================================================
 // Schemas

@@ -6,9 +6,11 @@
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@systeminit/swamp-testing@0.20260504.10": "0.20260504.10",
     "npm:postgres@3.4.7": "3.4.7",
-    "npm:zod@4": "4.3.6",
+    "npm:postgres@3.4.9": "3.4.9",
+    "npm:zod@4": "4.4.3",
     "npm:zod@4.3.6": "4.3.6",
-    "npm:zod@^4.3.6": "4.3.6"
+    "npm:zod@4.4.3": "4.4.3",
+    "npm:zod@^4.3.6": "4.4.3"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -32,8 +34,14 @@
     "postgres@3.4.7": {
       "integrity": "sha512-Jtc2612XINuBjIl/QTWsV5UvE8UHuNblcO3vVADSrKsrc6RqGX6lOW1cEo3CM2v0XG4Nat8nI+YM7/f26VxXLw=="
     },
+    "postgres@3.4.9": {
+      "integrity": "sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw=="
+    },
     "zod@4.3.6": {
       "integrity": "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="
+    },
+    "zod@4.4.3": {
+      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
     }
   },
   "workspace": {

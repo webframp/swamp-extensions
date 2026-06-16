@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: '@webframp/research-collector'
-version: '2026.06.14.1'
+version: '2026.06.15.1'
 description: |
   Research data collector — gathers intelligence from Hacker News, Lobste.rs,
   SRE Weekly, IFIN Discourse, and RedMonk for daily AI/tech intelligence

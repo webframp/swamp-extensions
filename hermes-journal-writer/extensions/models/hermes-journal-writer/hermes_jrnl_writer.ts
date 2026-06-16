@@ -8,7 +8,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 
 const GlobalArgsSchema = z.object({
   orgDir: z.string().default("~/org")

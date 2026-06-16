@@ -2,7 +2,7 @@
 // Guides teams through applying Domain-Driven Design to an existing project.
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 
 // =============================================================================
 // Schemas

@@ -10,38 +10,38 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 import {
   DescribeDBInstancesCommand,
   RDSClient,
-} from "npm:@aws-sdk/client-rds@3.1010.0";
+} from "npm:@aws-sdk/client-rds@3.1069.0";
 import {
   DescribeInstancesCommand,
   DescribeVolumesCommand,
   EC2Client,
-} from "npm:@aws-sdk/client-ec2@3.1010.0";
+} from "npm:@aws-sdk/client-ec2@3.1069.0";
 import {
   DescribeTableCommand,
   DynamoDBClient,
   ListTablesCommand,
-} from "npm:@aws-sdk/client-dynamodb@3.1010.0";
+} from "npm:@aws-sdk/client-dynamodb@3.1069.0";
 import {
   LambdaClient,
   ListFunctionsCommand,
-} from "npm:@aws-sdk/client-lambda@3.1010.0";
-import { ListBucketsCommand, S3Client } from "npm:@aws-sdk/client-s3@3.1010.0";
+} from "npm:@aws-sdk/client-lambda@3.1069.0";
+import { ListBucketsCommand, S3Client } from "npm:@aws-sdk/client-s3@3.1069.0";
 import {
   ConfigServiceClient,
   SelectResourceConfigCommand,
-} from "npm:@aws-sdk/client-config-service@3.1010.0";
+} from "npm:@aws-sdk/client-config-service@3.1069.0";
 import {
   ResourceExplorer2Client,
   SearchCommand as RESearchCommand,
-} from "npm:@aws-sdk/client-resource-explorer-2@3.1010.0";
+} from "npm:@aws-sdk/client-resource-explorer-2@3.1069.0";
 import {
   GetResourcesCommand,
   ResourceGroupsTaggingAPIClient,
-} from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1010.0";
+} from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1069.0";
 
 const MAX_PAGES = 10;
 

@@ -3,7 +3,7 @@
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { GuardDutyClient } from "npm:@aws-sdk/client-guardduty@3.1010.0";
+import { GuardDutyClient } from "npm:@aws-sdk/client-guardduty@3.1069.0";
 import { model } from "./guardduty.ts";
 
 // =============================================================================

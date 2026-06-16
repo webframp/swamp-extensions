@@ -1,7 +1,7 @@
 // ABOUTME: PostgreSQL sync service — transaction-wrapped push with batched inserts,
 // ABOUTME: team-safe watermarking via sync_state table, retry on transient errors.
 
-import type postgres from "npm:postgres@3.4.7";
+import type postgres from "npm:postgres@3.4.9";
 import { Sidecar } from "./sidecar.ts";
 import { retryable } from "./_lib/retry.ts";
 import { tracerFromEnv } from "./_lib/trace.ts";

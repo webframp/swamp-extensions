@@ -8,7 +8,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.3.6";
+import { z } from "npm:zod@4.4.3";
 
 const GlobalArgsSchema = z.object({
   hnCount: z.number().int().min(5).max(50).default(20)

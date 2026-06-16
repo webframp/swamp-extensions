@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.4.3";
 
 const GlobalArgsSchema = z.object({
   region: z

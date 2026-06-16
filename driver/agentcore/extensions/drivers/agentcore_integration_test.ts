@@ -20,7 +20,7 @@ const PROFILE = Deno.env.get("AWS_PROFILE");
 const SKIP = !RUNTIME_ARN || !S3_BUCKET;
 
 const NOOP_BUNDLE = new TextEncoder().encode(`
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.4.3";
 export const model = {
   type: "@test/integration-probe",
   version: "2026.06.11.1",
