@@ -70,12 +70,31 @@ Deno.test("dns model: create method has correct arguments schema", () => {
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------
 
+type CapturedCfRequest = {
+  method: string;
+  path: string;
+  body?: Record<string, unknown>;
+};
+
 function startMockCfServer(
   responses: Record<string, unknown>,
-): { url: string; server: Deno.HttpServer } {
-  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+): {
+  url: string;
+  server: Deno.HttpServer;
+  requests: CapturedCfRequest[];
+} {
+  const requests: CapturedCfRequest[] = [];
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+    const bodyText = await req.text();
+    requests.push({
+      method: req.method,
+      path,
+      body: bodyText
+        ? JSON.parse(bodyText) as Record<string, unknown>
+        : undefined,
+    });
 
     // Match against expected paths
     for (const [pattern, result] of Object.entries(responses)) {
@@ -106,7 +125,7 @@ function startMockCfServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return { url: `http://localhost:${addr.port}`, server, requests };
 }
 
 /** Install fetch mock that redirects Cloudflare API calls to local server */
@@ -254,7 +273,7 @@ Deno.test({
       modified_on: "2024-01-03T00:00:00Z",
     };
 
-    const { url, server } = startMockCfServer({
+    const { url, server, requests } = startMockCfServer({
       "/dns_records": mockRecord,
     });
     const uninstall = installFetchMock(url);
@@ -287,6 +306,161 @@ Deno.test({
 
       const data = resources[0].data as typeof mockRecord;
       assertEquals(data.content, "192.0.2.10");
+      assertEquals(requests[0].body?.proxied, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "dns model: create omits proxied for TXT records",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockRecord = {
+      id: "rec-txt",
+      zone_id: "zone-1",
+      zone_name: "example.com",
+      name: "_verify.example.com",
+      type: "TXT",
+      content: "verification-token",
+      proxiable: false,
+      proxied: false,
+      ttl: 300,
+      locked: false,
+      created_on: "2024-01-03T00:00:00Z",
+      modified_on: "2024-01-03T00:00:00Z",
+    };
+
+    const { url, server, requests } = startMockCfServer({
+      "/dns_records": mockRecord,
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { apiToken: "test-token", zoneId: "zone-1" },
+        definition: { id: "test-id", name: "test-dns", version: 1, tags: {} },
+      });
+
+      await model.methods.create.execute(
+        {
+          type: "TXT",
+          name: "_verify",
+          content: "verification-token",
+          ttl: 300,
+          proxied: false,
+        },
+        context as unknown as Parameters<
+          typeof model.methods.create.execute
+        >[1],
+      );
+
+      assertEquals(Object.hasOwn(requests[0].body ?? {}, "proxied"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "dns model: create accepts Cloudflare response without zone metadata",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockRecord = {
+      id: "rec-minimal",
+      name: "minimal.example.com",
+      type: "A",
+      content: "192.0.2.20",
+      proxiable: true,
+      proxied: false,
+      ttl: 60,
+      created_on: "2024-01-03T00:00:00Z",
+      modified_on: "2024-01-03T00:00:00Z",
+    };
+
+    const { url, server } = startMockCfServer({
+      "/dns_records": mockRecord,
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { apiToken: "test-token", zoneId: "zone-1" },
+        definition: { id: "test-id", name: "test-dns", version: 1, tags: {} },
+      });
+
+      const result = await model.methods.create.execute(
+        {
+          type: "A",
+          name: "minimal",
+          content: "192.0.2.20",
+          ttl: 60,
+          proxied: false,
+        },
+        context as unknown as Parameters<
+          typeof model.methods.create.execute
+        >[1],
+      );
+
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources[0].name, "rec-minimal");
+      assertEquals(resources[0].data, mockRecord);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "dns model: update omits proxied for TXT records",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockRecord = {
+      id: "rec-txt",
+      zone_id: "zone-1",
+      zone_name: "example.com",
+      name: "_verify.example.com",
+      type: "TXT",
+      content: "updated-verification-token",
+      proxiable: false,
+      proxied: false,
+      ttl: 300,
+      locked: false,
+      created_on: "2024-01-03T00:00:00Z",
+      modified_on: "2024-01-04T00:00:00Z",
+    };
+
+    const { url, server, requests } = startMockCfServer({
+      "/dns_records/rec-txt": mockRecord,
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { apiToken: "test-token", zoneId: "zone-1" },
+        definition: { id: "test-id", name: "test-dns", version: 1, tags: {} },
+      });
+
+      await model.methods.update.execute(
+        {
+          recordId: "rec-txt",
+          type: "TXT",
+          name: "_verify",
+          content: "updated-verification-token",
+          ttl: 300,
+          proxied: false,
+        },
+        context as unknown as Parameters<
+          typeof model.methods.update.execute
+        >[1],
+      );
+
+      assertEquals(Object.hasOwn(requests[0].body ?? {}, "proxied"), false);
     } finally {
       uninstall();
       await server.shutdown();
