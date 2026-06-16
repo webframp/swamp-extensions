@@ -165,19 +165,10 @@ CI auto-publishes when `manifest.yaml` changes land on main and CI passes. The p
 
 ## Swamp Skills
 
-These swamp skills are available for guidance when working on extensions (invoke via the Skill tool):
+Two skills are available for guidance when working on extensions:
 
-- `swamp-extension` - Create TypeScript extensions (models, vaults, drivers, datastores, reports)
-- `swamp-extension-publish` - Publish extensions to the registry with verification gates
-- `swamp-model` - Work with swamp models (creating instances, running methods)
-- `swamp-workflow` - Define and run workflows
-- `swamp-report` - Create and run reports
-- `swamp-data` - Manage model data lifecycle with CEL expressions
-- `swamp-vault` - Manage secret storage
-- `swamp-repo` - Repository setup, init, and upgrade
-- `swamp-issue` - Issue tracking and feedback
-- `swamp-troubleshooting` - Diagnose swamp problems through diagnostic tiers
-- `swamp-getting-started` - Interactive onboarding walkthrough for new users
+- `swamp` — Unified skill covering the full CLI: models, workflows, data, vaults, extensions, publishing, repos, reports, issues, and troubleshooting. Contains a routing table that dispatches to sub-guides by topic (e.g., `references/model/guide.md`, `references/extension/guide.md`, `references/workflow/guide.md`). Load the skill, then follow the routing table to the relevant guide.
+- `swamp-getting-started` — Interactive onboarding walkthrough for new swamp users (state-machine checklist with verification at each step).
 
 ## Project Skills
 
