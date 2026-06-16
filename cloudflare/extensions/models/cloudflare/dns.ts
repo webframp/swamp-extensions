@@ -25,15 +25,15 @@ const GlobalArgsSchema = z.object({
 
 const DnsRecordSchema = z.object({
   id: z.string(),
-  zone_id: z.string(),
-  zone_name: z.string(),
+  zone_id: z.string().optional(),
+  zone_name: z.string().optional(),
   name: z.string(),
   type: z.string(),
   content: z.string(),
   proxiable: z.boolean(),
   proxied: z.boolean(),
   ttl: z.number(),
-  locked: z.boolean(),
+  locked: z.boolean().optional(),
   priority: z.number().optional(),
   created_on: z.string(),
   modified_on: z.string(),
@@ -46,6 +46,39 @@ const DnsRecordListSchema = z.object({
   records: z.array(DnsRecordSchema),
   fetchedAt: z.string(),
 });
+
+const PROXYABLE_RECORD_TYPES = new Set(["A", "AAAA", "CNAME"]);
+
+type DnsRecordMutationArgs = {
+  type: string;
+  name: string;
+  content: string;
+  ttl: number;
+  proxied: boolean;
+  priority?: number;
+  comment?: string;
+};
+
+function isProxyableRecordType(type: string): boolean {
+  return PROXYABLE_RECORD_TYPES.has(type);
+}
+
+function buildDnsRecordPayload(
+  args: DnsRecordMutationArgs,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    type: args.type,
+    name: args.name,
+    content: args.content,
+    ttl: args.ttl,
+  };
+
+  if (isProxyableRecordType(args.type)) body.proxied = args.proxied;
+  if (args.priority !== undefined) body.priority = args.priority;
+  if (args.comment) body.comment = args.comment;
+
+  return body;
+}
 
 // =============================================================================
 // Model Definition
@@ -225,15 +258,7 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {
-          type: args.type,
-          name: args.name,
-          content: args.content,
-          ttl: args.ttl,
-          proxied: args.proxied,
-        };
-        if (args.priority !== undefined) body.priority = args.priority;
-        if (args.comment) body.comment = args.comment;
+        const body = buildDnsRecordPayload(args);
 
         const record = await cfApi<z.infer<typeof DnsRecordSchema>>(
           apiToken,
@@ -300,15 +325,7 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {
-          type: args.type,
-          name: args.name,
-          content: args.content,
-          ttl: args.ttl,
-          proxied: args.proxied,
-        };
-        if (args.priority !== undefined) body.priority = args.priority;
-        if (args.comment) body.comment = args.comment;
+        const body = buildDnsRecordPayload(args);
 
         const record = await cfApi<z.infer<typeof DnsRecordSchema>>(
           apiToken,
