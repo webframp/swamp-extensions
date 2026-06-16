@@ -175,3 +175,5 @@ Two skills are available for guidance when working on extensions:
 Project-level skills in `skills/` at the repo root:
 
 - `skills/pr-workflow.md` - End-to-end PR workflow: branch, develop, push, respond to adversarial review, iterate until CI passes, merge
+- `skills/update-stale-deps.md` - Fix stale swamp extension dependency pins in workflow manifests
+- `skills/bump-npm-deps.md` - Audit and upgrade npm dependencies (AWS SDK, zod, postgres) across all extensions
