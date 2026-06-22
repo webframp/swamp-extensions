@@ -198,7 +198,7 @@ type MethodContext = {
 /** JFrog Artifactory model for package management and health monitoring. */
 export const model = {
   type: "@webframp/artifactory",
-  version: "2026.06.02.1",
+  version: "2026.06.15.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

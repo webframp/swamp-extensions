@@ -190,7 +190,7 @@ async function waitForQueryCompletion(
  */
 export const model = {
   type: "@webframp/aws/logs",
-  version: "2026.03.30.1",
+  version: "2026.06.15.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

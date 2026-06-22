@@ -71,7 +71,7 @@ const AnalyticsSchema = z.object({
 /** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
-  version: "2026.03.28.1",
+  version: "2026.06.16.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

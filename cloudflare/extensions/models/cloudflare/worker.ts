@@ -63,7 +63,7 @@ const WorkerDeploymentSchema = z.object({
 /** Cloudflare Workers model definition with methods for script lifecycle, route management, and subdomain toggling. */
 export const model = {
   type: "@webframp/cloudflare/worker",
-  version: "2026.03.28.1",
+  version: "2026.06.16.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
