@@ -145,7 +145,7 @@ type MethodContext = {
 /** DDD guidance model — bounded context discovery, ubiquitous language capture, aggregate boundary design. */
 export const model = {
   type: "@webframp/ddd-guidance",
-  version: "2026.06.21.1",
+  version: "2026.06.22.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

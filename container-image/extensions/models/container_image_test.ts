@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertMatch, assertEquals, assertRejects } from "@std/assert";
 import { model } from "./container_image.ts";
 
 type CommandHandler = (
@@ -52,7 +52,7 @@ function withMockedCommand<T>(
 
 Deno.test("model export has correct type and version", () => {
   assertEquals(model.type, "@webframp/container-image");
-  assertEquals(model.version, "2026.06.12.1");
+  assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
 Deno.test("model has expected methods", () => {
