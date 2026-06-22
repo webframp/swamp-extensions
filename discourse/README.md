@@ -1,8 +1,8 @@
 # @webframp/discourse
 
-Query Discourse forums via the public REST API. List categories, browse
-topics, read full posts, and search by keyword. Works with any Discourse
-instance. Optional API key for private forums.
+Query Discourse forums via the public REST API. List categories, browse topics,
+read full posts, and search by keyword. Works with any Discourse instance.
+Optional API key for private forums.
 
 ## Installation
 
@@ -26,22 +26,22 @@ globalArguments:
 
 ## Methods
 
-| Method | Description | Inputs |
-|--------|-------------|--------|
-| `list_categories` | List all categories with topic counts | — |
-| `list_latest` | Latest topics across all categories | `page?` |
-| `list_category_topics` | Topics in a specific category | `slug`, `categoryId`, `page?` |
-| `get_topic` | Full topic with all posts | `topicId` |
-| `search` | Search topics by keyword | `query`, `page?` |
+| Method                 | Description                           | Inputs                        |
+| ---------------------- | ------------------------------------- | ----------------------------- |
+| `list_categories`      | List all categories with topic counts | —                             |
+| `list_latest`          | Latest topics across all categories   | `page?`                       |
+| `list_category_topics` | Topics in a specific category         | `slug`, `categoryId`, `page?` |
+| `get_topic`            | Full topic with all posts             | `topicId`                     |
+| `search`               | Search topics by keyword              | `query`, `page?`              |
 
 ## Resources
 
-| Resource | Description | Lifetime |
-|----------|-------------|----------|
-| `categories` | Category listing | 1h, 3 versions |
-| `topics` | Topic listings (latest or by category) | 30m, 5 versions |
-| `topicDetail` | Full topic with posts | 1h, 5 versions |
-| `searchResults` | Search results | 30m, 5 versions |
+| Resource        | Description                            | Lifetime        |
+| --------------- | -------------------------------------- | --------------- |
+| `categories`    | Category listing                       | 1h, 3 versions  |
+| `topics`        | Topic listings (latest or by category) | 30m, 5 versions |
+| `topicDetail`   | Full topic with posts                  | 1h, 5 versions  |
+| `searchResults` | Search results                         | 30m, 5 versions |
 
 ## Examples
 

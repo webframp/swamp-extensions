@@ -40,8 +40,8 @@ swamp model method run adoption discover
 
 ### Design an extension
 
-After discovery, `design` helps you shape a swamp extension for the
-highest-pain system:
+After discovery, `design` helps you shape a swamp extension for the highest-pain
+system:
 
 ```bash
 swamp model method run adoption design
@@ -59,8 +59,8 @@ swamp model method run adoption scaffold --arg outputFormat=stdout
 
 ### Get next suggestion
 
-After building your first extension, `next` recommends what to tackle next
-based on remaining pain in your landscape:
+After building your first extension, `next` recommends what to tackle next based
+on remaining pain in your landscape:
 
 ```bash
 swamp model method run adoption next
@@ -68,20 +68,20 @@ swamp model method run adoption next
 
 ## Methods
 
-| Method | Description |
-|--------|-------------|
+| Method     | Description                                                       |
+| ---------- | ----------------------------------------------------------------- |
 | `discover` | Structured interview to map systems, interactions, and data flows |
-| `design` | Shape an extension design from landscape analysis |
-| `scaffold` | Generate implementation files from a design |
-| `next` | Suggest the next extension to build based on remaining pain |
+| `design`   | Shape an extension design from landscape analysis                 |
+| `scaffold` | Generate implementation files from a design                       |
+| `next`     | Suggest the next extension to build based on remaining pain       |
 
 ## Resources
 
-| Resource | Lifetime | Description |
-|----------|----------|-------------|
-| `landscape` | infinite | Discovered system landscape from domain interviews |
+| Resource          | Lifetime | Description                                        |
+| ----------------- | -------- | -------------------------------------------------- |
+| `landscape`       | infinite | Discovered system landscape from domain interviews |
 | `extensionDesign` | infinite | Versioned extension design produced from landscape |
-| `scaffold` | 24h | Generated file scaffold (ephemeral) |
+| `scaffold`        | 24h      | Generated file scaffold (ephemeral)                |
 
 ## License
 

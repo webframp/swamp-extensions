@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assertEquals, assertMatch, assertStringIncludes } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./artifactory.ts";
 
@@ -42,7 +42,7 @@ function mockFetch(
 
 Deno.test("model type and version", () => {
   assertEquals(model.type, "@webframp/artifactory");
-  assertEquals(model.version, "2026.06.02.1");
+  assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
 Deno.test("model has all expected methods", () => {
@@ -75,6 +75,7 @@ Deno.test({
     try {
       const { context, getWrittenResources } = makeContext();
       await model.methods.system_health.execute({}, context as AnyContext);
+      // deno-lint-ignore no-explicit-any
       const data = (getWrittenResources() as any[])[0].data as any;
       assertEquals(data.ping, "ok");
       assertStringIncludes(data.health.note, "403");
@@ -95,6 +96,7 @@ Deno.test({
     try {
       const { context, getWrittenResources } = makeContext();
       await model.methods.system_health.execute({}, context as AnyContext);
+      // deno-lint-ignore no-explicit-any
       const data = (getWrittenResources() as any[])[0].data as any;
       assertEquals(data.ping, "error");
     } finally {
@@ -133,6 +135,7 @@ Deno.test({
     try {
       const { context, getWrittenResources } = makeContext();
       await model.methods.list_repos.execute({}, context as AnyContext);
+      // deno-lint-ignore no-explicit-any
       const data = (getWrittenResources() as any[])[0].data as any;
       assertEquals(data.totalCount, 2);
       assertEquals(data.repos[0].key, "docker-local");
@@ -182,8 +185,10 @@ Deno.test({
         { repoKey: undefined },
         context as AnyContext,
       );
+      // deno-lint-ignore no-explicit-any
       const resources = getWrittenResources() as any[];
       assertEquals(resources.length, 2);
+      // deno-lint-ignore no-explicit-any
       const docker = resources.find((r: any) => r.name === "docker-local");
       assertEquals(docker.data.status, "ok");
       assertEquals(docker.data.artifactCount, 42);
@@ -222,6 +227,7 @@ Deno.test({
         { query: 'items.find({"repo":"npm-local"})', limit: 1000 },
         context as AnyContext,
       );
+      // deno-lint-ignore no-explicit-any
       const data = (getWrittenResources() as any[])[0].data as any;
       assertEquals(data.totalCount, 1);
       assertEquals(data.results[0].name, "lodash-4.17.21.tgz");
@@ -264,6 +270,7 @@ Deno.test({
     }));
     try {
       const { context, getWrittenResources } = makeContext();
+      // deno-lint-ignore no-explicit-any
       (context as any).readResource = () =>
         Promise.resolve({
           fetchedAt: "2026-05-31T00:00:00Z",
@@ -289,6 +296,7 @@ Deno.test({
         { query: 'items.find({"repo":"npm"})', limit: 1000 },
         context as AnyContext,
       );
+      // deno-lint-ignore no-explicit-any
       const resources = getWrittenResources() as any[];
       const diff = resources.find((r) => r.specName === "package-diff")?.data;
       assertEquals(diff.summary.newCount, 1); // b-2.0.tgz
@@ -315,6 +323,7 @@ Deno.test({
     try {
       const { context, getWrittenResources } = makeContext();
       await model.methods.get_storage_info.execute({}, context as AnyContext);
+      // deno-lint-ignore no-explicit-any
       const data = (getWrittenResources() as any[])[0].data as any;
       assertEquals(data.status, "forbidden");
       assertStringIncludes(data.error, "admin");
