@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/discourse"
-version: "2026.06.21.1"
+version: "2026.06.22.1"
 description: |
   Query Discourse forums via the public REST API. List categories, browse
   topics, read full posts, and search. Supports optional API key for

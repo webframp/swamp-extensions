@@ -53,7 +53,11 @@ Deno.test({
   fn: async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (input: string | URL | Request) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? "" : input.url;
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+        ? ""
+        : input.url;
       if (url.includes("hacker-news.firebaseio.com/v0/topstories.json")) {
         return Promise.resolve(
           new Response(JSON.stringify([1, 2, 3, 4, 5, 6])),
@@ -63,8 +67,14 @@ Deno.test({
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              id: 1, title: "Test Story", url: "https://example.com",
-              score: 100, by: "test", time: 1000000, descendants: 5, type: "story",
+              id: 1,
+              title: "Test Story",
+              url: "https://example.com",
+              score: 100,
+              by: "test",
+              time: 1000000,
+              descendants: 5,
+              type: "story",
             }),
           ),
         );
@@ -73,9 +83,14 @@ Deno.test({
         return Promise.resolve(
           new Response(JSON.stringify([
             {
-              short_id: "abc", title: "Lobsters Test", url: "https://example.com",
-              score: 50, comment_count: 10, tags: ["rust", "web"],
-              submitter_user: { username: "user1" }, created_at: "2026-01-01",
+              short_id: "abc",
+              title: "Lobsters Test",
+              url: "https://example.com",
+              score: 50,
+              comment_count: 10,
+              tags: ["rust", "web"],
+              submitter_user: { username: "user1" },
+              created_at: "2026-01-01",
             },
           ])),
         );
@@ -84,11 +99,11 @@ Deno.test({
         return Promise.resolve(
           new Response(
             '<?xml version="1.0"?><rss><channel><item>' +
-            "<title><![CDATA[SRE Weekly Issue #1]]></title>" +
-            "<link>https://example.com</link>" +
-            "<description><![CDATA[Test description]]></description>" +
-            "<pubDate>Mon, 01 Jan 2026 00:00:00 +0000</pubDate>" +
-            "</item></channel></rss>",
+              "<title><![CDATA[SRE Weekly Issue #1]]></title>" +
+              "<link>https://example.com</link>" +
+              "<description><![CDATA[Test description]]></description>" +
+              "<pubDate>Mon, 01 Jan 2026 00:00:00 +0000</pubDate>" +
+              "</item></channel></rss>",
           ),
         );
       }
@@ -98,11 +113,19 @@ Deno.test({
             topic_list: {
               topics: [
                 {
-                  id: 1, title: "IFIN Topic", slug: "ifin-topic",
-                  tags: ["security", "cve"], excerpt: "Test excerpt",
-                  created_at: "2026-01-01", bumped_at: "2026-01-02",
-                  posts_count: 5, views: 100, like_count: 3,
-                  last_poster_username: "user2", pinned: false, archived: false,
+                  id: 1,
+                  title: "IFIN Topic",
+                  slug: "ifin-topic",
+                  tags: ["security", "cve"],
+                  excerpt: "Test excerpt",
+                  created_at: "2026-01-01",
+                  bumped_at: "2026-01-02",
+                  posts_count: 5,
+                  views: 100,
+                  like_count: 3,
+                  last_poster_username: "user2",
+                  pinned: false,
+                  archived: false,
                 },
               ],
             },
@@ -113,12 +136,12 @@ Deno.test({
         return Promise.resolve(
           new Response(
             '<?xml version="1.0"?><rss><channel><item>' +
-            "<title><![CDATA[RedMonk Post]]></title>" +
-            "<link>https://redmonk.com/post</link>" +
-            "<description><![CDATA[Analysis]]></description>" +
-            "<pubDate>Tue, 01 Jan 2026 00:00:00 +0000</pubDate>" +
-            "<dc:creator><![CDATA[Analyst]]></dc:creator>" +
-            "</item></channel></rss>",
+              "<title><![CDATA[RedMonk Post]]></title>" +
+              "<link>https://redmonk.com/post</link>" +
+              "<description><![CDATA[Analysis]]></description>" +
+              "<pubDate>Tue, 01 Jan 2026 00:00:00 +0000</pubDate>" +
+              "<dc:creator><![CDATA[Analyst]]></dc:creator>" +
+              "</item></channel></rss>",
           ),
         );
       }
@@ -126,13 +149,13 @@ Deno.test({
         return Promise.resolve(
           new Response(
             '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">' +
-            '<entry><id>http://arxiv.org/abs/2601.00001v1</id>' +
-            "<title>Test Paper</title><summary>A test paper</summary>" +
-            "<published>2026-01-01</published>" +
-            "<updated>2026-01-02</updated>" +
-            '<category term="cs.AI"/>' +
-            "<author><name>Author Name</name></author>" +
-            "</entry></feed>",
+              "<entry><id>http://arxiv.org/abs/2601.00001v1</id>" +
+              "<title>Test Paper</title><summary>A test paper</summary>" +
+              "<published>2026-01-01</published>" +
+              "<updated>2026-01-02</updated>" +
+              '<category term="cs.AI"/>' +
+              "<author><name>Author Name</name></author>" +
+              "</entry></feed>",
           ),
         );
       }
@@ -143,13 +166,18 @@ Deno.test({
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
         definition: {
-          id: "test-id", name: "test-collector", version: 1, tags: {},
+          id: "test-id",
+          name: "test-collector",
+          version: 1,
+          tags: {},
         },
       });
 
       const result = await model.methods.gather.execute(
         {},
-        context as unknown as Parameters<typeof model.methods.gather.execute>[1],
+        context as unknown as Parameters<
+          typeof model.methods.gather.execute
+        >[1],
       );
 
       assertEquals(result.dataHandles.length, 1);
@@ -162,15 +190,11 @@ Deno.test({
 
       assertEquals(stories.length, 5);
       assertEquals(
-        (data.sreWeekly as Record<string, unknown>).items
-          ? true
-          : false,
+        (data.sreWeekly as Record<string, unknown>).items ? true : false,
         true,
       );
       assertEquals(
-        (data.ifin as Record<string, unknown>).topics
-          ? true
-          : false,
+        (data.ifin as Record<string, unknown>).topics ? true : false,
         true,
       );
     } finally {
@@ -190,7 +214,11 @@ Deno.test({
     const originalFetch = globalThis.fetch;
     let lobstersCalled = false;
     globalThis.fetch = (input: string | URL | Request) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? "" : input.url;
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+        ? ""
+        : input.url;
       if (url.includes("hacker-news.firebaseio.com/v0/topstories.json")) {
         return Promise.resolve(new Response(JSON.stringify([1, 2])));
       }
@@ -198,8 +226,14 @@ Deno.test({
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              id: 1, title: "Test", url: "https://example.com",
-              score: 10, by: "t", time: 1000000, descendants: 0, type: "story",
+              id: 1,
+              title: "Test",
+              url: "https://example.com",
+              score: 10,
+              by: "t",
+              time: 1000000,
+              descendants: 0,
+              type: "story",
             }),
           ),
         );
@@ -216,7 +250,9 @@ Deno.test({
         );
       }
       if (url.includes("discourse.ifin.network")) {
-        return Promise.resolve(new Response(JSON.stringify({ topic_list: { topics: [] } })));
+        return Promise.resolve(
+          new Response(JSON.stringify({ topic_list: { topics: [] } })),
+        );
       }
       if (url.includes("redmonk.com")) {
         return Promise.resolve(
@@ -234,12 +270,19 @@ Deno.test({
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-collector",
+          version: 1,
+          tags: {},
+        },
       });
 
       const result = await model.methods.gather.execute(
         {},
-        context as unknown as Parameters<typeof model.methods.gather.execute>[1],
+        context as unknown as Parameters<
+          typeof model.methods.gather.execute
+        >[1],
       );
 
       assertEquals(result.dataHandles.length, 1);
@@ -272,12 +315,19 @@ Deno.test({
     try {
       const { context } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-collector",
+          version: 1,
+          tags: {},
+        },
       });
 
       const result = await model.methods.gather.execute(
         {},
-        context as unknown as Parameters<typeof model.methods.gather.execute>[1],
+        context as unknown as Parameters<
+          typeof model.methods.gather.execute
+        >[1],
       );
 
       assertEquals(result.dataHandles.length, 1);
@@ -297,37 +347,64 @@ Deno.test({
   fn: async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (input: string | URL | Request) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? "" : input.url;
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+        ? ""
+        : input.url;
       if (url.includes("sreweekly.com")) {
         return Promise.resolve(
           new Response(
             '<?xml version="1.0"?><rss><channel>' +
-            "<item><title><![CDATA[SRE Weekly Issue #200]]></title>" +
-            "<link>https://sreweekly.com/200</link>" +
-            "<description><![CDATA[Test CDATA description]]></description>" +
-            "<pubDate>Mon, 01 Jun 2026 00:00:00 +0000</pubDate></item>" +
-            "</channel></rss>",
+              "<item><title><![CDATA[SRE Weekly Issue #200]]></title>" +
+              "<link>https://sreweekly.com/200</link>" +
+              "<description><![CDATA[Test CDATA description]]></description>" +
+              "<pubDate>Mon, 01 Jun 2026 00:00:00 +0000</pubDate></item>" +
+              "</channel></rss>",
           ),
         );
       }
       // Return empty for all other sources
-      if (url.includes("hacker-news")) return Promise.resolve(new Response(JSON.stringify([])));
-      if (url.includes("lobste.rs")) return Promise.resolve(new Response(JSON.stringify([])));
-      if (url.includes("discourse")) return Promise.resolve(new Response(JSON.stringify({ topic_list: { topics: [] } })));
-      if (url.includes("redmonk.com")) return Promise.resolve(new Response('<?xml version="1.0"?><rss><channel></channel></rss>'));
-      if (url.includes("arxiv")) return Promise.resolve(new Response('<?xml version="1.0"?><feed></feed>'));
+      if (url.includes("hacker-news")) {
+        return Promise.resolve(new Response(JSON.stringify([])));
+      }
+      if (url.includes("lobste.rs")) {
+        return Promise.resolve(new Response(JSON.stringify([])));
+      }
+      if (url.includes("discourse")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ topic_list: { topics: [] } })),
+        );
+      }
+      if (url.includes("redmonk.com")) {
+        return Promise.resolve(
+          new Response('<?xml version="1.0"?><rss><channel></channel></rss>'),
+        );
+      }
+      if (url.includes("arxiv")) {
+        return Promise.resolve(
+          new Response('<?xml version="1.0"?><feed></feed>'),
+        );
+      }
       return Promise.resolve(new Response("", { status: 404 }));
     };
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-collector",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.gather.execute(
         {},
-        context as unknown as Parameters<typeof model.methods.gather.execute>[1],
+        context as unknown as Parameters<
+          typeof model.methods.gather.execute
+        >[1],
       );
 
       const resources = getWrittenResources();
@@ -353,42 +430,76 @@ Deno.test({
   fn: async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (input: string | URL | Request) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? "" : input.url;
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+        ? ""
+        : input.url;
       if (url.includes("discourse.ifin.network")) {
         return Promise.resolve(
           new Response(JSON.stringify({
             topic_list: {
               topics: [
                 {
-                  id: 1, title: "Test", slug: "test",
+                  id: 1,
+                  title: "Test",
+                  slug: "test",
                   tags: ["security", "cve", "malware"],
-                  excerpt: "Test", created_at: "2026-01-01",
-                  bumped_at: "2026-01-02", posts_count: 1,
-                  views: 10, like_count: 1,
-                  last_poster_username: "u", pinned: false, archived: false,
+                  excerpt: "Test",
+                  created_at: "2026-01-01",
+                  bumped_at: "2026-01-02",
+                  posts_count: 1,
+                  views: 10,
+                  like_count: 1,
+                  last_poster_username: "u",
+                  pinned: false,
+                  archived: false,
                 },
               ],
             },
           })),
         );
       }
-      if (url.includes("hacker-news")) return Promise.resolve(new Response(JSON.stringify([])));
-      if (url.includes("lobste.rs")) return Promise.resolve(new Response(JSON.stringify([])));
-      if (url.includes("sreweekly")) return Promise.resolve(new Response('<?xml version="1.0"?><rss><channel></channel></rss>'));
-      if (url.includes("redmonk")) return Promise.resolve(new Response('<?xml version="1.0"?><rss><channel></channel></rss>'));
-      if (url.includes("arxiv")) return Promise.resolve(new Response('<?xml version="1.0"?><feed></feed>'));
+      if (url.includes("hacker-news")) {
+        return Promise.resolve(new Response(JSON.stringify([])));
+      }
+      if (url.includes("lobste.rs")) {
+        return Promise.resolve(new Response(JSON.stringify([])));
+      }
+      if (url.includes("sreweekly")) {
+        return Promise.resolve(
+          new Response('<?xml version="1.0"?><rss><channel></channel></rss>'),
+        );
+      }
+      if (url.includes("redmonk")) {
+        return Promise.resolve(
+          new Response('<?xml version="1.0"?><rss><channel></channel></rss>'),
+        );
+      }
+      if (url.includes("arxiv")) {
+        return Promise.resolve(
+          new Response('<?xml version="1.0"?><feed></feed>'),
+        );
+      }
       return Promise.resolve(new Response("", { status: 404 }));
     };
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: DEFAULT_GLOBAL_ARGS,
-        definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-collector",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.gather.execute(
         {},
-        context as unknown as Parameters<typeof model.methods.gather.execute>[1],
+        context as unknown as Parameters<
+          typeof model.methods.gather.execute
+        >[1],
       );
 
       const resources = getWrittenResources();
@@ -420,13 +531,13 @@ Deno.test({
       return Promise.resolve(
         new Response(
           '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">' +
-          '<entry><id>http://arxiv.org/abs/2601.00001v2</id>' +
-          "<title>Revised Paper</title><summary>Updated</summary>" +
-          "<published>2026-01-01</published>" +
-          "<updated>2026-03-15</updated>" +
-          '<category term="cs.LG"/>' +
-          "<author><name>Author</name></author>" +
-          "</entry></feed>",
+            "<entry><id>http://arxiv.org/abs/2601.00001v2</id>" +
+            "<title>Revised Paper</title><summary>Updated</summary>" +
+            "<published>2026-01-01</published>" +
+            "<updated>2026-03-15</updated>" +
+            '<category term="cs.LG"/>' +
+            "<author><name>Author</name></author>" +
+            "</entry></feed>",
         ),
       );
     };
@@ -434,12 +545,19 @@ Deno.test({
     try {
       const { context, getWrittenResources } = createModelTestContext({
         globalArgs: { ...DEFAULT_GLOBAL_ARGS, arxivCount: 1 },
-        definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+        definition: {
+          id: "test-id",
+          name: "test-collector",
+          version: 1,
+          tags: {},
+        },
       });
 
       await model.methods.gather.execute(
         {},
-        context as unknown as Parameters<typeof model.methods.gather.execute>[1],
+        context as unknown as Parameters<
+          typeof model.methods.gather.execute
+        >[1],
       );
 
       const resources = getWrittenResources();

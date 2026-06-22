@@ -91,7 +91,10 @@ function mockFetch(
       : (input as Request).url;
     const path = new URL(url).pathname + new URL(url).search;
     for (const [key, route] of Object.entries(routes)) {
-      if (path.startsWith(key.split("?")[0]) && path.includes(key.split("?")[1] ?? "")) {
+      if (
+        path.startsWith(key.split("?")[0]) &&
+        path.includes(key.split("?")[1] ?? "")
+      ) {
         return Promise.resolve(
           new Response(JSON.stringify(route.body), {
             status: route.status,
@@ -114,8 +117,20 @@ Deno.test("list_categories fetches and stores categories", async () => {
       body: {
         category_list: {
           categories: [
-            { id: 1, name: "General", slug: "general", topic_count: 50, description_text: "General discussion" },
-            { id: 2, name: "Security", slug: "security", topic_count: 30, description_text: null },
+            {
+              id: 1,
+              name: "General",
+              slug: "general",
+              topic_count: 50,
+              description_text: "General discussion",
+            },
+            {
+              id: 2,
+              name: "Security",
+              slug: "security",
+              topic_count: 30,
+              description_text: null,
+            },
           ],
         },
       },
@@ -146,7 +161,17 @@ Deno.test("list_latest stores topics with truncated flag", async () => {
       body: {
         topic_list: {
           topics: [
-            { id: 1, title: "Test", category_id: 1, created_at: "2026-01-01T00:00:00Z", posts_count: 3, views: 10, reply_count: 2, last_posted_at: null, pinned: false },
+            {
+              id: 1,
+              title: "Test",
+              category_id: 1,
+              created_at: "2026-01-01T00:00:00Z",
+              posts_count: 3,
+              views: 10,
+              reply_count: 2,
+              last_posted_at: null,
+              pinned: false,
+            },
           ],
           more_topics_url: "/latest?page=1",
         },
@@ -178,7 +203,17 @@ Deno.test("list_category_topics fetches and stores topics for a category", async
       body: {
         topic_list: {
           topics: [
-            { id: 50, title: "New CVE", category_id: 8, created_at: "2026-01-01T00:00:00Z", posts_count: 5, views: 200, reply_count: 4, last_posted_at: "2026-01-02T00:00:00Z", pinned: false },
+            {
+              id: 50,
+              title: "New CVE",
+              category_id: 8,
+              created_at: "2026-01-01T00:00:00Z",
+              posts_count: 5,
+              views: 200,
+              reply_count: 4,
+              last_posted_at: "2026-01-02T00:00:00Z",
+              pinned: false,
+            },
           ],
           more_topics_url: null,
         },
@@ -191,15 +226,18 @@ Deno.test("list_category_topics fetches and stores topics for a category", async
   });
 
   try {
-    // deno-lint-ignore no-explicit-any
     await model.methods.list_category_topics.execute(
       { slug: "cyber-news", categoryId: 8, page: 0 },
+      // deno-lint-ignore no-explicit-any
       context as any,
     );
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
     assertEquals(resources[0].name, "category-cyber-news-8-page-0");
-    const data = resources[0].data as { topics: { title: string }[]; truncated: boolean };
+    const data = resources[0].data as {
+      topics: { title: string }[];
+      truncated: boolean;
+    };
     assertEquals(data.topics[0].title, "New CVE");
     assertEquals(data.truncated, false);
   } finally {
@@ -241,8 +279,18 @@ Deno.test("get_topic stores posts from topic", async () => {
         views: 100,
         post_stream: {
           posts: [
-            { id: 1, username: "admin", created_at: "2026-01-01T00:00:00Z", cooked: "<p>Alert content</p>" },
-            { id: 2, username: "user1", created_at: "2026-01-02T00:00:00Z", cooked: "<p>Reply</p>" },
+            {
+              id: 1,
+              username: "admin",
+              created_at: "2026-01-01T00:00:00Z",
+              cooked: "<p>Alert content</p>",
+            },
+            {
+              id: 2,
+              username: "user1",
+              created_at: "2026-01-02T00:00:00Z",
+              cooked: "<p>Reply</p>",
+            },
           ],
         },
       },
@@ -258,7 +306,10 @@ Deno.test("get_topic stores posts from topic", async () => {
     await model.methods.get_topic.execute({ topicId: 42 }, context as any);
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
-    const data = resources[0].data as { title: string; posts: { username: string }[] };
+    const data = resources[0].data as {
+      title: string;
+      posts: { username: string }[];
+    };
     assertEquals(data.title, "Security Alert");
     assertEquals(data.posts.length, 2);
     assertEquals(data.posts[0].username, "admin");
@@ -273,7 +324,17 @@ Deno.test("search stores results with hashed instance name for long queries", as
       status: 200,
       body: {
         topics: [
-          { id: 99, title: "CVE Result", category_id: 5, created_at: "2026-01-01T00:00:00Z", posts_count: 1, views: 5, reply_count: 0, last_posted_at: null, pinned: false },
+          {
+            id: 99,
+            title: "CVE Result",
+            category_id: 5,
+            created_at: "2026-01-01T00:00:00Z",
+            posts_count: 1,
+            views: 5,
+            reply_count: 0,
+            last_posted_at: null,
+            pinned: false,
+          },
         ],
         grouped_search_result: { more_full_page_results: false },
       },
@@ -286,13 +347,20 @@ Deno.test("search stores results with hashed instance name for long queries", as
 
   try {
     const longQuery = "A".repeat(60);
-    // deno-lint-ignore no-explicit-any
-    await model.methods.search.execute({ query: longQuery, page: 1 }, context as any);
+    await model.methods.search.execute(
+      { query: longQuery, page: 1 },
+      // deno-lint-ignore no-explicit-any
+      context as any,
+    );
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
     // Instance name should be hashed (not contain the full 60-char query)
     assertEquals(resources[0].name.length < 40, true);
-    const data = resources[0].data as { query: string; topics: unknown[]; truncated: boolean };
+    const data = resources[0].data as {
+      query: string;
+      topics: unknown[];
+      truncated: boolean;
+    };
     assertEquals(data.query, longQuery);
     assertEquals(data.topics.length, 1);
     assertEquals(data.truncated, false);
@@ -317,8 +385,11 @@ Deno.test("search with short query uses encoded query in instance name", async (
   });
 
   try {
-    // deno-lint-ignore no-explicit-any
-    await model.methods.search.execute({ query: "CVE", page: 1 }, context as any);
+    await model.methods.search.execute(
+      { query: "CVE", page: 1 },
+      // deno-lint-ignore no-explicit-any
+      context as any,
+    );
     const resources = getWrittenResources();
     assertEquals(resources.length, 1);
     assertEquals(resources[0].name.includes("CVE"), true);

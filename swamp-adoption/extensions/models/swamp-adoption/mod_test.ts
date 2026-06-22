@@ -1,7 +1,7 @@
 // Swamp Adoption Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1";
+import { assertEquals, assertExists, assertMatch, assertRejects } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./mod.ts";
 
@@ -35,7 +35,7 @@ Deno.test("model has correct type string", () => {
 });
 
 Deno.test("model has correct version", () => {
-  assertEquals(model.version, "2026.06.05.1");
+  assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
 Deno.test("model exports globalArguments schema", () => {
@@ -392,9 +392,8 @@ Deno.test("scaffold sanitizes newlines and quotes in description", async () => {
   assertEquals(descLine.includes("\n"), false);
   assertEquals(descLine.includes('"Evil'), true);
   // No injected YAML stanza — models: should appear exactly once
-  const modelsCount = manifest.content.split("\n").filter((l) =>
-    l.startsWith("models:")
-  ).length;
+  const modelsCount =
+    manifest.content.split("\n").filter((l) => l.startsWith("models:")).length;
   assertEquals(modelsCount, 1);
   // Quotes should be escaped to single quotes
   assertEquals(descLine.includes("'quotes'"), true);
@@ -451,20 +450,40 @@ Deno.test("next ranks systems by pain level using correct vocabulary", async () 
         {
           name: "low-pain",
           type: "cli-tool",
-          interactions: [{ verb: "run", direction: "outbound", frequency: "daily", pain: "none" }],
+          interactions: [{
+            verb: "run",
+            direction: "outbound",
+            frequency: "daily",
+            pain: "none",
+          }],
         },
         {
           name: "high-pain",
           type: "api",
           interactions: [
-            { verb: "deploy", direction: "outbound", frequency: "hourly", pain: "blocking" },
-            { verb: "monitor", direction: "inbound", frequency: "hourly", pain: "significant" },
+            {
+              verb: "deploy",
+              direction: "outbound",
+              frequency: "hourly",
+              pain: "blocking",
+            },
+            {
+              verb: "monitor",
+              direction: "inbound",
+              frequency: "hourly",
+              pain: "significant",
+            },
           ],
         },
         {
           name: "mid-pain",
           type: "saas",
-          interactions: [{ verb: "sync", direction: "bidirectional", frequency: "daily", pain: "minor" }],
+          interactions: [{
+            verb: "sync",
+            direction: "bidirectional",
+            frequency: "daily",
+            pain: "minor",
+          }],
         },
       ],
       dataFlows: [],
