@@ -528,7 +528,7 @@ class GitLabLock implements DistributedLock {
   private readonly retryIntervalMs: number;
   private readonly maxWaitMs: number;
   private lockInfo: LockInfo | null = null;
-  private heartbeatId: number | undefined;
+  private heartbeatId: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     client: GitLabStateClient,
