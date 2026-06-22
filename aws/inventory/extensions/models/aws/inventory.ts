@@ -524,7 +524,7 @@ async function tryTagApi(
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.06.15.1",
+  version: "2026.06.21.1",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
