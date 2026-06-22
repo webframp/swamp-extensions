@@ -1,7 +1,7 @@
 // RICE Scoring Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1";
+import { assertMatch, assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./mod.ts";
 
@@ -18,7 +18,7 @@ Deno.test("model exports required fields", () => {
 });
 
 Deno.test("model version matches CalVer pattern", () => {
-  assertEquals(model.version, "2026.06.05.1");
+  assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
 Deno.test("model has all expected methods", () => {

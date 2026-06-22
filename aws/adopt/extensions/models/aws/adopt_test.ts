@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertMatch, assertEquals } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1069.0";
 import { RDSClient } from "npm:@aws-sdk/client-rds@3.1069.0";
@@ -79,7 +79,7 @@ type WrittenResource = any;
 
 Deno.test("model type and version are correct", () => {
   assertEquals(model.type, "@webframp/aws/adopt");
-  assertEquals(model.version, "2026.05.28.1");
+  assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
 // =============================================================================

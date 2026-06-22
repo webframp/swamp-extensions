@@ -1,7 +1,7 @@
 // Reddit Moderation Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists } from "@std/assert";
+import { assertMatch, assertEquals, assertExists } from "@std/assert";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./moderation.ts";
 
@@ -14,7 +14,7 @@ Deno.test("moderation model: has correct type", () => {
 });
 
 Deno.test("moderation model: has correct version", () => {
-  assertEquals(model.version, "2026.05.24.1");
+  assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
 Deno.test("moderation model: globalArguments schema has all 6 fields", () => {

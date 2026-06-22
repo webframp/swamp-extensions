@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/ddd-guidance"
-version: "2026.06.21.1"
+version: "2026.06.22.1"
 description: |
   Guides teams through applying Domain-Driven Design to existing projects.
   Structured discovery of bounded contexts, ubiquitous language capture,
