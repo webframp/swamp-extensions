@@ -168,7 +168,7 @@ async function executeCommand(
     callbacks?.onLog?.(`[nix] Pinned to nixpkgs rev: ${config.nixpkgsRev}`);
   }
 
-  let killTimeoutId: number | undefined;
+  let killTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
     const command = new Deno.Command("nix", {
@@ -180,7 +180,7 @@ async function executeCommand(
 
     const process = command.spawn();
     let timedOut = false;
-    let timeoutId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     if (config.timeout) {
       timeoutId = setTimeout(() => {
@@ -295,7 +295,7 @@ async function executeBundle(
   const start = performance.now();
   const logs: string[] = [];
   const tmpDir = await Deno.makeTempDir({ prefix: "swamp-nix-" });
-  let killTimeoutId: number | undefined;
+  let killTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
   try {
     const bundlePath = `${tmpDir}/bundle.js`;
@@ -351,7 +351,7 @@ async function executeBundle(
 
     const process = command.spawn();
     let timedOut = false;
-    let timeoutId: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     if (config.timeout) {
       timeoutId = setTimeout(() => {
