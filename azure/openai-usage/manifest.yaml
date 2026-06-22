@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/azure/openai-usage"
-version: "2026.06.15.1"
+version: "2026.06.21.1"
 description: |
   Azure OpenAI / AI Services token usage monitoring — multi-subscription
   scanning of ProcessedPromptTokens and GeneratedTokens via Azure Monitor.

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gcp/vertex-usage"
-version: "2026.06.15.1"
+version: "2026.06.21.1"
 description: |
   GCP Vertex AI token usage monitoring — multi-project scanning of
   token_count metrics via the Cloud Monitoring API. Provides per-model

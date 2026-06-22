@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab-review"
-version: "2026.06.15.1"
+version: "2026.06.21.1"
 description: |
   AI-assisted GitLab merge request code review with human approval gate.
   Uses GraphQL for notes and MR metadata, REST fallback for diff content

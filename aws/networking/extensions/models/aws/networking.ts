@@ -114,7 +114,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/networking",
-  version: "2026.04.12.1",
+  version: "2026.06.21.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

@@ -336,7 +336,7 @@ async function enrichAlarm(
  */
 export const model = {
   type: "@webframp/aws/alarm-investigation",
-  version: "2026.04.22.1",
+  version: "2026.06.21.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

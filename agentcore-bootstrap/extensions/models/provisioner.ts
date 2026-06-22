@@ -113,7 +113,7 @@ async function ecrRepoExists(
 /** Model definition for the AgentCore bootstrap provisioner. */
 export const model = {
   type: "@webframp/agentcore-bootstrap/provisioner",
-  version: "2026.06.12.1",
+  version: "2026.06.21.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     provision: {

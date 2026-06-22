@@ -284,7 +284,7 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.03.30.1",
+  version: "2026.06.21.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

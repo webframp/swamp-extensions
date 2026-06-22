@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: '@webframp/hermes-kanban-orchestrator'
-version: '2026.06.15.1'
+version: '2026.06.21.1'
 description: |
   Kanban Orchestrator — creates kanban tasks via `hermes kanban create` and
   records each task as a swamp data resource with its ID, type, assignee, and

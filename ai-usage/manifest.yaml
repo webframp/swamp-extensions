@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/ai-usage"
-version: "2026.06.15.1"
+version: "2026.06.21.1"
 description: |
   Unified cross-provider AI token usage monitoring — workflow, model, and
   report that aggregates Bedrock, Vertex AI, and Azure OpenAI token data

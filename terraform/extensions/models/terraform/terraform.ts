@@ -189,7 +189,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.04.14.1",
+  version: "2026.06.21.1",
 
   globalArguments: GlobalArgsSchema,
 
