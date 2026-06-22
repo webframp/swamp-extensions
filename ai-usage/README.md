@@ -1,11 +1,11 @@
 # @webframp/ai-usage
 
-Unified cross-provider AI token usage monitoring — workflow, model, and
-report that aggregates Bedrock, Vertex AI, and Azure OpenAI token data
-into a single view.
+Unified cross-provider AI token usage monitoring — workflow, model, and report
+that aggregates Bedrock, Vertex AI, and Azure OpenAI token data into a single
+view.
 
-Gracefully handles partial provider configurations. Unconfigured providers
-are shown with setup hints in the report output.
+Gracefully handles partial provider configurations. Unconfigured providers are
+shown with setup hints in the report output.
 
 ## Quick Start
 

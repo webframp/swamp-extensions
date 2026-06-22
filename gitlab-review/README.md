@@ -1,8 +1,8 @@
 # @webframp/gitlab-review
 
-AI-assisted GitLab merge request review. Fetches diffs, stores versioned
-review drafts, gates on human approval, and posts comments via the GitLab
-REST API. No CLI dependencies. Designed to run from an agent harness with
+AI-assisted GitLab merge request review. Fetches diffs, stores versioned review
+drafts, gates on human approval, and posts comments via the GitLab REST API. No
+CLI dependencies. Designed to run from an agent harness with
 `@dougschaefer/writing-voice` for tone-consistent output.
 
 ## Prerequisites
@@ -39,26 +39,26 @@ globalArguments:
 
 ## Methods
 
-| Method | Description | Inputs |
-|--------|-------------|--------|
-| `get_mr_diff` | Fetch MR metadata and file diffs | `project`, `iid` |
-| `analyze` | Store a review draft | `project`, `iid`, `body` |
-| `edit_draft` | Revise draft (new version, history retained) | `project`, `iid`, `body` |
-| `update_review` | Edit an existing MR comment in place | `project`, `iid`, `noteId` |
-| `approve_mr` | Approve MR without commenting | `project`, `iid` |
-| `unapprove_mr` | Remove approval (request changes) | `project`, `iid` |
-| `post_review` | Post draft as comment, optionally approve | `project`, `iid`, `action?` |
+| Method          | Description                                  | Inputs                      |
+| --------------- | -------------------------------------------- | --------------------------- |
+| `get_mr_diff`   | Fetch MR metadata and file diffs             | `project`, `iid`            |
+| `analyze`       | Store a review draft                         | `project`, `iid`, `body`    |
+| `edit_draft`    | Revise draft (new version, history retained) | `project`, `iid`, `body`    |
+| `update_review` | Edit an existing MR comment in place         | `project`, `iid`, `noteId`  |
+| `approve_mr`    | Approve MR without commenting                | `project`, `iid`            |
+| `unapprove_mr`  | Remove approval (request changes)            | `project`, `iid`            |
+| `post_review`   | Post draft as comment, optionally approve    | `project`, `iid`, `action?` |
 
-The `action` parameter on `post_review` accepts: `comment` (default),
-`approve`, or `request_changes`.
+The `action` parameter on `post_review` accepts: `comment` (default), `approve`,
+or `request_changes`.
 
 ## Resources
 
-| Resource | Description | Retention |
-|----------|-------------|-----------|
-| `mrDiff` | MR metadata and file diffs | 7d, 5 versions |
-| `reviewDraft` | Draft comment (editable) | 7d, 10 versions |
-| `reviewPosted` | Record of posted comments | 30d, 5 versions |
+| Resource       | Description                | Retention       |
+| -------------- | -------------------------- | --------------- |
+| `mrDiff`       | MR metadata and file diffs | 7d, 5 versions  |
+| `reviewDraft`  | Draft comment (editable)   | 7d, 10 versions |
+| `reviewPosted` | Record of posted comments  | 30d, 5 versions |
 
 The `reviewDraft` retains 10 versions. Compare drafts before approving:
 
@@ -70,8 +70,8 @@ diff <(swamp data get mr-reviewer reviewDraft-group~repo-123 --version 1 --json 
 ## Writing Voice Setup
 
 This extension produces better reviews when paired with
-`@dougschaefer/writing-voice`. The voice profile tells the agent *how* to
-write; the extension handles *where* the output goes.
+`@dougschaefer/writing-voice`. The voice profile tells the agent _how_ to write;
+the extension handles _where_ the output goes.
 
 ### 1. Pull and create a voice instance
 
@@ -158,7 +158,11 @@ inputs:
   properties:
     project: { type: string }
     iid: { type: integer }
-    action: { type: string, enum: [comment, approve, request_changes], default: approve }
+    action: {
+      type: string,
+      enum: [comment, approve, request_changes],
+      default: approve,
+    }
   required: [project, iid]
 jobs:
   - name: review
@@ -172,28 +176,43 @@ jobs:
           methodName: get_mr_diff
           inputs: { project: "${{ inputs.project }}", iid: "${{ inputs.iid }}" }
       - name: analyze
-        dependsOn: [{ step: fetch-diff, condition: { type: succeeded } }, { step: fetch-voice, condition: { type: succeeded } }]
+        dependsOn: [
+          { step: fetch-diff, condition: { type: succeeded } },
+          { step: fetch-voice, condition: { type: succeeded } },
+        ]
         task:
           type: model_method
           modelIdOrName: mr-reviewer
           methodName: analyze
-          inputs: { project: "${{ inputs.project }}", iid: "${{ inputs.iid }}", body: "Placeholder" }
+          inputs: {
+            project: "${{ inputs.project }}",
+            iid: "${{ inputs.iid }}",
+            body: "Placeholder",
+          }
       - name: approval-gate
         dependsOn: [{ step: analyze, condition: { type: succeeded } }]
-        task: { type: manual_approval, prompt: "Review draft. Use edit_draft to revise, then approve.", timeout: 86400 }
+        task: {
+          type: manual_approval,
+          prompt: "Review draft. Use edit_draft to revise, then approve.",
+          timeout: 86400,
+        }
       - name: post-review
         dependsOn: [{ step: approval-gate, condition: { type: succeeded } }]
         task:
           type: model_method
           modelIdOrName: mr-reviewer
           methodName: post_review
-          inputs: { project: "${{ inputs.project }}", iid: "${{ inputs.iid }}", action: "${{ inputs.action }}" }
+          inputs: {
+            project: "${{ inputs.project }}",
+            iid: "${{ inputs.iid }}",
+            action: "${{ inputs.action }}",
+          }
 ```
 
 ## Driving Reviews from an Agent Harness
 
-The workflow above provides structure, but the AI analysis itself happens
-in the agent session. Here are prompts for driving the full cycle:
+The workflow above provides structure, but the AI analysis itself happens in the
+agent session. Here are prompts for driving the full cycle:
 
 ### Full review (workflow-based)
 

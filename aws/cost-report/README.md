@@ -30,7 +30,8 @@ swamp model report cost-est --json
 
 The generated report includes:
 
-- **Resource tables** with per-item costs (name, type, spec, count, unit cost, total)
+- **Resource tables** with per-item costs (name, type, spec, count, unit cost,
+  total)
 - **Tag-based cost allocation** grouped by owner and project
 - **Recommendations** tailored to the method executed
 

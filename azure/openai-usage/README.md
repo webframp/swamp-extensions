@@ -1,9 +1,8 @@
 # @webframp/azure/openai-usage
 
-Azure OpenAI / AI Services token usage monitoring — multi-subscription
-scanning of ProcessedPromptTokens and GeneratedTokens via Azure Monitor.
-Auto-discovers CognitiveServices resources and provides per-deployment
-breakdowns.
+Azure OpenAI / AI Services token usage monitoring — multi-subscription scanning
+of ProcessedPromptTokens and GeneratedTokens via Azure Monitor. Auto-discovers
+CognitiveServices resources and provides per-deployment breakdowns.
 
 ## Authentication
 
@@ -30,7 +29,8 @@ swamp model method run azure-ai-usage list_ai_resources
 
 ## Methods
 
-- **scan_subscriptions** — Fan-out across subscriptions, per-deployment breakdown
+- **scan_subscriptions** — Fan-out across subscriptions, per-deployment
+  breakdown
 - **list_ai_resources** — Discover OpenAI/AIServices resources
 
 ## Output

@@ -1,16 +1,16 @@
 id: ada3d8bb-9cde-436e-8bbc-7a45add10e8d
-name: '@webframp/cloudflare-audit'
+name: "@webframp/cloudflare-audit"
 description: |
   Cloudflare security and configuration audit.
   Inspects zone settings, DNS records, WAF rules, Workers, and cache config,
   then generates a severity-rated report with findings and recommendations.
 tags:
-  cloudflare: 'true'
-  security: 'true'
-  audit: 'true'
+  cloudflare: "true"
+  security: "true"
+  audit: "true"
 reports:
   require:
-    - '@webframp/cloudflare-audit-report'
+    - "@webframp/cloudflare-audit-report"
 inputs:
   properties:
     zoneId:

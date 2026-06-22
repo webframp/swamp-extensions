@@ -2,8 +2,8 @@
 
 A swamp execution driver that runs model methods inside a Nix shell with
 declarative package dependencies. It provides reproducible execution
-environments without containers by pulling packages from nixpkgs and
-caching them in the Nix store.
+environments without containers by pulling packages from nixpkgs and caching
+them in the Nix store.
 
 ## Features
 
@@ -18,8 +18,8 @@ caching them in the Nix store.
 **Command mode** runs a shell command string directly inside the Nix shell.
 Standard output becomes the resource data, and standard error streams as logs.
 
-**Bundle mode** writes a swamp bundle to a temporary file and executes it
-with Deno inside the Nix shell, parsing structured JSON output.
+**Bundle mode** writes a swamp bundle to a temporary file and executes it with
+Deno inside the Nix shell, parsing structured JSON output.
 
 ## Configuration
 
@@ -33,17 +33,17 @@ driver:
       - dig
       - whois
       - openssl
-    flakeRef: "nixpkgs"           # default
-    nixpkgsRev: "abc123"          # optional: pin to a specific revision
-    timeout: 300000               # default: 5 minutes (ms)
-    impure: true                  # default: pass --impure to nix shell
-    extraArgs: []                 # additional nix flags
+    flakeRef: "nixpkgs" # default
+    nixpkgsRev: "abc123" # optional: pin to a specific revision
+    timeout: 300000 # default: 5 minutes (ms)
+    impure: true # default: pass --impure to nix shell
+    extraArgs: [] # additional nix flags
 ```
 
 ## Usage Example
 
-Reference the driver in a model definition to run commands in a reproducible
-Nix environment:
+Reference the driver in a model definition to run commands in a reproducible Nix
+environment:
 
 ```yaml
 models:

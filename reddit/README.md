@@ -81,19 +81,19 @@ swamp model method run reddit-mod flair_post --input thingId=t3_abc123 --input f
 
 ## Methods
 
-| Method           | Description                                                  |
-| ---------------- | ------------------------------------------------------------ |
-| `get_modqueue`   | Fetch items pending moderation (posts, comments, or both)    |
-| `get_reports`    | Retrieve user-submitted reports for the subreddit            |
-| `get_modlog`     | Query the moderator action log with optional action filter   |
-| `list_comments`  | List recent comments in the subreddit                        |
-| `list_posts`     | List posts with configurable sort order                      |
-| `get_user_info`  | Retrieve public profile information for a Reddit user        |
-| `approve`        | Approve a post or comment from the modqueue                  |
-| `remove`         | Remove a post or comment (with optional spam flag)           |
-| `ban_user`       | Ban a user from the subreddit                                |
-| `send_modmail`   | Send a modmail message to a user                             |
-| `flair_post`     | Apply a flair template to a post                             |
+| Method          | Description                                                |
+| --------------- | ---------------------------------------------------------- |
+| `get_modqueue`  | Fetch items pending moderation (posts, comments, or both)  |
+| `get_reports`   | Retrieve user-submitted reports for the subreddit          |
+| `get_modlog`    | Query the moderator action log with optional action filter |
+| `list_comments` | List recent comments in the subreddit                      |
+| `list_posts`    | List posts with configurable sort order                    |
+| `get_user_info` | Retrieve public profile information for a Reddit user      |
+| `approve`       | Approve a post or comment from the modqueue                |
+| `remove`        | Remove a post or comment (with optional spam flag)         |
+| `ban_user`      | Ban a user from the subreddit                              |
+| `send_modmail`  | Send a modmail message to a user                           |
+| `flair_post`    | Apply a flair template to a post                           |
 
 ## Authentication
 

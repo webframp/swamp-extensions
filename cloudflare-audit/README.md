@@ -7,17 +7,22 @@ actionable recommendations.
 
 ## Checks Performed
 
-- **Zone** -- SSL mode (off/flexible/full/strict), Always Use HTTPS, development mode, zone paused/active status
-- **WAF** -- Firewall rules present and active, WAF managed rulesets enabled, paused rule detection
-- **DNS** -- Unproxied records exposing origin IPs, dangling CNAMEs (subdomain takeover risk), CAA record presence
+- **Zone** -- SSL mode (off/flexible/full/strict), Always Use HTTPS, development
+  mode, zone paused/active status
+- **WAF** -- Firewall rules present and active, WAF managed rulesets enabled,
+  paused rule detection
+- **DNS** -- Unproxied records exposing origin IPs, dangling CNAMEs (subdomain
+  takeover risk), CAA record presence
 - **Workers** -- Orphaned worker scripts with no routes
-- **Cache** -- Cache level configuration, cache hit rate against a configurable threshold
+- **Cache** -- Cache level configuration, cache hit rate against a configurable
+  threshold
 
 ## Prerequisites
 
 - [swamp](https://github.com/systeminit/swamp) CLI installed
 - The `@webframp/cloudflare` extension (installed automatically as a dependency)
-- A Cloudflare API token with read access to zones, DNS, WAF, Workers, and cache settings
+- A Cloudflare API token with read access to zones, DNS, WAF, Workers, and cache
+  settings
 - Your Cloudflare Zone ID and Account ID
 
 ## Installation

@@ -3,6 +3,6 @@ name: redmine-kanban
 description: Kanban workflow reports and automation for Redmine
 repoId: bdea5d8b-792d-48da-a86f-92d93ead9104
 swampVersion: 20260615.105123.0
-upgradedAt: '2026-06-15T23:25:19.136Z'
+upgradedAt: "2026-06-15T23:25:19.136Z"
 tools:
   - claude

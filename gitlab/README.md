@@ -72,8 +72,8 @@ These are things you can ask when this model is available in your workspace:
 
 ### Dashboard (GraphQL)
 
-| Method | Description | Inputs |
-|--------|-------------|--------|
+| Method                   | Description                               | Inputs                                                               |
+| ------------------------ | ----------------------------------------- | -------------------------------------------------------------------- |
 | `list_my_merge_requests` | Cross-project MR overview + pending todos | `role?` (reviewer/assignee/author/all), `state?`, `includeArchived?` |
 
 Uses the GitLab GraphQL API to fetch all three MR views plus todos in a single
@@ -82,66 +82,67 @@ fires the `@webframp/review-dashboard` report automatically.
 
 ### Read (REST)
 
-| Method | Description | Inputs |
-|--------|-------------|--------|
-| `list_projects` | Projects for the authenticated user | — |
-| `get_project_info` | Detailed info for a project | `project` |
-| `list_merge_requests` | MRs for a project | `project`, `state?` (opened/closed/merged/all) |
-| `list_issues` | Issues for a project | `project`, `state?` (opened/closed/all) |
-| `list_releases` | Releases | `project` |
-| `list_pipelines` | Recent CI/CD pipelines | `project` |
-| `list_issue_notes` | Comments on an issue | `project`, `iid` |
-| `list_labels` | Project labels | `project` |
-| `list_members` | Project members | `project` |
-| `list_branches` | Repository branches | `project` |
+| Method                | Description                         | Inputs                                         |
+| --------------------- | ----------------------------------- | ---------------------------------------------- |
+| `list_projects`       | Projects for the authenticated user | —                                              |
+| `get_project_info`    | Detailed info for a project         | `project`                                      |
+| `list_merge_requests` | MRs for a project                   | `project`, `state?` (opened/closed/merged/all) |
+| `list_issues`         | Issues for a project                | `project`, `state?` (opened/closed/all)        |
+| `list_releases`       | Releases                            | `project`                                      |
+| `list_pipelines`      | Recent CI/CD pipelines              | `project`                                      |
+| `list_issue_notes`    | Comments on an issue                | `project`, `iid`                               |
+| `list_labels`         | Project labels                      | `project`                                      |
+| `list_members`        | Project members                     | `project`                                      |
+| `list_branches`       | Repository branches                 | `project`                                      |
 
 ### Write (REST)
 
-| Method | Description | Inputs |
-|--------|-------------|--------|
-| `create_issue` | Create an issue | `project`, `title`, `description?`, `labels?` |
-| `update_issue` | Update an issue | `project`, `iid`, `title?`, `description?`, `labels?`, `stateEvent?` |
-| `add_issue_note` | Comment on an issue | `project`, `iid`, `body` |
-| `create_merge_request` | Create a merge request | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?` |
-| `merge` | Merge a merge request | `project`, `iid`, `squash?` |
-| `add_mr_note` | Comment on a merge request | `project`, `iid`, `body` |
-| `create_label` | Create a label | `project`, `name`, `color?`, `description?` |
+| Method                 | Description                | Inputs                                                               |
+| ---------------------- | -------------------------- | -------------------------------------------------------------------- |
+| `create_issue`         | Create an issue            | `project`, `title`, `description?`, `labels?`                        |
+| `update_issue`         | Update an issue            | `project`, `iid`, `title?`, `description?`, `labels?`, `stateEvent?` |
+| `add_issue_note`       | Comment on an issue        | `project`, `iid`, `body`                                             |
+| `create_merge_request` | Create a merge request     | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
+| `merge`                | Merge a merge request      | `project`, `iid`, `squash?`                                          |
+| `add_mr_note`          | Comment on a merge request | `project`, `iid`, `body`                                             |
+| `create_label`         | Create a label             | `project`, `name`, `color?`, `description?`                          |
 
 ## Reports
 
 ### @webframp/review-dashboard
 
-Fires automatically after `list_my_merge_requests`. Renders a prioritized
-triage view:
+Fires automatically after `list_my_merge_requests`. Renders a prioritized triage
+view:
 
-- **🔴 Action Required** — overdue reviews (>7d), stale assignments (>14d), MRs to consider closing (>30d)
+- **🔴 Action Required** — overdue reviews (>7d), stale assignments (>14d), MRs
+  to consider closing (>30d)
 - **🟡 Aging** — reviews 3-7d old, assignments 7-14d, authored MRs 14-30d
 - **🟢 Active** — everything current
 - **Todos** — pending GitLab action items (mentions, assignments, CI failures)
 
 ## Resources
 
-| Resource | Description | Key fields |
-|----------|-------------|------------|
-| **dashboard** | Cross-project MR overview + todos | username, reviewing, assigned, authored, todos, truncated |
-| **projects** | Project list | name, visibility, starCount, archived, truncated |
-| **projectInfo** | Single project detail | webUrl, openIssuesCount, topics |
-| **mergeRequests** | MR list by state | iid, author, sourceBranch, draft, truncated |
-| **issues** | Issue list by state | iid, author, labels, truncated |
-| **issueDetail** | Single issue (from create/update) | iid, webUrl, description, state |
-| **notes** | Comments on issue or MR | noteableType, noteableIid, truncated |
-| **releases** | Tagged releases | tagName, releasedAt, truncated |
-| **pipelines** | CI/CD pipeline runs | status, source, ref, truncated |
-| **labels** | Project labels | name, color, description |
-| **members** | Project members | username, accessLevel |
-| **branches** | Repository branches | name, protected, default |
+| Resource          | Description                       | Key fields                                                |
+| ----------------- | --------------------------------- | --------------------------------------------------------- |
+| **dashboard**     | Cross-project MR overview + todos | username, reviewing, assigned, authored, todos, truncated |
+| **projects**      | Project list                      | name, visibility, starCount, archived, truncated          |
+| **projectInfo**   | Single project detail             | webUrl, openIssuesCount, topics                           |
+| **mergeRequests** | MR list by state                  | iid, author, sourceBranch, draft, truncated               |
+| **issues**        | Issue list by state               | iid, author, labels, truncated                            |
+| **issueDetail**   | Single issue (from create/update) | iid, webUrl, description, state                           |
+| **notes**         | Comments on issue or MR           | noteableType, noteableIid, truncated                      |
+| **releases**      | Tagged releases                   | tagName, releasedAt, truncated                            |
+| **pipelines**     | CI/CD pipeline runs               | status, source, ref, truncated                            |
+| **labels**        | Project labels                    | name, color, description                                  |
+| **members**       | Project members                   | username, accessLevel                                     |
+| **branches**      | Repository branches               | name, protected, default                                  |
 
 ## Global Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `host` | Yes | GitLab hostname (e.g. `git.example.org`) |
-| `token` | Yes | Personal access token with `api` scope (use vault reference) |
+| Argument | Required | Description                                                  |
+| -------- | -------- | ------------------------------------------------------------ |
+| `host`   | Yes      | GitLab hostname (e.g. `git.example.org`)                     |
+| `token`  | Yes      | Personal access token with `api` scope (use vault reference) |
 
 ## Changelog
 

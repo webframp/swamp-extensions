@@ -3,13 +3,14 @@
 Redmine issue tracker integration for swamp. Manage issues, projects, and
 workflows through the Redmine REST API. Provides model methods for CRUD
 operations on Redmine issues (themes, stories, tasks), project queries,
-status/tracker/user lookups, and custom field access. Includes reports for
-flow metrics (cycle time, lead time, throughput, WIP age) and sprint summaries,
-plus a scaffold-story workflow for creating stories with child tasks.
+status/tracker/user lookups, and custom field access. Includes reports for flow
+metrics (cycle time, lead time, throughput, WIP age) and sprint summaries, plus
+a scaffold-story workflow for creating stories with child tasks.
 
 ## Prerequisites
 
-- A running [Redmine](https://www.redmine.org/) instance with the REST API enabled
+- A running [Redmine](https://www.redmine.org/) instance with the REST API
+  enabled
 - A Redmine API key (found under My Account in Redmine)
 - [swamp](https://github.com/systeminit/swamp) CLI installed
 
@@ -78,9 +79,9 @@ swamp model method run tracker list_custom_fields
 ```yaml
 # Run the scaffold-story workflow
 swamp workflow run scaffold-story \
-  --input subject="Platform | Auth Service | Improve session handling" \
-  --input description="Reduce timeout errors by extending token TTL" \
-  --input tracker=Story
+--input subject="Platform | Auth Service | Improve session handling" \
+--input description="Reduce timeout errors by extending token TTL" \
+--input tracker=Story
 ```
 
 ### Reports
@@ -97,12 +98,12 @@ swamp report run @webframp/sprint-summary-report --workflow-run <run-id>
 
 ## Extension Contents
 
-| Type     | Path                          | Description                              |
-|----------|-------------------------------|------------------------------------------|
-| Model    | `redmine/redmine.ts`          | Redmine issue tracker model              |
-| Report   | `flow_metrics_report.ts`      | Cycle time, lead time, throughput, WIP   |
-| Report   | `sprint_summary_report.ts`    | Sprint status and assignee breakdowns    |
-| Workflow | `scaffold-story.yaml`         | Create a story with structured fields    |
+| Type     | Path                       | Description                            |
+| -------- | -------------------------- | -------------------------------------- |
+| Model    | `redmine/redmine.ts`       | Redmine issue tracker model            |
+| Report   | `flow_metrics_report.ts`   | Cycle time, lead time, throughput, WIP |
+| Report   | `sprint_summary_report.ts` | Sprint status and assignee breakdowns  |
+| Workflow | `scaffold-story.yaml`      | Create a story with structured fields  |
 
 ## License
 

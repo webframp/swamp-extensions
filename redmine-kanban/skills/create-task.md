@@ -5,18 +5,20 @@ description: Use when creating a Redmine procedural task with the @webframp/redm
 
 # Create Task
 
-Create a well-formed procedural Redmine task using the `@webframp/redmine` model. Use this for work with a known solution and clear steps. For uncertain work requiring experimentation, use the `hypothesis-task` skill instead.
+Create a well-formed procedural Redmine task using the `@webframp/redmine`
+model. Use this for work with a known solution and clear steps. For uncertain
+work requiring experimentation, use the `hypothesis-task` skill instead.
 
 ## When to Use Procedural vs Hypothesis
 
-| Signal | Task type |
-|--------|-----------|
-| Clear, known solution | Procedural (this skill) |
-| Following an established procedure | Procedural |
-| Predictable outcome, done before | Procedural |
-| Solution unclear, needs experimentation | Hypothesis-driven |
-| Learning or investigation required | Hypothesis-driven |
-| Outcome uncertain | Hypothesis-driven |
+| Signal                                  | Task type               |
+| --------------------------------------- | ----------------------- |
+| Clear, known solution                   | Procedural (this skill) |
+| Following an established procedure      | Procedural              |
+| Predictable outcome, done before        | Procedural              |
+| Solution unclear, needs experimentation | Hypothesis-driven       |
+| Learning or investigation required      | Hypothesis-driven       |
+| Outcome uncertain                       | Hypothesis-driven       |
 
 ## Subject Convention
 
@@ -28,25 +30,24 @@ Task subjects start with an **imperative action verb**:
 
 ## Task Template
 
-Use this description template for the `create_issue` method's `description` argument:
+Use this description template for the `create_issue` method's `description`
+argument:
 
 ```markdown
-**Background:**
-[Context for this task. How does it contribute to the parent story?]
+**Background:** [Context for this task. How does it contribute to the parent
+story?]
 
-**Objective:**
-[What specific action needs to be taken?]
+**Objective:** [What specific action needs to be taken?]
 
-**Success criteria:**
-[How we know this is complete. Specific and testable.]
+**Success criteria:** [How we know this is complete. Specific and testable.]
 
-**Documentation to update:**
-[List specific documentation pages or sections.]
+**Documentation to update:** [List specific documentation pages or sections.]
 
-**Help references/contact person:**
-[Links to relevant documentation, contact information for SMEs.]
+**Help references/contact person:** [Links to relevant documentation, contact
+information for SMEs.]
 
 **Action plan steps:**
+
 1. [Specific step with command or action]
 2. [Next step]
 3. [Verification step]
@@ -54,7 +55,8 @@ Use this description template for the `create_issue` method's `description` argu
 
 ## Workflow
 
-1. **Find parent story** — run `list_issues` filtered by Story tracker to locate the parent
+1. **Find parent story** — run `list_issues` filtered by Story tracker to locate
+   the parent
 2. **Look up trackers** — run `list_trackers` to find the Task tracker ID
 3. **Look up users** — run `list_users` to find the assignee's ID
 4. **Create the task** — run `create_issue` with:
@@ -81,8 +83,10 @@ Before submitting, verify:
 
 ## State Lifecycle
 
-Tasks move through: **New** -> **Ready** -> **In Progress** -> **Review** -> **Closed**
+Tasks move through: **New** -> **Ready** -> **In Progress** -> **Review** ->
+**Closed**
 
 - Simple tasks can skip Review: New -> Ready -> In Progress -> Closed
 - WIP limit: 2 tasks per person
-- Blocked tasks: prefix title with `[blocked]`, keep status as In Progress, add comment explaining the blocker
+- Blocked tasks: prefix title with `[blocked]`, keep status as In Progress, add
+  comment explaining the blocker

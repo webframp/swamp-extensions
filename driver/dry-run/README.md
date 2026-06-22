@@ -1,6 +1,10 @@
 # @webframp/dry-run
 
-A dry-run execution driver for [swamp](https://github.com/systeminit/swamp). This driver captures the full method execution request without running it, returning the request envelope as a pending resource for inspection. It serves as a safe, side-effect-free tool for debugging workflows, auditing method arguments, and validating pipeline configuration before hitting real APIs.
+A dry-run execution driver for [swamp](https://github.com/systeminit/swamp).
+This driver captures the full method execution request without running it,
+returning the request envelope as a pending resource for inspection. It serves
+as a safe, side-effect-free tool for debugging workflows, auditing method
+arguments, and validating pipeline configuration before hitting real APIs.
 
 ## Installation
 
@@ -12,7 +16,8 @@ swamp extension install @webframp/dry-run
 
 ## Usage
 
-Configure the dry-run driver in your workflow or invoke it directly to capture what a method execution would look like without performing any real work.
+Configure the dry-run driver in your workflow or invoke it directly to capture
+what a method execution would look like without performing any real work.
 
 ```yaml
 # workflow.yaml — use dry-run to preview an AWS inventory call
@@ -26,7 +31,8 @@ jobs:
           region: us-east-1
 ```
 
-The driver produces a single `pending` output named `dry-run-<methodName>` containing a JSON capture of the full request envelope:
+The driver produces a single `pending` output named `dry-run-<methodName>`
+containing a JSON capture of the full request envelope:
 
 ```json
 {
@@ -44,9 +50,11 @@ The driver produces a single `pending` output named `dry-run-<methodName>` conta
 
 ## How It Works
 
-1. The driver receives the standard execution request (model type, method name, arguments, optional bundle, resource specs, file specs, and trace headers).
+1. The driver receives the standard execution request (model type, method name,
+   arguments, optional bundle, resource specs, file specs, and trace headers).
 2. It logs each section of the request for visibility.
-3. It serializes the full request into a JSON capture object and returns it as a `pending` resource output with status `success`.
+3. It serializes the full request into a JSON capture object and returns it as a
+   `pending` resource output with status `success`.
 
 No network calls, no file writes, no side effects.
 

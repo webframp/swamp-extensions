@@ -1,6 +1,9 @@
 # @webframp/macos-keychain
 
-A swamp vault provider that stores and retrieves secrets using the macOS Keychain via the `security` command-line tool. Secrets are persisted as generic password items, scoped by a configurable service name, and protected by the operating system's native credential storage.
+A swamp vault provider that stores and retrieves secrets using the macOS
+Keychain via the `security` command-line tool. Secrets are persisted as generic
+password items, scoped by a configurable service name, and protected by the
+operating system's native credential storage.
 
 ## Prerequisites
 
@@ -22,10 +25,11 @@ vaults:
   keychain:
     type: "@webframp/macos-keychain"
     config:
-      service: "swamp"   # optional, defaults to "swamp"
+      service: "swamp" # optional, defaults to "swamp"
 ```
 
-The `service` field controls the Keychain service name under which all secrets are stored. If you omit it, the provider defaults to `"swamp"`.
+The `service` field controls the Keychain service name under which all secrets
+are stored. If you omit it, the provider defaults to `"swamp"`.
 
 ## Usage
 
@@ -43,7 +47,8 @@ swamp vault get keychain my-api-key
 
 ## Vault Expressions in Models
 
-Reference vault secrets in model definitions using the `vault://` expression syntax:
+Reference vault secrets in model definitions using the `vault://` expression
+syntax:
 
 ```yaml
 globalArgs:
@@ -52,7 +57,8 @@ globalArgs:
     default: "vault://keychain/my-api-key"
 ```
 
-When a method runs, swamp resolves `vault://keychain/my-api-key` by calling the provider's `get("my-api-key")` method automatically.
+When a method runs, swamp resolves `vault://keychain/my-api-key` by calling the
+provider's `get("my-api-key")` method automatically.
 
 ## Supported Platforms
 

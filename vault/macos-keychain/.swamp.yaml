@@ -2,6 +2,6 @@ extensions:
   - manifest.yaml
 repoId: 49cae6d2-326c-4189-8866-d99f45147df7
 swampVersion: 20260615.105123.0
-upgradedAt: '2026-06-15T23:25:29.712Z'
+upgradedAt: "2026-06-15T23:25:29.712Z"
 tools:
   - claude

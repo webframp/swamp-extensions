@@ -90,15 +90,14 @@ Inputs:
 
 Output (stored as the `stackPlan` resource):
 
-- `mapped[]` — resources with a known swamp type, model name, physical ID,
-  and `getCommand` for adoption
+- `mapped[]` — resources with a known swamp type, model name, physical ID, and
+  `getCommand` for adoption
 - `unmapped[]` — resources with no swamp equivalent (e.g.,
   `AWS::Kinesis::Stream`, `Custom::*` resources)
 - `skipped[]` — resources in unstable states (`CREATE_IN_PROGRESS`,
   `DELETE_IN_PROGRESS`, etc.) where `PhysicalResourceId` is unreliable
-- `orphans[]` — resources from a previous plan that are missing from the
-  current stack (compared against the previous run's plan stored in this
-  model)
+- `orphans[]` — resources from a previous plan that are missing from the current
+  stack (compared against the previous run's plan stored in this model)
 - `summary` — counts and `coveragePercent`
 
 ### Workflow
@@ -111,12 +110,12 @@ swamp workflow run @webframp/adopt-cfn-stack \
   --input stackName=my-prod-stack
 ```
 
-The workflow produces the plan, then runs `get` on each mapped resource's
-swamp model. Models that don't yet exist will surface as failed steps (with
+The workflow produces the plan, then runs `get` on each mapped resource's swamp
+model. Models that don't yet exist will surface as failed steps (with
 `allowFailure: true` so the workflow continues). Create the required models
-using `swamp model type describe <swampType>` to determine required
-global-args, then re-run the workflow — on the second pass, all `get` calls
-succeed and live state is captured.
+using `swamp model type describe <swampType>` to determine required global-args,
+then re-run the workflow — on the second pass, all `get` calls succeed and live
+state is captured.
 
 ### Supported CloudFormation types
 

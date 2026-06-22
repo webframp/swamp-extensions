@@ -82,6 +82,7 @@ The model implements agile threat modeling with these concepts:
 Computed automatically for each scenario.
 
 **Threat Status Tracking:** Each threat is classified as:
+
 - `mitigated` — control reduces risk below threshold
 - `accepted` — risk acknowledged with stated rationale
 - `deferred` — awaiting external input (open questions)
@@ -92,8 +93,8 @@ glance. Reports overall posture as acceptable, conditionally-acceptable, or
 unacceptable based on unaddressed high/critical threats.
 
 **Progressive Discovery:** Methods build on each other:
-`scope → identify → evaluate → mitigate → posture`, with `revisit` to
-re-enter the loop when the system changes.
+`scope → identify → evaluate → mitigate → posture`, with `revisit` to re-enter
+the loop when the system changes.
 
 ## License
 

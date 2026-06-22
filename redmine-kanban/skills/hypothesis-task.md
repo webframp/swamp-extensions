@@ -5,7 +5,9 @@ description: Use when creating a hypothesis-driven Redmine task for uncertain wo
 
 # Hypothesis-Driven Task
 
-Create a hypothesis-driven task in Redmine using the `@webframp/redmine` model. Use this when the solution is unclear and experimentation is needed. For well-defined work with known steps, use the `create-task` skill instead.
+Create a hypothesis-driven task in Redmine using the `@webframp/redmine` model.
+Use this when the solution is unclear and experimentation is needed. For
+well-defined work with known steps, use the `create-task` skill instead.
 
 ## The Hypothesis Format
 
@@ -21,33 +23,32 @@ This is not optional decoration — it is the task description's foundation.
 
 ## Task Template
 
-Use this description template for the `create_issue` method's `description` argument:
+Use this description template for the `create_issue` method's `description`
+argument:
 
 ```markdown
-**We believe that**
-[Hypothesis: what we think will solve the problem or improve the situation]
+**We believe that** [Hypothesis: what we think will solve the problem or improve
+the situation]
 
-**Will result in**
-[Expected outcome: the measurable impact or benefit we expect]
+**Will result in** [Expected outcome: the measurable impact or benefit we
+expect]
 
-**We will know we have succeeded when**
-[Success criteria: specific, measurable evidence that validates or invalidates the hypothesis]
+**We will know we have succeeded when** [Success criteria: specific, measurable
+evidence that validates or invalidates the hypothesis]
 
-**Context:**
-[Why we are exploring this and what problem we are solving]
+**Context:** [Why we are exploring this and what problem we are solving]
 
 **Approach:**
+
 1. [Step 1]
 2. [Step 2]
 3. [Step 3]
 
 **Time box:** [Maximum hours to spend]
 
-**Learning goals:**
-[What we want to learn regardless of outcome]
+**Learning goals:** [What we want to learn regardless of outcome]
 
-**Rollback plan:**
-[How to undo changes if the experiment fails]
+**Rollback plan:** [How to undo changes if the experiment fails]
 ```
 
 ## Subject Convention
@@ -74,29 +75,29 @@ Prefix with the hypothesis context:
 
 ## Recording Outcomes
 
-When closing the task, use `update_issue` to add a notes comment documenting the outcome:
+When closing the task, use `update_issue` to add a notes comment documenting the
+outcome:
 
-| Outcome | Meaning |
-|---------|---------|
-| **Validated** | Hypothesis proved true, measurements met targets |
-| **Invalidated** | Hypothesis proved false, measurements did not meet targets |
-| **Inconclusive** | Need more information or a different approach |
+| Outcome          | Meaning                                                    |
+| ---------------- | ---------------------------------------------------------- |
+| **Validated**    | Hypothesis proved true, measurements met targets           |
+| **Invalidated**  | Hypothesis proved false, measurements did not meet targets |
+| **Inconclusive** | Need more information or a different approach              |
 
-**A failed hypothesis is still a success** — the team learned something. Close the task with status Closed and prefix the title with `[failed]` if invalidated. The learning is the deliverable.
+**A failed hypothesis is still a success** — the team learned something. Close
+the task with status Closed and prefix the title with `[failed]` if invalidated.
+The learning is the deliverable.
 
 ## Outcome Comment Template
 
 ```markdown
 **Outcome:** [Validated / Invalidated / Inconclusive]
 
-**What we learned:**
-[Key findings from the experiment]
+**What we learned:** [Key findings from the experiment]
 
-**Evidence:**
-[Data, measurements, or observations that support the outcome]
+**Evidence:** [Data, measurements, or observations that support the outcome]
 
-**Recommendation:**
-[Next steps based on what we learned]
+**Recommendation:** [Next steps based on what we learned]
 ```
 
 ## Time-Boxing Rules
@@ -104,4 +105,5 @@ When closing the task, use `update_issue` to add a notes comment documenting the
 - Set `estimatedHours` to the maximum time allowed
 - Typical range: 2-16 hours (never open-ended)
 - If the time box expires without a clear result, the outcome is Inconclusive
-- Document what was learned and decide whether to run another experiment or change approach
+- Document what was learned and decide whether to run another experiment or
+  change approach

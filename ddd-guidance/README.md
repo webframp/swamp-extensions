@@ -1,8 +1,8 @@
 # @webframp/ddd-guidance
 
 Guides teams through applying Domain-Driven Design to existing projects. A
-concept model — the agent drives real conversations using method descriptions
-as structured guidance; execute functions store versioned discovery results.
+concept model — the agent drives real conversations using method descriptions as
+structured guidance; execute functions store versioned discovery results.
 
 ## Installation
 
@@ -51,19 +51,19 @@ swamp model @webframp/ddd-guidance method run revisit my-project
 swamp model @webframp/ddd-guidance method run revisit my-project --input scope="contexts"
 ```
 
-Domain understanding evolves. After new services, team reorgs, or incidents
-that revealed hidden coupling, run `revisit` to review prior decisions.
-The agent guides a structured review of context boundaries, language drift,
-and aggregate pressure, then updates affected resources. Previous versions
-remain queryable through the datastore's version history.
+Domain understanding evolves. After new services, team reorgs, or incidents that
+revealed hidden coupling, run `revisit` to review prior decisions. The agent
+guides a structured review of context boundaries, language drift, and aggregate
+pressure, then updates affected resources. Previous versions remain queryable
+through the datastore's version history.
 
 ## Resources
 
-| Resource | Lifetime | GC | Purpose |
-|----------|----------|-----|---------|
-| `contextMap` | infinite | 20 | Bounded contexts, relationships, overloaded terms |
-| `domainGlossary` | infinite | 20 | Per-context term definitions |
-| `boundaries` | infinite | 20 | Aggregate designs with invariants and consistency rules |
+| Resource         | Lifetime | GC | Purpose                                                 |
+| ---------------- | -------- | -- | ------------------------------------------------------- |
+| `contextMap`     | infinite | 20 | Bounded contexts, relationships, overloaded terms       |
+| `domainGlossary` | infinite | 20 | Per-context term definitions                            |
+| `boundaries`     | infinite | 20 | Aggregate designs with invariants and consistency rules |
 
 All resources are versioned. Query historical versions to track how domain
 understanding evolves over time:
@@ -74,12 +74,12 @@ swamp data query "type == '@webframp/ddd-guidance' && specName == 'contextMap'"
 
 ## Design Philosophy
 
-This model stores the *results* of DDD discovery conversations, not the
-conversations themselves. The agent's value is in asking the right questions
-in the right order — Vernon's structured approach to aggregate design,
-Evans' context mapping patterns. The typed resources make that knowledge
-queryable, comparable across versions, and available to other agents making
-architectural decisions.
+This model stores the _results_ of DDD discovery conversations, not the
+conversations themselves. The agent's value is in asking the right questions in
+the right order — Vernon's structured approach to aggregate design, Evans'
+context mapping patterns. The typed resources make that knowledge queryable,
+comparable across versions, and available to other agents making architectural
+decisions.
 
 The high garbage collection count (20 versions) reflects that domain
 understanding deepens over months. Early versions capture initial assumptions;
