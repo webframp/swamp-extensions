@@ -69,7 +69,7 @@ function mockClients(overrides: {
 
 function makeContext() {
   return createModelTestContext({
-    globalArgs: { region: "us-east-1" },
+    globalArgs: { regions: ["us-east-1"] },
     definition: {
       id: "test-id",
       name: "aws-inventory",
@@ -158,9 +158,9 @@ Deno.test("model version matches CalVer pattern", () => {
   assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
-Deno.test("model globalArguments has region with default", () => {
+Deno.test("model globalArguments has regions with default", () => {
   const parsed = model.globalArguments.parse({});
-  assertEquals(parsed.region, "us-east-1");
+  assertEquals(parsed.regions, ["us-east-1"]);
 });
 
 Deno.test("model defines inventory resource", () => {
@@ -740,7 +740,7 @@ function mockScanClients(overrides: {
 
 function makeScanContext() {
   return createModelTestContext({
-    globalArgs: { region: "us-east-1" },
+    globalArgs: { regions: ["us-east-1"] },
     definition: {
       id: "test-scan",
       name: "inv-scan-test",
