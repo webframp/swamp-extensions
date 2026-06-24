@@ -436,14 +436,6 @@ mutation createIssue($projectPath: ID!, $title: String!, $description: String, $
   }
 }`;
 
-const UPDATE_ISSUE_MUTATION = `
-mutation updateIssue($id: IssueID!, $title: String, $description: String, $labels: [String!], $stateEvent: IssueStateEvent) {
-  updateIssue(input: { id: $id, title: $title, description: $description, labels: $labels, stateEvent: $stateEvent }) {
-    issue { iid title description state webUrl labels { nodes { title } } createdAt updatedAt }
-    errors
-  }
-}`;
-
 const CREATE_NOTE_MUTATION = `
 mutation createNote($noteableId: NoteableID!, $body: String!) {
   createNote(input: { noteableId: $noteableId, body: $body }) {
@@ -652,7 +644,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.21.1",
+  version: "2026.06.24.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1031,54 +1023,33 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
-        const { host, token } = ctx.globalArgs;
-        // Resolve the global issue ID first
-        const idData = await graphqlRequest(host, token, ISSUE_ID_QUERY, {
-          fullPath: args.project,
-          iid: String(args.iid),
-        });
-        const issueGid = idData.project?.issue?.id;
-        if (!issueGid) {
-          throw new Error(`Issue #${args.iid} not found in ${args.project}`);
-        }
-        const stateMap: Record<string, string> = {
-          close: "CLOSE",
-          reopen: "REOPEN",
-        };
-        const vars: Record<string, unknown> = { id: issueGid };
-        if (args.title !== undefined) vars.title = args.title;
-        if (args.description !== undefined) vars.description = args.description;
-        if (args.labels !== undefined) vars.labels = args.labels;
-        if (args.stateEvent !== undefined) {
-          vars.stateEvent = stateMap[args.stateEvent] ??
-            args.stateEvent.toUpperCase();
-        }
-        const data = await graphqlRequest(
-          host,
-          token,
-          UPDATE_ISSUE_MUTATION,
-          vars,
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
         );
-        const result = data.updateIssue;
-        if (result.errors?.length) {
-          throw new Error(`updateIssue failed: ${result.errors.join("; ")}`);
-        }
-        const issue = result.issue;
+        const body: Record<string, unknown> = {};
+        if (args.title !== undefined) body.title = args.title;
+        if (args.description !== undefined) body.description = args.description;
+        if (args.labels !== undefined) body.labels = args.labels.join(",");
+        if (args.stateEvent !== undefined) body.state_event = args.stateEvent;
+        const raw = await client.put(
+          args.project,
+          `/issues/${args.iid}`,
+          body,
+        );
         const handle = await ctx.writeResource(
           "issueDetail",
-          `${sanitizeName(args.project)}-${issue.iid}`,
+          `${sanitizeName(args.project)}-${raw.iid}`,
           {
             project: args.project,
-            iid: typeof issue.iid === "string"
-              ? parseInt(issue.iid, 10)
-              : issue.iid,
-            title: issue.title ?? "",
-            description: issue.description ?? "",
-            state: issue.state ?? "opened",
-            webUrl: issue.webUrl ?? "",
-            labels: issue.labels?.nodes?.map((l: any) => l.title) ?? [],
-            createdAt: issue.createdAt ?? "",
-            updatedAt: issue.updatedAt ?? "",
+            iid: raw.iid,
+            title: raw.title ?? "",
+            description: raw.description ?? "",
+            state: raw.state ?? "opened",
+            webUrl: raw.web_url ?? "",
+            labels: raw.labels ?? [],
+            createdAt: raw.created_at ?? "",
+            updatedAt: raw.updated_at ?? "",
           },
         );
         ctx.logger.info("Updated issue #{iid} in {project}", {
@@ -1274,6 +1245,62 @@ export const model = {
           },
         );
         ctx.logger.info("Merged MR !{iid} in {project}", {
+          iid: args.iid,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    update_merge_request: {
+      description: "Update a merge request (title, description, labels, state)",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        labels: z.array(z.string()).optional(),
+        stateEvent: z.enum(["close", "reopen"]).optional(),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          iid: number;
+          title?: string;
+          description?: string;
+          labels?: string[];
+          stateEvent?: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const body: Record<string, unknown> = {};
+        if (args.title !== undefined) body.title = args.title;
+        if (args.description !== undefined) body.description = args.description;
+        if (args.labels !== undefined) body.labels = args.labels.join(",");
+        if (args.stateEvent !== undefined) body.state_event = args.stateEvent;
+        const raw = await client.put(
+          args.project,
+          `/merge_requests/${args.iid}`,
+          body,
+        );
+        const mr = mapMR(raw);
+        const handle = await ctx.writeResource(
+          "mergeRequests",
+          `${sanitizeName(args.project)}-updated-${args.iid}`,
+          {
+            project: args.project,
+            mergeRequests: [mr],
+            count: 1,
+            truncated: false,
+            state: mr.state,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Updated MR !{iid} in {project}", {
           iid: args.iid,
           project: args.project,
         });
