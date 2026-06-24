@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.06.24.2"
+version: "2026.06.24.3"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,

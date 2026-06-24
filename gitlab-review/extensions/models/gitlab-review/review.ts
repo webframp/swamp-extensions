@@ -221,7 +221,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.06.21.1",
+  version: "2026.06.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     mrDiff: {
@@ -485,6 +485,11 @@ export const model = {
         if (result.updateNote?.errors?.length) {
           throw new Error(
             `updateNote failed: ${result.updateNote.errors.join("; ")}`,
+          );
+        }
+        if (!result.updateNote?.note) {
+          throw new Error(
+            `updateNote returned no note (noteId: ${args.noteId}, project: ${args.project})`,
           );
         }
 
