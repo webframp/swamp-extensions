@@ -1136,7 +1136,7 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.06.22.1",
+  version: "2026.06.23.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

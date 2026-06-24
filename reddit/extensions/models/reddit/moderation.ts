@@ -165,7 +165,7 @@ interface MethodContext {
 /** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.06.22.1",
+  version: "2026.06.23.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
