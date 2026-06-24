@@ -298,7 +298,7 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
 function mapDashboardMR(node: any): z.infer<typeof DashboardMRSchema> {
   return {
     project: node.project?.fullPath ?? "",
-    iid: typeof node.iid === "string" ? parseInt(node.iid) : node.iid,
+    iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
     title: node.title ?? "",
     author: node.author?.username ?? "",
     updatedAt: node.updatedAt ?? "",
@@ -644,7 +644,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.24.1",
+  version: "2026.06.24.2",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
