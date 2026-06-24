@@ -644,7 +644,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.24.2",
+  version: "2026.06.24.3",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -804,7 +804,7 @@ export const model = {
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, MERGE_REQUESTS_QUERY, {
           fullPath: args.project,
-          state: args.state === "all" ? undefined : args.state,
+          state: args.state === "all" ? undefined : args.state.toUpperCase(),
           first: 20,
         });
         const conn = data.project?.mergeRequests;
@@ -844,7 +844,7 @@ export const model = {
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, ISSUES_QUERY, {
           fullPath: args.project,
-          state: args.state === "all" ? undefined : args.state,
+          state: args.state === "all" ? undefined : args.state.toUpperCase(),
           first: 20,
         });
         const conn = data.project?.issues;
@@ -976,6 +976,11 @@ export const model = {
           throw new Error(`createIssue failed: ${result.errors.join("; ")}`);
         }
         const issue = result.issue;
+        if (!issue) {
+          throw new Error(
+            `createIssue returned no issue (project: ${args.project})`,
+          );
+        }
         const handle = await ctx.writeResource(
           "issueDetail",
           `${sanitizeName(args.project)}-${issue.iid}`,
@@ -1089,6 +1094,11 @@ export const model = {
         if (result.errors?.length) {
           throw new Error(`createNote failed: ${result.errors.join("; ")}`);
         }
+        if (!result.note) {
+          throw new Error(
+            `createNote returned no note (project: ${args.project}, iid: ${args.iid})`,
+          );
+        }
         const note = gqlMapNote(result.note);
         const handle = await ctx.writeResource(
           "notes",
@@ -1182,6 +1192,11 @@ export const model = {
         if (result.errors?.length) {
           throw new Error(
             `mergeRequestCreate failed: ${result.errors.join("; ")}`,
+          );
+        }
+        if (!result.mergeRequest) {
+          throw new Error(
+            `mergeRequestCreate returned no MR (project: ${args.project})`,
           );
         }
         const mr = gqlMapMR(result.mergeRequest);
@@ -1336,6 +1351,11 @@ export const model = {
         const result = data.createNote;
         if (result.errors?.length) {
           throw new Error(`createNote failed: ${result.errors.join("; ")}`);
+        }
+        if (!result.note) {
+          throw new Error(
+            `createNote returned no note (project: ${args.project}, iid: ${args.iid})`,
+          );
         }
         const note = gqlMapNote(result.note);
         const handle = await ctx.writeResource(
