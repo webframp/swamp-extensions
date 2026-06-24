@@ -52,6 +52,7 @@ const MAX_PAGES = 10;
 const GlobalArgsSchema = z.object({
   regions: z
     .array(z.string())
+    .min(1, "at least one region required")
     .default(["us-east-1"])
     .describe("AWS regions to inventory (fan-out across all)"),
 });
@@ -905,47 +906,43 @@ export const model = {
         _args: Record<string, never>,
         context: InventoryContext,
       ) => {
-        const handles: { name: string }[] = [];
-        for (const region of context.globalArgs.regions) {
-          const client = new S3Client({ region });
-          try {
-            const buckets: z.infer<typeof S3BucketSchema>[] = [];
+        const client = new S3Client({ region: context.globalArgs.regions[0] });
+        try {
+          const buckets: z.infer<typeof S3BucketSchema>[] = [];
 
-            const command = new ListBucketsCommand({});
-            const response = await client.send(command);
+          const command = new ListBucketsCommand({});
+          const response = await client.send(command);
 
-            if (response.Buckets) {
-              for (const bucket of response.Buckets) {
-                if (bucket.Name) {
-                  buckets.push({
-                    bucketName: bucket.Name,
-                    creationDate: bucket.CreationDate?.toISOString() || null,
-                  });
-                }
+          if (response.Buckets) {
+            for (const bucket of response.Buckets) {
+              if (bucket.Name) {
+                buckets.push({
+                  bucketName: bucket.Name,
+                  creationDate: bucket.CreationDate?.toISOString() || null,
+                });
               }
             }
-
-            const handle = await context.writeResource(
-              "inventory",
-              "s3-global",
-              {
-                region: "global",
-                resourceType: "s3",
-                resources: buckets,
-                count: buckets.length,
-                fetchedAt: new Date().toISOString(),
-              },
-            );
-
-            context.logger.info("Found {count} S3 buckets", {
-              count: buckets.length,
-            });
-            handles.push(handle);
-          } finally {
-            client.destroy();
           }
+
+          const handle = await context.writeResource(
+            "inventory",
+            "s3-global",
+            {
+              region: "global",
+              resourceType: "s3",
+              resources: buckets,
+              count: buckets.length,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
+
+          context.logger.info("Found {count} S3 buckets", {
+            count: buckets.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
         }
-        return { dataHandles: handles };
       },
     },
 
