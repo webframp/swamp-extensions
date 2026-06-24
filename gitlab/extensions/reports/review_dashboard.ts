@@ -67,10 +67,10 @@ export const report = {
       role: string,
     ): { level: string; reason: string } {
       const days = age(mr.updatedAt);
-      if (role === "reviewer" && days > 7) {
+      if (role === "reviewer" && days >= 7) {
         return { level: "🔴", reason: "overdue review" };
       }
-      if (role === "reviewer" && days > 3) {
+      if (role === "reviewer" && days >= 3) {
         return { level: "🟡", reason: "aging review" };
       }
       if (role === "reviewer") return { level: "🟢", reason: "recent" };
