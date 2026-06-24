@@ -81,6 +81,7 @@ Deno.test("model has all expected methods", () => {
     "list_releases",
     "merge",
     "update_issue",
+    "update_merge_request",
   ]);
 });
 
@@ -491,37 +492,30 @@ Deno.test("create_issue throws on mutation errors", async () => {
   }
 });
 
-Deno.test("update_issue writes issueDetail resource via GraphQL", async () => {
-  // Mock needs to handle two sequential GraphQL calls: first to get issue ID, then to update
-  let callCount = 0;
+Deno.test("update_issue writes issueDetail resource via REST", async () => {
   const original = globalThis.fetch;
-  globalThis.fetch = (_input: any, _init?: any) => {
-    callCount++;
-    const body = callCount === 1
-      ? { data: { project: { issue: { id: "gid://gitlab/Issue/123" } } } }
-      : {
-        data: {
-          updateIssue: {
-            issue: {
-              iid: 5,
-              title: "Updated",
-              description: "",
-              state: "opened",
-              webUrl: "https://git.example.org/org/repo/-/issues/5",
-              labels: { nodes: [] },
-              createdAt: "2026-01-01T00:00:00Z",
-              updatedAt: "2026-06-10T00:00:00Z",
-            },
-            errors: [],
-          },
-        },
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    // Expect a PUT to /api/v4/projects/.../issues/5
+    if (init?.method === "PUT" && url.includes("/issues/5")) {
+      const body = {
+        iid: 5,
+        title: "Updated",
+        description: "",
+        state: "opened",
+        web_url: "https://git.example.org/org/repo/-/issues/5",
+        labels: [],
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-06-10T00:00:00Z",
       };
-    return Promise.resolve(
-      new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
   };
   try {
     const { context, getWrittenResources } = createModelTestContext({

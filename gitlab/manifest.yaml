@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.06.21.1"
+version: "2026.06.24.1"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -46,7 +46,7 @@ description: |
 
   **Write:**
   - create_issue, update_issue, add_issue_note
-  - create_merge_request, merge, add_mr_note
+  - create_merge_request, update_merge_request, merge, add_mr_note
   - create_label
 repository: "https://github.com/webframp/swamp-extensions"
 models:
