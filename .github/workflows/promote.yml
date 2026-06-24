@@ -1,0 +1,51 @@
+name: Promote Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      extension:
+        description: "Extension name (e.g. @webframp/gitlab)"
+        required: true
+        type: string
+      version:
+        description: "Version to promote (e.g. 2026.06.24.4)"
+        required: true
+        type: string
+      channel:
+        description: "Target channel"
+        required: true
+        type: choice
+        options:
+          - stable
+          - rc
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.extension }}@${{ inputs.version }} → ${{ inputs.channel }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: systeminit/setup-swamp@v0.1.0
+        with:
+          api-key: ${{ secrets.SWAMP_API_KEY }}
+
+      - name: Promote extension
+        run: |
+          swamp extension promote "${{ inputs.extension }}" "${{ inputs.version }}" \
+            --channel "${{ inputs.channel }}"
+
+      - name: Create GitHub release
+        if: inputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.extension }}@${{ inputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, skipping"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "Promoted from beta to stable"

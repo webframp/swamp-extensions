@@ -33,15 +33,20 @@ jobs:
         name: Find extensions with changes
         env:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          # Determine channel: main = stable, anything else = beta
-          if [ "$HEAD_BRANCH" = "main" ]; then
+          # Determine channel: stable if the commit is on main, beta otherwise.
+          # workflow_run.head_branch is unreliable for squash merges (reports
+          # the PR branch name, not 'main'), so we check git directly.
+          if git branch -r --contains "$HEAD_SHA" | grep -q "origin/main"; then
+            CHANNEL="stable"
+          elif [ "$HEAD_BRANCH" = "main" ]; then
             CHANNEL="stable"
           else
             CHANNEL="beta"
           fi
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
-          echo "Channel: $CHANNEL (branch: $HEAD_BRANCH)"
+          echo "Channel: $CHANNEL (branch: $HEAD_BRANCH, sha: ${HEAD_SHA:0:8})"
 
           # Compare against the parent commit
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
