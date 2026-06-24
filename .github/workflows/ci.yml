@@ -719,7 +719,7 @@ jobs:
             [PASS / FAIL with one-line summary]
           claude_args: |
             --model us.anthropic.claude-sonnet-4-6
-            --allowedTools 'Read,Glob,Grep,Bash(gh pr review:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(touch /tmp/review-failed)'
+            --allowedTools 'Read,Glob,Grep,Bash(gh:*),Bash(cat:*),Bash(touch /tmp/review-failed)'
 
       - name: Fail if changes requested
         shell: bash
@@ -885,7 +885,7 @@ jobs:
             [PASS / FAIL with one-line summary]
           claude_args: |
             --model us.anthropic.claude-sonnet-4-6
-            --allowedTools 'Read,Glob,Grep,Bash(gh pr review:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(touch /tmp/security-review-failed)'
+            --allowedTools 'Read,Glob,Grep,Bash(gh:*),Bash(cat:*),Bash(touch /tmp/security-review-failed)'
 
       - name: Fail if security review requested changes
         if: steps.check.outputs.has_workflow_changes == 'true'
