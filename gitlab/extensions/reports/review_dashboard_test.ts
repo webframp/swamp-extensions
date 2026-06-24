@@ -260,3 +260,21 @@ Deno.test("json output includes summary counts", async () => {
   assertEquals((result.json as AnyJson).overdue, 1);
   assertEquals((result.json as AnyJson).active, 2);
 });
+
+Deno.test("priority: reviewer with commented=true is green/commented", async () => {
+  const data = makeDashboardData({
+    reviewing: [
+      {
+        project: "g/p",
+        title: "Already reviewed",
+        author: "bob",
+        updatedAt: daysAgo(10),
+        draft: false,
+        commented: true,
+      },
+    ],
+  });
+  const result = await report.execute(makeContext(data));
+  assertEquals((result.json as AnyJson).items[0].level, "🟢");
+  assertEquals((result.json as AnyJson).items[0].reason, "commented");
+});

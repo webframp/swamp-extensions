@@ -217,6 +217,7 @@ const DashboardMRSchema = z.object({
   draft: z.boolean(),
   labels: z.array(z.string()),
   webUrl: z.string(),
+  commented: z.boolean(),
 });
 
 const TodoSchema = z.object({
@@ -277,7 +278,7 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
   currentUser {
     username
     reviewRequestedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } }
       pageInfo { hasNextPage }
     }
     assignedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
@@ -295,7 +296,13 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
   }
 }`;
 
-function mapDashboardMR(node: any): z.infer<typeof DashboardMRSchema> {
+function mapDashboardMR(
+  node: any,
+  currentUser?: string,
+): z.infer<typeof DashboardMRSchema> {
+  const noteAuthors: string[] =
+    node.notes?.nodes?.map((n: any) => n.author?.username).filter(Boolean) ??
+      [];
   return {
     project: node.project?.fullPath ?? "",
     iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
@@ -305,6 +312,7 @@ function mapDashboardMR(node: any): z.infer<typeof DashboardMRSchema> {
     draft: node.draft ?? false,
     labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
     webUrl: node.webUrl ?? "",
+    commented: currentUser ? noteAuthors.includes(currentUser) : false,
   };
 }
 
@@ -644,7 +652,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.24.3",
+  version: "2026.06.24.4",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1569,13 +1577,19 @@ export const model = {
         const showAuthored = args.role === "all" || args.role === "author";
 
         const reviewing = showReviewing
-          ? (user.reviewRequestedMergeRequests?.nodes ?? []).map(mapDashboardMR)
+          ? (user.reviewRequestedMergeRequests?.nodes ?? []).map((n: any) =>
+            mapDashboardMR(n, user.username)
+          )
           : [];
         const assigned = showAssigned
-          ? (user.assignedMergeRequests?.nodes ?? []).map(mapDashboardMR)
+          ? (user.assignedMergeRequests?.nodes ?? []).map((n: any) =>
+            mapDashboardMR(n)
+          )
           : [];
         const authored = showAuthored
-          ? (user.authoredMergeRequests?.nodes ?? []).map(mapDashboardMR)
+          ? (user.authoredMergeRequests?.nodes ?? []).map((n: any) =>
+            mapDashboardMR(n)
+          )
           : [];
         const todos = (user.todos?.nodes ?? []).map(mapTodo);
 
