@@ -7,9 +7,11 @@ and produces a consolidated savings report with prioritized recommendations.
 
 ## Features
 
-- Month-over-month cost comparison with automated anomaly detection (>25% spike flagging)
+- Month-over-month cost comparison with automated anomaly detection (>25% spike
+  flagging)
 - Per-service deep dives for EC2, RDS, S3, and Lambda usage types
-- Networking waste analysis covering NAT Gateways, Load Balancers, and unattached Elastic IPs
+- Networking waste analysis covering NAT Gateways, Load Balancers, and
+  unattached Elastic IPs
 - Infrastructure inventory with stopped EC2 instances and orphaned EBS volumes
 - Prioritized recommendations table with estimated monthly savings
 
@@ -56,7 +58,9 @@ swamp workflow run @webframp/cost-audit \
 - `dynamodb:ListTables`, `dynamodb:DescribeTable`
 - `lambda:ListFunctions`
 - `s3:ListBuckets`
-- `elasticloadbalancing:DescribeLoadBalancers`, `elasticloadbalancing:DescribeTargetGroups`, `elasticloadbalancing:DescribeTargetHealth`
+- `elasticloadbalancing:DescribeLoadBalancers`,
+  `elasticloadbalancing:DescribeTargetGroups`,
+  `elasticloadbalancing:DescribeTargetHealth`
 - `cloudwatch:GetMetricStatistics`
 
 ## License

@@ -1,6 +1,6 @@
 version: 1
 repoId: 5027f92c-e26a-4122-9a52-45039d774372
 swampVersion: 20260615.105123.0
-upgradedAt: '2026-06-15T23:24:35.155Z'
+upgradedAt: "2026-06-15T23:24:35.155Z"
 tools:
   - claude

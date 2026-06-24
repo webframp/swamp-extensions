@@ -7,11 +7,13 @@ workflows.
 
 ## Prerequisites
 
-- swamp CLI version `20260505` or later. Run `swamp update` to get the latest version.
+- swamp CLI version `20260505` or later. Run `swamp update` to get the latest
+  version.
 
 The following command-line utilities must be available on the host:
 
-- `dig` -- DNS lookups, used by `dns_lookup` (usually provided by `bind-utils` or `dnsutils`)
+- `dig` -- DNS lookups, used by `dns_lookup` (usually provided by `bind-utils`
+  or `dnsutils`)
 - `whois` -- domain registration queries, used by `whois_lookup`
 - `openssl` -- TLS certificate inspection, used by `cert_check`
 - `traceroute` -- network path tracing, used by `traceroute`
@@ -71,14 +73,14 @@ swamp model method run net-probe port_check --input host=example.com --input por
 
 ## Methods
 
-| Method          | Description                                              |
-| --------------- | -------------------------------------------------------- |
-| `dns_lookup`    | Run dig to resolve DNS records for a domain              |
-| `http_check`    | Fetch a URL and record status, headers, timing, redirects |
-| `whois_lookup`  | Query WHOIS for domain registration details              |
-| `cert_check`    | Inspect TLS certificate subject, issuer, validity dates  |
-| `traceroute`    | Trace network path to a host                             |
-| `port_check`    | Test TCP connectivity on specific ports                  |
+| Method         | Description                                               |
+| -------------- | --------------------------------------------------------- |
+| `dns_lookup`   | Run dig to resolve DNS records for a domain               |
+| `http_check`   | Fetch a URL and record status, headers, timing, redirects |
+| `whois_lookup` | Query WHOIS for domain registration details               |
+| `cert_check`   | Inspect TLS certificate subject, issuer, validity dates   |
+| `traceroute`   | Trace network path to a host                              |
+| `port_check`   | Test TCP connectivity on specific ports                   |
 
 ## License
 

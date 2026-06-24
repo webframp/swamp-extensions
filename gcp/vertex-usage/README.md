@@ -1,8 +1,8 @@
 # @webframp/gcp/vertex-usage
 
-GCP Vertex AI token usage monitoring — multi-project scanning of
-token_count metrics via the Cloud Monitoring API. Provides per-model
-breakdowns with input/output direction split and tokens-per-minute rates.
+GCP Vertex AI token usage monitoring — multi-project scanning of token_count
+metrics via the Cloud Monitoring API. Provides per-model breakdowns with
+input/output direction split and tokens-per-minute rates.
 
 ## Authentication
 
@@ -28,7 +28,8 @@ swamp model method run vertex-usage get_token_usage --input project=jw-cd-apps-a
 
 ## Methods
 
-- **scan_projects** — Fan-out across all configured projects, per-model breakdown
+- **scan_projects** — Fan-out across all configured projects, per-model
+  breakdown
 - **get_token_usage** — Single project with model breakdown
 
 ## Output

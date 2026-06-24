@@ -1,6 +1,9 @@
 # @webframp/github
 
-A swamp model extension for querying GitHub repository data using the `gh` CLI. This extension provides methods to list repositories, inspect repository details, enumerate pull requests, issues, releases, and recent workflow runs -- all without leaving the swamp workflow.
+A swamp model extension for querying GitHub repository data using the `gh` CLI.
+This extension provides methods to list repositories, inspect repository
+details, enumerate pull requests, issues, releases, and recent workflow runs --
+all without leaving the swamp workflow.
 
 ## Prerequisites
 
@@ -61,14 +64,14 @@ swamp model method run github list_workflows --input repo=octocat/Hello-World
 
 ## Available Methods
 
-| Method | Description |
-|--------|-------------|
-| `list_repos` | List repositories for the authenticated user with basic metadata |
-| `get_repo_info` | Get detailed information about a specific repository |
-| `list_prs` | List pull requests for a repository with optional state filter |
-| `list_issues` | List issues for a repository with optional state filter |
-| `list_releases` | List releases for a repository |
-| `list_workflows` | List recent workflow runs for a repository |
+| Method           | Description                                                      |
+| ---------------- | ---------------------------------------------------------------- |
+| `list_repos`     | List repositories for the authenticated user with basic metadata |
+| `get_repo_info`  | Get detailed information about a specific repository             |
+| `list_prs`       | List pull requests for a repository with optional state filter   |
+| `list_issues`    | List issues for a repository with optional state filter          |
+| `list_releases`  | List releases for a repository                                   |
+| `list_workflows` | List recent workflow runs for a repository                       |
 
 ## License
 

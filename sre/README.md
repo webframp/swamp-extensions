@@ -42,7 +42,8 @@ swamp workflow run @webframp/sre-health-check --input target=https://example.com
 The workflow executes the following checks in parallel:
 
 - **HTTP check** -- verifies endpoint availability and response time
-- **TLS certificate check** -- inspects certificate expiry (warns at 30 days, critical at 7)
+- **TLS certificate check** -- inspects certificate expiry (warns at 30 days,
+  critical at 7)
 - **DNS lookup** -- resolves the target hostname and reports records
 - **Port check** -- tests TCP connectivity on standard ports
 - **Disk usage** -- flags filesystems above 80% (warn) or 90% (critical)
@@ -67,7 +68,7 @@ Checks: "7 total | 0 critical | 0 warning | 5 ok"
 ## Components
 
 | Type     | Name                          | Description                              |
-|----------|-------------------------------|------------------------------------------|
+| -------- | ----------------------------- | ---------------------------------------- |
 | Workflow | `@webframp/sre-health-check`  | Orchestrates all probes and diagnostics  |
 | Report   | `@webframp/sre-health-report` | Aggregates findings into a health report |
 

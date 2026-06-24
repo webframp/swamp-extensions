@@ -1,6 +1,6 @@
 manifestVersion: 1
-name: '@webframp/hermes-journal-writer'
-version: '2026.06.21.1'
+name: "@webframp/hermes-journal-writer"
+version: "2026.06.21.1"
 description: |
   Journal Writer — reads research-collector data from the swamp catalog and
   writes org-mode journal entries to ~/org/journal/. Commits and pushes to the
@@ -11,7 +11,7 @@ description: |
   - **write_daily_entry** — Appends a daily research summary to
     ~/org/journal/YYYY-MM.org with property drawer, source links,
     and summaries from HN, Lobste.rs, SRE Weekly, IFIN, and RedMonk.
-repository: 'https://github.com/webframp/swamp-extensions'
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - hermes-journal-writer/hermes_jrnl_writer.ts
 labels:

@@ -71,12 +71,12 @@ The sprint summary report produces an overview of current sprint status:
 
 This extension ships four agent skills for guided issue creation:
 
-| Skill | Purpose |
-|-------|---------|
-| `create-story` | Guides story creation with subject convention and template |
-| `create-task` | Guides procedural task creation with action plan steps |
-| `hypothesis-task` | Guides hypothesis-driven tasks for uncertain work |
-| `design-session-checklist` | Facilitates design sessions and produces task issues |
+| Skill                      | Purpose                                                    |
+| -------------------------- | ---------------------------------------------------------- |
+| `create-story`             | Guides story creation with subject convention and template |
+| `create-task`              | Guides procedural task creation with action plan steps     |
+| `hypothesis-task`          | Guides hypothesis-driven tasks for uncertain work          |
+| `design-session-checklist` | Facilitates design sessions and produces task issues       |
 
 ## Report Output Format
 

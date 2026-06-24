@@ -56,8 +56,10 @@ JSON output containing:
 
 At minimum the calling identity needs:
 
-- `logs:DescribeLogGroups`, `logs:StartQuery`, `logs:GetQueryResults`, `logs:FilterLogEvents`
-- `cloudwatch:ListMetrics`, `cloudwatch:GetMetricStatistics`, `cloudwatch:GetMetricData`
+- `logs:DescribeLogGroups`, `logs:StartQuery`, `logs:GetQueryResults`,
+  `logs:FilterLogEvents`
+- `cloudwatch:ListMetrics`, `cloudwatch:GetMetricStatistics`,
+  `cloudwatch:GetMetricData`
 - `cloudwatch:DescribeAlarms`, `cloudwatch:DescribeAlarmHistory`
 - `xray:GetServiceGraph`, `xray:GetTraceSummaries`
 - `ec2:DescribeInstances`, `lambda:ListFunctions`

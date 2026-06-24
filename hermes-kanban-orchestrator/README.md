@@ -1,8 +1,8 @@
 # @webframp/hermes-kanban-orchestrator
 
-Creates kanban tasks via `hermes kanban create` and records each task as a
-swamp data resource. This is the single entry point for creating kanban tasks
-from swamp workflows, cron, and automation.
+Creates kanban tasks via `hermes kanban create` and records each task as a swamp
+data resource. This is the single entry point for creating kanban tasks from
+swamp workflows, cron, and automation.
 
 ## Usage
 
@@ -30,10 +30,10 @@ swamp model method run kanban-orch list_recent --input limit=5
 
 ## Methods
 
-| Method | Description |
-|--------|-------------|
-| `new_task` | Create a kanban task with type, assignee, title, body, tags, and priority. Writes a `kanbanTask` resource to the swamp catalog. |
-| `list_recent` | List recent kanban tasks and record them as swamp data. |
+| Method        | Description                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `new_task`    | Create a kanban task with type, assignee, title, body, tags, and priority. Writes a `kanbanTask` resource to the swamp catalog. |
+| `list_recent` | List recent kanban tasks and record them as swamp data.                                                                         |
 
 ## Task types
 
@@ -43,11 +43,11 @@ swamp model method run kanban-orch list_recent --input limit=5
 
 ## Global arguments
 
-| Arg | Default | Description |
-|-----|---------|-------------|
-| `board` | `research` | Kanban board slug |
-| `hermesBin` | `~/.local/bin/hermes` | Path to hermes binary |
-| `repoDir` | `/tmp/swamp-fresh` | Swamp repo working directory |
+| Arg         | Default               | Description                  |
+| ----------- | --------------------- | ---------------------------- |
+| `board`     | `research`            | Kanban board slug            |
+| `hermesBin` | `~/.local/bin/hermes` | Path to hermes binary        |
+| `repoDir`   | `/tmp/swamp-fresh`    | Swamp repo working directory |
 
 ## TypeScript model export
 

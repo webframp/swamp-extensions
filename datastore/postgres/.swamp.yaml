@@ -1,7 +1,7 @@
 swampVersion: 20260615.105123.0
-initializedAt: '2026-05-05T04:01:19.840Z'
+initializedAt: "2026-05-05T04:01:19.840Z"
 repoId: cf3b9c65-2513-4537-bed9-1df1569e55e6
 tools:
   - claude
 gitignoreManaged: true
-upgradedAt: '2026-06-15T23:25:07.146Z'
+upgradedAt: "2026-06-15T23:25:07.146Z"

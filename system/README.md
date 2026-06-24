@@ -1,10 +1,15 @@
 # @webframp/system
 
-System diagnostics model for [swamp](https://github.com/systeminit/swamp). Provides operational visibility into local host health by querying disk usage, memory and swap consumption, process activity, uptime and load averages, network interfaces, and OS release information -- all through standard Unix shell commands.
+System diagnostics model for [swamp](https://github.com/systeminit/swamp).
+Provides operational visibility into local host health by querying disk usage,
+memory and swap consumption, process activity, uptime and load averages, network
+interfaces, and OS release information -- all through standard Unix shell
+commands.
 
 ## Prerequisites
 
-This extension relies on standard Unix utilities that ship with most Linux distributions:
+This extension relies on standard Unix utilities that ship with most Linux
+distributions:
 
 - `df` -- disk usage
 - `free` -- memory and swap
@@ -48,7 +53,8 @@ swamp model method run sys-diag get_network_interfaces
 swamp model method run sys-diag get_os_info
 ```
 
-Each method writes its output to a typed resource that you can inspect or feed into workflows and reports.
+Each method writes its output to a typed resource that you can inspect or feed
+into workflows and reports.
 
 ### Example: disk usage output
 
@@ -67,14 +73,14 @@ fetchedAt: "2026-04-22T12:00:00.000Z"
 
 ## Methods
 
-| Method | Description |
-|--------|-------------|
-| `get_disk_usage` | Filesystem usage from `df -h` |
-| `get_memory` | Memory and swap usage from `free -h` |
-| `get_uptime` | Boot time, uptime string, and 1/5/15-minute load averages |
-| `get_processes` | Top N processes sorted by CPU (default 20) |
-| `get_network_interfaces` | Network interfaces and addresses from `ip -j addr show` |
-| `get_os_info` | OS release info from `/etc/os-release` and kernel version from `uname -a` |
+| Method                   | Description                                                               |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `get_disk_usage`         | Filesystem usage from `df -h`                                             |
+| `get_memory`             | Memory and swap usage from `free -h`                                      |
+| `get_uptime`             | Boot time, uptime string, and 1/5/15-minute load averages                 |
+| `get_processes`          | Top N processes sorted by CPU (default 20)                                |
+| `get_network_interfaces` | Network interfaces and addresses from `ip -j addr show`                   |
+| `get_os_info`            | OS release info from `/etc/os-release` and kernel version from `uname -a` |
 
 ## License
 

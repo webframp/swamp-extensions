@@ -5,11 +5,13 @@ description: Use when facilitating or preparing a design session for a Redmine s
 
 # Design Session Checklist
 
-Facilitate a design session for a Redmine story and produce task issues from the results using the `@webframp/redmine` model.
+Facilitate a design session for a Redmine story and produce task issues from the
+results using the `@webframp/redmine` model.
 
 ## When Is a Design Session Required?
 
 **Required:**
+
 - Infrastructure change affecting multiple sites
 - Security implications
 - Team has uncertainties about the approach
@@ -17,6 +19,7 @@ Facilitate a design session for a Redmine story and produce task issues from the
 - High-risk change
 
 **Can skip (with Crew Lead + Team Lead approval):**
+
 - Exceptionally simple work
 - Crew Lead is confident in the approach
 - Team Leads approve via chat
@@ -48,57 +51,67 @@ Facilitate a design session for a Redmine story and produce task issues from the
 
 ## Design Session Output Template
 
-After the session, update the story description by appending this output using `update_issue` with `notes`:
+After the session, update the story description by appending this output using
+`update_issue` with `notes`:
 
 ```markdown
 ## Design Session: [Story Title]
 
-**Date:** [Date]
-**Participants:** [Names]
+**Date:** [Date] **Participants:** [Names]
 
 ### Design Questions
+
 1. [Question 1]
 2. [Question 2]
 
 ### Constraints
+
 - [Constraint 1]
 - [Constraint 2]
 
 ### Risks Identified
+
 - [Risk 1]
 - [Risk 2]
 
 ### Approach Options
 
-**Option 1: [Name]**
-Pros:
+**Option 1: [Name]** Pros:
+
 - [Pro 1]
 
 Cons:
+
 - [Con 1]
 
-**Option 2: [Name]**
-Pros:
+**Option 2: [Name]** Pros:
+
 - [Pro 1]
 
 Cons:
+
 - [Con 1]
 
 ### Recommended Approach
+
 [Description of chosen approach and rationale]
 
 ### Security Considerations
+
 [Security implications, mitigations, and checklist items addressed]
 
 ### Experiments Needed
+
 1. [Experiment 1 with hypothesis]
 2. [Experiment 2 with hypothesis]
 
 ### Action Items
+
 - [ ] [Action 1] - @[Owner]
 - [ ] [Action 2] - @[Owner]
 
 ### Decisions Made
+
 - [Decision 1]
 - [Decision 2]
 ```
@@ -107,7 +120,8 @@ Cons:
 
 For each action item identified in the design session:
 
-1. **Decide task type** — Is the solution known (procedural) or uncertain (hypothesis-driven)?
+1. **Decide task type** — Is the solution known (procedural) or uncertain
+   (hypothesis-driven)?
    - Known solution: use the `create-task` skill
    - Needs experimentation: use the `hypothesis-task` skill
 2. **Create the task** — run `create_issue` with the parent set to the story
@@ -118,29 +132,35 @@ For each action item identified in the design session:
 Address these during the design session and document in the output:
 
 **Authentication/Authorization:**
+
 - No hard-coded credentials
 - Service accounts follow least privilege
 - Server-side authorization checks
 
 **Data Protection:**
+
 - Sensitive data encrypted in transit (TLS 1.2+) and at rest
 - Data retention follows policy
 - PII/PHI handling compliant
 
 **Network Security:**
+
 - Firewall rules follow least privilege
 - Only required ports/services exposed
 - Network segmentation appropriate
 
 **Input Validation:**
+
 - All user input validated
 - SQL injection and XSS protections
 
 **Logging and Monitoring:**
+
 - Security events logged
 - Audit trail for sensitive actions
 
 **Dependencies:**
+
 - Scanned for vulnerabilities
 - No known high/critical vulnerabilities
 
@@ -148,12 +168,12 @@ Address these during the design session and document in the output:
 
 **Is security review required?**
 
-| Condition | Required? |
-|-----------|-----------|
-| Auth/authz changes | Yes |
-| New network services | Yes |
-| Sensitive data handling changes | Yes |
-| Public-facing or internet-exposed | Yes |
-| High-risk systems (identity, finance) | Recommended |
-| New third-party services | Recommended |
-| All other work | Minimum: security checklist |
+| Condition                             | Required?                   |
+| ------------------------------------- | --------------------------- |
+| Auth/authz changes                    | Yes                         |
+| New network services                  | Yes                         |
+| Sensitive data handling changes       | Yes                         |
+| Public-facing or internet-exposed     | Yes                         |
+| High-risk systems (identity, finance) | Recommended                 |
+| New third-party services              | Recommended                 |
+| All other work                        | Minimum: security checklist |

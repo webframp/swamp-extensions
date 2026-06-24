@@ -42,19 +42,19 @@ swamp model method run tf-infra get_outputs
 
 ## Global Arguments
 
-| Argument    | Default       | Description                                       |
-|-------------|---------------|---------------------------------------------------|
-| `workDir`   | *(required)*  | Path to an initialized Terraform/OpenTofu directory |
-| `workspace` | `default`     | Terraform workspace name                          |
-| `binary`    | `terraform`   | CLI binary: `terraform` or `tofu`                 |
+| Argument    | Default      | Description                                         |
+| ----------- | ------------ | --------------------------------------------------- |
+| `workDir`   | _(required)_ | Path to an initialized Terraform/OpenTofu directory |
+| `workspace` | `default`    | Terraform workspace name                            |
+| `binary`    | `terraform`  | CLI binary: `terraform` or `tofu`                   |
 
 ## Methods
 
 ### `list_resources`
 
-Reads state and writes a single `tf_inventory` resource containing the
-Terraform version, total resource count, and a summary array of every managed
-resource (address, type, name, provider, module path).
+Reads state and writes a single `tf_inventory` resource containing the Terraform
+version, total resource count, and a summary array of every managed resource
+(address, type, name, provider, module path).
 
 ### `read_state`
 
