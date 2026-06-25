@@ -146,6 +146,11 @@ const ContextsArgsSchema = z.object({
 });
 
 const LanguageArgsSchema = z.object({
+  mode: z.enum(["merge", "replace-context", "replace-all"])
+    .default("merge")
+    .describe(
+      "Write strategy: merge (default), replace-context, or replace-all",
+    ),
   context: z.string().describe(
     "Bounded context name these terms belong to",
   ),
@@ -248,7 +253,7 @@ type MethodContext = {
 /** DDD guidance model — bounded context discovery, ubiquitous language capture, aggregate boundary design. */
 export const model = {
   type: "@webframp/ddd-guidance",
-  version: "2026.06.24.1",
+  version: "2026.06.25.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -397,8 +402,17 @@ Guide the conversation through these phases:
    - Passive ("is processed", "gets handled") — find the actor and the verb
 
 After completing the conversation, call this method with the captured
-glossary entries. Entries are MERGED with existing glossary data —
-run repeatedly to build vocabulary across contexts.
+glossary entries.
+
+WRITE MODES (the 'mode' argument):
+- merge (default): new entries are merged with existing glossary data.
+  Matching entries (same term + context) are replaced; others are kept.
+  Use this to incrementally build vocabulary.
+- replace-context: removes ALL existing entries for the specified context,
+  then writes the supplied entries. Use this when a context has been
+  renamed or significantly redefined and old entries are stale.
+- replace-all: discards the entire glossary and writes only the supplied
+  entries. Use this for a full reset after major domain restructuring.
 
 If any terms are overloaded across contexts, include them in the
 overloadedTerms argument to update the contextMap as well.`,
@@ -425,15 +439,30 @@ overloadedTerms argument to update the contextMap as well.`,
             antiPatterns: e.antiPatterns,
           }));
 
-        const mergedEntries = [
-          ...existingEntries.filter(
-            (e) =>
-              !newEntries.some(
-                (n) => n.term === e.term && n.context === e.context,
+        let mergedEntries: z.infer<typeof GlossaryEntrySchema>[];
+        switch (args.mode) {
+          case "replace-all":
+            mergedEntries = newEntries;
+            break;
+          case "replace-context":
+            mergedEntries = [
+              ...existingEntries.filter((e) => e.context !== args.context),
+              ...newEntries,
+            ];
+            break;
+          case "merge":
+          default:
+            mergedEntries = [
+              ...existingEntries.filter(
+                (e) =>
+                  !newEntries.some(
+                    (n) => n.term === e.term && n.context === e.context,
+                  ),
               ),
-          ),
-          ...newEntries,
-        ];
+              ...newEntries,
+            ];
+            break;
+        }
 
         const glossary = {
           entries: mergedEntries,
@@ -492,9 +521,10 @@ overloadedTerms argument to update the contextMap as well.`,
         }
 
         ctx.logger.info(
-          "Domain glossary updated for context {context}. Added {newCount} entries, total {totalCount}",
+          "Domain glossary updated for context {context} (mode: {mode}). Added {newCount} entries, total {totalCount}",
           {
             context: args.context,
+            mode: args.mode,
             newCount: newEntries.length,
             totalCount: mergedEntries.length,
           },
