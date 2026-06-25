@@ -255,10 +255,12 @@ Deno.test({
       assertEquals(resources[0].specName, "quotas");
       const data = resources[0].data as {
         quotas: Array<{ quotaCode: string }>;
+        truncated: boolean;
       };
       assertEquals(data.quotas.length, 2);
       assertEquals(data.quotas[0].quotaCode, "L-FE177D64");
       assertEquals(data.quotas[1].quotaCode, "L-E95E4862");
+      assertEquals(data.truncated, false);
     } finally {
       restoreSts();
       restoreQuotas();
@@ -299,8 +301,10 @@ Deno.test({
       assertEquals(resources[0].specName, "services");
       const data = resources[0].data as {
         services: Array<{ serviceCode: string }>;
+        truncated: boolean;
       };
       assertEquals(data.services.length, 2);
+      assertEquals(data.truncated, false);
     } finally {
       restoreSts();
       restoreQuotas();
@@ -370,11 +374,13 @@ Deno.test({
       assertEquals(resources[0].specName, "utilization");
       const data = resources[0].data as {
         entries: Array<{ quotaCode: string; utilizationPct: number }>;
+        truncated: boolean;
       };
       // Only Roles (90%) should be above 80% threshold
       assertEquals(data.entries.length, 1);
       assertEquals(data.entries[0].quotaCode, "L-FE177D64");
       assertEquals(data.entries[0].utilizationPct, 90);
+      assertEquals(data.truncated, false);
     } finally {
       restoreSts();
       restoreQuotas();

@@ -30,6 +30,8 @@ import { fromIni } from "npm:@aws-sdk/credential-providers@3.1069.0";
 // Schemas
 // =============================================================================
 
+const MAX_PAGES = 20;
+
 const GlobalArgsSchema = z.object({
   profiles: z
     .array(z.string())
@@ -68,6 +70,7 @@ const QuotasResourceSchema = z.object({
   region: z.string(),
   serviceCode: z.string(),
   quotas: z.array(QuotaDetailSchema),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -80,6 +83,7 @@ const ServicesResourceSchema = z.object({
   profile: z.string(),
   accountId: z.string(),
   services: z.array(ServiceEntrySchema),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -100,6 +104,7 @@ const UtilizationResourceSchema = z.object({
   threshold: z.number(),
   region: z.string(),
   entries: z.array(UtilizationEntrySchema),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -324,7 +329,7 @@ export const model = {
         );
 
         const value = q.Value ?? 0;
-        const utilizationPct = usageValue !== null
+        const utilizationPct = usageValue !== null && value > 0
           ? Math.round((usageValue / value) * 10000) / 100
           : null;
 
@@ -394,6 +399,7 @@ export const model = {
         const quotas: z.infer<typeof QuotaDetailSchema>[] = [];
 
         let nextToken: string | undefined;
+        let pages = 0;
         do {
           const resp = await client.send(
             new ListServiceQuotasCommand({
@@ -419,8 +425,10 @@ export const model = {
           }
 
           nextToken = resp.NextToken;
-        } while (nextToken);
+          pages++;
+        } while (nextToken && pages < MAX_PAGES);
 
+        const truncated = !!nextToken;
         const handle = await ctx.writeResource(
           "quotas",
           `${args.serviceCode}-${sanitizeName(profile)}`,
@@ -430,6 +438,7 @@ export const model = {
             region,
             serviceCode: args.serviceCode,
             quotas,
+            truncated,
             fetchedAt: new Date().toISOString(),
           } as unknown as Record<string, unknown>,
         );
@@ -466,6 +475,7 @@ export const model = {
         const services: z.infer<typeof ServiceEntrySchema>[] = [];
 
         let nextToken: string | undefined;
+        let pages = 0;
         do {
           const resp = await client.send(
             new ListServicesCommand({
@@ -482,8 +492,10 @@ export const model = {
           }
 
           nextToken = resp.NextToken;
-        } while (nextToken);
+          pages++;
+        } while (nextToken && pages < MAX_PAGES);
 
+        const truncated = !!nextToken;
         const handle = await ctx.writeResource(
           "services",
           `services-${sanitizeName(profile)}`,
@@ -491,6 +503,7 @@ export const model = {
             profile,
             accountId,
             services,
+            truncated,
             fetchedAt: new Date().toISOString(),
           } as unknown as Record<string, unknown>,
         );
@@ -538,6 +551,7 @@ export const model = {
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const threshold = args.threshold ?? 0.8;
         const entries: z.infer<typeof UtilizationEntrySchema>[] = [];
+        let anyTruncated = false;
 
         for (const profile of profiles) {
           const client = createQuotasClient(profile, region);
@@ -545,6 +559,7 @@ export const model = {
           const accountId = await getAccountId(profile, region);
 
           let nextToken: string | undefined;
+          let pages = 0;
           do {
             const resp = await client.send(
               new ListServiceQuotasCommand({
@@ -590,7 +605,10 @@ export const model = {
             }
 
             nextToken = resp.NextToken;
-          } while (nextToken);
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
+
+          if (nextToken) anyTruncated = true;
 
           ctx.logger.info(
             "Checked {service} utilization in {account}: {count} over threshold",
@@ -610,6 +628,7 @@ export const model = {
             threshold,
             region,
             entries,
+            truncated: anyTruncated,
             fetchedAt: new Date().toISOString(),
           } as unknown as Record<string, unknown>,
         );
