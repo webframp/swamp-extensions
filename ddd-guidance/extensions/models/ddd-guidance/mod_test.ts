@@ -552,7 +552,7 @@ Deno.test("boundaries writes boundaries resource with provided data", async () =
   const resources = getWrittenResources();
   assertEquals(resources.length, 1);
   assertEquals(resources[0].specName, "boundaries");
-  assertEquals(resources[0].instanceName, "inventory");
+  assertEquals(resources[0].name, "inventory");
 
   const data = resources[0].data as {
     aggregates: Array<{ name: string; context: string }>;
