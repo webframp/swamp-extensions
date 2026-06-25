@@ -723,9 +723,18 @@ jobs:
 
       - name: Fail if changes requested
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -f /tmp/review-failed ]; then
             echo "::error::Adversarial review requested changes — blocking merge"
+            exit 1
+          fi
+          # Belt-and-suspenders: also check the actual review state on the PR
+          CHANGES_REQUESTED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" \
+            --jq '[.[] | select(.state == "CHANGES_REQUESTED" and .user.login == "github-actions[bot]" and (.body | test("Adversarial Review")))] | length')
+          if [ "$CHANGES_REQUESTED" -gt 0 ]; then
+            echo "::error::Adversarial review has CHANGES_REQUESTED state on PR — blocking merge"
             exit 1
           fi
 
@@ -890,8 +899,17 @@ jobs:
       - name: Fail if security review requested changes
         if: steps.check.outputs.has_workflow_changes == 'true'
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -f /tmp/security-review-failed ]; then
             echo "::error::CI security review requested changes — blocking merge"
+            exit 1
+          fi
+          # Belt-and-suspenders: also check the actual review state on the PR
+          CHANGES_REQUESTED=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews" \
+            --jq '[.[] | select(.state == "CHANGES_REQUESTED" and .user.login == "github-actions[bot]" and (.body | test("CI Security Review")))] | length')
+          if [ "$CHANGES_REQUESTED" -gt 0 ]; then
+            echo "::error::CI security review has CHANGES_REQUESTED state on PR — blocking merge"
             exit 1
           fi
