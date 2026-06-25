@@ -469,7 +469,7 @@ Deno.test("discover_trust_map captures federated trust principals", async () => 
   assertEquals(data.federatedTrusts[0].targetAccount, "111111111111");
 });
 
-Deno.test("trustMap resource schema requires federatedTrusts field", () => {
+Deno.test("trustMap resource schema requires wildcardTrusts and federatedTrusts", () => {
   const result = model.resources.trustMap.schema.safeParse({
     edges: [],
     externalTrusts: [],
@@ -480,16 +480,72 @@ Deno.test("trustMap resource schema requires federatedTrusts field", () => {
   assertEquals(result.success, false);
 });
 
-Deno.test("trustMap resource schema accepts complete data with federatedTrusts", () => {
+Deno.test("trustMap resource schema accepts complete data", () => {
   const result = model.resources.trustMap.schema.safeParse({
     edges: [],
     externalTrusts: [],
+    wildcardTrusts: [],
     federatedTrusts: [],
     serviceTrusts: [],
     knownAccounts: [],
     fetchedAt: "2026-06-25T00:00:00Z",
   });
   assertEquals(result.success, true);
+});
+
+Deno.test("discover_trust_map routes wildcard principal to wildcardTrusts", async () => {
+  const { context, getWrittenResources } = createIamContext({
+    "roles-prod": {
+      profile: "prod",
+      accountId: "111111111111",
+      truncated: false,
+      roles: [
+        {
+          roleName: "publicly-assumable",
+          arn: "arn:aws:iam::111111111111:role/publicly-assumable",
+          path: "/",
+          roleId: "AROA9999999999",
+          description: "",
+          createDate: "2026-01-01T00:00:00Z",
+          lastUsed: null,
+          lastUsedRegion: null,
+          maxSessionDuration: 3600,
+          permissionBoundary: null,
+          attachedPolicies: [],
+          inlinePolicies: [],
+          trustPolicy: [
+            {
+              effect: "Allow",
+              principals: [{ type: "Wildcard", value: "*" }],
+              actions: ["sts:AssumeRole"],
+            },
+          ],
+          tags: {},
+          isServiceLinked: false,
+        },
+      ],
+      fetchedAt: "2026-06-25T00:00:00Z",
+    },
+  });
+
+  await model.methods.discover_trust_map.execute(
+    {},
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    wildcardTrusts: Array<{
+      targetRoleName: string;
+      targetAccount: string;
+    }>;
+    externalTrusts: unknown[];
+  };
+  assertEquals(data.wildcardTrusts.length, 1);
+  assertEquals(data.wildcardTrusts[0].targetRoleName, "publicly-assumable");
+  assertEquals(data.wildcardTrusts[0].targetAccount, "111111111111");
+  assertEquals(data.externalTrusts.length, 0);
 });
 
 // =============================================================================

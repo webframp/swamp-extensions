@@ -53,7 +53,7 @@ const GlobalArgsSchema = z.object({
 });
 
 const TrustPrincipalSchema = z.object({
-  type: z.enum(["AWS", "Service", "Federated"]),
+  type: z.enum(["AWS", "Service", "Federated", "Wildcard"]),
   value: z.string(),
 });
 
@@ -168,9 +168,18 @@ const FederatedTrustSchema = z.object({
   conditions: z.record(z.string(), z.unknown()).optional(),
 });
 
+const WildcardTrustSchema = z.object({
+  targetRoleArn: z.string(),
+  targetAccount: z.string(),
+  targetRoleName: z.string(),
+  actions: z.array(z.string()),
+  conditions: z.record(z.string(), z.unknown()).optional(),
+});
+
 const TrustMapResourceSchema = z.object({
   edges: z.array(TrustEdgeSchema),
   externalTrusts: z.array(TrustEdgeSchema),
+  wildcardTrusts: z.array(WildcardTrustSchema),
   federatedTrusts: z.array(FederatedTrustSchema),
   serviceTrusts: z.array(z.object({
     service: z.string(),
@@ -236,13 +245,14 @@ function parseTrustPolicy(
       | undefined;
 
     if (typeof principal === "string") {
-      principals.push({ type: "AWS", value: principal });
+      const type = principal === "*" ? "Wildcard" : "AWS";
+      principals.push({ type, value: principal });
     } else if (principal) {
       for (const [type, values] of Object.entries(principal)) {
         const arr = Array.isArray(values) ? values : [values];
         for (const v of arr) {
           principals.push({
-            type: type as "AWS" | "Service" | "Federated",
+            type: type as "AWS" | "Service" | "Federated" | "Wildcard",
             value: String(v),
           });
         }
@@ -304,7 +314,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.06.25.2",
+  version: "2026.06.25.3",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -711,7 +721,8 @@ export const model = {
 
           const accountId = data.accountId as string;
           knownAccounts.push(accountId);
-          const roles = data.roles as z.infer<typeof RoleSchema>[];
+          const roles =
+            (data.roles as z.infer<typeof RoleSchema>[] | undefined) ?? [];
           for (const role of roles) {
             allRoles.push({ accountId, role });
           }
@@ -725,6 +736,7 @@ export const model = {
 
         const edges: z.infer<typeof TrustEdgeSchema>[] = [];
         const externalTrusts: z.infer<typeof TrustEdgeSchema>[] = [];
+        const wildcardTrusts: z.infer<typeof WildcardTrustSchema>[] = [];
         const federatedTrusts: z.infer<typeof FederatedTrustSchema>[] = [];
         const serviceTrusts: Array<{
           service: string;
@@ -742,6 +754,14 @@ export const model = {
                   service: principal.value,
                   targetRoleArn: role.arn,
                   targetAccount: accountId,
+                });
+              } else if (principal.type === "Wildcard") {
+                wildcardTrusts.push({
+                  targetRoleArn: role.arn,
+                  targetAccount: accountId,
+                  targetRoleName: role.roleName,
+                  actions: stmt.actions,
+                  conditions: stmt.conditions,
                 });
               } else if (principal.type === "Federated") {
                 federatedTrusts.push({
@@ -791,6 +811,7 @@ export const model = {
           {
             edges,
             externalTrusts,
+            wildcardTrusts,
             federatedTrusts,
             serviceTrusts,
             knownAccounts,
@@ -799,11 +820,12 @@ export const model = {
         );
 
         ctx.logger.info(
-          "Trust map built: {edgeCount} known edges, {externalCount} external trusts, " +
-            "{federatedCount} federated trusts, {serviceCount} service trusts",
+          "Trust map built: {edgeCount} known edges, {externalCount} external, " +
+            "{wildcardCount} wildcard, {federatedCount} federated, {serviceCount} service",
           {
             edgeCount: edges.length,
             externalCount: externalTrusts.length,
+            wildcardCount: wildcardTrusts.length,
             federatedCount: federatedTrusts.length,
             serviceCount: serviceTrusts.length,
           },
