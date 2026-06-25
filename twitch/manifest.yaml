@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/twitch"
-version: "2026.06.25.1"
+version: "2026.06.25.2"
 description: |
   Twitch Moderation Toolkit — cross-channel moderation visibility for Twitch moderators.
 
@@ -39,7 +39,7 @@ description: |
 
   ```bash
   # 1. Open in browser (replace YOUR_CLIENT_ID):
-  # https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=code&scope=moderator:read:chatters+moderation:read+moderator:manage:banned_users+channel:read:editors
+  # https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=code&scope=moderator:read:chatters+moderation:read+moderator:manage:banned_users+user:write:chat+channel:read:editors+moderator:read:suspicious_users+moderator:read:warnings
 
   # 2. Copy the code from the redirect URL, then exchange for tokens:
   curl -X POST 'https://id.twitch.tv/oauth2/token' \
@@ -54,12 +54,19 @@ description: |
 
   The model refreshes expired access tokens automatically using the refresh token.
 
-  ## Required Scopes
+  ## Scopes
 
-  - moderator:read:chatters
-  - moderation:read
-  - moderator:manage:banned_users
-  - channel:read:editors
+  Request all scopes during app registration to avoid re-authorization later.
+
+  | Scope | Used by | Purpose |
+  |-------|---------|---------|
+  | moderator:read:chatters | get_chatters | List users in chat |
+  | moderation:read | get_banned_users, get_mod_events | Read bans and mod activity |
+  | moderator:manage:banned_users | ban_user, unban_user | Issue bans/timeouts and unban |
+  | user:write:chat | send_message | Send chat messages as your user |
+  | channel:read:editors | get_channel | Read channel metadata |
+  | moderator:read:suspicious_users | (future) | Twitch-flagged suspicious users |
+  | moderator:read:warnings | (future) | Warnings issued to users |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - twitch/mod.ts

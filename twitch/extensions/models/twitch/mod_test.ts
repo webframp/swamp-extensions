@@ -111,7 +111,7 @@ Deno.test("twitch model: has globalArguments with required fields", () => {
   assertExists(shape.refreshToken);
 });
 
-Deno.test("twitch model: has all 7 methods and required resources", () => {
+Deno.test("twitch model: has all 8 methods and required resources", () => {
   assertExists(model.methods);
   assertExists(model.methods.get_channel);
   assertExists(model.methods.get_chatters);
@@ -119,6 +119,7 @@ Deno.test("twitch model: has all 7 methods and required resources", () => {
   assertExists(model.methods.get_banned_users);
   assertExists(model.methods.ban_user);
   assertExists(model.methods.unban_user);
+  assertExists(model.methods.send_message);
   assertExists(model.methods.get_mod_events);
 
   assertExists(model.resources);
@@ -127,6 +128,7 @@ Deno.test("twitch model: has all 7 methods and required resources", () => {
   assertExists(model.resources.user);
   assertExists(model.resources["banned-users"]);
   assertExists(model.resources["ban-result"]);
+  assertExists(model.resources["chat-message"]);
   assertExists(model.resources["mod-events"]);
 });
 
@@ -457,6 +459,62 @@ Deno.test({
       };
       assertEquals(data.action, "unban");
       assertEquals(data.userId, "target-user");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "twitch model: send_message posts to chat and writes chat-message resource",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedBody: Record<string, string> = {};
+
+    const { url, server } = startMockHelixServer({
+      "/users": () => USERS_RESPONSE,
+      "/chat/messages": (req) => {
+        req.text().then((text: string) => {
+          capturedBody = JSON.parse(text);
+        });
+        return {
+          data: [{ message_id: "msg-001", is_sent: true }],
+        };
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: GLOBAL_ARGS,
+        definition: DEFINITION,
+      });
+
+      const result = await model.methods.send_message.execute(
+        { message: "Please follow the rules", replyToMessageId: "parent-123" },
+        context as unknown as Parameters<
+          typeof model.methods.send_message.execute
+        >[1],
+      );
+
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "chat-message");
+
+      const data = resources[0].data as {
+        channel: string;
+        message: string;
+        replyToMessageId: string | null;
+      };
+      assertEquals(data.channel, "testchannel");
+      assertEquals(data.message, "Please follow the rules");
+      assertEquals(data.replyToMessageId, "parent-123");
+
+      assertEquals(capturedBody.broadcaster_id, BROADCASTER_ID);
+      assertEquals(capturedBody.sender_id, "mod-999");
+      assertEquals(capturedBody.reply_parent_message_id, "parent-123");
     } finally {
       uninstall();
       await server.shutdown();

@@ -153,6 +153,13 @@ const BanResultSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const ChatMessageSchema = z.object({
+  channel: z.string(),
+  message: z.string(),
+  replyToMessageId: z.string().nullable(),
+  sentAt: z.string(),
+});
+
 const ModEventSchema = z.object({
   eventType: z.string(),
   eventTimestamp: z.string(),
@@ -174,7 +181,7 @@ const ModEventsSchema = z.object({
 
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.06.25.1",
+  version: "2026.06.25.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -207,6 +214,12 @@ export const model = {
       schema: BanResultSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "chat-message": {
+      description: "Chat message sent to a channel (audit trail)",
+      schema: ChatMessageSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "mod-events": {
       description: "Moderator add/remove events in a channel",
@@ -465,6 +478,51 @@ export const model = {
           userId: args.userId,
           channel,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    send_message: {
+      description:
+        "Send a chat message in the configured channel (requires user:write:chat scope)",
+      arguments: z.object({
+        message: z.string().describe("Message text to send (max 500 chars)"),
+        replyToMessageId: z.string().optional().describe(
+          "Message ID to reply to (threads the response)",
+        ),
+      }),
+      execute: async (
+        args: { message: string; replyToMessageId?: string },
+        context: MethodContext,
+      ) => {
+        const { channel, moderatorId } = context.globalArgs;
+        const creds = credsFrom(context.globalArgs);
+        const broadcasterId = await getBroadcasterId(creds, channel);
+
+        const body: Record<string, string> = {
+          broadcaster_id: broadcasterId,
+          sender_id: moderatorId,
+          message: args.message,
+        };
+        if (args.replyToMessageId) {
+          body.reply_parent_message_id = args.replyToMessageId;
+        }
+
+        await helixApi(creds, "/chat/messages", "POST", body);
+
+        const instanceName = `${channel}-${Date.now()}`;
+        const handle = await context.writeResource(
+          "chat-message",
+          instanceName,
+          {
+            channel,
+            message: args.message,
+            replyToMessageId: args.replyToMessageId ?? null,
+            sentAt: new Date().toISOString(),
+          },
+        );
+
+        context.logger.info("Sent message in {channel}", { channel });
         return { dataHandles: [handle] };
       },
     },
