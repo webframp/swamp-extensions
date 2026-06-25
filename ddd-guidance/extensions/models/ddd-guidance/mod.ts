@@ -463,7 +463,21 @@ overloadedTerms argument to update the contextMap as well.`,
             for (const newTerm of args.overloadedTerms) {
               const idx = merged.findIndex((t) => t.term === newTerm.term);
               if (idx >= 0) {
-                merged[idx] = newTerm;
+                const existingMeanings = [...merged[idx].meanings];
+                for (const newMeaning of newTerm.meanings) {
+                  const mIdx = existingMeanings.findIndex(
+                    (m) => m.context === newMeaning.context,
+                  );
+                  if (mIdx >= 0) {
+                    existingMeanings[mIdx] = newMeaning;
+                  } else {
+                    existingMeanings.push(newMeaning);
+                  }
+                }
+                merged[idx] = {
+                  term: newTerm.term,
+                  meanings: existingMeanings,
+                };
               } else {
                 merged.push(newTerm);
               }
