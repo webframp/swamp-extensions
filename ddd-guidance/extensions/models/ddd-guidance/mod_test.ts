@@ -346,6 +346,7 @@ Deno.test("language writes domainGlossary with entries from args", async () => {
 
   const result = await model.methods.language.execute(
     {
+      mode: "merge",
       context: "order-management",
       entries: [{
         term: "Order",
@@ -399,6 +400,7 @@ Deno.test("language merges new entries with existing glossary", async () => {
 
   await model.methods.language.execute(
     {
+      mode: "merge",
       context: "order-management",
       entries: [{
         term: "Order",
@@ -439,6 +441,7 @@ Deno.test("language updates contextMap overloadedTerms when provided", async () 
 
   await model.methods.language.execute(
     {
+      mode: "merge",
       context: "order-management",
       entries: [{
         term: "Status",
@@ -485,6 +488,7 @@ Deno.test("language handles gracefully when no existing glossary", async () => {
 
   const result = await model.methods.language.execute(
     {
+      mode: "merge",
       context: "new-context",
       entries: [{
         term: "Widget",
@@ -501,6 +505,222 @@ Deno.test("language handles gracefully when no existing glossary", async () => {
   assertEquals(getWrittenResources().length, 1);
   const data = getWrittenResources()[0].data as { entries: unknown[] };
   assertEquals(data.entries.length, 1);
+});
+
+// =============================================================================
+// Schema Tests — language mode argument
+// =============================================================================
+
+Deno.test("language mode defaults to merge when omitted", () => {
+  const result = model.methods.language.arguments.safeParse({
+    context: "order-management",
+    entries: [{
+      term: "Order",
+      definition: "A purchase request",
+      examples: [],
+      relatedTerms: [],
+    }],
+  });
+  assertEquals(result.success, true);
+  if (result.success) {
+    assertEquals(result.data.mode, "merge");
+  }
+});
+
+Deno.test("language accepts all valid mode values", () => {
+  for (const mode of ["merge", "replace-context", "replace-all"]) {
+    const result = model.methods.language.arguments.safeParse({
+      mode,
+      context: "test",
+      entries: [{
+        term: "X",
+        definition: "x",
+        examples: [],
+        relatedTerms: [],
+      }],
+    });
+    assertEquals(result.success, true, `mode "${mode}" should be accepted`);
+  }
+});
+
+Deno.test("language rejects invalid mode value", () => {
+  const result = model.methods.language.arguments.safeParse({
+    mode: "append",
+    context: "test",
+    entries: [{
+      term: "X",
+      definition: "x",
+      examples: [],
+      relatedTerms: [],
+    }],
+  });
+  assertEquals(result.success, false);
+});
+
+// =============================================================================
+// Execute Tests — language replace-context mode
+// =============================================================================
+
+Deno.test("replace-context removes only entries for the specified context", async () => {
+  const { context, getWrittenResources } = createDddContext({
+    glossary: {
+      entries: [
+        {
+          term: "Order",
+          context: "order-management",
+          definition: "Old definition",
+          examples: [],
+          relatedTerms: [],
+        },
+        {
+          term: "Cart",
+          context: "order-management",
+          definition: "A shopping cart",
+          examples: [],
+          relatedTerms: [],
+        },
+        {
+          term: "Shipment",
+          context: "shipping",
+          definition: "A delivery unit",
+          examples: [],
+          relatedTerms: [],
+        },
+      ],
+      updatedAt: "2026-06-01T00:00:00Z",
+    },
+  });
+
+  await model.methods.language.execute(
+    {
+      mode: "replace-context",
+      context: "order-management",
+      entries: [{
+        term: "Order",
+        definition: "Revised definition",
+        examples: ["new example"],
+        relatedTerms: [],
+      }],
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    entries: Array<{ term: string; context: string; definition: string }>;
+  };
+  assertEquals(data.entries.length, 2);
+  const order = data.entries.find((e) => e.term === "Order")!;
+  assertEquals(order.definition, "Revised definition");
+  assertEquals(order.context, "order-management");
+  const shipment = data.entries.find((e) => e.term === "Shipment")!;
+  assertEquals(shipment.context, "shipping");
+  const cart = data.entries.find((e) => e.term === "Cart");
+  assertEquals(cart, undefined);
+});
+
+// =============================================================================
+// Execute Tests — language replace-all mode
+// =============================================================================
+
+Deno.test("replace-all discards entire existing glossary", async () => {
+  const { context, getWrittenResources } = createDddContext({
+    glossary: {
+      entries: [
+        {
+          term: "Order",
+          context: "order-management",
+          definition: "Old",
+          examples: [],
+          relatedTerms: [],
+        },
+        {
+          term: "Shipment",
+          context: "shipping",
+          definition: "Old",
+          examples: [],
+          relatedTerms: [],
+        },
+      ],
+      updatedAt: "2026-06-01T00:00:00Z",
+    },
+  });
+
+  await model.methods.language.execute(
+    {
+      mode: "replace-all",
+      context: "new-context",
+      entries: [{
+        term: "Widget",
+        definition: "A new thing",
+        examples: ["example"],
+        relatedTerms: [],
+      }],
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    entries: Array<{ term: string; context: string }>;
+  };
+  assertEquals(data.entries.length, 1);
+  assertEquals(data.entries[0].term, "Widget");
+  assertEquals(data.entries[0].context, "new-context");
+});
+
+Deno.test("replace-all with no existing glossary writes supplied entries", async () => {
+  const { context, getWrittenResources } = createDddContext();
+
+  await model.methods.language.execute(
+    {
+      mode: "replace-all",
+      context: "fresh",
+      entries: [{
+        term: "Alpha",
+        definition: "First",
+        examples: [],
+        relatedTerms: [],
+      }],
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as { entries: Array<{ term: string }> };
+  assertEquals(data.entries.length, 1);
+  assertEquals(data.entries[0].term, "Alpha");
+});
+
+// =============================================================================
+// Execute Tests — language mode logging
+// =============================================================================
+
+Deno.test("language logs mode in info message", async () => {
+  const { context, getLogsByLevel } = createDddContext();
+
+  await model.methods.language.execute(
+    {
+      mode: "replace-context",
+      context: "test",
+      entries: [{
+        term: "X",
+        definition: "x",
+        examples: [],
+        relatedTerms: [],
+      }],
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const logs = getLogsByLevel("info");
+  assertEquals(logs.length, 1);
+  const meta = logs[0].args[0] as { mode: string };
+  assertEquals(meta.mode, "replace-context");
 });
 
 // =============================================================================
