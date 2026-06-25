@@ -1,0 +1,55 @@
+manifestVersion: 1
+name: "@webframp/aws/service-quotas"
+version: "2026.06.25.1"
+description: |
+  Query and monitor AWS Service Quotas across accounts. Fan-out utilization
+  checks identify quotas approaching their limits before they cause failures.
+
+  ## Authentication
+
+  Uses the default AWS credential chain via named profiles.
+
+  ## Required IAM Permissions
+
+  - `servicequotas:GetServiceQuota`
+  - `servicequotas:ListServiceQuotas`
+  - `servicequotas:ListServices`
+  - `servicequotas:GetAWSDefaultServiceQuota`
+  - `cloudwatch:GetMetricData` (for usage metrics)
+  - `sts:GetCallerIdentity`
+
+  ## Usage
+
+  ```bash
+  # Create model
+  swamp model create @webframp/aws/service-quotas quotas \
+    --set profiles='["prod-readonly","staging-readonly"]'
+
+  # Check IAM role quota
+  swamp model method run quotas get_quota \
+    --input serviceCode=iam --input quotaCode=L-FE177D64
+
+  # List all IAM quotas
+  swamp model method run quotas list_quotas --input serviceCode=iam
+
+  # Find quotas above 80% utilization across accounts
+  swamp model method run quotas check_utilization \
+    --input serviceCode=iam --input threshold=0.8
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/service-quotas.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - aws
+  - service-quotas
+  - limits
+  - capacity
+  - ops

@@ -24,6 +24,7 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
 | [`@webframp/aws/guardduty`](aws/guardduty/) | AWS GuardDuty findings and member account enrollment from delegated admin | `@aws-sdk/client-guardduty` |
 | [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
+| [`@webframp/aws/service-quotas`](aws/service-quotas/) | AWS Service Quotas — query limits, check utilization, request increases | `@aws-sdk/client-service-quotas`, `@aws-sdk/client-cloudwatch` |
 | [`@webframp/terraform`](terraform/) | Terraform/OpenTofu state reader — resource inventory, full state, and outputs | None (shells out to `terraform` or `tofu`) |
 | [`@webframp/reddit/moderation`](reddit/) | Reddit moderation — modqueue, reports, modlog, comments, posts, user info | None (uses fetch + OAuth2) |
 | [`@webframp/rice-scoring`](rice-scoring/) | RICE scoring methodology as an agent-guided framework — configurable scales, structured interviews, ranked scorecards | None (concept model) |
@@ -107,6 +108,7 @@ swamp extension pull @webframp/aws/cost-estimate
 swamp extension pull @webframp/aws/cost-explorer
 swamp extension pull @webframp/aws/guardduty
 swamp extension pull @webframp/aws/networking
+swamp extension pull @webframp/aws/service-quotas
 swamp extension pull @webframp/aws/cost-report
 
 # Vault extensions
