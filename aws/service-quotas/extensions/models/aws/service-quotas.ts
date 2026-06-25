@@ -162,8 +162,12 @@ function sanitizeName(s: string): string {
 
 async function getAccountId(profile: string, region: string): Promise<string> {
   const sts = createStsClient(profile, region);
-  const resp = await sts.send(new GetCallerIdentityCommand({}));
-  return resp.Account ?? "unknown";
+  try {
+    const resp = await sts.send(new GetCallerIdentityCommand({}));
+    return resp.Account ?? "unknown";
+  } finally {
+    sts.destroy();
+  }
 }
 
 async function getUsageMetric(
@@ -236,9 +240,10 @@ interface ModelContext {
 // Model
 // =============================================================================
 
+/** AWS Service Quotas observation model with fan-out utilization checking. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.06.25.1",
+  version: "2026.06.25.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -305,71 +310,81 @@ export const model = {
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
         const cw = createCloudWatchClient(profile, region);
-        const accountId = await getAccountId(profile, region);
+        try {
+          const accountId = await getAccountId(profile, region);
 
-        const resp = await client.send(
-          new GetServiceQuotaCommand({
-            ServiceCode: args.serviceCode,
-            QuotaCode: args.quotaCode,
-          }),
-        );
+          const resp = await client.send(
+            new GetServiceQuotaCommand({
+              ServiceCode: args.serviceCode,
+              QuotaCode: args.quotaCode,
+            }),
+          );
 
-        const q = resp.Quota!;
-        const usageMetric = q.UsageMetric;
-        const usageValue = await getUsageMetric(
-          cw,
-          usageMetric?.MetricNamespace,
-          usageMetric?.MetricName,
-          usageMetric?.MetricDimensions
-            ? Object.entries(usageMetric.MetricDimensions).map(([k, v]) => ({
-              Name: k,
-              Value: v,
-            }))
-            : undefined,
-        );
+          const q = resp.Quota;
+          if (!q) {
+            throw new Error(
+              `No quota found for ${args.serviceCode}/${args.quotaCode}`,
+            );
+          }
+          const usageMetric = q.UsageMetric;
+          const usageValue = await getUsageMetric(
+            cw,
+            usageMetric?.MetricNamespace,
+            usageMetric?.MetricName,
+            usageMetric?.MetricDimensions
+              ? Object.entries(usageMetric.MetricDimensions).map(([k, v]) => ({
+                Name: k,
+                Value: v as string,
+              }))
+              : undefined,
+          );
 
-        const value = q.Value ?? 0;
-        const utilizationPct = usageValue !== null && value > 0
-          ? Math.round((usageValue / value) * 10000) / 100
-          : null;
+          const value = q.Value ?? 0;
+          const utilizationPct = usageValue !== null && value > 0
+            ? Math.round((usageValue / value) * 10000) / 100
+            : null;
 
-        const quota: z.infer<typeof QuotaDetailSchema> = {
-          serviceCode: args.serviceCode,
-          serviceName: q.ServiceName ?? args.serviceCode,
-          quotaCode: args.quotaCode,
-          quotaName: q.QuotaName ?? "",
-          value,
-          unit: q.Unit ?? "None",
-          adjustable: q.Adjustable ?? false,
-          globalQuota: q.GlobalQuota ?? false,
-          usageValue,
-          utilizationPct,
-        };
-
-        const handle = await ctx.writeResource(
-          "quota",
-          `${args.serviceCode}-${args.quotaCode}-${sanitizeName(profile)}`,
-          {
-            profile,
-            accountId,
-            region,
-            quota,
-            fetchedAt: new Date().toISOString(),
-          } as unknown as Record<string, unknown>,
-        );
-
-        ctx.logger.info(
-          "Quota {service}/{code} in {account}: {value} ({usage}% used)",
-          {
-            service: args.serviceCode,
-            code: args.quotaCode,
-            account: accountId,
+          const quota: z.infer<typeof QuotaDetailSchema> = {
+            serviceCode: args.serviceCode,
+            serviceName: q.ServiceName ?? args.serviceCode,
+            quotaCode: args.quotaCode,
+            quotaName: q.QuotaName ?? "",
             value,
-            usage: utilizationPct ?? "unknown",
-          },
-        );
+            unit: q.Unit ?? "None",
+            adjustable: q.Adjustable ?? false,
+            globalQuota: q.GlobalQuota ?? false,
+            usageValue,
+            utilizationPct,
+          };
 
-        return { dataHandles: [handle] };
+          const handle = await ctx.writeResource(
+            "quota",
+            `${args.serviceCode}-${args.quotaCode}-${sanitizeName(profile)}`,
+            {
+              profile,
+              accountId,
+              region,
+              quota,
+              fetchedAt: new Date().toISOString(),
+            } as unknown as Record<string, unknown>,
+          );
+
+          ctx.logger.info(
+            "Quota {service}/{code} in {account}: {value} ({usage}% used)",
+            {
+              service: args.serviceCode,
+              code: args.quotaCode,
+              account: accountId,
+              value,
+              usage: utilizationPct ?? "unknown",
+            },
+          );
+
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+          cw.destroy();
+        }
       },
     },
 
@@ -395,64 +410,68 @@ export const model = {
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
-        const accountId = await getAccountId(profile, region);
-        const quotas: z.infer<typeof QuotaDetailSchema>[] = [];
+        try {
+          const accountId = await getAccountId(profile, region);
+          const quotas: z.infer<typeof QuotaDetailSchema>[] = [];
 
-        let nextToken: string | undefined;
-        let pages = 0;
-        do {
-          const resp = await client.send(
-            new ListServiceQuotasCommand({
-              ServiceCode: args.serviceCode,
-              NextToken: nextToken,
-              MaxResults: 100,
-            }),
+          let nextToken: string | undefined;
+          let pages = 0;
+          do {
+            const resp = await client.send(
+              new ListServiceQuotasCommand({
+                ServiceCode: args.serviceCode,
+                NextToken: nextToken,
+                MaxResults: 100,
+              }),
+            );
+
+            for (const q of resp.Quotas ?? []) {
+              quotas.push({
+                serviceCode: args.serviceCode,
+                serviceName: q.ServiceName ?? args.serviceCode,
+                quotaCode: q.QuotaCode ?? "",
+                quotaName: q.QuotaName ?? "",
+                value: q.Value ?? 0,
+                unit: q.Unit ?? "None",
+                adjustable: q.Adjustable ?? false,
+                globalQuota: q.GlobalQuota ?? false,
+                usageValue: null,
+                utilizationPct: null,
+              });
+            }
+
+            nextToken = resp.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
+
+          const truncated = !!nextToken;
+          const handle = await ctx.writeResource(
+            "quotas",
+            `${args.serviceCode}-${sanitizeName(profile)}`,
+            {
+              profile,
+              accountId,
+              region,
+              serviceCode: args.serviceCode,
+              quotas,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            } as unknown as Record<string, unknown>,
           );
 
-          for (const q of resp.Quotas ?? []) {
-            quotas.push({
-              serviceCode: args.serviceCode,
-              serviceName: q.ServiceName ?? args.serviceCode,
-              quotaCode: q.QuotaCode ?? "",
-              quotaName: q.QuotaName ?? "",
-              value: q.Value ?? 0,
-              unit: q.Unit ?? "None",
-              adjustable: q.Adjustable ?? false,
-              globalQuota: q.GlobalQuota ?? false,
-              usageValue: null,
-              utilizationPct: null,
-            });
-          }
+          ctx.logger.info(
+            "Listed {count} quotas for {service} in {account}",
+            {
+              count: quotas.length,
+              service: args.serviceCode,
+              account: accountId,
+            },
+          );
 
-          nextToken = resp.NextToken;
-          pages++;
-        } while (nextToken && pages < MAX_PAGES);
-
-        const truncated = !!nextToken;
-        const handle = await ctx.writeResource(
-          "quotas",
-          `${args.serviceCode}-${sanitizeName(profile)}`,
-          {
-            profile,
-            accountId,
-            region,
-            serviceCode: args.serviceCode,
-            quotas,
-            truncated,
-            fetchedAt: new Date().toISOString(),
-          } as unknown as Record<string, unknown>,
-        );
-
-        ctx.logger.info(
-          "Listed {count} quotas for {service} in {account}",
-          {
-            count: quotas.length,
-            service: args.serviceCode,
-            account: accountId,
-          },
-        );
-
-        return { dataHandles: [handle] };
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -471,48 +490,52 @@ export const model = {
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
-        const accountId = await getAccountId(profile, region);
-        const services: z.infer<typeof ServiceEntrySchema>[] = [];
+        try {
+          const accountId = await getAccountId(profile, region);
+          const services: z.infer<typeof ServiceEntrySchema>[] = [];
 
-        let nextToken: string | undefined;
-        let pages = 0;
-        do {
-          const resp = await client.send(
-            new ListServicesCommand({
-              NextToken: nextToken,
-              MaxResults: 100,
-            }),
+          let nextToken: string | undefined;
+          let pages = 0;
+          do {
+            const resp = await client.send(
+              new ListServicesCommand({
+                NextToken: nextToken,
+                MaxResults: 100,
+              }),
+            );
+
+            for (const s of resp.Services ?? []) {
+              services.push({
+                serviceCode: s.ServiceCode ?? "",
+                serviceName: s.ServiceName ?? "",
+              });
+            }
+
+            nextToken = resp.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
+
+          const truncated = !!nextToken;
+          const handle = await ctx.writeResource(
+            "services",
+            `services-${sanitizeName(profile)}`,
+            {
+              profile,
+              accountId,
+              services,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            } as unknown as Record<string, unknown>,
           );
 
-          for (const s of resp.Services ?? []) {
-            services.push({
-              serviceCode: s.ServiceCode ?? "",
-              serviceName: s.ServiceName ?? "",
-            });
-          }
+          ctx.logger.info("Discovered {count} service codes", {
+            count: services.length,
+          });
 
-          nextToken = resp.NextToken;
-          pages++;
-        } while (nextToken && pages < MAX_PAGES);
-
-        const truncated = !!nextToken;
-        const handle = await ctx.writeResource(
-          "services",
-          `services-${sanitizeName(profile)}`,
-          {
-            profile,
-            accountId,
-            services,
-            truncated,
-            fetchedAt: new Date().toISOString(),
-          } as unknown as Record<string, unknown>,
-        );
-
-        ctx.logger.info("Discovered {count} service codes", {
-          count: services.length,
-        });
-
-        return { dataHandles: [handle] };
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
 
@@ -556,68 +579,73 @@ export const model = {
         for (const profile of profiles) {
           const client = createQuotasClient(profile, region);
           const cw = createCloudWatchClient(profile, region);
-          const accountId = await getAccountId(profile, region);
+          try {
+            const accountId = await getAccountId(profile, region);
 
-          let nextToken: string | undefined;
-          let pages = 0;
-          do {
-            const resp = await client.send(
-              new ListServiceQuotasCommand({
-                ServiceCode: args.serviceCode,
-                NextToken: nextToken,
-                MaxResults: 100,
-              }),
-            );
-
-            for (const q of resp.Quotas ?? []) {
-              const usageMetric = q.UsageMetric;
-              if (!usageMetric?.MetricNamespace) continue;
-
-              const usageValue = await getUsageMetric(
-                cw,
-                usageMetric.MetricNamespace,
-                usageMetric.MetricName,
-                usageMetric.MetricDimensions
-                  ? Object.entries(usageMetric.MetricDimensions).map((
-                    [k, v],
-                  ) => ({ Name: k, Value: v }))
-                  : undefined,
+            let nextToken: string | undefined;
+            let pages = 0;
+            do {
+              const resp = await client.send(
+                new ListServiceQuotasCommand({
+                  ServiceCode: args.serviceCode,
+                  NextToken: nextToken,
+                  MaxResults: 100,
+                }),
               );
 
-              if (usageValue === null) continue;
-              const value = q.Value ?? 0;
-              if (value === 0) continue;
+              for (const q of resp.Quotas ?? []) {
+                const usageMetric = q.UsageMetric;
+                if (!usageMetric?.MetricNamespace) continue;
 
-              const pct = usageValue / value;
-              if (pct >= threshold) {
-                entries.push({
-                  profile,
-                  accountId,
-                  serviceCode: args.serviceCode,
-                  quotaCode: q.QuotaCode ?? "",
-                  quotaName: q.QuotaName ?? "",
-                  value,
-                  usageValue,
-                  utilizationPct: Math.round(pct * 10000) / 100,
-                  adjustable: q.Adjustable ?? false,
-                });
+                const usageValue = await getUsageMetric(
+                  cw,
+                  usageMetric.MetricNamespace,
+                  usageMetric.MetricName,
+                  usageMetric.MetricDimensions
+                    ? Object.entries(usageMetric.MetricDimensions).map((
+                      [k, v],
+                    ) => ({ Name: k, Value: v as string }))
+                    : undefined,
+                );
+
+                if (usageValue === null) continue;
+                const value = q.Value ?? 0;
+                if (value === 0) continue;
+
+                const pct = usageValue / value;
+                if (pct >= threshold) {
+                  entries.push({
+                    profile,
+                    accountId,
+                    serviceCode: args.serviceCode,
+                    quotaCode: q.QuotaCode ?? "",
+                    quotaName: q.QuotaName ?? "",
+                    value,
+                    usageValue,
+                    utilizationPct: Math.round(pct * 10000) / 100,
+                    adjustable: q.Adjustable ?? false,
+                  });
+                }
               }
-            }
 
-            nextToken = resp.NextToken;
-            pages++;
-          } while (nextToken && pages < MAX_PAGES);
+              nextToken = resp.NextToken;
+              pages++;
+            } while (nextToken && pages < MAX_PAGES);
 
-          if (nextToken) anyTruncated = true;
+            if (nextToken) anyTruncated = true;
 
-          ctx.logger.info(
-            "Checked {service} utilization in {account}: {count} over threshold",
-            {
-              service: args.serviceCode,
-              account: accountId,
-              count: entries.filter((e) => e.profile === profile).length,
-            },
-          );
+            ctx.logger.info(
+              "Checked {service} utilization in {account}: {count} over threshold",
+              {
+                service: args.serviceCode,
+                account: accountId,
+                count: entries.filter((e) => e.profile === profile).length,
+              },
+            );
+          } finally {
+            client.destroy();
+            cw.destroy();
+          }
         }
 
         const handle = await ctx.writeResource(
@@ -677,58 +705,66 @@ export const model = {
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
-        const accountId = await getAccountId(profile, region);
+        try {
+          const accountId = await getAccountId(profile, region);
 
-        // Fetch current value for the record
-        const current = await client.send(
-          new GetServiceQuotaCommand({
-            ServiceCode: args.serviceCode,
-            QuotaCode: args.quotaCode,
-          }),
-        );
-        const previousValue = current.Quota?.Value ?? 0;
-        const quotaName = current.Quota?.QuotaName ?? "";
+          const current = await client.send(
+            new GetServiceQuotaCommand({
+              ServiceCode: args.serviceCode,
+              QuotaCode: args.quotaCode,
+            }),
+          );
+          const previousValue = current.Quota?.Value ?? 0;
+          const quotaName = current.Quota?.QuotaName ?? "";
 
-        const resp = await client.send(
-          new RequestServiceQuotaIncreaseCommand({
-            ServiceCode: args.serviceCode,
-            QuotaCode: args.quotaCode,
-            DesiredValue: args.desiredValue,
-          }),
-        );
+          const resp = await client.send(
+            new RequestServiceQuotaIncreaseCommand({
+              ServiceCode: args.serviceCode,
+              QuotaCode: args.quotaCode,
+              DesiredValue: args.desiredValue,
+            }),
+          );
 
-        const req = resp.RequestedQuota!;
-        const handle = await ctx.writeResource(
-          "increaseRequest",
-          `${args.serviceCode}-${args.quotaCode}-${sanitizeName(profile)}`,
-          {
-            profile,
-            accountId,
-            region,
-            serviceCode: args.serviceCode,
-            quotaCode: args.quotaCode,
-            quotaName,
-            requestId: req.Id ?? "",
-            desiredValue: args.desiredValue,
-            previousValue,
-            status: req.Status ?? "PENDING",
-            requestedAt: new Date().toISOString(),
-          } as unknown as Record<string, unknown>,
-        );
+          const req = resp.RequestedQuota;
+          if (!req) {
+            throw new Error(
+              `No response for quota increase request ${args.serviceCode}/${args.quotaCode}`,
+            );
+          }
+          const handle = await ctx.writeResource(
+            "increaseRequest",
+            `${args.serviceCode}-${args.quotaCode}-${sanitizeName(profile)}`,
+            {
+              profile,
+              accountId,
+              region,
+              serviceCode: args.serviceCode,
+              quotaCode: args.quotaCode,
+              quotaName,
+              requestId: req.Id ?? "",
+              desiredValue: args.desiredValue,
+              previousValue,
+              status: req.Status ?? "PENDING",
+              requestedAt: new Date().toISOString(),
+            } as unknown as Record<string, unknown>,
+          );
 
-        ctx.logger.info(
-          "Quota increase requested: {service}/{code} in {account} from {prev} to {desired} (status: {status})",
-          {
-            service: args.serviceCode,
-            code: args.quotaCode,
-            account: accountId,
-            prev: previousValue,
-            desired: args.desiredValue,
-            status: req.Status ?? "PENDING",
-          },
-        );
+          ctx.logger.info(
+            "Quota increase requested: {service}/{code} in {account} from {prev} to {desired} (status: {status})",
+            {
+              service: args.serviceCode,
+              code: args.quotaCode,
+              account: accountId,
+              prev: previousValue,
+              desired: args.desiredValue,
+              status: req.Status ?? "PENDING",
+            },
+          );
 
-        return { dataHandles: [handle] };
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
       },
     },
   },

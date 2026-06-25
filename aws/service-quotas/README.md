@@ -24,6 +24,15 @@ swamp model method run quotas check_utilization \
   --input serviceCode=iam --input threshold=0.8
 ```
 
+## Querying Stored Data
+
+```cel
+# Find all quotas above 90% utilization
+data.latest("quotas", "utilization").attributes.entries.filter(
+  e, e.utilizationPct > 90.0
+)
+```
+
 ## Common Quota Codes
 
 | Service | Quota | Code |
