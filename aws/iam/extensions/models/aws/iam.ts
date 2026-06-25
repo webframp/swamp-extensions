@@ -89,6 +89,7 @@ const RolesResourceSchema = z.object({
   profile: z.string(),
   accountId: z.string(),
   roles: z.array(RoleSchema),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -124,6 +125,7 @@ const UsersResourceSchema = z.object({
   profile: z.string(),
   accountId: z.string(),
   users: z.array(UserSchema),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -143,6 +145,7 @@ const PoliciesResourceSchema = z.object({
   profile: z.string(),
   accountId: z.string(),
   policies: z.array(PolicyVersionSchema),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -168,6 +171,8 @@ const TrustMapResourceSchema = z.object({
   knownAccounts: z.array(z.string()),
   fetchedAt: z.string(),
 });
+
+const MAX_PAGES = 200;
 
 // =============================================================================
 // Helpers
@@ -199,9 +204,14 @@ function parseTrustPolicy(
   document: string | Record<string, unknown> | undefined,
 ): z.infer<typeof TrustStatementSchema>[] {
   if (!document) return [];
-  const doc = typeof document === "string"
-    ? JSON.parse(decodeURIComponent(document))
-    : document;
+  let doc: Record<string, unknown>;
+  try {
+    doc = typeof document === "string"
+      ? JSON.parse(decodeURIComponent(document))
+      : document;
+  } catch {
+    return [];
+  }
 
   const statements = Array.isArray(doc.Statement)
     ? doc.Statement
@@ -341,6 +351,8 @@ export const model = {
           const roles: z.infer<typeof RoleSchema>[] = [];
 
           let marker: string | undefined;
+          let pages = 0;
+          let truncated = false;
           do {
             const resp = await iam.send(
               new ListRolesCommand({
@@ -400,6 +412,11 @@ export const model = {
             }
 
             marker = resp.Marker;
+            pages++;
+            if (pages >= MAX_PAGES && marker) {
+              truncated = true;
+              break;
+            }
           } while (marker);
 
           const handle = await ctx.writeResource(
@@ -409,6 +426,7 @@ export const model = {
               profile,
               accountId,
               roles,
+              truncated,
               fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
@@ -420,6 +438,7 @@ export const model = {
               count: roles.length,
               account: accountId,
               profile,
+              truncated,
             },
           );
         }
@@ -451,6 +470,8 @@ export const model = {
           const users: z.infer<typeof UserSchema>[] = [];
 
           let marker: string | undefined;
+          let pages = 0;
+          let truncated = false;
           do {
             const resp = await iam.send(
               new ListUsersCommand({
@@ -533,6 +554,11 @@ export const model = {
             }
 
             marker = resp.Marker;
+            pages++;
+            if (pages >= MAX_PAGES && marker) {
+              truncated = true;
+              break;
+            }
           } while (marker);
 
           const handle = await ctx.writeResource(
@@ -542,6 +568,7 @@ export const model = {
               profile,
               accountId,
               users,
+              truncated,
               fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
@@ -553,6 +580,7 @@ export const model = {
               count: users.length,
               account: accountId,
               profile,
+              truncated,
             },
           );
         }
@@ -584,6 +612,8 @@ export const model = {
           const policies: z.infer<typeof PolicyVersionSchema>[] = [];
 
           let marker: string | undefined;
+          let pages = 0;
+          let truncated = false;
           do {
             const resp = await iam.send(
               new ListPoliciesCommand({
@@ -611,6 +641,11 @@ export const model = {
             }
 
             marker = resp.Marker;
+            pages++;
+            if (pages >= MAX_PAGES && marker) {
+              truncated = true;
+              break;
+            }
           } while (marker);
 
           const handle = await ctx.writeResource(
@@ -620,6 +655,7 @@ export const model = {
               profile,
               accountId,
               policies,
+              truncated,
               fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
@@ -627,7 +663,7 @@ export const model = {
 
           ctx.logger.info(
             "Discovered {count} policies in account {account} ({profile})",
-            { count: policies.length, account: accountId, profile },
+            { count: policies.length, account: accountId, profile, truncated },
           );
         }
 
@@ -641,18 +677,23 @@ export const model = {
         "Reads all 'roles' resources and extracts trust relationships, " +
         "categorizing them as cross-account AWS trusts, service trusts, or " +
         "external (unknown account) trusts. Run discover_roles first.",
-      arguments: z.object({}),
+      arguments: z.object({
+        profiles: z.array(z.string()).optional().describe(
+          "Override: read roles for only these profiles (default: all configured profiles)",
+        ),
+      }),
       execute: async (
-        _args: Record<string, never>,
+        args: { profiles?: string[] },
         ctx: ModelContext,
       ) => {
+        const profiles = args.profiles ?? ctx.globalArgs.profiles;
         const knownAccounts: string[] = [];
         const allRoles: Array<{
           accountId: string;
           role: z.infer<typeof RoleSchema>;
         }> = [];
 
-        for (const profile of ctx.globalArgs.profiles) {
+        for (const profile of profiles) {
           const data = await ctx.readResource(`roles-${profile}`);
           if (!data) continue;
 
@@ -784,7 +825,7 @@ export const model = {
         allHandles.push(...policiesResult.dataHandles);
 
         const trustResult = await model.methods.discover_trust_map.execute(
-          {} as Record<string, never>,
+          { profiles },
           ctx,
         );
         allHandles.push(...trustResult.dataHandles);
