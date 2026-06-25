@@ -373,6 +373,161 @@ Deno.test("discover_trust_map uses profiles override", async () => {
   assertEquals(data.knownAccounts, ["111111111111"]);
 });
 
+Deno.test("discover_trust_map succeeds with empty roles (service-linked only accounts)", async () => {
+  const { context, getWrittenResources } = createIamContext({
+    "roles-prod": {
+      profile: "prod",
+      accountId: "111111111111",
+      truncated: false,
+      roles: [],
+      fetchedAt: "2026-06-25T00:00:00Z",
+    },
+  });
+
+  await model.methods.discover_trust_map.execute(
+    {},
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  assertEquals(resources.length, 1);
+  const data = resources[0].data as {
+    knownAccounts: string[];
+    edges: unknown[];
+  };
+  assertEquals(data.knownAccounts, ["111111111111"]);
+  assertEquals(data.edges, []);
+});
+
+Deno.test("discover_trust_map captures federated trust principals", async () => {
+  const { context, getWrittenResources } = createIamContext({
+    "roles-prod": {
+      profile: "prod",
+      accountId: "111111111111",
+      truncated: false,
+      roles: [
+        {
+          roleName: "github-actions-role",
+          arn: "arn:aws:iam::111111111111:role/github-actions-role",
+          path: "/",
+          roleId: "AROA1234567890",
+          description: "",
+          createDate: "2026-01-01T00:00:00Z",
+          lastUsed: null,
+          lastUsedRegion: null,
+          maxSessionDuration: 3600,
+          permissionBoundary: null,
+          attachedPolicies: [],
+          inlinePolicies: [],
+          trustPolicy: [
+            {
+              effect: "Allow",
+              principals: [
+                {
+                  type: "Federated",
+                  value: "token.actions.githubusercontent.com",
+                },
+              ],
+              actions: ["sts:AssumeRoleWithWebIdentity"],
+              conditions: {
+                StringEquals: {
+                  "token.actions.githubusercontent.com:aud":
+                    "sts.amazonaws.com",
+                },
+              },
+            },
+          ],
+          tags: {},
+          isServiceLinked: false,
+        },
+      ],
+      fetchedAt: "2026-06-25T00:00:00Z",
+    },
+  });
+
+  await model.methods.discover_trust_map.execute(
+    {},
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    federatedTrusts: Array<{
+      provider: string;
+      targetRoleName: string;
+      targetAccount: string;
+    }>;
+  };
+  assertEquals(data.federatedTrusts.length, 1);
+  assertEquals(
+    data.federatedTrusts[0].provider,
+    "token.actions.githubusercontent.com",
+  );
+  assertEquals(data.federatedTrusts[0].targetRoleName, "github-actions-role");
+  assertEquals(data.federatedTrusts[0].targetAccount, "111111111111");
+});
+
+Deno.test("trustMap resource schema requires federatedTrusts field", () => {
+  const result = model.resources.trustMap.schema.safeParse({
+    edges: [],
+    externalTrusts: [],
+    serviceTrusts: [],
+    knownAccounts: [],
+    fetchedAt: "2026-06-25T00:00:00Z",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("trustMap resource schema accepts complete data with federatedTrusts", () => {
+  const result = model.resources.trustMap.schema.safeParse({
+    edges: [],
+    externalTrusts: [],
+    federatedTrusts: [],
+    serviceTrusts: [],
+    knownAccounts: [],
+    fetchedAt: "2026-06-25T00:00:00Z",
+  });
+  assertEquals(result.success, true);
+});
+
+// =============================================================================
+// AccessKey Schema Tests — nullable createDate/ageDays
+// =============================================================================
+
+Deno.test("accessKey schema accepts null createDate and ageDays", () => {
+  const result = model.resources.users.schema.safeParse({
+    profile: "test",
+    accountId: "123456789012",
+    truncated: false,
+    users: [{
+      userName: "test-user",
+      arn: "arn:aws:iam::123456789012:user/test-user",
+      userId: "AIDA123",
+      path: "/",
+      createDate: "2026-01-01T00:00:00Z",
+      passwordLastUsed: null,
+      mfaEnabled: false,
+      mfaDeviceCount: 0,
+      accessKeys: [{
+        accessKeyId: "AKIA1234",
+        status: "Active",
+        createDate: null,
+        lastUsed: null,
+        lastUsedService: null,
+        lastUsedRegion: null,
+        ageDays: null,
+      }],
+      attachedPolicies: [],
+      inlinePolicies: [],
+      tags: {},
+    }],
+    fetchedAt: "2026-06-25T00:00:00Z",
+  });
+  assertEquals(result.success, true);
+});
+
 // =============================================================================
 // Method Execute Function Tests
 // =============================================================================

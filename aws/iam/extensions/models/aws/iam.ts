@@ -96,11 +96,11 @@ const RolesResourceSchema = z.object({
 const AccessKeySchema = z.object({
   accessKeyId: z.string(),
   status: z.enum(["Active", "Inactive"]),
-  createDate: z.string(),
+  createDate: z.string().nullable(),
   lastUsed: z.string().nullable(),
   lastUsedService: z.string().nullable(),
   lastUsedRegion: z.string().nullable(),
-  ageDays: z.number(),
+  ageDays: z.number().nullable(),
 });
 
 const UserSchema = z.object({
@@ -160,9 +160,18 @@ const TrustEdgeSchema = z.object({
   externalId: z.string().nullable(),
 });
 
+const FederatedTrustSchema = z.object({
+  provider: z.string(),
+  targetRoleArn: z.string(),
+  targetAccount: z.string(),
+  targetRoleName: z.string(),
+  conditions: z.record(z.string(), z.unknown()).optional(),
+});
+
 const TrustMapResourceSchema = z.object({
   edges: z.array(TrustEdgeSchema),
   externalTrusts: z.array(TrustEdgeSchema),
+  federatedTrusts: z.array(FederatedTrustSchema),
   serviceTrusts: z.array(z.object({
     service: z.string(),
     targetRoleArn: z.string(),
@@ -295,7 +304,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.06.24.1",
+  version: "2026.06.25.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -513,14 +522,17 @@ export const model = {
                     AccessKeyId: key.AccessKeyId!,
                   }),
                 );
-                const createDate = key.CreateDate ?? new Date();
-                const ageDays = Math.floor(
-                  (Date.now() - createDate.getTime()) / (1000 * 60 * 60 * 24),
-                );
+                const createDate = key.CreateDate ?? null;
+                const ageDays = createDate
+                  ? Math.floor(
+                    (Date.now() - createDate.getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  )
+                  : null;
                 accessKeys.push({
                   accessKeyId: key.AccessKeyId!,
                   status: key.Status as "Active" | "Inactive",
-                  createDate: createDate.toISOString(),
+                  createDate: createDate?.toISOString() ?? null,
                   lastUsed: lastUsedResp.AccessKeyLastUsed?.LastUsedDate
                     ?.toISOString() ??
                     null,
@@ -705,7 +717,7 @@ export const model = {
           }
         }
 
-        if (allRoles.length === 0) {
+        if (knownAccounts.length === 0) {
           throw new Error(
             "No role data found. Run discover_roles first.",
           );
@@ -713,6 +725,7 @@ export const model = {
 
         const edges: z.infer<typeof TrustEdgeSchema>[] = [];
         const externalTrusts: z.infer<typeof TrustEdgeSchema>[] = [];
+        const federatedTrusts: z.infer<typeof FederatedTrustSchema>[] = [];
         const serviceTrusts: Array<{
           service: string;
           targetRoleArn: string;
@@ -729,6 +742,14 @@ export const model = {
                   service: principal.value,
                   targetRoleArn: role.arn,
                   targetAccount: accountId,
+                });
+              } else if (principal.type === "Federated") {
+                federatedTrusts.push({
+                  provider: principal.value,
+                  targetRoleArn: role.arn,
+                  targetAccount: accountId,
+                  targetRoleName: role.roleName,
+                  conditions: stmt.conditions,
                 });
               } else if (principal.type === "AWS") {
                 const arnMatch = principal.value.match(
@@ -770,6 +791,7 @@ export const model = {
           {
             edges,
             externalTrusts,
+            federatedTrusts,
             serviceTrusts,
             knownAccounts,
             fetchedAt: new Date().toISOString(),
@@ -777,10 +799,12 @@ export const model = {
         );
 
         ctx.logger.info(
-          "Trust map built: {edgeCount} known edges, {externalCount} external trusts, {serviceCount} service trusts",
+          "Trust map built: {edgeCount} known edges, {externalCount} external trusts, " +
+            "{federatedCount} federated trusts, {serviceCount} service trusts",
           {
             edgeCount: edges.length,
             externalCount: externalTrusts.length,
+            federatedCount: federatedTrusts.length,
             serviceCount: serviceTrusts.length,
           },
         );
