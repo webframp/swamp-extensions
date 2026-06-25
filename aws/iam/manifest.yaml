@@ -1,0 +1,27 @@
+manifestVersion: 1
+name: "@webframp/aws/iam"
+version: "2026.06.24.1"
+description: |
+  Cross-account IAM observation model for role, user, and policy inventory.
+  Factory-pattern discovery fans out across AWS profiles to capture trust
+  policies, access key metadata, permission boundaries, and builds a
+  cross-account trust graph for security analysis.
+
+  Produces typed, versioned state queryable via CEL for privilege escalation
+  path analysis, unused permission detection, and external trust mapping.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/iam.ts
+labels:
+  - aws
+  - iam
+  - security
+  - observation
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
