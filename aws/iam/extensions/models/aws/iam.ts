@@ -212,8 +212,7 @@ function createStsClient(profile: string): STSClient {
   return new STSClient(opts as { region: string });
 }
 
-async function getAccountId(profile: string): Promise<string> {
-  const sts = createStsClient(profile);
+async function getAccountId(sts: STSClient): Promise<string> {
   const resp = await sts.send(new GetCallerIdentityCommand({}));
   return resp.Account ?? "unknown";
 }
@@ -314,7 +313,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.06.25.3",
+  version: "2026.06.25.4",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -366,100 +365,106 @@ export const model = {
 
         for (const profile of profiles) {
           const iam = createIamClient(profile);
-          const accountId = await getAccountId(profile);
-          const roles: z.infer<typeof RoleSchema>[] = [];
+          const sts = createStsClient(profile);
+          try {
+            const accountId = await getAccountId(sts);
+            const roles: z.infer<typeof RoleSchema>[] = [];
 
-          let marker: string | undefined;
-          let pages = 0;
-          let truncated = false;
-          do {
-            const resp = await iam.send(
-              new ListRolesCommand({
-                PathPrefix: ctx.globalArgs.pathPrefix,
-                Marker: marker,
-                MaxItems: 100,
-              }),
-            );
+            let marker: string | undefined;
+            let pages = 0;
+            let truncated = false;
+            do {
+              const resp = await iam.send(
+                new ListRolesCommand({
+                  PathPrefix: ctx.globalArgs.pathPrefix,
+                  Marker: marker,
+                  MaxItems: 100,
+                }),
+              );
 
-            for (const role of resp.Roles ?? []) {
-              const isServiceLinked = role.Path?.startsWith(
-                "/aws-service-role/",
-              ) ?? false;
-              if (ctx.globalArgs.excludeServiceLinked && isServiceLinked) {
-                continue;
+              for (const role of resp.Roles ?? []) {
+                const isServiceLinked = role.Path?.startsWith(
+                  "/aws-service-role/",
+                ) ?? false;
+                if (ctx.globalArgs.excludeServiceLinked && isServiceLinked) {
+                  continue;
+                }
+
+                const [attachedResp, inlineResp] = await Promise.all([
+                  iam.send(
+                    new ListAttachedRolePoliciesCommand({
+                      RoleName: role.RoleName!,
+                    }),
+                  ),
+                  iam.send(
+                    new ListRolePoliciesCommand({
+                      RoleName: role.RoleName!,
+                    }),
+                  ),
+                ]);
+
+                roles.push({
+                  roleName: role.RoleName!,
+                  arn: role.Arn!,
+                  path: role.Path ?? "/",
+                  roleId: role.RoleId!,
+                  description: role.Description ?? "",
+                  createDate: role.CreateDate?.toISOString() ?? "",
+                  lastUsed: role.RoleLastUsed?.LastUsedDate?.toISOString() ??
+                    null,
+                  lastUsedRegion: role.RoleLastUsed?.Region ?? null,
+                  maxSessionDuration: role.MaxSessionDuration ?? 3600,
+                  permissionBoundary:
+                    role.PermissionsBoundary?.PermissionsBoundaryArn ?? null,
+                  attachedPolicies: (attachedResp.AttachedPolicies ?? []).map(
+                    (p) => ({
+                      policyName: p.PolicyName!,
+                      policyArn: p.PolicyArn!,
+                    }),
+                  ),
+                  inlinePolicies: inlineResp.PolicyNames ?? [],
+                  trustPolicy: parseTrustPolicy(
+                    role.AssumeRolePolicyDocument,
+                  ),
+                  tags: tagsToRecord(role.Tags),
+                  isServiceLinked,
+                });
               }
 
-              const [attachedResp, inlineResp] = await Promise.all([
-                iam.send(
-                  new ListAttachedRolePoliciesCommand({
-                    RoleName: role.RoleName!,
-                  }),
-                ),
-                iam.send(
-                  new ListRolePoliciesCommand({
-                    RoleName: role.RoleName!,
-                  }),
-                ),
-              ]);
+              marker = resp.Marker;
+              pages++;
+              if (pages >= MAX_PAGES && marker) {
+                truncated = true;
+                break;
+              }
+            } while (marker);
 
-              roles.push({
-                roleName: role.RoleName!,
-                arn: role.Arn!,
-                path: role.Path ?? "/",
-                roleId: role.RoleId!,
-                description: role.Description ?? "",
-                createDate: role.CreateDate?.toISOString() ?? "",
-                lastUsed: role.RoleLastUsed?.LastUsedDate?.toISOString() ??
-                  null,
-                lastUsedRegion: role.RoleLastUsed?.Region ?? null,
-                maxSessionDuration: role.MaxSessionDuration ?? 3600,
-                permissionBoundary:
-                  role.PermissionsBoundary?.PermissionsBoundaryArn ?? null,
-                attachedPolicies: (attachedResp.AttachedPolicies ?? []).map(
-                  (p) => ({
-                    policyName: p.PolicyName!,
-                    policyArn: p.PolicyArn!,
-                  }),
-                ),
-                inlinePolicies: inlineResp.PolicyNames ?? [],
-                trustPolicy: parseTrustPolicy(
-                  role.AssumeRolePolicyDocument,
-                ),
-                tags: tagsToRecord(role.Tags),
-                isServiceLinked,
-              });
-            }
+            const handle = await ctx.writeResource(
+              "roles",
+              `roles-${profile}`,
+              {
+                profile,
+                accountId,
+                roles,
+                truncated,
+                fetchedAt: new Date().toISOString(),
+              } as unknown as Record<string, unknown>,
+            );
+            handles.push(handle);
 
-            marker = resp.Marker;
-            pages++;
-            if (pages >= MAX_PAGES && marker) {
-              truncated = true;
-              break;
-            }
-          } while (marker);
-
-          const handle = await ctx.writeResource(
-            "roles",
-            `roles-${profile}`,
-            {
-              profile,
-              accountId,
-              roles,
-              truncated,
-              fetchedAt: new Date().toISOString(),
-            } as unknown as Record<string, unknown>,
-          );
-          handles.push(handle);
-
-          ctx.logger.info(
-            "Discovered {count} roles in account {account} ({profile})",
-            {
-              count: roles.length,
-              account: accountId,
-              profile,
-              truncated,
-            },
-          );
+            ctx.logger.info(
+              "Discovered {count} roles in account {account} ({profile})",
+              {
+                count: roles.length,
+                account: accountId,
+                profile,
+                truncated,
+              },
+            );
+          } finally {
+            iam.destroy();
+            sts.destroy();
+          }
         }
 
         return { dataHandles: handles };
@@ -485,126 +490,133 @@ export const model = {
 
         for (const profile of profiles) {
           const iam = createIamClient(profile);
-          const accountId = await getAccountId(profile);
-          const users: z.infer<typeof UserSchema>[] = [];
+          const sts = createStsClient(profile);
+          try {
+            const accountId = await getAccountId(sts);
+            const users: z.infer<typeof UserSchema>[] = [];
 
-          let marker: string | undefined;
-          let pages = 0;
-          let truncated = false;
-          do {
-            const resp = await iam.send(
-              new ListUsersCommand({
-                PathPrefix: ctx.globalArgs.pathPrefix,
-                Marker: marker,
-                MaxItems: 100,
-              }),
-            );
+            let marker: string | undefined;
+            let pages = 0;
+            let truncated = false;
+            do {
+              const resp = await iam.send(
+                new ListUsersCommand({
+                  PathPrefix: ctx.globalArgs.pathPrefix,
+                  Marker: marker,
+                  MaxItems: 100,
+                }),
+              );
 
-            for (const user of resp.Users ?? []) {
-              const [mfaResp, keysResp, attachedResp, inlineResp] =
-                await Promise.all([
-                  iam.send(
-                    new ListMFADevicesCommand({
-                      UserName: user.UserName!,
-                    }),
-                  ),
-                  iam.send(
-                    new ListAccessKeysCommand({
-                      UserName: user.UserName!,
-                    }),
-                  ),
-                  iam.send(
-                    new ListAttachedUserPoliciesCommand({
-                      UserName: user.UserName!,
-                    }),
-                  ),
-                  iam.send(
-                    new ListUserPoliciesCommand({
-                      UserName: user.UserName!,
-                    }),
-                  ),
-                ]);
+              for (const user of resp.Users ?? []) {
+                const [mfaResp, keysResp, attachedResp, inlineResp] =
+                  await Promise.all([
+                    iam.send(
+                      new ListMFADevicesCommand({
+                        UserName: user.UserName!,
+                      }),
+                    ),
+                    iam.send(
+                      new ListAccessKeysCommand({
+                        UserName: user.UserName!,
+                      }),
+                    ),
+                    iam.send(
+                      new ListAttachedUserPoliciesCommand({
+                        UserName: user.UserName!,
+                      }),
+                    ),
+                    iam.send(
+                      new ListUserPoliciesCommand({
+                        UserName: user.UserName!,
+                      }),
+                    ),
+                  ]);
 
-              const accessKeys: z.infer<typeof AccessKeySchema>[] = [];
-              for (const key of keysResp.AccessKeyMetadata ?? []) {
-                const lastUsedResp = await iam.send(
-                  new GetAccessKeyLastUsedCommand({
-                    AccessKeyId: key.AccessKeyId!,
-                  }),
-                );
-                const createDate = key.CreateDate ?? null;
-                const ageDays = createDate
-                  ? Math.floor(
-                    (Date.now() - createDate.getTime()) /
-                      (1000 * 60 * 60 * 24),
-                  )
-                  : null;
-                accessKeys.push({
-                  accessKeyId: key.AccessKeyId!,
-                  status: key.Status as "Active" | "Inactive",
-                  createDate: createDate?.toISOString() ?? null,
-                  lastUsed: lastUsedResp.AccessKeyLastUsed?.LastUsedDate
-                    ?.toISOString() ??
+                const accessKeys: z.infer<typeof AccessKeySchema>[] = [];
+                for (const key of keysResp.AccessKeyMetadata ?? []) {
+                  const lastUsedResp = await iam.send(
+                    new GetAccessKeyLastUsedCommand({
+                      AccessKeyId: key.AccessKeyId!,
+                    }),
+                  );
+                  const createDate = key.CreateDate ?? null;
+                  const ageDays = createDate
+                    ? Math.floor(
+                      (Date.now() - createDate.getTime()) /
+                        (1000 * 60 * 60 * 24),
+                    )
+                    : null;
+                  accessKeys.push({
+                    accessKeyId: key.AccessKeyId!,
+                    status: key.Status as "Active" | "Inactive",
+                    createDate: createDate?.toISOString() ?? null,
+                    lastUsed: lastUsedResp.AccessKeyLastUsed?.LastUsedDate
+                      ?.toISOString() ??
+                      null,
+                    lastUsedService:
+                      lastUsedResp.AccessKeyLastUsed?.ServiceName ?? null,
+                    lastUsedRegion: lastUsedResp.AccessKeyLastUsed?.Region ??
+                      null,
+                    ageDays,
+                  });
+                }
+
+                users.push({
+                  userName: user.UserName!,
+                  arn: user.Arn!,
+                  userId: user.UserId!,
+                  path: user.Path ?? "/",
+                  createDate: user.CreateDate?.toISOString() ?? "",
+                  passwordLastUsed: user.PasswordLastUsed?.toISOString() ??
                     null,
-                  lastUsedService:
-                    lastUsedResp.AccessKeyLastUsed?.ServiceName ?? null,
-                  lastUsedRegion: lastUsedResp.AccessKeyLastUsed?.Region ??
-                    null,
-                  ageDays,
+                  mfaEnabled: (mfaResp.MFADevices?.length ?? 0) > 0,
+                  mfaDeviceCount: mfaResp.MFADevices?.length ?? 0,
+                  accessKeys,
+                  attachedPolicies: (attachedResp.AttachedPolicies ?? []).map(
+                    (p) => ({
+                      policyName: p.PolicyName!,
+                      policyArn: p.PolicyArn!,
+                    }),
+                  ),
+                  inlinePolicies: inlineResp.PolicyNames ?? [],
+                  tags: tagsToRecord(user.Tags),
                 });
               }
 
-              users.push({
-                userName: user.UserName!,
-                arn: user.Arn!,
-                userId: user.UserId!,
-                path: user.Path ?? "/",
-                createDate: user.CreateDate?.toISOString() ?? "",
-                passwordLastUsed: user.PasswordLastUsed?.toISOString() ?? null,
-                mfaEnabled: (mfaResp.MFADevices?.length ?? 0) > 0,
-                mfaDeviceCount: mfaResp.MFADevices?.length ?? 0,
-                accessKeys,
-                attachedPolicies: (attachedResp.AttachedPolicies ?? []).map(
-                  (p) => ({
-                    policyName: p.PolicyName!,
-                    policyArn: p.PolicyArn!,
-                  }),
-                ),
-                inlinePolicies: inlineResp.PolicyNames ?? [],
-                tags: tagsToRecord(user.Tags),
-              });
-            }
+              marker = resp.Marker;
+              pages++;
+              if (pages >= MAX_PAGES && marker) {
+                truncated = true;
+                break;
+              }
+            } while (marker);
 
-            marker = resp.Marker;
-            pages++;
-            if (pages >= MAX_PAGES && marker) {
-              truncated = true;
-              break;
-            }
-          } while (marker);
+            const handle = await ctx.writeResource(
+              "users",
+              `users-${profile}`,
+              {
+                profile,
+                accountId,
+                users,
+                truncated,
+                fetchedAt: new Date().toISOString(),
+              } as unknown as Record<string, unknown>,
+            );
+            handles.push(handle);
 
-          const handle = await ctx.writeResource(
-            "users",
-            `users-${profile}`,
-            {
-              profile,
-              accountId,
-              users,
-              truncated,
-              fetchedAt: new Date().toISOString(),
-            } as unknown as Record<string, unknown>,
-          );
-          handles.push(handle);
-
-          ctx.logger.info(
-            "Discovered {count} users in account {account} ({profile})",
-            {
-              count: users.length,
-              account: accountId,
-              profile,
-              truncated,
-            },
-          );
+            ctx.logger.info(
+              "Discovered {count} users in account {account} ({profile})",
+              {
+                count: users.length,
+                account: accountId,
+                profile,
+                truncated,
+              },
+            );
+          } finally {
+            iam.destroy();
+            sts.destroy();
+          }
         }
 
         return { dataHandles: handles };
@@ -630,63 +642,74 @@ export const model = {
 
         for (const profile of profiles) {
           const iam = createIamClient(profile);
-          const accountId = await getAccountId(profile);
-          const policies: z.infer<typeof PolicyVersionSchema>[] = [];
+          const sts = createStsClient(profile);
+          try {
+            const accountId = await getAccountId(sts);
+            const policies: z.infer<typeof PolicyVersionSchema>[] = [];
 
-          let marker: string | undefined;
-          let pages = 0;
-          let truncated = false;
-          do {
-            const resp = await iam.send(
-              new ListPoliciesCommand({
-                Scope: ctx.globalArgs.excludeAwsManagedPolicies
-                  ? "Local"
-                  : "All",
-                PathPrefix: ctx.globalArgs.pathPrefix,
-                Marker: marker,
-                MaxItems: 100,
-              }),
+            let marker: string | undefined;
+            let pages = 0;
+            let truncated = false;
+            do {
+              const resp = await iam.send(
+                new ListPoliciesCommand({
+                  Scope: ctx.globalArgs.excludeAwsManagedPolicies
+                    ? "Local"
+                    : "All",
+                  PathPrefix: ctx.globalArgs.pathPrefix,
+                  Marker: marker,
+                  MaxItems: 100,
+                }),
+              );
+
+              for (const policy of resp.Policies ?? []) {
+                policies.push({
+                  policyArn: policy.Arn!,
+                  policyName: policy.PolicyName!,
+                  path: policy.Path ?? "/",
+                  defaultVersionId: policy.DefaultVersionId ?? "v1",
+                  attachmentCount: policy.AttachmentCount ?? 0,
+                  isAttachable: policy.IsAttachable ?? true,
+                  createDate: policy.CreateDate?.toISOString() ?? "",
+                  updateDate: policy.UpdateDate?.toISOString() ?? "",
+                  description: policy.Description ?? "",
+                });
+              }
+
+              marker = resp.Marker;
+              pages++;
+              if (pages >= MAX_PAGES && marker) {
+                truncated = true;
+                break;
+              }
+            } while (marker);
+
+            const handle = await ctx.writeResource(
+              "policies",
+              `policies-${profile}`,
+              {
+                profile,
+                accountId,
+                policies,
+                truncated,
+                fetchedAt: new Date().toISOString(),
+              } as unknown as Record<string, unknown>,
             );
+            handles.push(handle);
 
-            for (const policy of resp.Policies ?? []) {
-              policies.push({
-                policyArn: policy.Arn!,
-                policyName: policy.PolicyName!,
-                path: policy.Path ?? "/",
-                defaultVersionId: policy.DefaultVersionId ?? "v1",
-                attachmentCount: policy.AttachmentCount ?? 0,
-                isAttachable: policy.IsAttachable ?? true,
-                createDate: policy.CreateDate?.toISOString() ?? "",
-                updateDate: policy.UpdateDate?.toISOString() ?? "",
-                description: policy.Description ?? "",
-              });
-            }
-
-            marker = resp.Marker;
-            pages++;
-            if (pages >= MAX_PAGES && marker) {
-              truncated = true;
-              break;
-            }
-          } while (marker);
-
-          const handle = await ctx.writeResource(
-            "policies",
-            `policies-${profile}`,
-            {
-              profile,
-              accountId,
-              policies,
-              truncated,
-              fetchedAt: new Date().toISOString(),
-            } as unknown as Record<string, unknown>,
-          );
-          handles.push(handle);
-
-          ctx.logger.info(
-            "Discovered {count} policies in account {account} ({profile})",
-            { count: policies.length, account: accountId, profile, truncated },
-          );
+            ctx.logger.info(
+              "Discovered {count} policies in account {account} ({profile})",
+              {
+                count: policies.length,
+                account: accountId,
+                profile,
+                truncated,
+              },
+            );
+          } finally {
+            iam.destroy();
+            sts.destroy();
+          }
         }
 
         return { dataHandles: handles };
@@ -773,9 +796,13 @@ export const model = {
                 });
               } else if (principal.type === "AWS") {
                 const arnMatch = principal.value.match(
-                  /arn:aws:iam::(\d{12}):/,
+                  /arn:[^:]+:iam::(\d{12}):/,
                 );
-                const sourceAccount = arnMatch?.[1] ?? "unknown";
+                const bareAccountMatch = !arnMatch
+                  ? principal.value.match(/^(\d{12})$/)
+                  : null;
+                const sourceAccount = arnMatch?.[1] ??
+                  bareAccountMatch?.[1] ?? "unknown";
 
                 const externalId = stmt.conditions
                   ? extractExternalId(stmt.conditions)
