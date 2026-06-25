@@ -313,7 +313,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.06.25.4",
+  version: "2026.06.25.5",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -382,6 +382,7 @@ export const model = {
                 }),
               );
 
+              let pageHadResults = false;
               for (const role of resp.Roles ?? []) {
                 const isServiceLinked = role.Path?.startsWith(
                   "/aws-service-role/",
@@ -389,6 +390,7 @@ export const model = {
                 if (ctx.globalArgs.excludeServiceLinked && isServiceLinked) {
                   continue;
                 }
+                pageHadResults = true;
 
                 const [attachedResp, inlineResp] = await Promise.all([
                   iam.send(
@@ -432,7 +434,7 @@ export const model = {
               }
 
               marker = resp.Marker;
-              pages++;
+              if (pageHadResults) pages++;
               if (pages >= MAX_PAGES && marker) {
                 truncated = true;
                 break;
@@ -460,6 +462,11 @@ export const model = {
                 profile,
                 truncated,
               },
+            );
+          } catch (err) {
+            ctx.logger.info(
+              "Failed to scan roles for profile {profile}: {err}",
+              { profile, err: String(err) },
             );
           } finally {
             iam.destroy();
@@ -613,6 +620,11 @@ export const model = {
                 truncated,
               },
             );
+          } catch (err) {
+            ctx.logger.info(
+              "Failed to scan users for profile {profile}: {err}",
+              { profile, err: String(err) },
+            );
           } finally {
             iam.destroy();
             sts.destroy();
@@ -706,6 +718,11 @@ export const model = {
                 truncated,
               },
             );
+          } catch (err) {
+            ctx.logger.info(
+              "Failed to scan policies for profile {profile}: {err}",
+              { profile, err: String(err) },
+            );
           } finally {
             iam.destroy();
             sts.destroy();
@@ -796,7 +813,7 @@ export const model = {
                 });
               } else if (principal.type === "AWS") {
                 const arnMatch = principal.value.match(
-                  /arn:[^:]+:iam::(\d{12}):/,
+                  /arn:[^:]+:[^:]+::(\d{12}):/,
                 );
                 const bareAccountMatch = !arnMatch
                   ? principal.value.match(/^(\d{12})$/)
