@@ -46,11 +46,17 @@ swamp model method run quotas check_utilization \
 
 ## Required Permissions
 
-Read-only. The configured profiles need:
+Read-only methods need:
 
-- `servicequotas:GetServiceQuota`
-- `servicequotas:ListServiceQuotas`
-- `servicequotas:ListServices`
-- `servicequotas:GetAWSDefaultServiceQuota`
-- `cloudwatch:GetMetricData`
-- `sts:GetCallerIdentity`
+```bash
+# Required IAM policy permissions
+servicequotas:GetServiceQuota
+servicequotas:ListServiceQuotas
+servicequotas:ListServices
+servicequotas:GetAWSDefaultServiceQuota
+cloudwatch:GetMetricData
+sts:GetCallerIdentity
+
+# request_increase additionally requires:
+servicequotas:RequestServiceQuotaIncrease
+```

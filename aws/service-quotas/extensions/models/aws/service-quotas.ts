@@ -236,9 +236,10 @@ interface ModelContext {
 // Model
 // =============================================================================
 
+/** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.06.25.1",
+  version: "2026.06.25.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
