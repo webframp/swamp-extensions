@@ -1,7 +1,12 @@
 // DDD Guidance Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertMatch, assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1";
+import {
+  assertEquals,
+  assertExists,
+  assertMatch,
+  assertRejects,
+} from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./mod.ts";
 
@@ -25,6 +30,21 @@ function createDddContext(
 
   return { context, getWrittenResources, getLogsByLevel };
 }
+
+const SAMPLE_CONTEXT = {
+  name: "order-management",
+  purpose: "Handle customer orders end-to-end",
+  ownerTeam: "checkout-team",
+  ubiquitousLanguageTerms: ["Order", "LineItem", "Cart"],
+  coreSubdomain: true,
+};
+
+const SAMPLE_RELATIONSHIP = {
+  upstream: "order-management",
+  downstream: "shipping",
+  type: "customer-supplier" as const,
+  description: "Shipping reacts to order placement",
+};
 
 // =============================================================================
 // Model Structure Tests
@@ -94,40 +114,126 @@ Deno.test("boundaries resource has infinite lifetime with high GC", () => {
 // Argument Schema Validation Tests
 // =============================================================================
 
-Deno.test("contexts accepts empty object", () => {
+Deno.test("contexts rejects empty object (requires contexts, relationships, overloadedTerms)", () => {
   const result = model.methods.contexts.arguments.safeParse({});
+  assertEquals(result.success, false);
+});
+
+Deno.test("contexts accepts valid full input", () => {
+  const result = model.methods.contexts.arguments.safeParse({
+    contexts: [SAMPLE_CONTEXT],
+    relationships: [SAMPLE_RELATIONSHIP],
+    overloadedTerms: [],
+  });
   assertEquals(result.success, true);
 });
 
-Deno.test("contexts accepts optional focus string", () => {
+Deno.test("contexts accepts optional focus with required fields", () => {
   const result = model.methods.contexts.arguments.safeParse({
     focus: "checkout subsystem",
+    contexts: [SAMPLE_CONTEXT],
+    relationships: [],
+    overloadedTerms: [],
   });
   assertEquals(result.success, true);
 });
 
-Deno.test("language accepts empty object", () => {
-  const result = model.methods.language.arguments.safeParse({});
-  assertEquals(result.success, true);
+Deno.test("contexts rejects when contexts array is empty", () => {
+  const result = model.methods.contexts.arguments.safeParse({
+    contexts: [],
+    relationships: [],
+    overloadedTerms: [],
+  });
+  assertEquals(result.success, false);
 });
 
-Deno.test("language accepts optional context string", () => {
+Deno.test("language rejects empty object (requires context and entries)", () => {
+  const result = model.methods.language.arguments.safeParse({});
+  assertEquals(result.success, false);
+});
+
+Deno.test("language accepts valid full input", () => {
   const result = model.methods.language.arguments.safeParse({
     context: "order-management",
+    entries: [{
+      term: "Order",
+      definition: "A purchase request from a customer",
+      examples: ["Cart checkout creates an Order"],
+      relatedTerms: ["LineItem", "Cart"],
+    }],
   });
   assertEquals(result.success, true);
 });
 
-Deno.test("boundaries accepts empty object", () => {
+Deno.test("language rejects when entries array is empty", () => {
+  const result = model.methods.language.arguments.safeParse({
+    context: "order-management",
+    entries: [],
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("language accepts optional overloadedTerms", () => {
+  const result = model.methods.language.arguments.safeParse({
+    context: "order-management",
+    entries: [{
+      term: "Order",
+      definition: "A purchase request",
+      examples: [],
+      relatedTerms: [],
+    }],
+    overloadedTerms: [{
+      term: "Order",
+      meanings: [
+        { context: "order-management", definition: "A purchase request" },
+        { context: "shipping", definition: "A shipment instruction" },
+      ],
+    }],
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("boundaries rejects empty object (requires context and aggregates)", () => {
   const result = model.methods.boundaries.arguments.safeParse({});
+  assertEquals(result.success, false);
+});
+
+Deno.test("boundaries accepts valid full input", () => {
+  const result = model.methods.boundaries.arguments.safeParse({
+    context: "order-management",
+    aggregates: [{
+      name: "Order",
+      rootEntity: "Order",
+      entities: ["LineItem"],
+      valueObjects: ["Money", "Address"],
+      invariants: [{
+        description: "Order total must equal sum of line items",
+        transactional: true,
+        rationale: "Financial consistency",
+      }],
+      identityReferences: [{
+        target: "Customer",
+        reason: "Order belongs to customer",
+      }],
+      eventsTrigger: ["OrderPlaced", "OrderCancelled"],
+    }],
+    eventualConsistencyRules: [{
+      trigger: "OrderPlaced",
+      affectedAggregates: ["Inventory"],
+      tolerableDelay: "5 seconds",
+      rationale: "Stock reservation can lag slightly",
+    }],
+  });
   assertEquals(result.success, true);
 });
 
-Deno.test("boundaries accepts optional context string", () => {
+Deno.test("boundaries rejects when aggregates array is empty", () => {
   const result = model.methods.boundaries.arguments.safeParse({
-    context: "inventory",
+    context: "order-management",
+    aggregates: [],
+    eventualConsistencyRules: [],
   });
-  assertEquals(result.success, true);
+  assertEquals(result.success, false);
 });
 
 // =============================================================================
@@ -171,11 +277,21 @@ Deno.test("globalArgs rejects invalid teamSize", () => {
 // Execute Tests — contexts
 // =============================================================================
 
-Deno.test("contexts writes contextMap resource", async () => {
+Deno.test("contexts writes contextMap resource with provided data", async () => {
   const { context, getWrittenResources } = createDddContext();
 
   const result = await model.methods.contexts.execute(
-    {},
+    {
+      contexts: [SAMPLE_CONTEXT],
+      relationships: [SAMPLE_RELATIONSHIP],
+      overloadedTerms: [{
+        term: "Order",
+        meanings: [
+          { context: "order-management", definition: "A purchase request" },
+          { context: "shipping", definition: "A shipment instruction" },
+        ],
+      }],
+    },
     // deno-lint-ignore no-explicit-any
     context as any,
   );
@@ -188,22 +304,29 @@ Deno.test("contexts writes contextMap resource", async () => {
   assertEquals(resources[0].specName, "contextMap");
 
   const data = resources[0].data as {
-    contexts: unknown[];
-    relationships: unknown[];
-    overloadedTerms: unknown[];
+    contexts: Array<{ name: string }>;
+    relationships: Array<{ upstream: string }>;
+    overloadedTerms: Array<{ term: string }>;
     discoveredAt: string;
   };
   assertExists(data.discoveredAt);
-  assertEquals(Array.isArray(data.contexts), true);
-  assertEquals(Array.isArray(data.relationships), true);
-  assertEquals(Array.isArray(data.overloadedTerms), true);
+  assertEquals(data.contexts.length, 1);
+  assertEquals(data.contexts[0].name, "order-management");
+  assertEquals(data.relationships.length, 1);
+  assertEquals(data.overloadedTerms.length, 1);
+  assertEquals(data.overloadedTerms[0].term, "Order");
 });
 
 Deno.test("contexts passes focus to logger", async () => {
   const { context, getLogsByLevel } = createDddContext();
 
   await model.methods.contexts.execute(
-    { focus: "payments" },
+    {
+      focus: "payments",
+      contexts: [SAMPLE_CONTEXT],
+      relationships: [],
+      overloadedTerms: [],
+    },
     // deno-lint-ignore no-explicit-any
     context as any,
   );
@@ -218,143 +341,56 @@ Deno.test("contexts passes focus to logger", async () => {
 // Execute Tests — language
 // =============================================================================
 
-Deno.test("language writes domainGlossary resource", async () => {
-  const { context, getWrittenResources } = createDddContext({
-    current: {
-      contexts: [
-        {
-          name: "order-management",
-          purpose: "Handle orders",
-          ubiquitousLanguageTerms: [],
-          coreSubdomain: true,
-        },
-      ],
-      relationships: [],
-      overloadedTerms: [],
-      discoveredAt: "2026-06-05T00:00:00Z",
-    },
-  });
-
-  const result = await model.methods.language.execute(
-    { context: "order-management" },
-    // deno-lint-ignore no-explicit-any
-    context as any,
-  );
-
-  assertExists(result.dataHandles);
-  assertEquals(result.dataHandles.length, 1);
-
-  const resources = getWrittenResources();
-  assertEquals(resources.length, 1);
-  assertEquals(resources[0].specName, "domainGlossary");
-
-  const data = resources[0].data as {
-    entries: unknown[];
-    updatedAt: string;
-  };
-  assertExists(data.updatedAt);
-  assertEquals(Array.isArray(data.entries), true);
-});
-
-Deno.test("language uses first context when none specified", async () => {
-  const { context, getLogsByLevel } = createDddContext({
-    current: {
-      contexts: [
-        {
-          name: "billing",
-          purpose: "Handle billing",
-          ubiquitousLanguageTerms: [],
-          coreSubdomain: false,
-        },
-        {
-          name: "shipping",
-          purpose: "Handle shipping",
-          ubiquitousLanguageTerms: [],
-          coreSubdomain: false,
-        },
-      ],
-      relationships: [],
-      overloadedTerms: [],
-      discoveredAt: "2026-06-05T00:00:00Z",
-    },
-  });
-
-  await model.methods.language.execute(
-    {},
-    // deno-lint-ignore no-explicit-any
-    context as any,
-  );
-
-  const logs = getLogsByLevel("info");
-  const meta = logs[0].args[0] as { context: string };
-  assertEquals(meta.context, "billing");
-});
-
-Deno.test("language handles gracefully when no context map exists", async () => {
+Deno.test("language writes domainGlossary with entries from args", async () => {
   const { context, getWrittenResources } = createDddContext();
 
   const result = await model.methods.language.execute(
-    {},
+    {
+      context: "order-management",
+      entries: [{
+        term: "Order",
+        definition: "A purchase request from a customer",
+        examples: ["Cart checkout creates an Order"],
+        relatedTerms: ["LineItem"],
+      }],
+    },
     // deno-lint-ignore no-explicit-any
     context as any,
   );
 
   assertExists(result.dataHandles);
   assertEquals(result.dataHandles.length, 1);
-  assertEquals(getWrittenResources().length, 1);
-});
 
-Deno.test("language handles malformed glossary without entries field", async () => {
-  const { context, getWrittenResources } = createDddContext({
-    current: {
-      contexts: [{
-        name: "orders",
-        purpose: "test",
-        ubiquitousLanguageTerms: [],
-        coreSubdomain: true,
-      }],
-      relationships: [],
-      overloadedTerms: [],
-      discoveredAt: "2026-06-05T00:00:00Z",
-    },
-    glossary: {
-      updatedAt: "2026-06-01T00:00:00Z",
-    },
-  });
-
-  const result = await model.methods.language.execute(
-    { context: "orders" },
-    // deno-lint-ignore no-explicit-any
-    context as any,
-  );
-
-  assertExists(result.dataHandles);
   const resources = getWrittenResources();
-  const data = resources[0].data as { entries: unknown[] };
-  assertEquals(data.entries.length, 0);
+  assertEquals(resources[0].specName, "domainGlossary");
+
+  const data = resources[0].data as {
+    entries: Array<{ term: string; context: string; definition: string }>;
+    updatedAt: string;
+  };
+  assertExists(data.updatedAt);
+  assertEquals(data.entries.length, 1);
+  assertEquals(data.entries[0].term, "Order");
+  assertEquals(data.entries[0].context, "order-management");
 });
 
-Deno.test("language preserves existing glossary entries", async () => {
+Deno.test("language merges new entries with existing glossary", async () => {
   const { context, getWrittenResources } = createDddContext({
-    current: {
-      contexts: [{
-        name: "orders",
-        purpose: "test",
-        ubiquitousLanguageTerms: [],
-        coreSubdomain: true,
-      }],
-      relationships: [],
-      overloadedTerms: [],
-      discoveredAt: "2026-06-05T00:00:00Z",
-    },
     glossary: {
       entries: [
         {
           term: "Order",
-          context: "orders",
+          context: "order-management",
           definition: "A purchase request",
-          examples: ["Cart checkout"],
-          relatedTerms: ["LineItem"],
+          examples: ["old example"],
+          relatedTerms: [],
+        },
+        {
+          term: "Shipment",
+          context: "shipping",
+          definition: "A delivery unit",
+          examples: [],
+          relatedTerms: [],
         },
       ],
       updatedAt: "2026-06-01T00:00:00Z",
@@ -362,22 +398,116 @@ Deno.test("language preserves existing glossary entries", async () => {
   });
 
   await model.methods.language.execute(
-    { context: "orders" },
+    {
+      context: "order-management",
+      entries: [{
+        term: "Order",
+        definition: "Updated definition",
+        examples: ["new example"],
+        relatedTerms: ["Cart"],
+      }],
+    },
     // deno-lint-ignore no-explicit-any
     context as any,
   );
 
   const resources = getWrittenResources();
-  const data = resources[0].data as { entries: Array<{ term: string }> };
+  const data = resources[0].data as {
+    entries: Array<{ term: string; context: string; definition: string }>;
+  };
+  assertEquals(data.entries.length, 2);
+  const order = data.entries.find((e) => e.term === "Order")!;
+  assertEquals(order.definition, "Updated definition");
+  const shipment = data.entries.find((e) => e.term === "Shipment")!;
+  assertEquals(shipment.context, "shipping");
+});
+
+Deno.test("language updates contextMap overloadedTerms when provided", async () => {
+  const { context, getWrittenResources } = createDddContext({
+    current: {
+      contexts: [SAMPLE_CONTEXT],
+      relationships: [],
+      overloadedTerms: [{
+        term: "Status",
+        meanings: [
+          { context: "billing", definition: "Payment state" },
+        ],
+      }],
+      discoveredAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  await model.methods.language.execute(
+    {
+      context: "order-management",
+      entries: [{
+        term: "Status",
+        definition: "Order lifecycle state",
+        examples: ["pending, confirmed, shipped"],
+        relatedTerms: [],
+      }],
+      overloadedTerms: [{
+        term: "Status",
+        meanings: [
+          { context: "order-management", definition: "Order lifecycle state" },
+        ],
+      }],
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const contextMapWrite = resources.find(
+    (r: { specName: string }) => r.specName === "contextMap",
+  );
+  assertExists(contextMapWrite);
+  const cmData = contextMapWrite.data as {
+    overloadedTerms: Array<{
+      term: string;
+      meanings: Array<{ context: string; definition: string }>;
+    }>;
+  };
+  assertEquals(cmData.overloadedTerms.length, 1);
+  assertEquals(cmData.overloadedTerms[0].meanings.length, 2);
+  assertExists(
+    cmData.overloadedTerms[0].meanings.find((m) => m.context === "billing"),
+  );
+  assertExists(
+    cmData.overloadedTerms[0].meanings.find(
+      (m) => m.context === "order-management",
+    ),
+  );
+});
+
+Deno.test("language handles gracefully when no existing glossary", async () => {
+  const { context, getWrittenResources } = createDddContext();
+
+  const result = await model.methods.language.execute(
+    {
+      context: "new-context",
+      entries: [{
+        term: "Widget",
+        definition: "A thing",
+        examples: [],
+        relatedTerms: [],
+      }],
+    },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertExists(result.dataHandles);
+  assertEquals(getWrittenResources().length, 1);
+  const data = getWrittenResources()[0].data as { entries: unknown[] };
   assertEquals(data.entries.length, 1);
-  assertEquals(data.entries[0].term, "Order");
 });
 
 // =============================================================================
 // Execute Tests — boundaries
 // =============================================================================
 
-Deno.test("boundaries writes boundaries resource", async () => {
+Deno.test("boundaries writes boundaries resource with provided data", async () => {
   const { context, getWrittenResources } = createDddContext({
     current: {
       contexts: [
@@ -395,7 +525,23 @@ Deno.test("boundaries writes boundaries resource", async () => {
   });
 
   const result = await model.methods.boundaries.execute(
-    { context: "inventory" },
+    {
+      context: "inventory",
+      aggregates: [{
+        name: "StockItem",
+        rootEntity: "StockItem",
+        entities: [],
+        valueObjects: ["Quantity"],
+        invariants: [{
+          description: "Stock cannot go negative",
+          transactional: true,
+          rationale: "Physical constraint",
+        }],
+        identityReferences: [],
+        eventsTrigger: ["StockReserved"],
+      }],
+      eventualConsistencyRules: [],
+    },
     // deno-lint-ignore no-explicit-any
     context as any,
   );
@@ -406,15 +552,17 @@ Deno.test("boundaries writes boundaries resource", async () => {
   const resources = getWrittenResources();
   assertEquals(resources.length, 1);
   assertEquals(resources[0].specName, "boundaries");
+  assertEquals(resources[0].name, "inventory");
 
   const data = resources[0].data as {
-    aggregates: unknown[];
+    aggregates: Array<{ name: string; context: string }>;
     eventualConsistencyRules: unknown[];
     discoveredAt: string;
   };
   assertExists(data.discoveredAt);
-  assertEquals(Array.isArray(data.aggregates), true);
-  assertEquals(Array.isArray(data.eventualConsistencyRules), true);
+  assertEquals(data.aggregates.length, 1);
+  assertEquals(data.aggregates[0].name, "StockItem");
+  assertEquals(data.aggregates[0].context, "inventory");
 });
 
 Deno.test("boundaries uses context argument for instance name", async () => {
@@ -435,7 +583,23 @@ Deno.test("boundaries uses context argument for instance name", async () => {
   });
 
   const result = await model.methods.boundaries.execute(
-    { context: "payments" },
+    {
+      context: "payments",
+      aggregates: [{
+        name: "Payment",
+        rootEntity: "Payment",
+        entities: [],
+        valueObjects: ["Money"],
+        invariants: [{
+          description: "Payment amount must be positive",
+          transactional: true,
+          rationale: "Business rule",
+        }],
+        identityReferences: [],
+        eventsTrigger: ["PaymentConfirmed"],
+      }],
+      eventualConsistencyRules: [],
+    },
     // deno-lint-ignore no-explicit-any
     context as any,
   );
@@ -447,8 +611,28 @@ Deno.test("boundaries throws when no context map exists", async () => {
   const { context } = createDddContext();
 
   await assertRejects(
-    // deno-lint-ignore no-explicit-any
-    () => model.methods.boundaries.execute({}, context as any),
+    () =>
+      model.methods.boundaries.execute(
+        {
+          context: "anything",
+          aggregates: [{
+            name: "X",
+            rootEntity: "X",
+            entities: [],
+            valueObjects: [],
+            invariants: [{
+              description: "x",
+              transactional: true,
+              rationale: "x",
+            }],
+            identityReferences: [],
+            eventsTrigger: [],
+          }],
+          eventualConsistencyRules: [],
+        },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
     Error,
     "No bounded contexts discovered yet",
   );
@@ -465,8 +649,28 @@ Deno.test("boundaries throws when contexts array is empty", async () => {
   });
 
   await assertRejects(
-    // deno-lint-ignore no-explicit-any
-    () => model.methods.boundaries.execute({}, context as any),
+    () =>
+      model.methods.boundaries.execute(
+        {
+          context: "orders",
+          aggregates: [{
+            name: "X",
+            rootEntity: "X",
+            entities: [],
+            valueObjects: [],
+            invariants: [{
+              description: "x",
+              transactional: true,
+              rationale: "x",
+            }],
+            identityReferences: [],
+            eventsTrigger: [],
+          }],
+          eventualConsistencyRules: [],
+        },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
     Error,
     "No bounded contexts discovered yet",
   );
@@ -489,39 +693,30 @@ Deno.test("boundaries throws when specified context not in map", async () => {
 
   await assertRejects(
     () =>
-      // deno-lint-ignore no-explicit-any
-      model.methods.boundaries.execute({ context: "payments" }, context as any),
+      model.methods.boundaries.execute(
+        {
+          context: "payments",
+          aggregates: [{
+            name: "X",
+            rootEntity: "X",
+            entities: [],
+            valueObjects: [],
+            invariants: [{
+              description: "x",
+              transactional: true,
+              rationale: "x",
+            }],
+            identityReferences: [],
+            eventsTrigger: [],
+          }],
+          eventualConsistencyRules: [],
+        },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
     Error,
     'Context "payments" not found in context map',
   );
-});
-
-Deno.test("boundaries uses first context from map when none specified", async () => {
-  const { context, getLogsByLevel } = createDddContext({
-    current: {
-      contexts: [
-        {
-          name: "fulfillment",
-          purpose: "Ship orders",
-          ubiquitousLanguageTerms: [],
-          coreSubdomain: false,
-        },
-      ],
-      relationships: [],
-      overloadedTerms: [],
-      discoveredAt: "2026-06-05T00:00:00Z",
-    },
-  });
-
-  await model.methods.boundaries.execute(
-    {},
-    // deno-lint-ignore no-explicit-any
-    context as any,
-  );
-
-  const logs = getLogsByLevel("info");
-  const meta = logs[0].args[0] as { context: string };
-  assertEquals(meta.context, "fulfillment");
 });
 
 // =============================================================================

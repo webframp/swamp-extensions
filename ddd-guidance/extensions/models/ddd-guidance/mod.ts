@@ -1,6 +1,14 @@
-// DDD Guidance Model
-// Guides teams through applying Domain-Driven Design to an existing project.
-// SPDX-License-Identifier: Apache-2.0
+/**
+ * DDD Guidance Model
+ *
+ * Guides teams through applying Domain-Driven Design to existing projects.
+ * Agent conducts structured conversations, then persists results as typed
+ * method arguments — the same pattern as rice-scoring and good-planning.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @module
+ */
 
 import { z } from "npm:zod@4.4.3";
 
@@ -113,6 +121,101 @@ const BoundariesSchema = z.object({
 });
 
 // =============================================================================
+// Method Argument Schemas
+// =============================================================================
+
+const ContextsArgsSchema = z.object({
+  focus: z.string().optional().describe(
+    "Optional: narrow discovery to a specific area of the system",
+  ),
+  contexts: z.array(BoundedContextSchema).min(1).describe(
+    "Bounded contexts discovered through conversation",
+  ),
+  relationships: z.array(ContextRelationshipSchema).describe(
+    "Relationships between bounded contexts",
+  ),
+  overloadedTerms: z.array(z.object({
+    term: z.string(),
+    meanings: z.array(z.object({
+      context: z.string(),
+      definition: z.string(),
+    })),
+  })).describe(
+    "Terms that mean different things in different contexts",
+  ),
+});
+
+const LanguageArgsSchema = z.object({
+  context: z.string().describe(
+    "Bounded context name these terms belong to",
+  ),
+  entries: z.array(z.object({
+    term: z.string().describe("The domain term"),
+    definition: z.string().describe(
+      "Precise definition within this bounded context",
+    ),
+    examples: z.array(z.string()).describe("Concrete usage examples"),
+    relatedTerms: z.array(z.string()).describe(
+      "Terms that reference or depend on this term",
+    ),
+    antiPatterns: z.array(z.string()).optional().describe(
+      "Names to avoid and why (too generic, implementation-leaked, passive)",
+    ),
+  })).min(1).describe(
+    "Glossary entries captured through conversation",
+  ),
+  overloadedTerms: z.array(z.object({
+    term: z.string(),
+    meanings: z.array(z.object({
+      context: z.string(),
+      definition: z.string(),
+    })),
+  })).optional().describe(
+    "Any newly discovered terms that are overloaded across contexts",
+  ),
+});
+
+const BoundariesArgsSchema = z.object({
+  context: z.string().describe(
+    "Bounded context name these boundaries belong to",
+  ),
+  aggregates: z.array(z.object({
+    name: z.string().describe("Aggregate name"),
+    rootEntity: z.string().describe("The aggregate root entity"),
+    entities: z.array(z.string()).describe("Entities within this aggregate"),
+    valueObjects: z.array(z.string()).describe(
+      "Value objects within this aggregate",
+    ),
+    invariants: z.array(InvariantSchema).min(1).describe(
+      "Business rules that must hold within this aggregate boundary",
+    ),
+    identityReferences: z.array(z.object({
+      target: z.string().describe("Target aggregate referenced by ID"),
+      reason: z.string().describe("Why this reference exists"),
+    })).describe("References to other aggregates by identity only"),
+    eventsTrigger: z.array(z.string()).describe(
+      "Domain events this aggregate emits (past tense: OrderPlaced, etc.)",
+    ),
+  })).min(1).describe(
+    "Aggregate designs produced through Vernon's rules analysis",
+  ),
+  eventualConsistencyRules: z.array(z.object({
+    trigger: z.string().describe("The domain event that triggers this rule"),
+    affectedAggregates: z.array(z.string()).describe(
+      "Aggregates that react to this event",
+    ),
+    tolerableDelay: z.string().describe(
+      "How much delay is acceptable (seconds, minutes, hours)",
+    ),
+    rationale: z.string().describe(
+      "Why eventual consistency is acceptable here",
+    ),
+  })).describe(
+    "Cross-aggregate consistency rules that tolerate eventual consistency",
+  ),
+});
+
+// =============================================================================
 // Context type shorthand
 // =============================================================================
 
@@ -145,7 +248,7 @@ type MethodContext = {
 /** DDD guidance model — bounded context discovery, ubiquitous language capture, aggregate boundary design. */
 export const model = {
   type: "@webframp/ddd-guidance",
-  version: "2026.06.23.1",
+  version: "2026.06.24.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -203,8 +306,7 @@ Guide the discussion through these phases:
    - Independence from other contexts for most changes
 
 5. RELATIONSHIP MAPPING
-   For each pair of related contexts, determine the relationship type
-   (use these exact values in the resource):
+   For each pair of related contexts, determine the relationship type:
    - partnership: teams cooperate, evolve together
    - customer-supplier: downstream has veto power over upstream changes
    - conformist: downstream accepts upstream's model as-is
@@ -218,30 +320,21 @@ Guide the discussion through these phases:
 6. CORE DOMAIN IDENTIFICATION
    Ask: "Which of these contexts represents your competitive advantage
    or primary business value?" Mark it as the core subdomain. The rest
-   are supporting or generic subdomains. Strategic investment should
-   concentrate on the core.
+   are supporting or generic subdomains.
 
-Write the contextMap resource with contexts, relationships, and
-overloaded terms. This resource evolves — run this method again as
-understanding deepens.`,
-      arguments: z.object({
-        focus: z.string().optional().describe(
-          "Optional: narrow discovery to a specific area of the system",
-        ),
-      }),
+After completing the conversation, call this method with the discovered
+contexts, relationships, and overloaded terms as structured arguments.
+The contextMap resource evolves — run this method again as understanding
+deepens.`,
+      arguments: ContextsArgsSchema,
       execute: async (
-        args: { focus?: string },
+        args: z.infer<typeof ContextsArgsSchema>,
         context: MethodContext,
       ) => {
-        const { projectContext, existingPatterns } = context.globalArgs;
-
         const contextMap = {
-          contexts: [] as z.infer<typeof BoundedContextSchema>[],
-          relationships: [] as z.infer<typeof ContextRelationshipSchema>[],
-          overloadedTerms: [] as Array<{
-            term: string;
-            meanings: Array<{ context: string; definition: string }>;
-          }>,
+          contexts: args.contexts,
+          relationships: args.relationships,
+          overloadedTerms: args.overloadedTerms,
           discoveredAt: new Date().toISOString(),
         };
 
@@ -252,10 +345,10 @@ understanding deepens.`,
         );
 
         context.logger.info(
-          "Context map initialized for {project}. Existing patterns: [{patterns}]. Focus: {focus}",
+          "Context map written with {contextCount} contexts and {relCount} relationships",
           {
-            project: projectContext,
-            patterns: existingPatterns.join(", "),
+            contextCount: args.contexts.length,
+            relCount: args.relationships.length,
             focus: args.focus ?? "full system",
           },
         );
@@ -303,44 +396,47 @@ Guide the conversation through these phases:
      should describe the domain, not the technology
    - Passive ("is processed", "gets handled") — find the actor and the verb
 
-7. CROSS-RESOURCE FEEDBACK
-   If any term discovered in this session is used in OTHER contexts with
-   a different meaning, update the contextMap resource's overloadedTerms
-   array. Read the current contextMap, append the new overloaded term with
-   its per-context meanings, and write it back. The contextMap should always
-   reflect the latest understanding of where language diverges.
+After completing the conversation, call this method with the captured
+glossary entries. Entries are MERGED with existing glossary data —
+run repeatedly to build vocabulary across contexts.
 
-Write or update the domainGlossary resource. Each invocation adds entries
-for one context. Run repeatedly to build vocabulary across contexts.`,
-      arguments: z.object({
-        context: z.string().optional().describe(
-          "Bounded context name to capture language for (uses first context if omitted)",
-        ),
-      }),
+If any terms are overloaded across contexts, include them in the
+overloadedTerms argument to update the contextMap as well.`,
+      arguments: LanguageArgsSchema,
       execute: async (
-        args: { context?: string },
+        args: z.infer<typeof LanguageArgsSchema>,
         ctx: MethodContext,
       ) => {
-        const contextMap = await ctx.readResource("current");
-
-        const contexts = (contextMap && Array.isArray(contextMap.contexts))
-          ? contextMap.contexts as Array<{ name: string }>
-          : [];
-
-        const targetContext = args.context ??
-          contexts[0]?.name ??
-          "unknown-context";
-
         const existing = await ctx.readResource(
           "glossary",
         ) as Record<string, unknown> | null;
 
-        const entries = Array.isArray(existing?.entries)
+        const existingEntries = Array.isArray(existing?.entries)
           ? (existing!.entries as z.infer<typeof GlossaryEntrySchema>[])
           : [];
 
+        const newEntries: z.infer<typeof GlossaryEntrySchema>[] = args.entries
+          .map((e) => ({
+            term: e.term,
+            context: args.context,
+            definition: e.definition,
+            examples: e.examples,
+            relatedTerms: e.relatedTerms,
+            antiPatterns: e.antiPatterns,
+          }));
+
+        const mergedEntries = [
+          ...existingEntries.filter(
+            (e) =>
+              !newEntries.some(
+                (n) => n.term === e.term && n.context === e.context,
+              ),
+          ),
+          ...newEntries,
+        ];
+
         const glossary = {
-          entries,
+          entries: mergedEntries,
           updatedAt: new Date().toISOString(),
         };
 
@@ -350,9 +446,58 @@ for one context. Run repeatedly to build vocabulary across contexts.`,
           glossary as unknown as Record<string, unknown>,
         );
 
+        if (args.overloadedTerms && args.overloadedTerms.length > 0) {
+          const contextMap = await ctx.readResource(
+            "current",
+          ) as Record<string, unknown> | null;
+
+          if (contextMap) {
+            const existingOverloaded = Array.isArray(contextMap.overloadedTerms)
+              ? (contextMap.overloadedTerms as Array<{
+                term: string;
+                meanings: Array<{ context: string; definition: string }>;
+              }>)
+              : [];
+
+            const merged = [...existingOverloaded];
+            for (const newTerm of args.overloadedTerms) {
+              const idx = merged.findIndex((t) => t.term === newTerm.term);
+              if (idx >= 0) {
+                const existingMeanings = [...merged[idx].meanings];
+                for (const newMeaning of newTerm.meanings) {
+                  const mIdx = existingMeanings.findIndex(
+                    (m) => m.context === newMeaning.context,
+                  );
+                  if (mIdx >= 0) {
+                    existingMeanings[mIdx] = newMeaning;
+                  } else {
+                    existingMeanings.push(newMeaning);
+                  }
+                }
+                merged[idx] = {
+                  term: newTerm.term,
+                  meanings: existingMeanings,
+                };
+              } else {
+                merged.push(newTerm);
+              }
+            }
+
+            await ctx.writeResource(
+              "contextMap",
+              "current",
+              { ...contextMap, overloadedTerms: merged },
+            );
+          }
+        }
+
         ctx.logger.info(
-          "Domain glossary updated for context {context}. Total entries: {count}",
-          { context: targetContext, count: entries.length },
+          "Domain glossary updated for context {context}. Added {newCount} entries, total {totalCount}",
+          {
+            context: args.context,
+            newCount: newEntries.length,
+            totalCount: mergedEntries.length,
+          },
         );
 
         return { dataHandles: [handle] };
@@ -371,76 +516,47 @@ Rules of Thumb:
    for?" If a 'context' argument is provided, use that directly.
 
 2. AGGREGATE CANDIDATE CLUSTERING
-   Before applying Vernon's rules, help the team translate glossary terms
-   into candidate aggregates. Present the glossary entries for this context
-   and ask: "Which of these terms cluster together — which ones are always
-   discussed together, always change together, or make no sense without
-   each other?" Group the terms into 2-5 clusters.
+   Present the glossary entries for this context and ask: "Which of these
+   terms cluster together — which ones are always discussed together,
+   always change together, or make no sense without each other?" Group
+   the terms into 2-5 clusters.
 
    For each cluster, ask: "What is the 'main thing' in this cluster — the
    one concept that the others describe or qualify?" That main thing is
-   the candidate aggregate root. The others are candidate entities or
-   value objects within it.
-
-   Teams that think in database tables: ask "Which table would you query
-   first? The other tables in this cluster — are they always JOINed with
-   it, or can they be queried independently?" Tables always JOINed suggest
-   one aggregate. Independently queryable tables suggest separate aggregates.
-
-   Present the candidate aggregates before proceeding. The team should
-   agree these are reasonable starting points before applying invariant
-   analysis.
+   the candidate aggregate root.
 
 3. INVARIANT DISCOVERY
-   For each candidate aggregate from step 2, ask: "What rules MUST be
-   true at all times? What would constitute an invalid state?" These are
-   your true invariants — the things that must be transactionally consistent.
+   For each candidate aggregate, ask: "What rules MUST be true at all
+   times? What would constitute an invalid state?" These are your true
+   invariants.
 
    Vernon's Rule: "Model true invariants in consistency boundaries."
-   An invariant is a business rule that must always be consistent with
-   other rules within the same aggregate. If two things must be
-   atomically consistent, they belong in the same aggregate.
 
 4. AGGREGATE SIZING
    Vernon's Rule: "Design small aggregates."
    Ask: "Could this aggregate be smaller? Does every entity and value
    object here participate in the SAME invariant?" If not, split it.
-   Large aggregates cause transaction contention, memory pressure,
-   and merge conflicts. Prefer one root entity with value objects.
 
 5. REFERENCE STRATEGY
    Vernon's Rule: "Reference other aggregates by identity only."
    Ask: "When this aggregate needs data from another, does it need
-   the entire object graph, or just an ID to look it up?" Direct object
-   references create coupling. Identity references enable independent
-   scaling and evolution.
+   the entire object graph, or just an ID to look it up?"
 
 6. CONSISTENCY BOUNDARY DECISIONS
    Vernon's Rule: "Use eventual consistency outside the boundary."
-   For each cross-aggregate rule, ask: "Whose job is it to enforce
-   this? The user doing the action, or the system afterward?" If it's
-   the system's job, it can be eventually consistent.
-
-   Ask domain experts: "How did this work before computers? Was it
-   ever immediately consistent?" The answer is almost always no.
-   Ask: "How many seconds/minutes/hours of delay is tolerable?"
+   For each cross-aggregate rule, ask: "How many seconds/minutes/hours
+   of delay is tolerable?"
 
 7. EVENT IDENTIFICATION
    Where eventual consistency is chosen, identify the domain events
    that trigger cross-aggregate updates. Name them in past tense
-   (OrderPlaced, InventoryReserved, PaymentConfirmed). Each event
-   represents something that happened in one aggregate that other
-   aggregates react to.
+   (OrderPlaced, InventoryReserved, PaymentConfirmed).
 
-Write the boundaries resource with aggregate designs, invariants,
-identity references, and eventual consistency rules.`,
-      arguments: z.object({
-        context: z.string().optional().describe(
-          "Bounded context name to design boundaries for",
-        ),
-      }),
+After completing the conversation, call this method with the aggregate
+designs and eventual consistency rules as structured arguments.`,
+      arguments: BoundariesArgsSchema,
       execute: async (
-        args: { context?: string },
+        args: z.infer<typeof BoundariesArgsSchema>,
         ctx: MethodContext,
       ) => {
         const contextMap = await ctx.readResource(
@@ -457,36 +573,37 @@ identity references, and eventual consistency rules.`,
         }
 
         const contexts = contextMap.contexts as Array<{ name: string }>;
-        const targetContext = args.context ?? contexts[0].name;
 
-        if (!contexts.some((c) => c.name === targetContext)) {
+        if (!contexts.some((c) => c.name === args.context)) {
           throw new Error(
-            `Context "${targetContext}" not found in context map. Known contexts: ${
+            `Context "${args.context}" not found in context map. Known contexts: ${
               contexts.map((c) => c.name).join(", ")
             }`,
           );
         }
 
         const boundariesData = {
-          aggregates: [] as z.infer<typeof AggregateDesignSchema>[],
-          eventualConsistencyRules: [] as Array<{
-            trigger: string;
-            affectedAggregates: string[];
-            tolerableDelay: string;
-            rationale: string;
-          }>,
+          aggregates: args.aggregates.map((a) => ({
+            ...a,
+            context: args.context,
+          })),
+          eventualConsistencyRules: args.eventualConsistencyRules,
           discoveredAt: new Date().toISOString(),
         };
 
         const handle = await ctx.writeResource(
           "boundaries",
-          targetContext,
+          args.context,
           boundariesData as unknown as Record<string, unknown>,
         );
 
         ctx.logger.info(
-          "Aggregate boundaries initialized for context {context}",
-          { context: targetContext },
+          "Aggregate boundaries written for context {context}. {aggCount} aggregates, {ruleCount} consistency rules",
+          {
+            context: args.context,
+            aggCount: args.aggregates.length,
+            ruleCount: args.eventualConsistencyRules.length,
+          },
         );
 
         return { dataHandles: [handle] };
@@ -496,10 +613,9 @@ identity references, and eventual consistency rules.`,
     revisit: {
       description: `Review existing DDD decisions against recent system changes.
 
-Domain understanding evolves. New services appear, teams reorganize, incidents
-reveal hidden coupling, and business priorities shift. This method guides a
-structured review of prior context, language, and boundary decisions to
-determine what still holds and what needs updating.
+Domain understanding evolves. This method guides a structured review of
+prior context, language, and boundary decisions to determine what still
+holds and what needs updating.
 
 Guide the conversation through these phases:
 
@@ -516,43 +632,28 @@ Guide the conversation through these phases:
 2. BOUNDARY STRESS TEST
    For each bounded context in the contextMap, ask: "Has this context's
    rate of change shifted? Is it still owned by the same team? Has its
-   purpose expanded or contracted?" Contexts that have grown to serve
-   multiple purposes or multiple teams are candidates for splitting.
+   purpose expanded or contracted?"
 
    For each relationship, ask: "Is this still the right relationship
-   type? Has a partnership become a customer-supplier? Has a conformist
-   relationship developed enough friction to justify an anticorruption
-   layer?"
+   type? Has a partnership become a customer-supplier?"
 
 3. LANGUAGE DRIFT
    For the domainGlossary, ask: "Are there terms the team has stopped
    using? New terms that have emerged? Definitions that no longer match
    how the team actually talks about the system?"
 
-   Pay attention to terms that have silently changed meaning — the
-   definition in the glossary says one thing, but the team uses the word
-   differently now. These are signals of unacknowledged context shifts.
-
 4. AGGREGATE PRESSURE
    For stored boundaries, ask: "Have any aggregates grown? Are there
-   new invariants that were not present before? Have tolerable delays
-   changed — is something that was eventually consistent now causing
-   user-visible problems because the delay is too long?"
-
-   Look for aggregates that have accumulated entities since the last
-   review. Each addition should be justified by a shared invariant.
+   new invariants? Have tolerable delays changed?"
 
 5. DECISION RECORD
    For each change identified, record: what changed, why it changed,
-   and what resource to update. Write updated versions of affected
-   resources. The version history (via GC retention) preserves the
-   evolution — teams can query "what did we believe 3 months ago?"
-   to understand how their domain model matured.
+   and what resource to update.
 
 After identifying what changed, re-run the relevant methods (contexts,
-language, boundaries) to write updated resource versions. This method
-identifies what needs revision; the other methods perform the actual
-writes. The version history (via GC retention) preserves the evolution.`,
+language, boundaries) with updated arguments to write new resource
+versions. This method identifies what needs revision; the other methods
+perform the actual writes.`,
       arguments: z.object({
         scope: z
           .enum(["all", "contexts", "language", "boundaries"])
@@ -565,8 +666,6 @@ writes. The version history (via GC retention) preserves the evolution.`,
         args: { scope: string },
         ctx: MethodContext,
       ) => {
-        const scope = args.scope;
-
         const contextMap = await ctx.readResource(
           "current",
         ) as Record<string, unknown> | null;
@@ -588,7 +687,7 @@ writes. The version history (via GC retention) preserves the evolution.`,
         ctx.logger.info(
           "Revisit session started for scope {scope}. Contexts: [{contexts}]. Last discovered: {discoveredAt}",
           {
-            scope,
+            scope: args.scope,
             contexts: contextNames.join(", "),
             discoveredAt: (contextMap.discoveredAt as string) ?? "unknown",
             glossaryUpdatedAt: glossary
