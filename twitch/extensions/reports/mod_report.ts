@@ -172,6 +172,9 @@ export const report = {
       { login: string; channels: string[]; reasons: Record<string, string> }
     > = new Map();
     const allModEvents: Array<ModEvent & { channel: string }> = [];
+    // Accumulated counts per modelId from chatters/bans first pass
+    const chatterCountByModelId: Map<string, number> = new Map();
+    const banCountByModelId: Map<string, number> = new Map();
 
     // Gather channel data
     const channelSteps = findAllStepData("get_channel");
@@ -193,6 +196,7 @@ export const report = {
       if (!data) continue;
       const chatters = data as unknown as ChattersData;
       modelIdToChannel.set(loc.modelId, chatters.channel);
+      chatterCountByModelId.set(loc.modelId, chatters.count);
 
       for (const chatter of chatters.chatters) {
         const existing = allChatters.get(chatter.userId);
@@ -220,6 +224,7 @@ export const report = {
       if (!data) continue;
       const banned = data as unknown as BannedUsersData;
       modelIdToChannel.set(loc.modelId, banned.channel);
+      banCountByModelId.set(loc.modelId, banned.count);
 
       for (const ban of banned.bans) {
         const existing = allBans.get(ban.userId);
@@ -238,7 +243,7 @@ export const report = {
       }
     }
 
-    // Process channel info and build overview rows
+    // Process channel info and build overview rows using accumulated counts
     for (const { loc } of channelSteps) {
       const data = await getData(
         loc.modelType,
@@ -250,44 +255,12 @@ export const report = {
       const ch = data as unknown as ChannelData;
       modelIdToChannel.set(loc.modelId, ch.broadcasterLogin);
 
-      // Count chatters and bans for this channel
-      let chatterCount = 0;
-      let banCount = 0;
-
-      for (const { loc: cLoc } of chatterSteps) {
-        if (cLoc.modelId === loc.modelId) {
-          const cData = await getData(
-            cLoc.modelType,
-            cLoc.modelId,
-            cLoc.dataName,
-            cLoc.version,
-          );
-          if (cData) {
-            chatterCount = (cData as unknown as ChattersData).count;
-          }
-        }
-      }
-
-      for (const { loc: bLoc } of banSteps) {
-        if (bLoc.modelId === loc.modelId) {
-          const bData = await getData(
-            bLoc.modelType,
-            bLoc.modelId,
-            bLoc.dataName,
-            bLoc.version,
-          );
-          if (bData) {
-            banCount = (bData as unknown as BannedUsersData).count;
-          }
-        }
-      }
-
       allChannels.push({
         channel: ch.broadcasterLogin,
         title: ch.title,
         game: ch.gameName,
-        chatterCount,
-        banCount,
+        chatterCount: chatterCountByModelId.get(loc.modelId) ?? 0,
+        banCount: banCountByModelId.get(loc.modelId) ?? 0,
       });
     }
 

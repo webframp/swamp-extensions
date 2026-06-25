@@ -28,10 +28,22 @@ function credsFrom(globalArgs: GlobalArgs): TwitchCredentials {
   };
 }
 
+// Per-process cache: avoids redundant /users lookups when the workflow runs
+// multiple methods against the same channel within a single execution.
+const broadcasterIdCache = new Map<string, string>();
+
+/** Exported for testing — clears the broadcaster ID cache. */
+export function clearBroadcasterIdCache(): void {
+  broadcasterIdCache.clear();
+}
+
 async function getBroadcasterId(
   creds: TwitchCredentials,
   channel: string,
 ): Promise<string> {
+  const cached = broadcasterIdCache.get(channel);
+  if (cached) return cached;
+
   const resp = await helixApi<{
     id: string;
     login: string;
@@ -39,7 +51,9 @@ async function getBroadcasterId(
   if (resp.data.length === 0) {
     throw new Error(`Twitch user not found for channel: ${channel}`);
   }
-  return resp.data[0].id;
+  const id = resp.data[0].id;
+  broadcasterIdCache.set(channel, id);
+  return id;
 }
 
 // =============================================================================
@@ -160,7 +174,7 @@ const ModEventsSchema = z.object({
 
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.04.22.1",
+  version: "2026.06.25.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -456,7 +470,8 @@ export const model = {
     },
 
     get_mod_events: {
-      description: "Get moderator add/remove events for the configured channel",
+      description:
+        "Get moderator add/remove events for the configured channel (uses legacy endpoint; may return empty on newer channels)",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
         const { channel } = context.globalArgs;

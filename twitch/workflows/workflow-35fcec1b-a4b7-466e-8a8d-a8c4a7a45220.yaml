@@ -15,8 +15,22 @@ reports:
   require:
     - "@webframp/twitch-mod-report"
 jobs:
+  - name: validate-auth
+    description: Verify API credentials and channel resolution before gathering data
+    steps:
+      - name: get-channel-info
+        description: Get channel metadata (title, game, tags) — gates subsequent jobs on auth success
+        task:
+          type: model_method
+          modelIdOrName: "*"
+          methodName: get_channel
+
   - name: gather-channel-data
-    description: Collect chatters, bans, and channel info from each channel instance
+    description: Collect chatters, bans, and mod events from each channel instance
+    dependsOn:
+      - job: validate-auth
+        condition:
+          type: succeeded
     steps:
       - name: get-chatters
         description: Get current chatters in the channel
@@ -34,16 +48,8 @@ jobs:
           methodName: get_banned_users
         allowFailure: true
 
-      - name: get-channel-info
-        description: Get channel metadata (title, game, tags)
-        task:
-          type: model_method
-          modelIdOrName: "*"
-          methodName: get_channel
-        allowFailure: true
-
       - name: get-mod-events
-        description: Get recent moderation actions
+        description: Get recent moderation actions (legacy endpoint, may return empty)
         task:
           type: model_method
           modelIdOrName: "*"
