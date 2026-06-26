@@ -18,6 +18,7 @@ jobs:
         startsWith(github.event.comment.body, '/shipit')
       )
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
@@ -64,3 +65,9 @@ jobs:
             --repo ${{ github.repository }} \
             --squash \
             --delete-branch
+
+      - name: Trigger CI on main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run ci.yml --repo ${{ github.repository }} --ref main
