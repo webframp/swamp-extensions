@@ -9,8 +9,6 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/cloudflare`](cloudflare/) | Cloudflare management — zones, DNS, WAF, Workers, cache | None (uses fetch) |
 | [`@webframp/github`](github/) | GitHub operations via the `gh` CLI — repos, PRs, issues, releases, workflows | None (shells out to `gh`) |
 | [`@webframp/gitlab`](gitlab/) | GitLab operations via REST API — projects, merge requests, issues, pipelines | None (uses fetch) |
-| [`@webframp/gitlab-review`](gitlab-review/) | AI-assisted GitLab MR code review with human approval gate — fetch diffs, draft reviews, post comments, approve/unapprove | None (uses fetch) |
-| [`@webframp/discourse`](discourse/) | Discourse forum queries — categories, topics, posts, search | None (uses fetch) |
 | [`@webframp/system`](system/) | Local system diagnostics — disk usage, memory, uptime/load | None (shells out to OS commands) |
 | [`@webframp/network`](network/) | Network probes — HTTP checks, TLS cert inspection, DNS lookup, whois, port scanning | None (shells out to `curl`, `openssl`, `dig`, `whois`) |
 | [`@webframp/aws/pricing`](aws/pricing/) | AWS Pricing API for service cost lookups | `@aws-sdk/client-pricing` |
@@ -18,18 +16,12 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/logs`](aws/logs/) | CloudWatch Logs queries and analysis | `@aws-sdk/client-cloudwatch-logs` |
 | [`@webframp/aws/metrics`](aws/metrics/) | CloudWatch Metrics retrieval and anomaly analysis | `@aws-sdk/client-cloudwatch` |
 | [`@webframp/aws/alarms`](aws/alarms/) | CloudWatch Alarms status, history, and active alerts | `@aws-sdk/client-cloudwatch` |
-| [`@webframp/aws/alarm-investigation`](aws/alarm-investigation/) | CloudWatch alarm investigation and triage — enriches alarms with metric activity, SNS subscriptions, and verdict classification | `@aws-sdk/client-cloudwatch`, `@aws-sdk/client-sns` |
 | [`@webframp/aws/traces`](aws/traces/) | X-Ray distributed tracing and error analysis | `@aws-sdk/client-xray` |
 | [`@webframp/aws/cost-estimate`](aws/cost-estimate/) | Cost estimation from inventory specs | `@aws-sdk/client-pricing` |
 | [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
-| [`@webframp/aws/guardduty`](aws/guardduty/) | AWS GuardDuty findings and member account enrollment from delegated admin | `@aws-sdk/client-guardduty` |
 | [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
-| [`@webframp/aws/service-quotas`](aws/service-quotas/) | AWS Service Quotas — query limits, check utilization, request increases | `@aws-sdk/client-service-quotas`, `@aws-sdk/client-cloudwatch` |
 | [`@webframp/terraform`](terraform/) | Terraform/OpenTofu state reader — resource inventory, full state, and outputs | None (shells out to `terraform` or `tofu`) |
-| [`@webframp/reddit/moderation`](reddit/) | Reddit moderation — modqueue, reports, modlog, comments, posts, user info | None (uses fetch + OAuth2) |
-| [`@webframp/rice-scoring`](rice-scoring/) | RICE scoring methodology as an agent-guided framework — configurable scales, structured interviews, ranked scorecards | None (concept model) |
-| [`@webframp/swamp-adoption`](swamp-adoption/) | Guides new users through mapping their domain onto swamp primitives — discovery interviews, extension designs, scaffolds | None (concept model) |
-| [`@webframp/ddd-guidance`](ddd-guidance/) | Domain-Driven Design guidance — bounded context discovery, ubiquitous language capture, aggregate boundary design using Vernon's rules | None (concept model) |
+| [`@webframp/twitch`](twitch/) | Twitch Moderation — cross-channel moderation visibility, suspicious user detection, ban overlap analysis | None (uses fetch) |
 
 ## Workflow + Report Extensions
 
@@ -41,8 +33,8 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws-cost-audit`](aws/cost-audit/) | AWS cost audit — analyzes spend, resource inventory, and networking waste, then generates savings recommendations | `@webframp/aws/cost-explorer`, `@webframp/aws/networking`, `@webframp/aws/inventory` |
 | [`@webframp/aws/terraform-drift`](aws/terraform-drift/) | Terraform drift detection — compares TF state against live AWS resources | `@webframp/terraform`, `@webframp/aws/inventory`, `@webframp/aws/networking` |
 | [`@webframp/aws/cost-report`](aws/cost-report/) | AWS cost report formatting (standalone report extension) | None |
-| [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — workflow-agnostic CRUD model for issues, projects, versions, relations, time entries, watchers, search, and more | None |
-| [`@webframp/redmine-kanban`](redmine-kanban/) | Kanban workflow reports and automation for Redmine — flow metrics, sprint summaries, and story scaffolding | `@webframp/redmine` |
+| [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — CRUD operations on issues, projects, users, and custom fields, plus flow metrics and sprint summary reports with a scaffold-story workflow | None |
+| [`@webframp/twitch`](twitch/) | Twitch cross-channel moderation audit — gathers chatters, bans, and mod events across channels, then generates a report highlighting ban overlap and suspicious users | None (uses fetch) |
 
 ## Vault Extensions
 
@@ -58,7 +50,6 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | Extension | Description | Dependencies |
 |-----------|-------------|--------------|
 | [`@webframp/gitlab-datastore`](datastore/gitlab-datastore/) | Stores swamp runtime data in GitLab using the Terraform state HTTP API. Provides distributed locking and bidirectional sync. | None (uses fetch) |
-| [`@webframp/postgres-datastore`](datastore/postgres/) | Stores swamp runtime data in PostgreSQL with row-based distributed locking. Compatible with AWS RDS, Aurora, and Aurora Serverless v2. | `postgres` (npm) |
 
 ## Driver Extensions
 
@@ -78,15 +69,10 @@ manually with:
 swamp extension pull @webframp/cloudflare
 swamp extension pull @webframp/github
 swamp extension pull @webframp/gitlab
-swamp extension pull @webframp/gitlab-review
-swamp extension pull @webframp/discourse
 swamp extension pull @webframp/system
 swamp extension pull @webframp/network
 swamp extension pull @webframp/terraform
-swamp extension pull @webframp/reddit/moderation
-swamp extension pull @webframp/rice-scoring
-swamp extension pull @webframp/swamp-adoption
-swamp extension pull @webframp/ddd-guidance
+swamp extension pull @webframp/twitch
 
 # Workflow + report extensions (auto-pull model dependencies)
 swamp extension pull @webframp/sre
@@ -95,7 +81,6 @@ swamp extension pull @webframp/aws-ops
 swamp extension pull @webframp/aws-cost-audit
 swamp extension pull @webframp/aws/terraform-drift
 swamp extension pull @webframp/redmine
-swamp extension pull @webframp/redmine-kanban
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing
@@ -106,9 +91,7 @@ swamp extension pull @webframp/aws/alarms
 swamp extension pull @webframp/aws/traces
 swamp extension pull @webframp/aws/cost-estimate
 swamp extension pull @webframp/aws/cost-explorer
-swamp extension pull @webframp/aws/guardduty
 swamp extension pull @webframp/aws/networking
-swamp extension pull @webframp/aws/service-quotas
 swamp extension pull @webframp/aws/cost-report
 
 # Vault extensions
@@ -119,7 +102,6 @@ swamp extension pull @webframp/macos-keychain
 
 # Datastore extensions
 swamp extension pull @webframp/gitlab-datastore
-swamp extension pull @webframp/postgres-datastore
 
 # Driver extensions
 swamp extension pull @webframp/nix
@@ -212,24 +194,6 @@ swamp model create @webframp/redmine tracker \
 
 swamp workflow run @webframp/scaffold-story \
   --input subject="ADDS | LDAP | Implement Geographic Redundancy"
-```
-
-### Reddit moderation
-
-```bash
-swamp extension pull @webframp/reddit/moderation
-
-swamp model create @webframp/reddit/moderation reddit-mod \
-  --global-arg subreddit=yoursubreddit \
-  --global-arg clientId=vault://reddit/clientId \
-  --global-arg clientSecret=vault://reddit/clientSecret \
-  --global-arg username=vault://reddit/username \
-  --global-arg password=vault://reddit/password \
-  --global-arg userAgent="swamp:yourbot:v1.0 (by /u/yourname)"
-
-swamp model method run reddit-mod get_modqueue
-swamp model method run reddit-mod get_reports --input limit=50
-swamp model method run reddit-mod get_user_info --input username=targetuser
 ```
 
 ### Terraform state reader
