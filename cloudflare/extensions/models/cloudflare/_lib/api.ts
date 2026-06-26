@@ -49,6 +49,7 @@ const MAX_PAGES = 20;
 export interface PaginatedResult<T> {
   results: T[];
   truncated: boolean;
+  totalFetched: number;
 }
 
 export async function cfApiPaginated<T>(
@@ -95,5 +96,5 @@ export async function cfApiPaginated<T>(
     truncated = true;
   }
 
-  return { results: allResults, truncated };
+  return { results: allResults, truncated, totalFetched: allResults.length };
 }

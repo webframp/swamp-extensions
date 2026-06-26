@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 // =============================================================================
@@ -87,7 +87,7 @@ const SecurityEventsSchema = z.object({
 /** Cloudflare WAF model definition with methods for firewall rules, WAF packages, and security events. */
 export const model = {
   type: "@webframp/cloudflare/waf",
-  version: "2026.06.21.1",
+  version: "2026.06.26.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -143,6 +143,13 @@ export const model = {
           apiToken,
           `/zones/${zoneId}/firewall/rules`,
         );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: firewall rules truncated at {count} results (pagination cap reached)",
+            { count: rules.length },
+          );
+        }
 
         const handle = await context.writeResource("rules", "main", {
           zoneId,
@@ -334,17 +341,25 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const { results: packages, truncated } = await cfApiPaginated<
-          z.infer<typeof WafPackageSchema>
-        >(
-          apiToken,
-          `/zones/${zoneId}/firewall/waf/packages`,
-        );
+        const { results: packages, truncated: pkgTruncated } =
+          await cfApiPaginated<
+            z.infer<typeof WafPackageSchema>
+          >(
+            apiToken,
+            `/zones/${zoneId}/firewall/waf/packages`,
+          );
+
+        if (pkgTruncated) {
+          context.logger.info(
+            "WARNING: WAF packages truncated at {count} results (pagination cap reached)",
+            { count: packages.length },
+          );
+        }
 
         const handle = await context.writeResource("packages", "main", {
           zoneId,
           packages,
-          truncated,
+          truncated: pkgTruncated,
           fetchedAt: new Date().toISOString(),
         });
 
@@ -378,13 +393,12 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        // Use GraphQL API for security events
         const query = `
-          query {
+          query($zoneTag: String!, $limit: Int!) {
             viewer {
-              zones(filter: { zoneTag: "${zoneId}" }) {
+              zones(filter: { zoneTag: $zoneTag }) {
                 firewallEventsAdaptive(
-                  limit: ${args.limit}
+                  limit: $limit
                   orderBy: [datetime_DESC]
                 ) {
                   rayName
@@ -412,7 +426,10 @@ export const model = {
               "Authorization": `Bearer ${apiToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ query }),
+            body: JSON.stringify({
+              query,
+              variables: { zoneTag: zoneId, limit: args.limit },
+            }),
           },
         );
 

@@ -10,7 +10,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { cfApi } from "./_lib/api.ts";
 
 // =============================================================================
@@ -65,13 +65,50 @@ const AnalyticsSchema = z.object({
 });
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+async function fetchCacheSettings(
+  apiToken: string,
+  zoneId: string,
+): Promise<z.infer<typeof CacheSettingsSchema>> {
+  const settingsArray = await cfApi<Array<{ id: string; value: unknown }>>(
+    apiToken,
+    "GET",
+    `/zones/${zoneId}/settings`,
+  );
+
+  const settingsMap = new Map(settingsArray.map((s) => [s.id, s.value]));
+
+  return {
+    zoneId,
+    cacheLevel: settingsMap.get("cache_level") as string | undefined,
+    browserCacheTtl: settingsMap.get("browser_cache_ttl") as
+      | number
+      | undefined,
+    alwaysOnline: settingsMap.get("always_online") as string | undefined,
+    developmentMode: settingsMap.get("development_mode") as
+      | number
+      | undefined,
+    minify: settingsMap.get("minify") as {
+      css: boolean;
+      html: boolean;
+      js: boolean;
+    } | undefined,
+    polish: settingsMap.get("polish") as string | undefined,
+    webp: settingsMap.get("webp") as string | undefined,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+// =============================================================================
 // Model Definition
 // =============================================================================
 
 /** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
-  version: "2026.06.21.1",
+  version: "2026.06.26.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -283,37 +320,7 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-
-        // Fetch relevant settings
-        const settingsArray = await cfApi<
-          Array<{ id: string; value: unknown }>
-        >(
-          apiToken,
-          "GET",
-          `/zones/${zoneId}/settings`,
-        );
-
-        const settingsMap = new Map(settingsArray.map((s) => [s.id, s.value]));
-
-        const settings = {
-          zoneId,
-          cacheLevel: settingsMap.get("cache_level") as string | undefined,
-          browserCacheTtl: settingsMap.get("browser_cache_ttl") as
-            | number
-            | undefined,
-          alwaysOnline: settingsMap.get("always_online") as string | undefined,
-          developmentMode: settingsMap.get("development_mode") as
-            | number
-            | undefined,
-          minify: settingsMap.get("minify") as {
-            css: boolean;
-            html: boolean;
-            js: boolean;
-          } | undefined,
-          polish: settingsMap.get("polish") as string | undefined,
-          webp: settingsMap.get("webp") as string | undefined,
-          fetchedAt: new Date().toISOString(),
-        };
+        const settings = await fetchCacheSettings(apiToken, zoneId);
 
         const handle = await context.writeResource(
           "settings",
@@ -359,37 +366,7 @@ export const model = {
           { value: args.level },
         );
 
-        // Fetch updated settings
-        const settingsArray = await cfApi<
-          Array<{ id: string; value: unknown }>
-        >(
-          apiToken,
-          "GET",
-          `/zones/${zoneId}/settings`,
-        );
-
-        const settingsMap = new Map(settingsArray.map((s) => [s.id, s.value]));
-
-        const settings = {
-          zoneId,
-          cacheLevel: settingsMap.get("cache_level") as string | undefined,
-          browserCacheTtl: settingsMap.get("browser_cache_ttl") as
-            | number
-            | undefined,
-          alwaysOnline: settingsMap.get("always_online") as string | undefined,
-          developmentMode: settingsMap.get("development_mode") as
-            | number
-            | undefined,
-          minify: settingsMap.get("minify") as {
-            css: boolean;
-            html: boolean;
-            js: boolean;
-          } | undefined,
-          polish: settingsMap.get("polish") as string | undefined,
-          webp: settingsMap.get("webp") as string | undefined,
-          fetchedAt: new Date().toISOString(),
-        };
-
+        const settings = await fetchCacheSettings(apiToken, zoneId);
         const handle = await context.writeResource(
           "settings",
           "main",
@@ -431,37 +408,7 @@ export const model = {
           { value: args.enabled ? "on" : "off" },
         );
 
-        // Fetch updated settings
-        const settingsArray = await cfApi<
-          Array<{ id: string; value: unknown }>
-        >(
-          apiToken,
-          "GET",
-          `/zones/${zoneId}/settings`,
-        );
-
-        const settingsMap = new Map(settingsArray.map((s) => [s.id, s.value]));
-
-        const settings = {
-          zoneId,
-          cacheLevel: settingsMap.get("cache_level") as string | undefined,
-          browserCacheTtl: settingsMap.get("browser_cache_ttl") as
-            | number
-            | undefined,
-          alwaysOnline: settingsMap.get("always_online") as string | undefined,
-          developmentMode: settingsMap.get("development_mode") as
-            | number
-            | undefined,
-          minify: settingsMap.get("minify") as {
-            css: boolean;
-            html: boolean;
-            js: boolean;
-          } | undefined,
-          polish: settingsMap.get("polish") as string | undefined,
-          webp: settingsMap.get("webp") as string | undefined,
-          fetchedAt: new Date().toISOString(),
-        };
-
+        const settings = await fetchCacheSettings(apiToken, zoneId);
         const handle = await context.writeResource(
           "settings",
           "main",
@@ -500,16 +447,16 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        // Use GraphQL for analytics
+        const dateStart = getDateMinutesAgo(parseInt(args.since));
+        const dateEnd = getDateMinutesAgo(parseInt(args.until));
+
         const query = `
-          query {
+          query($zoneTag: String!, $dateStart: Date!, $dateEnd: Date!) {
             viewer {
-              zones(filter: { zoneTag: "${zoneId}" }) {
+              zones(filter: { zoneTag: $zoneTag }) {
                 httpRequests1dGroups(
                   limit: 1
-                  filter: { date_geq: "${
-          getDateMinutesAgo(parseInt(args.since))
-        }", date_leq: "${getDateMinutesAgo(parseInt(args.until))}" }
+                  filter: { date_geq: $dateStart, date_leq: $dateEnd }
                 ) {
                   sum {
                     requests
@@ -531,7 +478,10 @@ export const model = {
               "Authorization": `Bearer ${apiToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ query }),
+            body: JSON.stringify({
+              query,
+              variables: { zoneTag: zoneId, dateStart, dateEnd },
+            }),
           },
         );
 

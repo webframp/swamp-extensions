@@ -163,6 +163,34 @@ All changes go through pull requests — no direct pushes to main.
 
 CI auto-publishes when `manifest.yaml` changes land on main and CI passes. The publish workflow triggers only after a successful CI run — it will not publish broken code. Do not push extensions locally — always open a PR and let CI handle publishing via `swamp extension push manifest.yaml --yes`.
 
+## Release Notes
+
+Every version bump **must** include a `RELEASE_NOTES.md` in the extension directory. CI passes this to `swamp extension push --release-notes` and to `gh release create --notes`. Without it, the registry and GitHub release get generic placeholder text that tells users nothing.
+
+### Format
+
+```markdown
+## <version>
+
+**Fixed:** One-line per fix. Lead with what was broken, not how you fixed it.
+
+**Added:** New methods, resources, or capabilities.
+
+**Changed:** Behavioral changes, even if they're improvements. Users who depend on
+the old behavior need to know.
+
+**Upgrade note:** Dependency changes, required co-upgrades, or migration steps.
+```
+
+### Rules
+
+1. **Write for the user who runs `swamp extension pull`.** They care about what changed in behavior, not about internal refactoring.
+2. **Call out behavioral changes explicitly.** If a method that previously failed silently now returns data, say so. If log output changes, say so.
+3. **Include co-upgrade requirements.** If extension A depends on extension B at a specific version, state that both must be pulled together.
+4. **Keep it under 5000 characters** (the `--release-notes` flag limit).
+5. **Do not include the file in `additionalFiles` in the manifest.** It is consumed by CI only, not bundled into the published extension.
+6. **Overwrite per version.** The file always describes the current version being published. Previous notes live in git history and GitHub releases.
+
 ## Swamp Skills
 
 Two skills are available for guidance when working on extensions:
