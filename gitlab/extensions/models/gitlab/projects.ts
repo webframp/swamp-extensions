@@ -286,11 +286,11 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
       pageInfo { hasNextPage }
     }
     assignedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
       pageInfo { hasNextPage }
     }
     authoredMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
       pageInfo { hasNextPage }
     }
     todos(state: pending, first: 20) {
@@ -316,12 +316,15 @@ function mapDashboardMR(
     : null;
   const rawState: string | null =
     myReviewer?.mergeRequestInteraction?.reviewState ?? null;
-  const myReviewState = rawState
-    ? (rawState.toLowerCase() as
-      | "pending"
-      | "reviewed"
-      | "approved"
-      | "unapproved")
+  const validStates = new Set([
+    "pending",
+    "reviewed",
+    "approved",
+    "unapproved",
+  ]);
+  const normalized = rawState?.toLowerCase() ?? null;
+  const myReviewState = normalized && validStates.has(normalized)
+    ? (normalized as "pending" | "reviewed" | "approved" | "unapproved")
     : null;
   return {
     project: node.project?.fullPath ?? "",

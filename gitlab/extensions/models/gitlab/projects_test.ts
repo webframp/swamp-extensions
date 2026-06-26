@@ -905,6 +905,16 @@ const MOCK_GRAPHQL_RESPONSE = {
             project: { fullPath: "group/proj" },
             author: { username: "alice" },
             labels: { nodes: [{ title: "security" }] },
+            approvedBy: { nodes: [{ username: "testuser" }] },
+            reviewers: {
+              nodes: [
+                {
+                  username: "testuser",
+                  mergeRequestInteraction: { reviewState: "APPROVED" },
+                },
+              ],
+            },
+            notes: { nodes: [{ author: { username: "testuser" } }] },
           },
         ],
         pageInfo: { hasNextPage: false },
@@ -1037,6 +1047,9 @@ Deno.test("list_my_merge_requests writes dashboard resource with all roles", asy
     assertEquals(data.reviewing[0].project, "group/proj");
     assertEquals(data.reviewing[0].author, "alice");
     assertEquals(data.reviewing[0].labels, ["security"]);
+    assertEquals(data.reviewing[0].approvedByMe, true);
+    assertEquals(data.reviewing[0].myReviewState, "approved");
+    assertEquals(data.reviewing[0].commented, true);
     // Verify assigned draft detection
     assertEquals(data.assigned[0].draft, true);
     // Verify todo mapping
