@@ -218,6 +218,10 @@ const DashboardMRSchema = z.object({
   labels: z.array(z.string()),
   webUrl: z.string(),
   commented: z.boolean(),
+  approvedByMe: z.boolean(),
+  myReviewState: z
+    .enum(["pending", "reviewed", "approved", "unapproved"])
+    .nullable(),
 });
 
 const TodoSchema = z.object({
@@ -278,15 +282,15 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
   currentUser {
     username
     reviewRequestedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
       pageInfo { hasNextPage }
     }
     assignedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
       pageInfo { hasNextPage }
     }
     authoredMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
       pageInfo { hasNextPage }
     }
     todos(state: pending, first: 20) {
@@ -303,6 +307,22 @@ function mapDashboardMR(
   const noteAuthors: string[] =
     node.notes?.nodes?.map((n: any) => n.author?.username).filter(Boolean) ??
       [];
+  const approvers: string[] =
+    node.approvedBy?.nodes?.map((a: any) => a.username).filter(Boolean) ?? [];
+  const myReviewer = currentUser
+    ? (node.reviewers?.nodes ?? []).find(
+      (r: any) => r.username === currentUser,
+    )
+    : null;
+  const rawState: string | null =
+    myReviewer?.mergeRequestInteraction?.reviewState ?? null;
+  const myReviewState = rawState
+    ? (rawState.toLowerCase() as
+      | "pending"
+      | "reviewed"
+      | "approved"
+      | "unapproved")
+    : null;
   return {
     project: node.project?.fullPath ?? "",
     iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
@@ -313,6 +333,8 @@ function mapDashboardMR(
     labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
     webUrl: node.webUrl ?? "",
     commented: currentUser ? noteAuthors.includes(currentUser) : false,
+    approvedByMe: currentUser ? approvers.includes(currentUser) : false,
+    myReviewState,
   };
 }
 
@@ -652,7 +674,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.24.4",
+  version: "2026.06.26.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1583,12 +1605,12 @@ export const model = {
           : [];
         const assigned = showAssigned
           ? (user.assignedMergeRequests?.nodes ?? []).map((n: any) =>
-            mapDashboardMR(n)
+            mapDashboardMR(n, user.username)
           )
           : [];
         const authored = showAuthored
           ? (user.authoredMergeRequests?.nodes ?? []).map((n: any) =>
-            mapDashboardMR(n)
+            mapDashboardMR(n, user.username)
           )
           : [];
         const todos = (user.todos?.nodes ?? []).map(mapTodo);
