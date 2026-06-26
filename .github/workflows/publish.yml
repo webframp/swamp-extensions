@@ -108,11 +108,17 @@ jobs:
         env:
           CHANNEL: ${{ needs.detect-changes.outputs.channel }}
         run: |
-          if [ "$CHANNEL" = "stable" ]; then
-            swamp extension push manifest.yaml --yes
-          else
-            swamp extension push manifest.yaml --yes --channel "$CHANNEL"
+          PUSH_ARGS=(swamp extension push manifest.yaml --yes)
+
+          if [ "$CHANNEL" != "stable" ]; then
+            PUSH_ARGS+=(--channel "$CHANNEL")
           fi
+
+          if [ -f RELEASE_NOTES.md ]; then
+            PUSH_ARGS+=(--release-notes "$(cat RELEASE_NOTES.md)")
+          fi
+
+          "${PUSH_ARGS[@]}"
 
       - name: Create GitHub release
         # Only create GH releases for stable channel
@@ -122,6 +128,7 @@ jobs:
           EXT_NAME: ${{ steps.manifest.outputs.name }}
           EXT_VERSION: ${{ steps.manifest.outputs.version }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        working-directory: ${{ matrix.extension }}
         run: |
           TAG="${EXT_NAME}@${EXT_VERSION}"
 
@@ -131,7 +138,14 @@ jobs:
             exit 0
           fi
 
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "Published to swamp.club registry" \
-            --target "$HEAD_SHA"
+          if [ -f RELEASE_NOTES.md ]; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file RELEASE_NOTES.md \
+              --target "$HEAD_SHA"
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Published to swamp.club registry" \
+              --target "$HEAD_SHA"
+          fi
