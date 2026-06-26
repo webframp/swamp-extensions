@@ -316,16 +316,17 @@ function mapDashboardMR(
     : null;
   const rawState: string | null =
     myReviewer?.mergeRequestInteraction?.reviewState ?? null;
-  const validStates = new Set([
-    "pending",
-    "reviewed",
-    "approved",
-    "unapproved",
-  ]);
+  const STATE_MAP: Record<
+    string,
+    "pending" | "reviewed" | "approved" | "unapproved"
+  > = {
+    "unreviewed": "pending",
+    "reviewed": "reviewed",
+    "approved": "approved",
+    "requested_changes": "unapproved",
+  };
   const normalized = rawState?.toLowerCase() ?? null;
-  const myReviewState = normalized && validStates.has(normalized)
-    ? (normalized as "pending" | "reviewed" | "approved" | "unapproved")
-    : null;
+  const myReviewState = normalized ? (STATE_MAP[normalized] ?? null) : null;
   return {
     project: node.project?.fullPath ?? "",
     iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
