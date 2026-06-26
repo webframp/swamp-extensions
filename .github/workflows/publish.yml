@@ -107,6 +107,8 @@ jobs:
         working-directory: ${{ matrix.extension }}
         env:
           CHANNEL: ${{ needs.detect-changes.outputs.channel }}
+          EXT_NAME: ${{ steps.manifest.outputs.name }}
+          EXT_VERSION: ${{ steps.manifest.outputs.version }}
         run: |
           PUSH_ARGS=(swamp extension push manifest.yaml --yes)
 
@@ -118,7 +120,15 @@ jobs:
             PUSH_ARGS+=(--release-notes "$(cat RELEASE_NOTES.md)")
           fi
 
-          "${PUSH_ARGS[@]}"
+          if "${PUSH_ARGS[@]}"; then
+            echo "Published successfully"
+          elif [ "$CHANNEL" = "stable" ]; then
+            echo "Push failed — attempting promote from beta to stable"
+            swamp extension promote "$EXT_NAME" "$EXT_VERSION" --channel stable
+          else
+            echo "::error::Push failed and no fallback available"
+            exit 1
+          fi
 
       - name: Create GitHub release
         # Only create GH releases for stable channel
