@@ -32,17 +32,20 @@ inputs:
     - driftModelName
 
 jobs:
-  - name: refresh-upstream
-    description: Sync upstream models to get fresh state
+  - name: refresh-adopt
+    description: Refresh adopt model discovery data
     steps:
-      - name: refresh-adopt
+      - name: discover
         task:
           type: model_method
           modelIdOrName: ${{ inputs.adoptModelName }}
           methodName: discover_all
         allowFailure: true
 
-      - name: refresh-inventory
+  - name: refresh-inventory
+    description: Refresh inventory scan data
+    steps:
+      - name: scan
         task:
           type: model_method
           modelIdOrName: ${{ inputs.inventoryModelName }}
@@ -52,7 +55,10 @@ jobs:
   - name: compute
     description: Recompute drift from refreshed upstream data
     dependsOn:
-      - job: refresh-upstream
+      - job: refresh-adopt
+        condition:
+          type: completed
+      - job: refresh-inventory
         condition:
           type: completed
     steps:

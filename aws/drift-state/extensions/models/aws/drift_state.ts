@@ -635,7 +635,7 @@ export const model = {
           resources: driftResources,
         };
 
-        // Update timelines for drifted resources
+        // Update timelines — only write on status transitions
         for (const resource of driftResources) {
           if (resource.driftStatus === "unknown") continue;
 
@@ -651,6 +651,11 @@ export const model = {
             }
           } catch {
             // No existing timeline
+          }
+
+          // Skip in_sync resources with no prior timeline (no information value)
+          if (resource.driftStatus === "in_sync" && events.length === 0) {
+            continue;
           }
 
           const lastEvent = events[events.length - 1];
@@ -904,13 +909,9 @@ export const model = {
     get_drift_velocity: {
       description:
         "Compute aggregate drift rate metrics by resource type and time window.",
-      arguments: z.object({
-        windowDays: z.number().optional().default(30).describe(
-          "Time window for velocity calculation (days)",
-        ),
-      }),
+      arguments: z.object({}),
       execute: async (
-        args: { windowDays: number },
+        _args: Record<string, never>,
         context: ModelContext,
       ) => {
         const now = new Date();
@@ -969,7 +970,7 @@ export const model = {
         const thresholds = {
           last24h: now.getTime() - 24 * 60 * 60 * 1000,
           last7d: now.getTime() - 7 * 24 * 60 * 60 * 1000,
-          last30d: now.getTime() - args.windowDays * 24 * 60 * 60 * 1000,
+          last30d: now.getTime() - 30 * 24 * 60 * 60 * 1000,
         };
 
         const byTimeWindow = {

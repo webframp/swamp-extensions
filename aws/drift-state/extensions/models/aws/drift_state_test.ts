@@ -947,7 +947,7 @@ Deno.test({
     const { context, getWrittenResources } = createDriftContext({});
 
     await model.methods.get_drift_velocity.execute(
-      { windowDays: 30 },
+      {} as Record<string, never>,
       context as unknown as VelocityContext,
     );
 
@@ -1006,7 +1006,7 @@ Deno.test({
     );
 
     await model.methods.get_drift_velocity.execute(
-      { windowDays: 30 },
+      {} as Record<string, never>,
       context as unknown as VelocityContext,
     );
 
