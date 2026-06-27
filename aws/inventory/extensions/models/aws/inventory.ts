@@ -26,6 +26,7 @@ import {
   ListTablesCommand,
 } from "npm:@aws-sdk/client-dynamodb@3.1069.0";
 import {
+  GetFunctionConcurrencyCommand,
   LambdaClient,
   ListFunctionsCommand,
 } from "npm:@aws-sdk/client-lambda@3.1069.0";
@@ -89,6 +90,17 @@ const DynamoDBTableSchema = z.object({
   tableSizeBytes: z.number(),
 });
 
+const LambdaVpcConfigSchema = z.object({
+  vpcId: z.string().nullable(),
+  subnetIds: z.array(z.string()),
+  securityGroupIds: z.array(z.string()),
+});
+
+const LambdaLayerSchema = z.object({
+  arn: z.string(),
+  codeSize: z.number(),
+});
+
 const LambdaFunctionSchema = z.object({
   functionName: z.string(),
   runtime: z.string().nullable(),
@@ -97,6 +109,16 @@ const LambdaFunctionSchema = z.object({
   codeSize: z.number(),
   lastModified: z.string(),
   architecture: z.string(),
+  handler: z.string().nullable().default(null),
+  vpcConfig: LambdaVpcConfigSchema.nullable().default(null),
+  layers: z.array(LambdaLayerSchema).default([]),
+  environment: z.record(z.string(), z.string()).nullable().default(null),
+  ephemeralStorageSize: z.number().nullable().default(null),
+  deadLetterConfig: z.object({ targetArn: z.string() }).nullable().default(
+    null,
+  ),
+  tracingConfig: z.string().nullable().default(null),
+  reservedConcurrency: z.number().nullable().default(null),
 });
 
 const S3BucketSchema = z.object({
@@ -546,7 +568,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.06.24.1",
+  version: "2026.06.27.1",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -834,10 +856,22 @@ export const model = {
     },
 
     list_lambda: {
-      description: "List Lambda functions",
-      arguments: z.object({}),
+      description: "List Lambda functions with full configuration details",
+      arguments: z.object({
+        includeEnvironment: z.boolean().optional().default(false)
+          .describe(
+            "Include environment variable values. WARNING: may contain secrets. Default stores keys only.",
+          ),
+        includeReservedConcurrency: z.boolean().optional().default(false)
+          .describe(
+            "Fetch reserved concurrency per function (requires extra API call per function)",
+          ),
+      }),
       execute: async (
-        _args: Record<string, never>,
+        args: {
+          includeEnvironment?: boolean;
+          includeReservedConcurrency?: boolean;
+        },
         context: InventoryContext,
       ) => {
         const handles: { name: string }[] = [];
@@ -857,6 +891,20 @@ export const model = {
               if (response.Functions) {
                 for (const fn of response.Functions) {
                   if (fn.FunctionName) {
+                    let reservedConcurrency: number | null = null;
+                    if (args.includeReservedConcurrency) {
+                      try {
+                        const concResp = await client.send(
+                          new GetFunctionConcurrencyCommand({
+                            FunctionName: fn.FunctionName,
+                          }),
+                        );
+                        reservedConcurrency =
+                          concResp.ReservedConcurrentExecutions ?? null;
+                      } catch {
+                        // Function may not have reserved concurrency configured
+                      }
+                    }
                     functions.push({
                       functionName: fn.FunctionName,
                       runtime: fn.Runtime || null,
@@ -865,6 +913,33 @@ export const model = {
                       codeSize: fn.CodeSize || 0,
                       lastModified: fn.LastModified || "",
                       architecture: fn.Architectures?.[0] || "x86_64",
+                      handler: fn.Handler || null,
+                      vpcConfig: fn.VpcConfig?.VpcId
+                        ? {
+                          vpcId: fn.VpcConfig.VpcId || null,
+                          subnetIds: fn.VpcConfig.SubnetIds || [],
+                          securityGroupIds: fn.VpcConfig.SecurityGroupIds || [],
+                        }
+                        : null,
+                      layers: (fn.Layers || []).map((l) => ({
+                        arn: l.Arn || "",
+                        codeSize: l.CodeSize || 0,
+                      })),
+                      environment: fn.Environment?.Variables
+                        ? args.includeEnvironment
+                          ? fn.Environment.Variables
+                          : Object.fromEntries(
+                            Object.keys(fn.Environment.Variables).map((
+                              k,
+                            ) => [k, "[REDACTED]"]),
+                          )
+                        : null,
+                      ephemeralStorageSize: fn.EphemeralStorage?.Size ?? null,
+                      deadLetterConfig: fn.DeadLetterConfig?.TargetArn
+                        ? { targetArn: fn.DeadLetterConfig.TargetArn }
+                        : null,
+                      tracingConfig: fn.TracingConfig?.Mode || null,
+                      reservedConcurrency,
                     });
                   }
                 }
@@ -1198,6 +1273,32 @@ export const model = {
                     codeSize: fn.CodeSize || 0,
                     lastModified: fn.LastModified || "",
                     architecture: fn.Architectures?.[0] || "x86_64",
+                    handler: fn.Handler || null,
+                    vpcConfig: fn.VpcConfig?.VpcId
+                      ? {
+                        vpcId: fn.VpcConfig.VpcId || null,
+                        subnetIds: fn.VpcConfig.SubnetIds || [],
+                        securityGroupIds: fn.VpcConfig.SecurityGroupIds || [],
+                      }
+                      : null,
+                    layers: (fn.Layers || []).map((l) => ({
+                      arn: l.Arn || "",
+                      codeSize: l.CodeSize || 0,
+                    })),
+                    environment: fn.Environment?.Variables
+                      ? Object.fromEntries(
+                        Object.keys(fn.Environment.Variables).map((k) => [
+                          k,
+                          "[REDACTED]",
+                        ]),
+                      )
+                      : null,
+                    ephemeralStorageSize: fn.EphemeralStorage?.Size ?? null,
+                    deadLetterConfig: fn.DeadLetterConfig?.TargetArn
+                      ? { targetArn: fn.DeadLetterConfig.TargetArn }
+                      : null,
+                    tracingConfig: fn.TracingConfig?.Mode || null,
+                    reservedConcurrency: null,
                   });
                 }
               }
