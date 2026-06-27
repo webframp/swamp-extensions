@@ -46,9 +46,10 @@ description: |
 
   ## Upstream Sources
 
-  - `@webframp/aws/adopt` — VPCs, subnets, gateways, route tables, security groups, RDS
-  - `@webframp/aws/inventory` — EC2, RDS, DynamoDB, Lambda, S3, EBS
-  - `@webframp/terraform` — All Terraform-managed resources
+  - `@webframp/aws/adopt` (required) — VPCs, subnets, gateways, route tables, security groups, RDS
+  - `@webframp/aws/inventory` (required) — EC2, RDS, DynamoDB, Lambda, S3, EBS
+  - `@webframp/terraform` (optional) — All Terraform-managed resources. If not
+    installed, terraform is reported in `unavailableSources` and skipped gracefully.
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/drift_state.ts

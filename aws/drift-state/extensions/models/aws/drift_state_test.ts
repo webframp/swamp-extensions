@@ -414,6 +414,7 @@ Deno.test({
     const data = driftResult.data as {
       resources: Array<{
         canonicalId: string;
+        resourceType: string;
         driftStatus: string;
         changedAttributes: Array<{ path: string }>;
       }>;
@@ -423,6 +424,7 @@ Deno.test({
     );
     assertExists(missing);
     assertEquals(missing.driftStatus, "drifted");
+    assertEquals(missing.resourceType, "AWS::EC2::VPC");
     assertEquals(missing.changedAttributes[0].path, "_resource");
   },
 });

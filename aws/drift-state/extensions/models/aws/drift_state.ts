@@ -459,8 +459,14 @@ export const model = {
             );
             const latest = sorted[0] ?? data[0];
 
-            // Check staleness
-            if (latest.updatedAt) {
+            // Check staleness — no timestamp means unknown age, treat as stale
+            if (!latest.updatedAt) {
+              staleSources.push(source);
+              context.logger.warn("Source data has no timestamp", {
+                source,
+                modelName,
+              });
+            } else {
               const age =
                 (now.getTime() - new Date(latest.updatedAt).getTime()) /
                 60000;
@@ -498,16 +504,23 @@ export const model = {
           );
 
           // Read stored baseline for this source
-          let baselineMap: Map<string, Record<string, unknown>> = new Map();
+          let baselineMap: Map<
+            string,
+            { snapshot: Record<string, unknown>; resourceType: string }
+          > = new Map();
           try {
             const baselineData = await context.readResource(source);
             if (baselineData) {
               const entries = (baselineData.attributes.entries as Array<{
                 canonicalId: string;
+                resourceType: string;
                 snapshot: Record<string, unknown>;
               }>) ?? [];
               baselineMap = new Map(
-                entries.map((e) => [e.canonicalId, e.snapshot]),
+                entries.map((e) => [e.canonicalId, {
+                  snapshot: e.snapshot,
+                  resourceType: e.resourceType,
+                }]),
               );
             }
           } catch {
@@ -515,9 +528,9 @@ export const model = {
           }
 
           for (const resource of sourceResources) {
-            const baselineSnapshot = baselineMap.get(resource.canonicalId);
+            const baselineEntry = baselineMap.get(resource.canonicalId);
 
-            if (!baselineSnapshot) {
+            if (!baselineEntry) {
               driftResources.push({
                 canonicalId: resource.canonicalId,
                 resourceType: resource.resourceType,
@@ -532,7 +545,10 @@ export const model = {
               continue;
             }
 
-            const diffs = diffObjects(baselineSnapshot, resource.snapshot);
+            const diffs = diffObjects(
+              baselineEntry.snapshot,
+              resource.snapshot,
+            );
 
             if (diffs.length === 0) {
               driftResources.push({
@@ -580,14 +596,14 @@ export const model = {
           }
 
           // Check for resources in baseline that are missing from current
-          for (const [canonicalId, _snapshot] of baselineMap) {
+          for (const [canonicalId, entry] of baselineMap) {
             const exists = sourceResources.some((r) =>
               r.canonicalId === canonicalId
             );
             if (!exists) {
               driftResources.push({
                 canonicalId,
-                resourceType: "unknown",
+                resourceType: entry.resourceType,
                 driftStatus: "drifted",
                 changedAttributes: [
                   {
@@ -866,7 +882,7 @@ export const model = {
         canonicalId: z.string().describe(
           "Canonical resource ID (ARN or composite key)",
         ),
-        limit: z.number().optional().default(50).describe(
+        limit: z.number().min(1).optional().default(50).describe(
           "Maximum events to return",
         ),
       }),
