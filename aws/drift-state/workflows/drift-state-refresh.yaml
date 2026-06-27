@@ -1,0 +1,75 @@
+id: "wf-drift-state-refresh-01"
+name: "@webframp/drift-state-refresh"
+description: |
+  Refresh upstream models and recompute drift state.
+  Runs discover_all (adopt) and inventory_scan (inventory) in parallel,
+  then computes drift against stored baselines.
+
+tags:
+  aws: "true"
+  drift: "true"
+  compliance: "true"
+
+inputs:
+  properties:
+    driftModelName:
+      type: string
+      description: Name of the @webframp/aws/drift-state model instance
+      default: "drift-state"
+    adoptModelName:
+      type: string
+      description: Name of the @webframp/aws/adopt model instance
+      default: "aws-adopt"
+    inventoryModelName:
+      type: string
+      description: Name of the @webframp/aws/inventory model instance
+      default: "aws-inventory"
+    terraformModelName:
+      type: string
+      description: Name of the @webframp/terraform model instance (optional)
+      default: "terraform"
+  required:
+    - driftModelName
+
+jobs:
+  - name: refresh-adopt
+    description: Refresh adopt model discovery data
+    steps:
+      - name: discover
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.adoptModelName }}
+          methodName: discover_all
+        allowFailure: true
+
+  - name: refresh-inventory
+    description: Refresh inventory scan data
+    steps:
+      - name: scan
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.inventoryModelName }}
+          methodName: inventory_scan
+        allowFailure: true
+
+  - name: compute
+    description: Recompute drift from refreshed upstream data
+    dependsOn:
+      - job: refresh-adopt
+        condition:
+          type: completed
+      - job: refresh-inventory
+        condition:
+          type: completed
+    steps:
+      - name: compute-drift
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.driftModelName }}
+          methodName: compute_drift
+          inputs:
+            adoptModelName: ${{ inputs.adoptModelName }}
+            inventoryModelName: ${{ inputs.inventoryModelName }}
+            terraformModelName: ${{ inputs.terraformModelName }}
+
+version: 1
