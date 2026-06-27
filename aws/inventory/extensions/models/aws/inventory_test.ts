@@ -318,7 +318,7 @@ Deno.test({
     try {
       const { context, getWrittenResources } = makeContext();
       await model.methods.list_lambda.execute(
-        { includeReservedConcurrency: false },
+        { includeEnvironment: false, includeReservedConcurrency: false },
         context as ExecuteContext,
       );
       const resources = getWrittenResources();
@@ -367,8 +367,8 @@ Deno.test({
         "arn:aws:lambda:us-east-1:123:layer:my-layer:3",
       );
       assertEquals(fn.environment, {
-        NODE_ENV: "production",
-        LOG_LEVEL: "info",
+        NODE_ENV: "[REDACTED]",
+        LOG_LEVEL: "[REDACTED]",
       });
       assertEquals(fn.ephemeralStorageSize, 1024);
       assertEquals(

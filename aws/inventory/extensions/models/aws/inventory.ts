@@ -858,13 +858,20 @@ export const model = {
     list_lambda: {
       description: "List Lambda functions with full configuration details",
       arguments: z.object({
+        includeEnvironment: z.boolean().optional().default(false)
+          .describe(
+            "Include environment variable values. WARNING: may contain secrets. Default stores keys only.",
+          ),
         includeReservedConcurrency: z.boolean().optional().default(false)
           .describe(
             "Fetch reserved concurrency per function (requires extra API call per function)",
           ),
       }),
       execute: async (
-        args: { includeReservedConcurrency?: boolean },
+        args: {
+          includeEnvironment?: boolean;
+          includeReservedConcurrency?: boolean;
+        },
         context: InventoryContext,
       ) => {
         const handles: { name: string }[] = [];
@@ -918,8 +925,16 @@ export const model = {
                         arn: l.Arn || "",
                         codeSize: l.CodeSize || 0,
                       })),
-                      environment: fn.Environment?.Variables || null,
-                      ephemeralStorageSize: fn.EphemeralStorage?.Size || null,
+                      environment: fn.Environment?.Variables
+                        ? args.includeEnvironment
+                          ? fn.Environment.Variables
+                          : Object.fromEntries(
+                            Object.keys(fn.Environment.Variables).map((
+                              k,
+                            ) => [k, "[REDACTED]"]),
+                          )
+                        : null,
+                      ephemeralStorageSize: fn.EphemeralStorage?.Size ?? null,
                       deadLetterConfig: fn.DeadLetterConfig?.TargetArn
                         ? { targetArn: fn.DeadLetterConfig.TargetArn }
                         : null,
@@ -1270,8 +1285,15 @@ export const model = {
                       arn: l.Arn || "",
                       codeSize: l.CodeSize || 0,
                     })),
-                    environment: fn.Environment?.Variables || null,
-                    ephemeralStorageSize: fn.EphemeralStorage?.Size || null,
+                    environment: fn.Environment?.Variables
+                      ? Object.fromEntries(
+                        Object.keys(fn.Environment.Variables).map((k) => [
+                          k,
+                          "[REDACTED]",
+                        ]),
+                      )
+                      : null,
+                    ephemeralStorageSize: fn.EphemeralStorage?.Size ?? null,
                     deadLetterConfig: fn.DeadLetterConfig?.TargetArn
                       ? { targetArn: fn.DeadLetterConfig.TargetArn }
                       : null,
