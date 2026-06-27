@@ -214,6 +214,58 @@ Deno.test({
 });
 
 Deno.test({
+  name: "twitch model: get_channel reports offline when stream is not live",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockHelixServer({
+      "/users": () => USERS_RESPONSE,
+      "/channels": () => ({
+        data: [
+          {
+            broadcaster_id: BROADCASTER_ID,
+            broadcaster_login: "testchannel",
+            broadcaster_name: "TestChannel",
+            game_name: "Just Chatting",
+            game_id: "509658",
+            title: "Offline",
+            tags: [],
+          },
+        ],
+      }),
+      "/streams": () => ({ data: [], pagination: {} }),
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: GLOBAL_ARGS,
+        definition: DEFINITION,
+      });
+
+      await model.methods.get_channel.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.get_channel.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        isLive: boolean;
+        viewerCount: number | null;
+        startedAt: string | null;
+      };
+      assertEquals(data.isLive, false);
+      assertEquals(data.viewerCount, null);
+      assertEquals(data.startedAt, null);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "twitch model: get_chatters paginates and writes chatters resource",
   sanitizeResources: false, // Deno.serve may hold resources briefly after shutdown
   fn: async () => {

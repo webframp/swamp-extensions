@@ -103,9 +103,9 @@ const ChannelSchema = z.object({
   gameId: z.string(),
   title: z.string(),
   tags: z.array(z.string()),
-  isLive: z.boolean(),
-  viewerCount: z.number().nullable(),
-  startedAt: z.string().nullable(),
+  isLive: z.boolean().default(false),
+  viewerCount: z.number().nullable().default(null),
+  startedAt: z.string().nullable().default(null),
   fetchedAt: z.string(),
 });
 
