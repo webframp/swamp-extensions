@@ -10,7 +10,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "zod";
+import { z } from "npm:zod@4.3.6";
 import { cfApi } from "./_lib/api.ts";
 
 // =============================================================================
@@ -108,7 +108,7 @@ async function fetchCacheSettings(
 /** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
-  version: "2026.06.26.1",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

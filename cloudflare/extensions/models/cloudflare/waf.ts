@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "zod";
+import { z } from "npm:zod@4.3.6";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 // =============================================================================
@@ -87,7 +87,7 @@ const SecurityEventsSchema = z.object({
 /** Cloudflare WAF model definition with methods for firewall rules, WAF packages, and security events. */
 export const model = {
   type: "@webframp/cloudflare/waf",
-  version: "2026.06.26.1",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
