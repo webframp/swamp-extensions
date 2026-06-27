@@ -1,0 +1,53 @@
+manifestVersion: 1
+name: "@webframp/aws/config-compliance"
+version: "2026.06.27.1"
+description: |
+  Observe AWS Config compliance evaluations as typed queryable data.
+
+  This model reads evaluation results from AWS Config rules — it does not
+  manage Config rules or recorders. Use @swamp/aws/config for infrastructure.
+
+  AWS Config continuously evaluates resources against policy rules. Non-compliant
+  resources represent drift from desired state. This model stores those verdicts
+  as typed data queryable via CEL, feeding into @webframp/aws/drift-state as a
+  fourth upstream source.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/aws/config-compliance
+  swamp model create @webframp/aws/config-compliance aws-config-compliance
+  swamp model method run aws-config-compliance get_non_compliant
+  swamp model method run aws-config-compliance get_compliance_summary
+  ```
+
+  ## Methods
+
+  - **get_non_compliant** — Fetch non-compliant evaluations across all Config rules
+  - **get_compliance_summary** — Rule-level compliance counts with metadata
+  - **list_rules** — Active Config rule inventory
+
+  ## Prerequisites
+
+  AWS Config must be enabled with active rules. Requires IAM permissions:
+  - config:DescribeComplianceByConfigRule
+  - config:GetComplianceDetailsByConfigRule
+  - config:DescribeConfigRules
+  - sts:GetCallerIdentity
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/config_compliance.ts
+labels:
+  - aws
+  - config
+  - compliance
+  - convergence
+  - observability
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
