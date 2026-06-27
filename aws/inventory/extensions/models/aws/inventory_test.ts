@@ -116,6 +116,20 @@ const lambdaFunction = {
   CodeSize: 5000,
   LastModified: "2026-01-01T00:00:00Z",
   Architectures: ["arm64"],
+  Handler: "index.handler",
+  VpcConfig: {
+    VpcId: "vpc-abc123",
+    SubnetIds: ["subnet-1", "subnet-2"],
+    SecurityGroupIds: ["sg-001"],
+  },
+  Layers: [{
+    Arn: "arn:aws:lambda:us-east-1:123:layer:my-layer:3",
+    CodeSize: 1024,
+  }],
+  Environment: { Variables: { NODE_ENV: "production", LOG_LEVEL: "info" } },
+  EphemeralStorage: { Size: 1024 },
+  DeadLetterConfig: { TargetArn: "arn:aws:sqs:us-east-1:123:my-dlq" },
+  TracingConfig: { Mode: "Active" },
 };
 
 const ebsVolumeAttached = {
@@ -304,7 +318,7 @@ Deno.test({
     try {
       const { context, getWrittenResources } = makeContext();
       await model.methods.list_lambda.execute(
-        {} as Record<string, never>,
+        { includeReservedConcurrency: false },
         context as ExecuteContext,
       );
       const resources = getWrittenResources();
@@ -320,16 +334,49 @@ Deno.test({
           codeSize: number;
           lastModified: string;
           architecture: string;
+          handler: string | null;
+          vpcConfig: {
+            vpcId: string | null;
+            subnetIds: string[];
+            securityGroupIds: string[];
+          } | null;
+          layers: { arn: string; codeSize: number }[];
+          environment: Record<string, string> | null;
+          ephemeralStorageSize: number | null;
+          deadLetterConfig: { targetArn: string } | null;
+          tracingConfig: string | null;
+          reservedConcurrency: number | null;
         }[];
       };
       assertEquals(data.resourceType, "lambda");
       assertEquals(data.count, 1);
-      assertEquals(data.resources[0].functionName, "my-func");
-      assertEquals(data.resources[0].runtime, "nodejs20.x");
-      assertEquals(data.resources[0].memorySize, 256);
-      assertEquals(data.resources[0].timeout, 30);
-      assertEquals(data.resources[0].codeSize, 5000);
-      assertEquals(data.resources[0].architecture, "arm64");
+      const fn = data.resources[0];
+      assertEquals(fn.functionName, "my-func");
+      assertEquals(fn.runtime, "nodejs20.x");
+      assertEquals(fn.memorySize, 256);
+      assertEquals(fn.timeout, 30);
+      assertEquals(fn.codeSize, 5000);
+      assertEquals(fn.architecture, "arm64");
+      assertEquals(fn.handler, "index.handler");
+      assertEquals(fn.vpcConfig?.vpcId, "vpc-abc123");
+      assertEquals(fn.vpcConfig?.subnetIds, ["subnet-1", "subnet-2"]);
+      assertEquals(fn.vpcConfig?.securityGroupIds, ["sg-001"]);
+      assertEquals(fn.layers.length, 1);
+      assertEquals(
+        fn.layers[0].arn,
+        "arn:aws:lambda:us-east-1:123:layer:my-layer:3",
+      );
+      assertEquals(fn.environment, {
+        NODE_ENV: "production",
+        LOG_LEVEL: "info",
+      });
+      assertEquals(fn.ephemeralStorageSize, 1024);
+      assertEquals(
+        fn.deadLetterConfig?.targetArn,
+        "arn:aws:sqs:us-east-1:123:my-dlq",
+      );
+      assertEquals(fn.tracingConfig, "Active");
+      assertEquals(fn.reservedConcurrency, null);
     } finally {
       restore();
     }
