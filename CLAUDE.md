@@ -116,6 +116,8 @@ When building models that wrap external APIs:
 - **`truncated` must be honest.** If results are sliced, capped, or filtered after fetching, the `truncated` field must reflect whether more data exists. Hardcoding `false` is a data integrity bug.
 - **SDK timestamp fields may be `Date` or `string`.** Use `String(field)` or `field?.toISOString?.() ?? String(field)` to normalize. Don't assume the SDK returns strings — some versions return `Date` objects.
 - **Instance names must be collision-resistant.** For variable-length ID lists, hash the sorted IDs (e.g., SHA-1 prefix) rather than joining/truncating. Truncated joins produce collisions.
+- **Schema changes must be additive.** Adding new optional or nullable fields to resource schemas is safe. Adding new required fields, removing fields, or changing field types are breaking changes that require a coordinated version bump, explicit `RELEASE_NOTES.md` **Upgrade note**, and consideration of whether existing stored resources will fail validation on read. When in doubt, make new fields nullable with a sensible default.
+- **Every version bump requires `RELEASE_NOTES.md`.** This is not optional. CI passes it to the registry and GitHub release. Without it, users pulling your extension have no idea what changed. See the Release Notes section for format.
 
 ## Commands
 

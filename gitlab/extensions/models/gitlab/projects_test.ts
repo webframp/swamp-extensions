@@ -905,6 +905,16 @@ const MOCK_GRAPHQL_RESPONSE = {
             project: { fullPath: "group/proj" },
             author: { username: "alice" },
             labels: { nodes: [{ title: "security" }] },
+            approvedBy: { nodes: [{ username: "testuser" }] },
+            reviewers: {
+              nodes: [
+                {
+                  username: "testuser",
+                  mergeRequestInteraction: { reviewState: "APPROVED" },
+                },
+              ],
+            },
+            notes: { nodes: [{ author: { username: "testuser" } }] },
           },
         ],
         pageInfo: { hasNextPage: false },
@@ -1037,6 +1047,9 @@ Deno.test("list_my_merge_requests writes dashboard resource with all roles", asy
     assertEquals(data.reviewing[0].project, "group/proj");
     assertEquals(data.reviewing[0].author, "alice");
     assertEquals(data.reviewing[0].labels, ["security"]);
+    assertEquals(data.reviewing[0].approvedByMe, true);
+    assertEquals(data.reviewing[0].myReviewState, "approved");
+    assertEquals(data.reviewing[0].commented, true);
     // Verify assigned draft detection
     assertEquals(data.assigned[0].draft, true);
     // Verify todo mapping
@@ -1201,3 +1214,185 @@ Deno.test("list_my_merge_requests truncated respects role filter", async () => {
     restore();
   }
 });
+
+Deno.test(
+  "list_my_merge_requests maps UNREVIEWED to pending",
+  async () => {
+    const response = {
+      data: {
+        currentUser: {
+          username: "testuser",
+          reviewRequestedMergeRequests: {
+            nodes: [
+              {
+                iid: 501,
+                title: "New feature",
+                webUrl: "https://git.example.org/g/p/-/merge_requests/501",
+                updatedAt: "2026-06-26T00:00:00Z",
+                draft: false,
+                project: { fullPath: "g/p" },
+                author: { username: "dev" },
+                labels: { nodes: [] },
+                approvedBy: { nodes: [] },
+                reviewers: {
+                  nodes: [
+                    {
+                      username: "testuser",
+                      mergeRequestInteraction: { reviewState: "UNREVIEWED" },
+                    },
+                  ],
+                },
+                notes: { nodes: [] },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+          assignedMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          authoredMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          todos: { nodes: [] },
+        },
+      },
+    };
+    const restore = mockGraphqlFetch(response);
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.list_my_merge_requests.execute(
+        { role: "reviewer", state: "opened", includeArchived: false },
+        context as any,
+      );
+      const data = getWrittenResources()[0].data as any;
+      assertEquals(data.reviewing[0].myReviewState, "pending");
+      assertEquals(data.reviewing[0].approvedByMe, false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "list_my_merge_requests maps REQUESTED_CHANGES to unapproved",
+  async () => {
+    const response = {
+      data: {
+        currentUser: {
+          username: "testuser",
+          reviewRequestedMergeRequests: {
+            nodes: [
+              {
+                iid: 502,
+                title: "Needs fixes",
+                webUrl: "https://git.example.org/g/p/-/merge_requests/502",
+                updatedAt: "2026-06-26T00:00:00Z",
+                draft: false,
+                project: { fullPath: "g/p" },
+                author: { username: "dev" },
+                labels: { nodes: [] },
+                approvedBy: { nodes: [] },
+                reviewers: {
+                  nodes: [
+                    {
+                      username: "testuser",
+                      mergeRequestInteraction: {
+                        reviewState: "REQUESTED_CHANGES",
+                      },
+                    },
+                  ],
+                },
+                notes: { nodes: [{ author: { username: "testuser" } }] },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+          assignedMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          authoredMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          todos: { nodes: [] },
+        },
+      },
+    };
+    const restore = mockGraphqlFetch(response);
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.list_my_merge_requests.execute(
+        { role: "reviewer", state: "opened", includeArchived: false },
+        context as any,
+      );
+      const data = getWrittenResources()[0].data as any;
+      assertEquals(data.reviewing[0].myReviewState, "unapproved");
+      assertEquals(data.reviewing[0].commented, true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "list_my_merge_requests populates new fields on assigned MRs",
+  async () => {
+    const response = {
+      data: {
+        currentUser: {
+          username: "testuser",
+          reviewRequestedMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          assignedMergeRequests: {
+            nodes: [
+              {
+                iid: 601,
+                title: "Assigned to me",
+                webUrl: "https://git.example.org/g/p/-/merge_requests/601",
+                updatedAt: "2026-06-26T00:00:00Z",
+                draft: false,
+                project: { fullPath: "g/p" },
+                author: { username: "other" },
+                labels: { nodes: [] },
+                approvedBy: { nodes: [{ username: "testuser" }] },
+                reviewers: { nodes: [] },
+                notes: { nodes: [{ author: { username: "testuser" } }] },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+          authoredMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          todos: { nodes: [] },
+        },
+      },
+    };
+    const restore = mockGraphqlFetch(response);
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.list_my_merge_requests.execute(
+        { role: "assignee", state: "opened", includeArchived: false },
+        context as any,
+      );
+      const data = getWrittenResources()[0].data as any;
+      assertEquals(data.assigned[0].approvedByMe, true);
+      assertEquals(data.assigned[0].commented, true);
+      assertEquals(data.assigned[0].myReviewState, null);
+    } finally {
+      restore();
+    }
+  },
+);
