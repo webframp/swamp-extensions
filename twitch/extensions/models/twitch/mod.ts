@@ -103,6 +103,9 @@ const ChannelSchema = z.object({
   gameId: z.string(),
   title: z.string(),
   tags: z.array(z.string()),
+  isLive: z.boolean(),
+  viewerCount: z.number().nullable(),
+  startedAt: z.string().nullable(),
   fetchedAt: z.string(),
 });
 
@@ -181,7 +184,7 @@ const ModEventsSchema = z.object({
 
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.06.25.2",
+  version: "2026.06.27.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -255,6 +258,18 @@ export const model = {
           );
         }
         const ch = resp.data[0];
+
+        const streamResp = await helixApi<{
+          id: string;
+          user_id: string;
+          type: string;
+          viewer_count: number;
+          started_at: string;
+        }>(creds, `/streams?user_id=${broadcasterId}`);
+
+        const stream = streamResp.data.length > 0 ? streamResp.data[0] : null;
+        const isLive = stream?.type === "live";
+
         const handle = await context.writeResource("channel", channel, {
           broadcasterId: ch.broadcaster_id,
           broadcasterLogin: ch.broadcaster_login,
@@ -263,6 +278,9 @@ export const model = {
           gameId: ch.game_id,
           title: ch.title,
           tags: ch.tags ?? [],
+          isLive,
+          viewerCount: isLive ? stream!.viewer_count : null,
+          startedAt: isLive ? stream!.started_at : null,
           fetchedAt: new Date().toISOString(),
         });
 

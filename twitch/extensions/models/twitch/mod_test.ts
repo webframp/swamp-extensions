@@ -156,6 +156,18 @@ Deno.test({
           },
         ],
       }),
+      "/streams": () => ({
+        data: [
+          {
+            id: "stream123",
+            user_id: BROADCASTER_ID,
+            type: "live",
+            viewer_count: 1234,
+            started_at: "2026-06-27T00:00:00Z",
+          },
+        ],
+        pagination: {},
+      }),
     });
     const uninstall = installFetchMock(url);
 
@@ -183,11 +195,17 @@ Deno.test({
         broadcasterLogin: string;
         gameName: string;
         title: string;
+        isLive: boolean;
+        viewerCount: number | null;
+        startedAt: string | null;
       };
       assertEquals(data.broadcasterId, BROADCASTER_ID);
       assertEquals(data.broadcasterLogin, "testchannel");
       assertEquals(data.gameName, "Just Chatting");
       assertEquals(data.title, "Hello World");
+      assertEquals(data.isLive, true);
+      assertEquals(data.viewerCount, 1234);
+      assertEquals(data.startedAt, "2026-06-27T00:00:00Z");
     } finally {
       uninstall();
       await server.shutdown();
