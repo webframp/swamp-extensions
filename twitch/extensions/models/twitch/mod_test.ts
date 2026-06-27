@@ -156,6 +156,18 @@ Deno.test({
           },
         ],
       }),
+      "/streams": () => ({
+        data: [
+          {
+            id: "stream123",
+            user_id: BROADCASTER_ID,
+            type: "live",
+            viewer_count: 1234,
+            started_at: "2026-06-27T00:00:00Z",
+          },
+        ],
+        pagination: {},
+      }),
     });
     const uninstall = installFetchMock(url);
 
@@ -183,11 +195,69 @@ Deno.test({
         broadcasterLogin: string;
         gameName: string;
         title: string;
+        isLive: boolean;
+        viewerCount: number | null;
+        startedAt: string | null;
       };
       assertEquals(data.broadcasterId, BROADCASTER_ID);
       assertEquals(data.broadcasterLogin, "testchannel");
       assertEquals(data.gameName, "Just Chatting");
       assertEquals(data.title, "Hello World");
+      assertEquals(data.isLive, true);
+      assertEquals(data.viewerCount, 1234);
+      assertEquals(data.startedAt, "2026-06-27T00:00:00Z");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "twitch model: get_channel reports offline when stream is not live",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockHelixServer({
+      "/users": () => USERS_RESPONSE,
+      "/channels": () => ({
+        data: [
+          {
+            broadcaster_id: BROADCASTER_ID,
+            broadcaster_login: "testchannel",
+            broadcaster_name: "TestChannel",
+            game_name: "Just Chatting",
+            game_id: "509658",
+            title: "Offline",
+            tags: [],
+          },
+        ],
+      }),
+      "/streams": () => ({ data: [], pagination: {} }),
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: GLOBAL_ARGS,
+        definition: DEFINITION,
+      });
+
+      await model.methods.get_channel.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.get_channel.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        isLive: boolean;
+        viewerCount: number | null;
+        startedAt: string | null;
+      };
+      assertEquals(data.isLive, false);
+      assertEquals(data.viewerCount, null);
+      assertEquals(data.startedAt, null);
     } finally {
       uninstall();
       await server.shutdown();
