@@ -1,0 +1,73 @@
+manifestVersion: 1
+name: "@webframp/aws/drift-state"
+version: "2026.06.27.1"
+description: |
+  Unified drift detection surface that composes observations from existing
+  models (adopt, inventory, terraform) into queryable versioned state.
+
+  This higher-order model makes zero AWS API calls. It reads upstream model
+  data via the swamp data repository and produces typed drift state:
+  baselines, drift results, timelines, and velocity metrics.
+
+  ## Quick Start
+
+  ```bash
+  # Pull the extension
+  swamp extension pull @webframp/aws/drift-state
+
+  # Create the drift-state model (after upstream models exist)
+  swamp model create @webframp/aws/drift-state drift-state
+
+  # Set baselines from current upstream data
+  swamp model method run drift-state set_baseline
+
+  # Later: compute drift against baselines
+  swamp model method run drift-state compute_drift
+
+  # Query drifted resources
+  swamp model method run drift-state get_drifted
+
+  # View drift timeline for a resource
+  swamp model method run drift-state get_drift_timeline \
+    --input '{"canonicalId": "arn:aws:ec2:us-east-1:123456:vpc/vpc-abc"}'
+
+  # Run the full refresh workflow (syncs upstream + recomputes)
+  swamp workflow run @webframp/drift-state-refresh
+  ```
+
+  ## Methods
+
+  - **compute_drift** — Compare latest upstream snapshots against baselines
+  - **set_baseline** — Mark current upstream state as expected
+  - **get_drifted** — Query resources currently in drifted state
+  - **get_drift_timeline** — History of drift events for a resource
+  - **get_drift_velocity** — Aggregate drift rate metrics
+  - **refresh** — Recompute drift from current upstream data
+
+  ## Upstream Sources
+
+  - `@webframp/aws/adopt` — VPCs, subnets, gateways, route tables, security groups, RDS
+  - `@webframp/aws/inventory` — EC2, RDS, DynamoDB, Lambda, S3, EBS
+  - `@webframp/terraform` — All Terraform-managed resources
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/drift_state.ts
+workflows:
+  - drift-state-refresh.yaml
+labels:
+  - aws
+  - drift
+  - compliance
+  - convergence
+  - observability
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+dependencies:
+  - "@webframp/aws/adopt@2026.05.22.1"
+  - "@webframp/aws/inventory@2026.05.16.1"
