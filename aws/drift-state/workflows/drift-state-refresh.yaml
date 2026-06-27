@@ -2,8 +2,9 @@ id: "wf-drift-state-refresh-01"
 name: "@webframp/drift-state-refresh"
 description: |
   Refresh upstream models and recompute drift state.
-  Runs discover_all (adopt) and inventory_scan (inventory) in parallel,
-  then computes drift against stored baselines.
+  Runs discover_all (adopt), inventory_scan (inventory), and
+  get_non_compliant (config) in parallel, then computes drift
+  against stored baselines.
 
 tags:
   aws: "true"
@@ -28,6 +29,10 @@ inputs:
       type: string
       description: Name of the @webframp/terraform model instance (optional)
       default: "terraform"
+    configModelName:
+      type: string
+      description: Name of the @webframp/aws/config-compliance model instance
+      default: "aws-config-compliance"
   required:
     - driftModelName
 
@@ -52,6 +57,16 @@ jobs:
           methodName: inventory_scan
         allowFailure: true
 
+  - name: refresh-config
+    description: Refresh Config compliance evaluations
+    steps:
+      - name: get-non-compliant
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.configModelName }}
+          methodName: get_non_compliant
+        allowFailure: true
+
   - name: compute
     description: Recompute drift from refreshed upstream data
     dependsOn:
@@ -59,6 +74,9 @@ jobs:
         condition:
           type: completed
       - job: refresh-inventory
+        condition:
+          type: completed
+      - job: refresh-config
         condition:
           type: completed
     steps:
@@ -71,5 +89,6 @@ jobs:
             adoptModelName: ${{ inputs.adoptModelName }}
             inventoryModelName: ${{ inputs.inventoryModelName }}
             terraformModelName: ${{ inputs.terraformModelName }}
+            configModelName: ${{ inputs.configModelName }}
 
 version: 1

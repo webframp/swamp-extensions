@@ -153,6 +153,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -169,7 +170,7 @@ Deno.test({
         totalResources: number;
       };
     };
-    assertEquals(data.summary.unavailableSources.length, 3);
+    assertEquals(data.summary.unavailableSources.length, 4);
     assertEquals(data.summary.totalResources, 0);
   },
 });
@@ -202,6 +203,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -263,6 +265,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -331,6 +334,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -401,6 +405,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -453,6 +458,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -502,6 +508,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -570,6 +577,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -626,6 +634,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
       },
       context as unknown as BaselineContext,
     );
@@ -678,6 +687,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
       },
       context as unknown as BaselineContext,
     );
@@ -1064,6 +1074,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -1121,6 +1132,7 @@ Deno.test({
         adoptModelName: "aws-adopt",
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -1139,5 +1151,134 @@ Deno.test({
       "arn:aws:ec2:us-east-1:123456:vpc/vpc-tf123",
     );
     assertEquals(data.resources[0].resourceType, "aws_vpc");
+  },
+});
+
+// =============================================================================
+// Config compliance normalization
+// =============================================================================
+
+Deno.test({
+  name: "compute_drift: config non-compliant resources normalized as drifted",
+  fn: async () => {
+    const { context, getWrittenResources } = createDriftContext({
+      "aws-config-compliance": {
+        "compliance": [
+          {
+            attributes: {
+              evaluations: [
+                {
+                  resourceId: "my-bucket",
+                  resourceType: "AWS::S3::Bucket",
+                  resourceArn: "arn:aws:s3:::my-bucket",
+                  accountId: "123456789012",
+                  region: "us-east-1",
+                  complianceType: "NON_COMPLIANT",
+                  configRuleName: "s3-bucket-versioning-enabled",
+                  annotation: "Versioning is not enabled",
+                  evaluatedAt: "2026-06-27T10:00:00Z",
+                },
+                {
+                  resourceId: "compliant-bucket",
+                  resourceType: "AWS::S3::Bucket",
+                  resourceArn: "arn:aws:s3:::compliant-bucket",
+                  accountId: "123456789012",
+                  region: "us-east-1",
+                  complianceType: "COMPLIANT",
+                  configRuleName: "s3-bucket-versioning-enabled",
+                  annotation: null,
+                  evaluatedAt: "2026-06-27T10:00:00Z",
+                },
+              ],
+            },
+            updatedAt: "2026-06-27T10:00:00Z",
+          },
+        ],
+      },
+    });
+
+    await model.methods.compute_drift.execute(
+      {
+        sources: ["config"],
+        adoptModelName: "aws-adopt",
+        inventoryModelName: "aws-inventory",
+        terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
+        staleThresholdMinutes: 1440,
+      },
+      context as unknown as ComputeContext,
+    );
+
+    const resources = getWrittenResources();
+    const driftResult = resources.find((r) => r.specName === "driftResult");
+    assertExists(driftResult);
+
+    const data = driftResult.data as {
+      resources: Array<{
+        canonicalId: string;
+        resourceType: string;
+        driftStatus: string;
+        detectionSource: string;
+      }>;
+    };
+    assertEquals(data.resources.length, 1);
+    assertEquals(data.resources[0].canonicalId, "arn:aws:s3:::my-bucket");
+    assertEquals(data.resources[0].resourceType, "AWS::S3::Bucket");
+    assertEquals(data.resources[0].detectionSource, "config");
+  },
+});
+
+Deno.test({
+  name: "compute_drift: config uses composite ID when ARN is null",
+  fn: async () => {
+    const { context, getWrittenResources } = createDriftContext({
+      "aws-config-compliance": {
+        "compliance": [
+          {
+            attributes: {
+              evaluations: [
+                {
+                  resourceId: "mydb",
+                  resourceType: "AWS::RDS::DBInstance",
+                  resourceArn: null,
+                  accountId: "123456789012",
+                  region: "us-east-1",
+                  complianceType: "NON_COMPLIANT",
+                  configRuleName: "rds-storage-encrypted",
+                  annotation: "Storage is not encrypted",
+                  evaluatedAt: "2026-06-27T11:00:00Z",
+                },
+              ],
+            },
+            updatedAt: "2026-06-27T10:00:00Z",
+          },
+        ],
+      },
+    });
+
+    await model.methods.compute_drift.execute(
+      {
+        sources: ["config"],
+        adoptModelName: "aws-adopt",
+        inventoryModelName: "aws-inventory",
+        terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
+        staleThresholdMinutes: 1440,
+      },
+      context as unknown as ComputeContext,
+    );
+
+    const resources = getWrittenResources();
+    const driftResult = resources.find((r) => r.specName === "driftResult");
+    assertExists(driftResult);
+
+    const data = driftResult.data as {
+      resources: Array<{ canonicalId: string }>;
+    };
+    assertEquals(data.resources.length, 1);
+    assertEquals(
+      data.resources[0].canonicalId,
+      "config:AWS::RDS::DBInstance:mydb",
+    );
   },
 });

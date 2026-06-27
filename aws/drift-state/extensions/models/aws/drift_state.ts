@@ -304,6 +304,38 @@ function normalizeTerraformResources(
   return results;
 }
 
+function normalizeConfigResources(
+  attrs: Record<string, unknown>,
+): NormalizedResource[] {
+  const results: NormalizedResource[] = [];
+  const evaluations = attrs.evaluations as
+    | Array<Record<string, unknown>>
+    | undefined;
+  if (!evaluations || !Array.isArray(evaluations)) return results;
+
+  for (const eval_ of evaluations) {
+    if (eval_.complianceType !== "NON_COMPLIANT") continue;
+    const resourceId = eval_.resourceId as string | undefined;
+    const resourceType = eval_.resourceType as string | undefined;
+    if (!resourceId || !resourceType) continue;
+    const resourceArn = eval_.resourceArn as string | undefined;
+    const canonicalId = (resourceArn && resourceArn.length > 0)
+      ? resourceArn
+      : `config:${resourceType}:${resourceId}`;
+
+    results.push({
+      canonicalId,
+      resourceType,
+      account: eval_.accountId as string | undefined,
+      region: eval_.region as string | undefined,
+      snapshot: eval_ as Record<string, unknown>,
+      source: "config",
+    });
+  }
+
+  return results;
+}
+
 // ---------------------------------------------------------------------------
 // Context Type
 // ---------------------------------------------------------------------------
@@ -341,9 +373,20 @@ const SOURCES = {
   adopt: { specName: "discovery", defaultModelName: "aws-adopt" },
   inventory: { specName: "scan", defaultModelName: "aws-inventory" },
   terraform: { specName: "read_state", defaultModelName: "terraform" },
+  config: { specName: "compliance", defaultModelName: "aws-config-compliance" },
 } as const;
 
 type SourceName = keyof typeof SOURCES;
+
+const NORMALIZERS: Record<
+  SourceName,
+  (attrs: Record<string, unknown>) => NormalizedResource[]
+> = {
+  adopt: normalizeAdoptResources,
+  inventory: normalizeInventoryResources,
+  terraform: normalizeTerraformResources,
+  config: normalizeConfigResources,
+};
 
 // ---------------------------------------------------------------------------
 // Model Definition
@@ -352,7 +395,7 @@ type SourceName = keyof typeof SOURCES;
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -391,9 +434,11 @@ export const model = {
   methods: {
     compute_drift: {
       description:
-        "Compare latest upstream snapshots against stored baselines to detect drift across adopt, inventory, and terraform sources.",
+        "Compare latest upstream snapshots against stored baselines to detect drift across adopt, inventory, terraform, and config sources.",
       arguments: z.object({
-        sources: z.array(z.enum(["adopt", "inventory", "terraform"])).optional()
+        sources: z.array(
+          z.enum(["adopt", "inventory", "terraform", "config"]),
+        ).optional()
           .describe("Upstream sources to compose. Omit for all available."),
         adoptModelName: z.string().optional().default("aws-adopt").describe(
           "Name of the @webframp/aws/adopt model instance",
@@ -402,6 +447,11 @@ export const model = {
           .describe("Name of the @webframp/aws/inventory model instance"),
         terraformModelName: z.string().optional().default("terraform").describe(
           "Name of the @webframp/terraform model instance",
+        ),
+        configModelName: z.string().optional().default(
+          "aws-config-compliance",
+        ).describe(
+          "Name of the @webframp/aws/config-compliance model instance",
         ),
         staleThresholdMinutes: z.number().optional().default(1440).describe(
           "Data older than this (minutes) is flagged as stale",
@@ -413,6 +463,7 @@ export const model = {
           adoptModelName: string;
           inventoryModelName: string;
           terraformModelName: string;
+          configModelName: string;
           staleThresholdMinutes: number;
         },
         context: ModelContext,
@@ -420,12 +471,13 @@ export const model = {
         const now = new Date();
         const activeSources: SourceName[] =
           (args.sources as SourceName[] | undefined) ??
-            (["adopt", "inventory", "terraform"] as SourceName[]);
+            (["adopt", "inventory", "terraform", "config"] as SourceName[]);
 
         const modelNames: Record<SourceName, string> = {
           adopt: args.adoptModelName,
           inventory: args.inventoryModelName,
           terraform: args.terraformModelName,
+          config: args.configModelName,
         };
 
         const unavailableSources: string[] = [];
@@ -476,12 +528,7 @@ export const model = {
             }
 
             // Normalize resources from this source
-            const normalized = source === "adopt"
-              ? normalizeAdoptResources(latest.attributes)
-              : source === "inventory"
-              ? normalizeInventoryResources(latest.attributes)
-              : normalizeTerraformResources(latest.attributes);
-
+            const normalized = NORMALIZERS[source](latest.attributes);
             allResources.push(...normalized);
           } catch (err) {
             unavailableSources.push(source);
@@ -713,9 +760,9 @@ export const model = {
       description:
         "Set baseline from current upstream data. Future compute_drift runs compare against this baseline.",
       arguments: z.object({
-        source: z.enum(["adopt", "inventory", "terraform", "all"]).default(
-          "all",
-        ).describe("Which upstream source to baseline"),
+        source: z.enum(["adopt", "inventory", "terraform", "config", "all"])
+          .default("all")
+          .describe("Which upstream source to baseline"),
         adoptModelName: z.string().optional().default("aws-adopt").describe(
           "Name of the @webframp/aws/adopt model instance",
         ),
@@ -724,6 +771,11 @@ export const model = {
         terraformModelName: z.string().optional().default("terraform").describe(
           "Name of the @webframp/terraform model instance",
         ),
+        configModelName: z.string().optional().default(
+          "aws-config-compliance",
+        ).describe(
+          "Name of the @webframp/aws/config-compliance model instance",
+        ),
       }),
       execute: async (
         args: {
@@ -731,18 +783,20 @@ export const model = {
           adoptModelName: string;
           inventoryModelName: string;
           terraformModelName: string;
+          configModelName: string;
         },
         context: ModelContext,
       ) => {
         const now = new Date();
         const sourcesToBaseline: SourceName[] = args.source === "all"
-          ? ["adopt", "inventory", "terraform"]
+          ? ["adopt", "inventory", "terraform", "config"]
           : [args.source as SourceName];
 
         const modelNames: Record<SourceName, string> = {
           adopt: args.adoptModelName,
           inventory: args.inventoryModelName,
           terraform: args.terraformModelName,
+          config: args.configModelName,
         };
 
         const handles: Array<{ name: string }> = [];
@@ -771,11 +825,7 @@ export const model = {
             );
             const latest = sorted[0] ?? data[0];
 
-            const normalized = source === "adopt"
-              ? normalizeAdoptResources(latest.attributes)
-              : source === "inventory"
-              ? normalizeInventoryResources(latest.attributes)
-              : normalizeTerraformResources(latest.attributes);
+            const normalized = NORMALIZERS[source](latest.attributes);
 
             const entries: z.infer<typeof BaselineEntrySchema>[] = normalized
               .map((r) => ({
@@ -1038,12 +1088,18 @@ export const model = {
         terraformModelName: z.string().optional().default("terraform").describe(
           "Name of the @webframp/terraform model instance",
         ),
+        configModelName: z.string().optional().default(
+          "aws-config-compliance",
+        ).describe(
+          "Name of the @webframp/aws/config-compliance model instance",
+        ),
       }),
       execute: async (
         args: {
           adoptModelName: string;
           inventoryModelName: string;
           terraformModelName: string;
+          configModelName: string;
         },
         context: ModelContext,
       ) => {
@@ -1058,6 +1114,7 @@ export const model = {
             adoptModelName: args.adoptModelName,
             inventoryModelName: args.inventoryModelName,
             terraformModelName: args.terraformModelName,
+            configModelName: args.configModelName,
             staleThresholdMinutes: 1440,
           },
           context,

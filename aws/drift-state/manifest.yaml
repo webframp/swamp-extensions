@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/drift-state"
-version: "2026.06.27.1"
+version: "2026.06.27.2"
 description: |
   Unified drift detection surface that composes observations from existing
   models (adopt, inventory, terraform) into queryable versioned state.
@@ -50,6 +50,8 @@ description: |
   - `@webframp/aws/inventory` (required) — EC2, RDS, DynamoDB, Lambda, S3, EBS
   - `@webframp/terraform` (optional) — All Terraform-managed resources. If not
     installed, terraform is reported in `unavailableSources` and skipped gracefully.
+  - `@webframp/aws/config-compliance` (optional) — AWS Config non-compliant
+    resources. If not installed, config is reported in `unavailableSources`.
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/drift_state.ts
