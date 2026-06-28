@@ -573,7 +573,7 @@ export const model = {
 
         try {
           // Get zones — either from filter or list all
-          let zoneIds: Array<{ id: string; name: string }> = [];
+          const zoneIds: Array<{ id: string; name: string }> = [];
           let zoneListTruncated = false;
 
           if (args.zoneFilter && args.zoneFilter.length > 0) {
