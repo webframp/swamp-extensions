@@ -1,0 +1,55 @@
+manifestVersion: 1
+name: "@webframp/aws/dns-observation"
+version: "2026.06.27.1"
+description: |
+  Observe Route53 hosted zones, record sets, and detect orphaned DNS records
+  pointing at decommissioned infrastructure.
+
+  This model reads Route53 data for observation and cross-references record
+  targets against inventory/adopt data to find orphaned entries. It does not
+  manage zones or records — use @swamp/aws/route53 for infrastructure management.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/aws/dns-observation
+  swamp model create @webframp/aws/dns-observation aws-dns-observation
+  swamp model method run aws-dns-observation list_zones
+  swamp model method run aws-dns-observation list_records
+  swamp model method run aws-dns-observation detect_orphans
+  ```
+
+  ## Methods
+
+  - **list_zones** — List all hosted zones with record counts and metadata
+  - **list_records** — List all record sets across zones (primary drift-state output)
+  - **detect_orphans** — Cross-reference records against inventory to find orphans
+
+  ## Prerequisites
+
+  Route53 read access. Required IAM permissions:
+  - route53:ListHostedZones
+  - route53:GetHostedZone
+  - route53:ListResourceRecordSets
+  - sts:GetCallerIdentity
+
+  For orphan detection, upstream models must have fresh data:
+  - @webframp/aws/inventory (scan spec) — EC2 IPs, ELBs, S3, CloudFront
+  - @webframp/aws/adopt (discovery spec) — Elastic IPs
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/dns_observation.ts
+labels:
+  - aws
+  - dns
+  - route53
+  - observability
+  - drift
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
