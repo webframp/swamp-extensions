@@ -558,6 +558,188 @@ Deno.test({
 });
 
 Deno.test({
+  name: "detect_orphans skips RFC 1918 addresses",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockClients({ sts: () => stsIdentity });
+    try {
+      const { context, getWrittenResources } = makeContext({
+        "aws-inventory": {
+          "scan": [
+            {
+              attributes: {
+                ec2: [{ publicIpAddress: "54.1.2.3", arn: "arn:..." }],
+              },
+              updatedAt: "2026-06-27T10:00:00Z",
+            },
+          ],
+        },
+      });
+
+      await context.writeResource("records", "record-scan", {
+        fetchedAt: "2026-06-27T10:00:00Z",
+        accountId: "123456789012",
+        records: [
+          {
+            zoneId: "Z1234",
+            zoneName: "internal.example.com",
+            name: "db.internal.example.com",
+            type: "A",
+            ttl: 60,
+            values: ["10.0.1.50"],
+            aliasTarget: null,
+          },
+          {
+            zoneId: "Z1234",
+            zoneName: "internal.example.com",
+            name: "cache.internal.example.com",
+            type: "A",
+            ttl: 60,
+            values: ["172.16.0.10"],
+            aliasTarget: null,
+          },
+          {
+            zoneId: "Z1234",
+            zoneName: "internal.example.com",
+            name: "local.internal.example.com",
+            type: "A",
+            ttl: 60,
+            values: ["192.168.1.1"],
+            aliasTarget: null,
+          },
+        ],
+        summary: { totalRecords: 3, zonesScanned: 1, byType: { A: 3 } },
+      });
+
+      await model.methods.detect_orphans.execute(
+        {
+          inventoryModelName: "aws-inventory",
+          adoptModelName: "aws-adopt",
+          skipTypes: ["TXT", "MX", "SRV"],
+        },
+        context as ExecuteContext,
+      );
+      const resources = getWrittenResources();
+      const orphanReport = resources.find((r) => r.specName === "orphans");
+      assertExists(orphanReport);
+
+      const data = orphanReport.data as {
+        orphans: unknown[];
+        summary: { totalOrphans: number };
+      };
+      // RFC 1918 addresses should not be flagged as orphans
+      assertEquals(data.summary.totalOrphans, 0);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "detect_orphans does not false-positive when inventory absent but adopt present",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockClients({ sts: () => stsIdentity });
+    try {
+      // Only adopt data, no inventory — ec2PublicIps will be empty
+      const { context, getWrittenResources } = makeContext({
+        "aws-adopt": {
+          "discovery": [
+            {
+              attributes: {
+                elasticIps: [{ publicIp: "52.1.2.3" }],
+              },
+              updatedAt: "2026-06-27T10:00:00Z",
+            },
+          ],
+        },
+      });
+
+      await context.writeResource("records", "record-scan", {
+        fetchedAt: "2026-06-27T10:00:00Z",
+        accountId: "123456789012",
+        records: [
+          {
+            zoneId: "Z1234",
+            zoneName: "example.com",
+            name: "app.example.com",
+            type: "A",
+            ttl: 60,
+            values: ["203.0.113.50"],
+            aliasTarget: null,
+          },
+        ],
+        summary: { totalRecords: 1, zonesScanned: 1, byType: { A: 1 } },
+      });
+
+      await model.methods.detect_orphans.execute(
+        {
+          inventoryModelName: "aws-inventory",
+          adoptModelName: "aws-adopt",
+          skipTypes: ["TXT", "MX", "SRV"],
+        },
+        context as ExecuteContext,
+      );
+      const resources = getWrittenResources();
+      const orphanReport = resources.find((r) => r.specName === "orphans");
+      assertExists(orphanReport);
+
+      const data = orphanReport.data as {
+        orphans: Array<{ recordName: string }>;
+        summary: { totalOrphans: number };
+      };
+      // Should flag as orphan since elasticIps has data but IP doesn't match
+      assertEquals(data.summary.totalOrphans, 1);
+      assertEquals(data.orphans[0].recordName, "app.example.com");
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "list_records resolves zone names with zoneFilter",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockClients({
+      sts: () => stsIdentity,
+      route53: (cmd: unknown) => {
+        const name = (cmd as { constructor: { name: string } }).constructor
+          .name;
+        if (name === "GetHostedZoneCommand") {
+          return {
+            HostedZone: {
+              Id: "/hostedzone/Z1234",
+              Name: "example.com.",
+            },
+          };
+        }
+        if (name === "ListResourceRecordSetsCommand") return recordSetsZ1234;
+        return {};
+      },
+    });
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_records.execute(
+        { zoneFilter: ["Z1234"] },
+        context as ExecuteContext,
+      );
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        records: Array<{ zoneName: string }>;
+      };
+      // All records should have the zone name, not their own FQDN
+      for (const r of data.records) {
+        assertEquals(r.zoneName, "example.com");
+      }
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
   name: "detect_orphans skips NS and SOA records",
   sanitizeResources: false,
   fn: async () => {

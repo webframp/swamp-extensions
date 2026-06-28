@@ -73,6 +73,7 @@ const OrphanedRecordSchema = z.object({
 const ZoneListSchema = z.object({
   fetchedAt: z.string(),
   accountId: z.string(),
+  truncated: z.boolean(),
   zones: z.array(HostedZoneSchema),
   summary: z.object({
     totalZones: z.number(),
@@ -85,6 +86,7 @@ const ZoneListSchema = z.object({
 const RecordListSchema = z.object({
   fetchedAt: z.string(),
   accountId: z.string(),
+  truncated: z.boolean(),
   records: z.array(RecordSetSchema),
   summary: z.object({
     totalRecords: z.number(),
@@ -96,6 +98,7 @@ const RecordListSchema = z.object({
 const OrphanReportSchema = z.object({
   fetchedAt: z.string(),
   accountId: z.string(),
+  truncated: z.boolean(),
   orphans: z.array(OrphanedRecordSchema),
   summary: z.object({
     totalOrphans: z.number(),
@@ -176,6 +179,20 @@ const ELASTICBEANSTALK_SUFFIXES = [
   ".elasticbeanstalk.com",
 ];
 
+function isPrivateOrReservedIp(ip: string): boolean {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((p) => isNaN(p))) return false;
+  // RFC 1918
+  if (parts[0] === 10) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  // Loopback
+  if (parts[0] === 127) return true;
+  // Link-local
+  if (parts[0] === 169 && parts[1] === 254) return true;
+  return false;
+}
+
 function classifyTarget(
   target: string,
 ): "elb" | "cloudfront" | "s3" | "beanstalk" | "ec2_ip" | "other" {
@@ -186,8 +203,10 @@ function classifyTarget(
   if (ELASTICBEANSTALK_SUFFIXES.some((s) => lower.endsWith(s))) {
     return "beanstalk";
   }
-  // IPv4 pattern — likely an EC2 EIP or instance
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(target)) return "ec2_ip";
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(target)) {
+    if (isPrivateOrReservedIp(target)) return "other";
+    return "ec2_ip";
+  }
   return "other";
 }
 
@@ -330,9 +349,13 @@ function detectOrphan(
     return null;
   }
 
-  // Check A record values (IPs)
+  // Check A record values (IPs) — skip if no IP data to compare against
   if (record.type === "A") {
+    if (known.ec2PublicIps.size === 0 && known.elasticIps.size === 0) {
+      return null;
+    }
     for (const value of record.values) {
+      if (isPrivateOrReservedIp(value)) continue;
       if (
         !known.ec2PublicIps.has(value) && !known.elasticIps.has(value)
       ) {
@@ -399,7 +422,7 @@ function detectOrphan(
 
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.06.27.1",
+  version: "2026.06.27.2",
   upgrades: [],
   globalArguments: GlobalArgsSchema,
 
@@ -439,8 +462,8 @@ export const model = {
         context: DnsObservationContext,
       ) => {
         const region = context.globalArgs.region;
-        const client = new Route53Client({ region });
         const accountId = await getAccountId(region);
+        const client = new Route53Client({ region });
 
         try {
           const zones: z.infer<typeof HostedZoneSchema>[] = [];
@@ -492,10 +515,12 @@ export const model = {
             pages++;
           } while (marker && pages < MAX_PAGES);
 
+          const truncated = !!marker;
           const publicZones = zones.filter((z) => !z.isPrivate).length;
           const result: z.infer<typeof ZoneListSchema> = {
             fetchedAt: new Date().toISOString(),
             accountId,
+            truncated,
             zones,
             summary: {
               totalZones: zones.length,
@@ -536,15 +561,27 @@ export const model = {
         context: DnsObservationContext,
       ) => {
         const region = context.globalArgs.region;
-        const client = new Route53Client({ region });
         const accountId = await getAccountId(region);
+        const client = new Route53Client({ region });
 
         try {
           // Get zones — either from filter or list all
           let zoneIds: Array<{ id: string; name: string }> = [];
 
           if (args.zoneFilter && args.zoneFilter.length > 0) {
-            zoneIds = args.zoneFilter.map((id) => ({ id, name: "" }));
+            for (const id of args.zoneFilter) {
+              try {
+                const detail = await client.send(
+                  new GetHostedZoneCommand({ Id: id }),
+                );
+                const name = detail.HostedZone?.Name
+                  ? stripTrailingDot(detail.HostedZone.Name)
+                  : id;
+                zoneIds.push({ id, name });
+              } catch {
+                zoneIds.push({ id, name: id });
+              }
+            }
           } else {
             let marker: string | undefined;
             let pages = 0;
@@ -566,6 +603,7 @@ export const model = {
 
           const records: z.infer<typeof RecordSetSchema>[] = [];
           const byType: Record<string, number> = {};
+          let truncated = false;
 
           for (const zone of zoneIds) {
             let startName: string | undefined;
@@ -626,11 +664,13 @@ export const model = {
               }
               pages++;
             } while (pages < MAX_PAGES);
+            if (pages >= MAX_PAGES) truncated = true;
           }
 
           const result: z.infer<typeof RecordListSchema> = {
             fetchedAt: new Date().toISOString(),
             accountId,
+            truncated,
             records,
             summary: {
               totalRecords: records.length,
@@ -700,6 +740,7 @@ export const model = {
           const handle = await context.writeResource("orphans", "latest", {
             fetchedAt: new Date().toISOString(),
             accountId,
+            truncated: false,
             orphans: [],
             summary: {
               totalOrphans: 0,
@@ -777,6 +818,7 @@ export const model = {
         const result: z.infer<typeof OrphanReportSchema> = {
           fetchedAt: new Date().toISOString(),
           accountId,
+          truncated: false,
           orphans,
           summary: {
             totalOrphans: orphans.length,

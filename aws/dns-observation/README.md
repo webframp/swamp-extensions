@@ -16,14 +16,17 @@ Route53 read access:
 - `sts:GetCallerIdentity`
 
 For orphan detection, upstream models must have fresh data:
+
 - `@webframp/aws/inventory` (scan spec) — EC2 IPs, ELBs, S3, CloudFront
 - `@webframp/aws/adopt` (discovery spec) — Elastic IPs
 
 ## Methods
 
-- **list_zones** — All hosted zones with record counts, public/private status, VPC associations
+- **list_zones** — All hosted zones with record counts, public/private status,
+  VPC associations
 - **list_records** — All record sets across zones (A, AAAA, CNAME, ALIAS, etc.)
-- **detect_orphans** — Cross-reference record targets against inventory/adopt data
+- **detect_orphans** — Cross-reference record targets against inventory/adopt
+  data
 
 ## Usage
 
@@ -40,14 +43,14 @@ swamp model method run aws-dns-observation detect_orphans
 The `detect_orphans` method reads stored record data and cross-references
 targets against upstream model data:
 
-| Record Type | Target | Checked Against |
-|-------------|--------|-----------------|
-| A (alias) | ELB DNS name | inventory elbv2/elb |
-| A (alias) | CloudFront domain | inventory cloudfront |
-| A (alias) | S3 website endpoint | inventory s3 |
-| A (value) | IP address | inventory ec2 + adopt elasticIps |
-| CNAME | ELB DNS name | inventory elbv2/elb |
-| CNAME | S3 website endpoint | inventory s3 |
+| Record Type | Target              | Checked Against                  |
+| ----------- | ------------------- | -------------------------------- |
+| A (alias)   | ELB DNS name        | inventory elbv2/elb              |
+| A (alias)   | CloudFront domain   | inventory cloudfront             |
+| A (alias)   | S3 website endpoint | inventory s3                     |
+| A (value)   | IP address          | inventory ec2 + adopt elasticIps |
+| CNAME       | ELB DNS name        | inventory elbv2/elb              |
+| CNAME       | S3 website endpoint | inventory s3                     |
 
 Records of type NS, SOA, TXT, MX, SRV are skipped by default.
 
