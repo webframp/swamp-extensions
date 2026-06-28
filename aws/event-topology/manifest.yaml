@@ -1,0 +1,32 @@
+manifestVersion: 1
+name: "@webframp/aws/event-topology"
+version: "2026.06.28.3"
+description: |
+  Event topology observation — discovers the directed graph of event
+  relationships across EventBridge, SNS, SQS, and Lambda event source mappings.
+  Produces a unified graph of nodes and edges with connected component analysis,
+  boundary detection, and hub identification.
+
+  ## Methods
+
+  - **discover** — Single fan-out observation: queries all 4 services in parallel,
+    produces unified graph with nodes, edges, and computed statistics
+  - **analyze** — Pure data-layer queries against stored graph: hubs, boundaries,
+    orphans, connected components, and node-centric path queries
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/event_topology.ts
+labels:
+  - aws
+  - eventbridge
+  - sqs
+  - sns
+  - topology
+  - experiment
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - LICENSE.md

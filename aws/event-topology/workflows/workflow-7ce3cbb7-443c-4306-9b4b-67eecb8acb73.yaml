@@ -1,0 +1,35 @@
+id: 7ce3cbb7-443c-4306-9b4b-67eecb8acb73
+name: event-topology-refresh
+description: Refresh event topology graph and run hub analysis
+tags: {}
+jobs:
+  - name: topology
+    description: Discover event graph and analyze hubs
+    steps:
+      - name: discover
+        description: Discover event topology across EventBridge, SNS, SQS, and Lambda ESM
+        task:
+          type: model_method
+          modelIdOrName: aws-event-topology
+          methodName: discover
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: analyze-hubs
+        description: Identify hub nodes with high connectivity
+        task:
+          type: model_method
+          modelIdOrName: aws-event-topology
+          methodName: analyze
+          inputs:
+            query: hubs
+            threshold: 3
+        dependsOn:
+          - step: discover
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0
+version: 1
