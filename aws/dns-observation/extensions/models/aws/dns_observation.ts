@@ -193,6 +193,11 @@ function isPrivateOrReservedIp(ip: string): boolean {
   return false;
 }
 
+function extractS3BucketName(target: string): string {
+  const match = target.match(/^(.+?)\.s3(?:-website[-.]|\.)/);
+  return match ? match[1] : target.split(".s3")[0];
+}
+
 function classifyTarget(
   target: string,
 ): "elb" | "cloudfront" | "s3" | "beanstalk" | "ec2_ip" | "other" {
@@ -334,7 +339,7 @@ function detectOrphan(
       };
     }
     if (targetType === "s3") {
-      const bucketName = target.split(".s3")[0];
+      const bucketName = extractS3BucketName(target);
       if (!known.s3Buckets.has(bucketName.toLowerCase())) {
         return {
           zoneId: record.zoneId,
@@ -387,8 +392,18 @@ function detectOrphan(
           reason: "cname_target_elb_not_found",
         };
       }
+      if (targetType === "cloudfront" && !known.cloudfrontDomains.has(target)) {
+        return {
+          zoneId: record.zoneId,
+          zoneName: record.zoneName,
+          recordName: record.name,
+          recordType: record.type,
+          target,
+          reason: "cname_target_cloudfront_not_found",
+        };
+      }
       if (targetType === "s3") {
-        const bucketName = target.split(".s3")[0];
+        const bucketName = extractS3BucketName(target);
         if (!known.s3Buckets.has(bucketName.toLowerCase())) {
           return {
             zoneId: record.zoneId,
@@ -606,65 +621,71 @@ export const model = {
           let truncated = false;
 
           for (const zone of zoneIds) {
-            let startName: string | undefined;
-            let startType: RRType | undefined;
-            let pages = 0;
+            try {
+              let startName: string | undefined;
+              let startType: RRType | undefined;
+              let pages = 0;
 
-            do {
-              const resp = await client.send(
-                new ListResourceRecordSetsCommand({
-                  HostedZoneId: zone.id,
-                  StartRecordName: startName,
-                  StartRecordType: startType,
-                }),
-              );
+              do {
+                const resp = await client.send(
+                  new ListResourceRecordSetsCommand({
+                    HostedZoneId: zone.id,
+                    StartRecordName: startName,
+                    StartRecordType: startType,
+                  }),
+                );
 
-              for (const rrs of resp.ResourceRecordSets ?? []) {
-                if (!rrs.Name || !rrs.Type) continue;
-                if (
-                  args.typeFilter && args.typeFilter.length > 0 &&
-                  !args.typeFilter.includes(rrs.Type)
-                ) {
-                  continue;
+                for (const rrs of resp.ResourceRecordSets ?? []) {
+                  if (!rrs.Name || !rrs.Type) continue;
+                  if (
+                    args.typeFilter && args.typeFilter.length > 0 &&
+                    !args.typeFilter.includes(rrs.Type)
+                  ) {
+                    continue;
+                  }
+
+                  const values = (rrs.ResourceRecords ?? [])
+                    .map((r) => r.Value)
+                    .filter((v): v is string => !!v);
+
+                  const aliasTarget = rrs.AliasTarget
+                    ? {
+                      dnsName: stripTrailingDot(
+                        rrs.AliasTarget.DNSName ?? "",
+                      ),
+                      hostedZoneId: rrs.AliasTarget.HostedZoneId ?? "",
+                      evaluateTargetHealth:
+                        rrs.AliasTarget.EvaluateTargetHealth ?? false,
+                    }
+                    : null;
+
+                  records.push({
+                    zoneId: zone.id,
+                    zoneName: zone.name || stripTrailingDot(rrs.Name),
+                    name: stripTrailingDot(rrs.Name),
+                    type: rrs.Type,
+                    ttl: rrs.TTL ?? null,
+                    values,
+                    aliasTarget,
+                  });
+
+                  byType[rrs.Type] = (byType[rrs.Type] ?? 0) + 1;
                 }
 
-                const values = (rrs.ResourceRecords ?? [])
-                  .map((r) => r.Value)
-                  .filter((v): v is string => !!v);
-
-                const aliasTarget = rrs.AliasTarget
-                  ? {
-                    dnsName: stripTrailingDot(
-                      rrs.AliasTarget.DNSName ?? "",
-                    ),
-                    hostedZoneId: rrs.AliasTarget.HostedZoneId ?? "",
-                    evaluateTargetHealth:
-                      rrs.AliasTarget.EvaluateTargetHealth ?? false,
-                  }
-                  : null;
-
-                records.push({
-                  zoneId: zone.id,
-                  zoneName: zone.name || stripTrailingDot(rrs.Name),
-                  name: stripTrailingDot(rrs.Name),
-                  type: rrs.Type,
-                  ttl: rrs.TTL ?? null,
-                  values,
-                  aliasTarget,
-                });
-
-                byType[rrs.Type] = (byType[rrs.Type] ?? 0) + 1;
-              }
-
-              if (resp.IsTruncated) {
-                startName = resp.NextRecordName;
-                startType = resp.NextRecordType;
-              } else {
-                break;
-              }
-              pages++;
-            } while (pages < MAX_PAGES);
-            if (pages >= MAX_PAGES) truncated = true;
+                if (resp.IsTruncated) {
+                  startName = resp.NextRecordName;
+                  startType = resp.NextRecordType;
+                } else {
+                  break;
+                }
+                pages++;
+              } while (pages < MAX_PAGES);
+              if (pages >= MAX_PAGES) truncated = true;
+            } catch {
+              context.logger.warn("Failed to list records for zone", {
+                zoneId: zone.id,
+              });
+            }
           }
 
           const result: z.infer<typeof RecordListSchema> = {
