@@ -154,6 +154,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -170,7 +171,7 @@ Deno.test({
         totalResources: number;
       };
     };
-    assertEquals(data.summary.unavailableSources.length, 4);
+    assertEquals(data.summary.unavailableSources.length, 5);
     assertEquals(data.summary.totalResources, 0);
   },
 });
@@ -204,6 +205,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -266,6 +268,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -335,6 +338,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -406,6 +410,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -459,6 +464,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -509,6 +515,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -578,6 +585,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -635,6 +643,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
       },
       context as unknown as BaselineContext,
     );
@@ -688,6 +697,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
       },
       context as unknown as BaselineContext,
     );
@@ -1075,6 +1085,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -1133,6 +1144,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -1204,6 +1216,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -1263,6 +1276,7 @@ Deno.test({
         inventoryModelName: "aws-inventory",
         terraformModelName: "terraform",
         configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
         staleThresholdMinutes: 1440,
       },
       context as unknown as ComputeContext,
@@ -1280,5 +1294,139 @@ Deno.test({
       data.resources[0].canonicalId,
       "config:AWS::RDS::DBInstance:mydb",
     );
+  },
+});
+
+// =============================================================================
+// DNS orphan normalization
+// =============================================================================
+
+Deno.test({
+  name: "compute_drift: dns orphans normalized with composite canonicalId",
+  fn: async () => {
+    const { context, getWrittenResources } = createDriftContext({
+      "aws-dns-observation": {
+        "orphans": [
+          {
+            attributes: {
+              orphans: [
+                {
+                  zoneId: "Z123",
+                  zoneName: "example.com",
+                  recordName: "old-api.example.com",
+                  recordType: "CNAME",
+                  target: "dead-elb.us-east-1.elb.amazonaws.com",
+                  reason: "ELB not found in inventory",
+                },
+                {
+                  zoneId: "Z123",
+                  zoneName: "example.com",
+                  recordName: "stale.example.com",
+                  recordType: "A",
+                  target: "54.1.2.3",
+                  reason: "IP not found in EC2 or EIP inventory",
+                },
+              ],
+            },
+            updatedAt: "2026-06-27T10:00:00Z",
+          },
+        ],
+      },
+    });
+
+    await model.methods.compute_drift.execute(
+      {
+        sources: ["dns"],
+        adoptModelName: "aws-adopt",
+        inventoryModelName: "aws-inventory",
+        terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
+        staleThresholdMinutes: 1440,
+      },
+      context as unknown as ComputeContext,
+    );
+
+    const resources = getWrittenResources();
+    const driftResult = resources.find((r) => r.specName === "driftResult");
+    assertExists(driftResult);
+
+    const data = driftResult.data as {
+      resources: Array<{
+        canonicalId: string;
+        resourceType: string;
+        driftStatus: string;
+        detectionSource: string;
+      }>;
+    };
+    assertEquals(data.resources.length, 2);
+    assertEquals(
+      data.resources[0].canonicalId,
+      "dns:Z123:old-api.example.com:dead-elb.us-east-1.elb.amazonaws.com",
+    );
+    assertEquals(data.resources[0].resourceType, "AWS::Route53::CNAME");
+    assertEquals(data.resources[0].detectionSource, "dns");
+    assertEquals(
+      data.resources[1].canonicalId,
+      "dns:Z123:stale.example.com:54.1.2.3",
+    );
+    assertEquals(data.resources[1].resourceType, "AWS::Route53::A");
+  },
+});
+
+Deno.test({
+  name: "compute_drift: dns normalizer skips orphans without recordName",
+  fn: async () => {
+    const { context, getWrittenResources } = createDriftContext({
+      "aws-dns-observation": {
+        "orphans": [
+          {
+            attributes: {
+              orphans: [
+                {
+                  zoneId: "Z123",
+                  zoneName: "example.com",
+                  recordName: "",
+                  recordType: "A",
+                  target: "1.2.3.4",
+                  reason: "test",
+                },
+                {
+                  zoneId: "Z123",
+                  zoneName: "example.com",
+                  recordName: "valid.example.com",
+                  recordType: "A",
+                  target: "",
+                  reason: "test",
+                },
+              ],
+            },
+            updatedAt: "2026-06-27T10:00:00Z",
+          },
+        ],
+      },
+    });
+
+    await model.methods.compute_drift.execute(
+      {
+        sources: ["dns"],
+        adoptModelName: "aws-adopt",
+        inventoryModelName: "aws-inventory",
+        terraformModelName: "terraform",
+        configModelName: "aws-config-compliance",
+        dnsModelName: "aws-dns-observation",
+        staleThresholdMinutes: 1440,
+      },
+      context as unknown as ComputeContext,
+    );
+
+    const resources = getWrittenResources();
+    const driftResult = resources.find((r) => r.specName === "driftResult");
+    assertExists(driftResult);
+
+    const data = driftResult.data as {
+      resources: Array<{ canonicalId: string }>;
+    };
+    assertEquals(data.resources.length, 0);
   },
 });

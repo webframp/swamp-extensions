@@ -336,6 +336,35 @@ function normalizeConfigResources(
   return results;
 }
 
+function normalizeDnsResources(
+  attrs: Record<string, unknown>,
+): NormalizedResource[] {
+  const results: NormalizedResource[] = [];
+  const orphans = attrs.orphans as
+    | Array<Record<string, unknown>>
+    | undefined;
+  if (!orphans || !Array.isArray(orphans)) return results;
+
+  for (const orphan of orphans) {
+    const recordName = orphan.recordName as string | undefined;
+    const target = orphan.target as string | undefined;
+    const recordType = orphan.recordType as string | undefined;
+    const zoneId = orphan.zoneId as string | undefined;
+    if (!recordName || !target) continue;
+
+    const canonicalId = `dns:${zoneId || "unknown"}:${recordName}:${target}`;
+
+    results.push({
+      canonicalId,
+      resourceType: `AWS::Route53::${recordType || "Record"}`,
+      snapshot: orphan as Record<string, unknown>,
+      source: "dns",
+    });
+  }
+
+  return results;
+}
+
 // ---------------------------------------------------------------------------
 // Context Type
 // ---------------------------------------------------------------------------
@@ -374,6 +403,7 @@ const SOURCES = {
   inventory: { specName: "scan", defaultModelName: "aws-inventory" },
   terraform: { specName: "read_state", defaultModelName: "terraform" },
   config: { specName: "compliance", defaultModelName: "aws-config-compliance" },
+  dns: { specName: "orphans", defaultModelName: "aws-dns-observation" },
 } as const;
 
 type SourceName = keyof typeof SOURCES;
@@ -386,6 +416,7 @@ const NORMALIZERS: Record<
   inventory: normalizeInventoryResources,
   terraform: normalizeTerraformResources,
   config: normalizeConfigResources,
+  dns: normalizeDnsResources,
 };
 
 // ---------------------------------------------------------------------------
@@ -395,7 +426,7 @@ const NORMALIZERS: Record<
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.06.27.2",
+  version: "2026.06.27.3",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -434,10 +465,10 @@ export const model = {
   methods: {
     compute_drift: {
       description:
-        "Compare latest upstream snapshots against stored baselines to detect drift across adopt, inventory, terraform, and config sources.",
+        "Compare latest upstream snapshots against stored baselines to detect drift across adopt, inventory, terraform, config, and dns sources.",
       arguments: z.object({
         sources: z.array(
-          z.enum(["adopt", "inventory", "terraform", "config"]),
+          z.enum(["adopt", "inventory", "terraform", "config", "dns"]),
         ).optional()
           .describe("Upstream sources to compose. Omit for all available."),
         adoptModelName: z.string().optional().default("aws-adopt").describe(
@@ -453,6 +484,11 @@ export const model = {
         ).describe(
           "Name of the @webframp/aws/config-compliance model instance",
         ),
+        dnsModelName: z.string().optional().default(
+          "aws-dns-observation",
+        ).describe(
+          "Name of the @webframp/aws/dns-observation model instance",
+        ),
         staleThresholdMinutes: z.number().optional().default(1440).describe(
           "Data older than this (minutes) is flagged as stale",
         ),
@@ -464,6 +500,7 @@ export const model = {
           inventoryModelName: string;
           terraformModelName: string;
           configModelName: string;
+          dnsModelName: string;
           staleThresholdMinutes: number;
         },
         context: ModelContext,
@@ -471,13 +508,20 @@ export const model = {
         const now = new Date();
         const activeSources: SourceName[] =
           (args.sources as SourceName[] | undefined) ??
-            (["adopt", "inventory", "terraform", "config"] as SourceName[]);
+            ([
+              "adopt",
+              "inventory",
+              "terraform",
+              "config",
+              "dns",
+            ] as SourceName[]);
 
         const modelNames: Record<SourceName, string> = {
           adopt: args.adoptModelName,
           inventory: args.inventoryModelName,
           terraform: args.terraformModelName,
           config: args.configModelName,
+          dns: args.dnsModelName,
         };
 
         const unavailableSources: string[] = [];
@@ -760,7 +804,14 @@ export const model = {
       description:
         "Set baseline from current upstream data. Future compute_drift runs compare against this baseline.",
       arguments: z.object({
-        source: z.enum(["adopt", "inventory", "terraform", "config", "all"])
+        source: z.enum([
+          "adopt",
+          "inventory",
+          "terraform",
+          "config",
+          "dns",
+          "all",
+        ])
           .default("all")
           .describe("Which upstream source to baseline"),
         adoptModelName: z.string().optional().default("aws-adopt").describe(
@@ -776,6 +827,11 @@ export const model = {
         ).describe(
           "Name of the @webframp/aws/config-compliance model instance",
         ),
+        dnsModelName: z.string().optional().default(
+          "aws-dns-observation",
+        ).describe(
+          "Name of the @webframp/aws/dns-observation model instance",
+        ),
       }),
       execute: async (
         args: {
@@ -784,12 +840,13 @@ export const model = {
           inventoryModelName: string;
           terraformModelName: string;
           configModelName: string;
+          dnsModelName: string;
         },
         context: ModelContext,
       ) => {
         const now = new Date();
         const sourcesToBaseline: SourceName[] = args.source === "all"
-          ? ["adopt", "inventory", "terraform", "config"]
+          ? ["adopt", "inventory", "terraform", "config", "dns"]
           : [args.source as SourceName];
 
         const modelNames: Record<SourceName, string> = {
@@ -797,6 +854,7 @@ export const model = {
           inventory: args.inventoryModelName,
           terraform: args.terraformModelName,
           config: args.configModelName,
+          dns: args.dnsModelName,
         };
 
         const handles: Array<{ name: string }> = [];
@@ -1093,6 +1151,11 @@ export const model = {
         ).describe(
           "Name of the @webframp/aws/config-compliance model instance",
         ),
+        dnsModelName: z.string().optional().default(
+          "aws-dns-observation",
+        ).describe(
+          "Name of the @webframp/aws/dns-observation model instance",
+        ),
       }),
       execute: async (
         args: {
@@ -1100,6 +1163,7 @@ export const model = {
           inventoryModelName: string;
           terraformModelName: string;
           configModelName: string;
+          dnsModelName: string;
         },
         context: ModelContext,
       ) => {
@@ -1115,6 +1179,7 @@ export const model = {
             inventoryModelName: args.inventoryModelName,
             terraformModelName: args.terraformModelName,
             configModelName: args.configModelName,
+            dnsModelName: args.dnsModelName,
             staleThresholdMinutes: 1440,
           },
           context,
