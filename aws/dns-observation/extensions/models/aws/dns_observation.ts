@@ -824,8 +824,18 @@ export const model = {
 
         if (!inventoryAttrs && !adoptAttrs) {
           context.logger.warn(
-            "No upstream infrastructure data available for cross-reference",
+            "No upstream data available — orphan detection will be limited",
             { hint: "Run inventory scan and/or adopt discover first" },
+          );
+        } else if (!inventoryAttrs) {
+          context.logger.warn(
+            "Inventory data absent — ELB, CloudFront, S3, and IP checks skipped",
+            { hint: "Run inventory scan for full orphan detection" },
+          );
+        } else if (!adoptAttrs) {
+          context.logger.warn(
+            "Adopt data absent — Elastic IP checks skipped",
+            { hint: "Run adopt discover for Elastic IP cross-reference" },
           );
         }
 
@@ -835,6 +845,7 @@ export const model = {
 
         for (const record of recordsData.records) {
           if (args.skipTypes.includes(record.type)) continue;
+          if (record.type === "NS" || record.type === "SOA") continue;
           recordsAnalyzed++;
           const orphan = detectOrphan(record, known);
           if (orphan) orphans.push(orphan);

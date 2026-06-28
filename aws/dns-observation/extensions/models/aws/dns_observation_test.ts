@@ -793,8 +793,8 @@ Deno.test({
         summary: { totalOrphans: number; recordsAnalyzed: number };
       };
       assertEquals(data.summary.totalOrphans, 0);
-      // NS/SOA are analyzed but detectOrphan returns null for them
-      assertEquals(data.summary.recordsAnalyzed, 2);
+      // NS/SOA are skipped at the loop level, not counted as analyzed
+      assertEquals(data.summary.recordsAnalyzed, 0);
     } finally {
       restore();
     }
