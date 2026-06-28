@@ -233,7 +233,7 @@ function isSnsEndpointInternal(protocol: string, endpoint: string): boolean {
 /** Event topology model — observes the directed graph of AWS event relationships. */
 export const model = {
   type: "@webframp/aws/event-topology",
-  version: "2026.06.28.3",
+  version: "2026.06.28.4",
   globalArguments: GlobalArgsSchema,
 
   resources: {
