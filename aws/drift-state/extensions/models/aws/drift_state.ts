@@ -349,13 +349,14 @@ function normalizeDnsResources(
     const recordName = orphan.recordName as string | undefined;
     const target = orphan.target as string | undefined;
     const recordType = orphan.recordType as string | undefined;
+    const zoneId = orphan.zoneId as string | undefined;
     if (!recordName || !target) continue;
 
-    const canonicalId = `dns:${recordName}:${target}`;
+    const canonicalId = `dns:${zoneId || "unknown"}:${recordName}:${target}`;
 
     results.push({
       canonicalId,
-      resourceType: `AWS::Route53::${recordType ?? "Record"}`,
+      resourceType: `AWS::Route53::${recordType || "Record"}`,
       snapshot: orphan as Record<string, unknown>,
       source: "dns",
     });

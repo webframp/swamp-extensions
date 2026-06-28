@@ -1362,13 +1362,13 @@ Deno.test({
     assertEquals(data.resources.length, 2);
     assertEquals(
       data.resources[0].canonicalId,
-      "dns:old-api.example.com:dead-elb.us-east-1.elb.amazonaws.com",
+      "dns:Z123:old-api.example.com:dead-elb.us-east-1.elb.amazonaws.com",
     );
     assertEquals(data.resources[0].resourceType, "AWS::Route53::CNAME");
     assertEquals(data.resources[0].detectionSource, "dns");
     assertEquals(
       data.resources[1].canonicalId,
-      "dns:stale.example.com:54.1.2.3",
+      "dns:Z123:stale.example.com:54.1.2.3",
     );
     assertEquals(data.resources[1].resourceType, "AWS::Route53::A");
   },
