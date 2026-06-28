@@ -2,14 +2,15 @@ id: "wf-drift-state-refresh-01"
 name: "@webframp/drift-state-refresh"
 description: |
   Refresh upstream models and recompute drift state.
-  Runs discover_all (adopt), inventory_scan (inventory), and
-  get_non_compliant (config) in parallel, then computes drift
-  against stored baselines.
+  Runs discover_all (adopt), inventory_scan (inventory),
+  get_non_compliant (config), and detect_orphans (dns) in parallel,
+  then computes drift against stored baselines.
 
 tags:
   aws: "true"
   drift: "true"
   compliance: "true"
+  dns: "true"
 
 inputs:
   properties:
@@ -33,6 +34,10 @@ inputs:
       type: string
       description: Name of the @webframp/aws/config-compliance model instance
       default: "aws-config-compliance"
+    dnsModelName:
+      type: string
+      description: Name of the @webframp/aws/dns-observation model instance
+      default: "aws-dns-observation"
   required:
     - driftModelName
 
@@ -67,6 +72,16 @@ jobs:
           methodName: get_non_compliant
         allowFailure: true
 
+  - name: refresh-dns
+    description: Refresh DNS orphan detection
+    steps:
+      - name: detect-orphans
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.dnsModelName }}
+          methodName: detect_orphans
+        allowFailure: true
+
   - name: compute
     description: Recompute drift from refreshed upstream data
     dependsOn:
@@ -77,6 +92,9 @@ jobs:
         condition:
           type: completed
       - job: refresh-config
+        condition:
+          type: completed
+      - job: refresh-dns
         condition:
           type: completed
     steps:
@@ -90,5 +108,6 @@ jobs:
             inventoryModelName: ${{ inputs.inventoryModelName }}
             terraformModelName: ${{ inputs.terraformModelName }}
             configModelName: ${{ inputs.configModelName }}
+            dnsModelName: ${{ inputs.dnsModelName }}
 
 version: 1
