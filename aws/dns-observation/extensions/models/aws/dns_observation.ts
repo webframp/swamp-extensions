@@ -415,16 +415,8 @@ function detectOrphan(
           };
         }
       }
-      if (targetType === "beanstalk") {
-        return {
-          zoneId: record.zoneId,
-          zoneName: record.zoneName,
-          recordName: record.name,
-          recordType: record.type,
-          target,
-          reason: "cname_target_beanstalk_unverified",
-        };
-      }
+      // Skip beanstalk — no inventory data to verify against
+      if (targetType === "beanstalk") continue;
     }
   }
 
@@ -582,6 +574,7 @@ export const model = {
         try {
           // Get zones — either from filter or list all
           let zoneIds: Array<{ id: string; name: string }> = [];
+          let zoneListTruncated = false;
 
           if (args.zoneFilter && args.zoneFilter.length > 0) {
             for (const id of args.zoneFilter) {
@@ -614,11 +607,12 @@ export const model = {
               marker = resp.NextMarker;
               pages++;
             } while (marker && pages < MAX_PAGES);
+            if (marker) zoneListTruncated = true;
           }
 
           const records: z.infer<typeof RecordSetSchema>[] = [];
           const byType: Record<string, number> = {};
-          let truncated = false;
+          let truncated = zoneListTruncated;
 
           for (const zone of zoneIds) {
             try {
@@ -839,7 +833,7 @@ export const model = {
         const result: z.infer<typeof OrphanReportSchema> = {
           fetchedAt: new Date().toISOString(),
           accountId,
-          truncated: false,
+          truncated: recordsData.truncated ?? false,
           orphans,
           summary: {
             totalOrphans: orphans.length,
