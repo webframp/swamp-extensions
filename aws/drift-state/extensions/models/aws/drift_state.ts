@@ -1,7 +1,7 @@
 /**
  * Unified drift detection model for swamp.
  *
- * Composes observations from upstream models (adopt, inventory, terraform) into
+ * Composes observations from upstream models (adopt, inventory, terraform, config, dns, event_topology) into
  * a queryable drift surface. Makes zero AWS API calls — purely data-layer
  * composition via dataRepository.findBySpec().
  *
@@ -365,6 +365,33 @@ function normalizeDnsResources(
   return results;
 }
 
+function normalizeTopologyResources(
+  attrs: Record<string, unknown>,
+): NormalizedResource[] {
+  const results: NormalizedResource[] = [];
+  const nodes = attrs.nodes as
+    | Array<Record<string, unknown>>
+    | undefined;
+  if (!nodes || !Array.isArray(nodes)) return results;
+
+  for (const node of nodes) {
+    const id = node.id as string | undefined;
+    const type = node.type as string | undefined;
+    if (!id || !type) continue;
+
+    results.push({
+      canonicalId: id,
+      resourceType: `AWS::Events::${type}`,
+      account: node.accountId as string | undefined,
+      region: node.region as string | undefined,
+      snapshot: node as Record<string, unknown>,
+      source: "event_topology",
+    });
+  }
+
+  return results;
+}
+
 // ---------------------------------------------------------------------------
 // Context Type
 // ---------------------------------------------------------------------------
@@ -404,6 +431,7 @@ const SOURCES = {
   terraform: { specName: "read_state", defaultModelName: "terraform" },
   config: { specName: "compliance", defaultModelName: "aws-config-compliance" },
   dns: { specName: "orphans", defaultModelName: "aws-dns-observation" },
+  event_topology: { specName: "graph", defaultModelName: "aws-event-topology" },
 } as const;
 
 type SourceName = keyof typeof SOURCES;
@@ -417,6 +445,7 @@ const NORMALIZERS: Record<
   terraform: normalizeTerraformResources,
   config: normalizeConfigResources,
   dns: normalizeDnsResources,
+  event_topology: normalizeTopologyResources,
 };
 
 // ---------------------------------------------------------------------------
@@ -426,7 +455,7 @@ const NORMALIZERS: Record<
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.06.27.3",
+  version: "2026.06.28.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -465,10 +494,17 @@ export const model = {
   methods: {
     compute_drift: {
       description:
-        "Compare latest upstream snapshots against stored baselines to detect drift across adopt, inventory, terraform, config, and dns sources.",
+        "Compare latest upstream snapshots against stored baselines to detect drift across adopt, inventory, terraform, config, dns, and event_topology sources.",
       arguments: z.object({
         sources: z.array(
-          z.enum(["adopt", "inventory", "terraform", "config", "dns"]),
+          z.enum([
+            "adopt",
+            "inventory",
+            "terraform",
+            "config",
+            "dns",
+            "event_topology",
+          ]),
         ).optional()
           .describe("Upstream sources to compose. Omit for all available."),
         adoptModelName: z.string().optional().default("aws-adopt").describe(
@@ -489,6 +525,11 @@ export const model = {
         ).describe(
           "Name of the @webframp/aws/dns-observation model instance",
         ),
+        topologyModelName: z.string().optional().default(
+          "aws-event-topology",
+        ).describe(
+          "Name of the @webframp/aws/event-topology model instance",
+        ),
         staleThresholdMinutes: z.number().optional().default(1440).describe(
           "Data older than this (minutes) is flagged as stale",
         ),
@@ -501,6 +542,7 @@ export const model = {
           terraformModelName: string;
           configModelName: string;
           dnsModelName: string;
+          topologyModelName: string;
           staleThresholdMinutes: number;
         },
         context: ModelContext,
@@ -514,6 +556,7 @@ export const model = {
               "terraform",
               "config",
               "dns",
+              "event_topology",
             ] as SourceName[]);
 
         const modelNames: Record<SourceName, string> = {
@@ -522,6 +565,7 @@ export const model = {
           terraform: args.terraformModelName,
           config: args.configModelName,
           dns: args.dnsModelName,
+          event_topology: args.topologyModelName,
         };
 
         const unavailableSources: string[] = [];
@@ -810,6 +854,7 @@ export const model = {
           "terraform",
           "config",
           "dns",
+          "event_topology",
           "all",
         ])
           .default("all")
@@ -832,6 +877,11 @@ export const model = {
         ).describe(
           "Name of the @webframp/aws/dns-observation model instance",
         ),
+        topologyModelName: z.string().optional().default(
+          "aws-event-topology",
+        ).describe(
+          "Name of the @webframp/aws/event-topology model instance",
+        ),
       }),
       execute: async (
         args: {
@@ -841,12 +891,20 @@ export const model = {
           terraformModelName: string;
           configModelName: string;
           dnsModelName: string;
+          topologyModelName: string;
         },
         context: ModelContext,
       ) => {
         const now = new Date();
         const sourcesToBaseline: SourceName[] = args.source === "all"
-          ? ["adopt", "inventory", "terraform", "config", "dns"]
+          ? [
+            "adopt",
+            "inventory",
+            "terraform",
+            "config",
+            "dns",
+            "event_topology",
+          ]
           : [args.source as SourceName];
 
         const modelNames: Record<SourceName, string> = {
@@ -855,6 +913,7 @@ export const model = {
           terraform: args.terraformModelName,
           config: args.configModelName,
           dns: args.dnsModelName,
+          event_topology: args.topologyModelName,
         };
 
         const handles: Array<{ name: string }> = [];
@@ -1156,6 +1215,11 @@ export const model = {
         ).describe(
           "Name of the @webframp/aws/dns-observation model instance",
         ),
+        topologyModelName: z.string().optional().default(
+          "aws-event-topology",
+        ).describe(
+          "Name of the @webframp/aws/event-topology model instance",
+        ),
       }),
       execute: async (
         args: {
@@ -1164,6 +1228,7 @@ export const model = {
           terraformModelName: string;
           configModelName: string;
           dnsModelName: string;
+          topologyModelName: string;
         },
         context: ModelContext,
       ) => {
@@ -1180,6 +1245,7 @@ export const model = {
             terraformModelName: args.terraformModelName,
             configModelName: args.configModelName,
             dnsModelName: args.dnsModelName,
+            topologyModelName: args.topologyModelName,
             staleThresholdMinutes: 1440,
           },
           context,
