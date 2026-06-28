@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/event-topology"
-version: "2026.06.28.4"
+version: "2026.06.28.5"
 description: |
   Event topology observation — discovers the directed graph of event
   relationships across EventBridge, SNS, SQS, and Lambda event source mappings.
