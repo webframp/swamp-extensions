@@ -306,39 +306,49 @@ function buildKnownInfrastructure(
   return known;
 }
 
+function stripDualstackPrefix(target: string): string {
+  return target.startsWith("dualstack.") ? target.slice(10) : target;
+}
+
 function detectOrphan(
   record: z.infer<typeof RecordSetSchema>,
   known: KnownInfrastructure,
 ): z.infer<typeof OrphanedRecordSchema> | null {
-  // Skip NS and SOA records (infrastructure records)
   if (record.type === "NS" || record.type === "SOA") return null;
 
-  // Check alias targets
   if (record.aliasTarget) {
     const target = stripTrailingDot(record.aliasTarget.dnsName).toLowerCase();
     const targetType = classifyTarget(target);
 
-    if (targetType === "elb" && !known.elbDnsNames.has(target)) {
-      return {
-        zoneId: record.zoneId,
-        zoneName: record.zoneName,
-        recordName: record.name,
-        recordType: record.type,
-        target,
-        reason: "alias_target_elb_not_found",
-      };
+    if (targetType === "elb") {
+      if (known.elbDnsNames.size === 0) return null;
+      const normalized = stripDualstackPrefix(target);
+      if (!known.elbDnsNames.has(normalized)) {
+        return {
+          zoneId: record.zoneId,
+          zoneName: record.zoneName,
+          recordName: record.name,
+          recordType: record.type,
+          target,
+          reason: "alias_target_elb_not_found",
+        };
+      }
     }
-    if (targetType === "cloudfront" && !known.cloudfrontDomains.has(target)) {
-      return {
-        zoneId: record.zoneId,
-        zoneName: record.zoneName,
-        recordName: record.name,
-        recordType: record.type,
-        target,
-        reason: "alias_target_cloudfront_not_found",
-      };
+    if (targetType === "cloudfront") {
+      if (known.cloudfrontDomains.size === 0) return null;
+      if (!known.cloudfrontDomains.has(target)) {
+        return {
+          zoneId: record.zoneId,
+          zoneName: record.zoneName,
+          recordName: record.name,
+          recordType: record.type,
+          target,
+          reason: "alias_target_cloudfront_not_found",
+        };
+      }
     }
     if (targetType === "s3") {
+      if (known.s3Buckets.size === 0) return null;
       const bucketName = extractS3BucketName(target);
       if (!known.s3Buckets.has(bucketName.toLowerCase())) {
         return {
@@ -354,7 +364,6 @@ function detectOrphan(
     return null;
   }
 
-  // Check A record values (IPs) — skip if no IP data to compare against
   if (record.type === "A") {
     if (known.ec2PublicIps.size === 0 && known.elasticIps.size === 0) {
       return null;
@@ -376,33 +385,40 @@ function detectOrphan(
     }
   }
 
-  // Check CNAME values
   if (record.type === "CNAME") {
     for (const value of record.values) {
       const target = stripTrailingDot(value).toLowerCase();
       const targetType = classifyTarget(target);
 
-      if (targetType === "elb" && !known.elbDnsNames.has(target)) {
-        return {
-          zoneId: record.zoneId,
-          zoneName: record.zoneName,
-          recordName: record.name,
-          recordType: record.type,
-          target,
-          reason: "cname_target_elb_not_found",
-        };
+      if (targetType === "elb") {
+        if (known.elbDnsNames.size === 0) continue;
+        const normalized = stripDualstackPrefix(target);
+        if (!known.elbDnsNames.has(normalized)) {
+          return {
+            zoneId: record.zoneId,
+            zoneName: record.zoneName,
+            recordName: record.name,
+            recordType: record.type,
+            target,
+            reason: "cname_target_elb_not_found",
+          };
+        }
       }
-      if (targetType === "cloudfront" && !known.cloudfrontDomains.has(target)) {
-        return {
-          zoneId: record.zoneId,
-          zoneName: record.zoneName,
-          recordName: record.name,
-          recordType: record.type,
-          target,
-          reason: "cname_target_cloudfront_not_found",
-        };
+      if (targetType === "cloudfront") {
+        if (known.cloudfrontDomains.size === 0) continue;
+        if (!known.cloudfrontDomains.has(target)) {
+          return {
+            zoneId: record.zoneId,
+            zoneName: record.zoneName,
+            recordName: record.name,
+            recordType: record.type,
+            target,
+            reason: "cname_target_cloudfront_not_found",
+          };
+        }
       }
       if (targetType === "s3") {
+        if (known.s3Buckets.size === 0) continue;
         const bucketName = extractS3BucketName(target);
         if (!known.s3Buckets.has(bucketName.toLowerCase())) {
           return {
@@ -415,7 +431,6 @@ function detectOrphan(
           };
         }
       }
-      // Skip beanstalk — no inventory data to verify against
       if (targetType === "beanstalk") continue;
     }
   }

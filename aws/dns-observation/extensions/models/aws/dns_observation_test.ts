@@ -510,7 +510,7 @@ Deno.test({
             ttl: null,
             values: [],
             aliasTarget: {
-              dnsName: "deleted-alb.us-east-1.elb.amazonaws.com",
+              dnsName: "dualstack.deleted-alb.us-east-1.elb.amazonaws.com",
               hostedZoneId: "Z35SXDOTRQ7X7K",
               evaluateTargetHealth: true,
             },
@@ -523,7 +523,7 @@ Deno.test({
             ttl: null,
             values: [],
             aliasTarget: {
-              dnsName: "active-alb.us-east-1.elb.amazonaws.com",
+              dnsName: "dualstack.active-alb.us-east-1.elb.amazonaws.com",
               hostedZoneId: "Z35SXDOTRQ7X7K",
               evaluateTargetHealth: true,
             },
