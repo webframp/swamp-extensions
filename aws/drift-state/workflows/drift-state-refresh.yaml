@@ -3,14 +3,16 @@ name: "@webframp/drift-state-refresh"
 description: |
   Refresh upstream models and recompute drift state.
   Runs discover_all (adopt), inventory_scan (inventory),
-  get_non_compliant (config), and detect_orphans (dns) in parallel,
-  then computes drift against stored baselines.
+  get_non_compliant (config), detect_orphans (dns), and
+  discover (event-topology) in parallel, then computes drift
+  against stored baselines.
 
 tags:
   aws: "true"
   drift: "true"
   compliance: "true"
   dns: "true"
+  topology: "true"
 
 inputs:
   properties:
@@ -38,6 +40,10 @@ inputs:
       type: string
       description: Name of the @webframp/aws/dns-observation model instance
       default: "aws-dns-observation"
+    topologyModelName:
+      type: string
+      description: Name of the @webframp/aws/event-topology model instance
+      default: "aws-event-topology"
   required:
     - driftModelName
 
@@ -82,6 +88,16 @@ jobs:
           methodName: detect_orphans
         allowFailure: true
 
+  - name: refresh-topology
+    description: Refresh event topology graph
+    steps:
+      - name: discover
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.topologyModelName }}
+          methodName: discover
+        allowFailure: true
+
   - name: compute
     description: Recompute drift from refreshed upstream data
     dependsOn:
@@ -97,6 +113,9 @@ jobs:
       - job: refresh-dns
         condition:
           type: completed
+      - job: refresh-topology
+        condition:
+          type: completed
     steps:
       - name: compute-drift
         task:
@@ -109,5 +128,6 @@ jobs:
             terraformModelName: ${{ inputs.terraformModelName }}
             configModelName: ${{ inputs.configModelName }}
             dnsModelName: ${{ inputs.dnsModelName }}
+            topologyModelName: ${{ inputs.topologyModelName }}
 
 version: 1
