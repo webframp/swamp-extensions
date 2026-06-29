@@ -2,7 +2,7 @@
 // Provides methods for channel info, chatters, user lookup, bans, and mod events.
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 import { helixApi, helixApiPaginated } from "./_lib/api.ts";
 import type { TwitchCredentials } from "./_lib/types.ts";
 
