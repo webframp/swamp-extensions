@@ -12,7 +12,6 @@
     }
   },
   "imports": {
-    "zod": "npm:zod@4.3.6",
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260331.5"
   }
 }
