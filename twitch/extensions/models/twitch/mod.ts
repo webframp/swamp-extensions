@@ -182,6 +182,7 @@ const ModEventsSchema = z.object({
 // Model Definition
 // =============================================================================
 
+/** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
   version: "2026.06.27.1",

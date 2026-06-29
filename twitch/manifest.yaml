@@ -74,6 +74,9 @@ workflows:
   - workflow-35fcec1b-a4b7-466e-8a8d-a8c4a7a45220.yaml
 reports:
   - mod_report.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
 labels:
   - twitch
   - moderation
