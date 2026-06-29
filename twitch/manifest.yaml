@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/twitch"
-version: "2026.06.29.1"
+version: "2026.06.29.2"
 description: |
   Twitch Moderation Toolkit — cross-channel moderation visibility for Twitch moderators.
 
@@ -74,6 +74,9 @@ workflows:
   - workflow-35fcec1b-a4b7-466e-8a8d-a8c4a7a45220.yaml
 reports:
   - mod_report.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
 labels:
   - twitch
   - moderation
