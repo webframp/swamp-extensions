@@ -1127,7 +1127,10 @@ Deno.test({
 
     try {
       await Deno.mkdir(`${tempDir}/data/t/m/d/1`, { recursive: true });
-      await Deno.writeTextFile(`${tempDir}/data/t/m/d/1/raw`, "two-phase content");
+      await Deno.writeTextFile(
+        `${tempDir}/data/t/m/d/1/raw`,
+        "two-phase content",
+      );
 
       const provider = datastore.createProvider({
         projectId: "123",

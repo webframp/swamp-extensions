@@ -1019,8 +1019,9 @@ class GitLabSyncService implements TwoPhaseSyncService {
     const signal = options?.signal;
     const scopeFilter = buildScopeFilter(options?.context);
     const syncState = await readSyncState(this.cachePath);
-    const entries: Array<{ relPath: string; hash: string; content: Uint8Array }> =
-      [];
+    const entries: Array<
+      { relPath: string; hash: string; content: Uint8Array }
+    > = [];
 
     const collectFile = async (relativePath: string): Promise<void> => {
       const fullPath = `${this.cachePath}/${relativePath}`;
@@ -1092,7 +1093,11 @@ class GitLabSyncService implements TwoPhaseSyncService {
       }
     }
 
-    return { entries, syncState, processedDirtyPaths } as unknown as PushManifest;
+    return {
+      entries,
+      syncState,
+      processedDirtyPaths,
+    } as unknown as PushManifest;
   }
 
   async commitPush(
