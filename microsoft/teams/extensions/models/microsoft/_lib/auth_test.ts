@@ -1,0 +1,317 @@
+// Tests for _lib/auth.ts (public client — no client secret)
+// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+
+import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import {
+  initiateDeviceCode,
+  MicrosoftAuthError,
+  pollDeviceCode,
+  refreshAccessToken,
+} from "./auth.ts";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeTokenResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    access_token: "at-test-token",
+    refresh_token: "rt-new-refresh",
+    expires_in: 3600,
+    token_type: "Bearer",
+    scope: "Chat.Read offline_access User.Read",
+    ...overrides,
+  };
+}
+
+function mockFetch(
+  status: number,
+  body: Record<string, unknown>,
+): typeof fetch {
+  return (_input, _init) =>
+    Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// refreshAccessToken
+// ---------------------------------------------------------------------------
+
+Deno.test("refreshAccessToken: returns token on success (no client secret)", async () => {
+  const tokenBody = makeTokenResponse();
+  const fetchFn = mockFetch(200, tokenBody);
+
+  const result = await refreshAccessToken(
+    {
+      tenantId: "tenant-123",
+      clientId: "client-abc",
+      refreshToken: "rt-old",
+    },
+    fetchFn,
+  );
+
+  assertEquals(result.access_token, "at-test-token");
+  assertEquals(result.refresh_token, "rt-new-refresh");
+});
+
+Deno.test("refreshAccessToken: does not send client_secret in request body", async () => {
+  let capturedBody = "";
+  // deno-lint-ignore no-explicit-any
+  const fetchFn = ((_input: any, init: any) => {
+    capturedBody = String(init?.body ?? "");
+    return Promise.resolve(
+      new Response(JSON.stringify(makeTokenResponse()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }) as typeof fetch;
+
+  await refreshAccessToken(
+    {
+      tenantId: "tenant-123",
+      clientId: "client-abc",
+      refreshToken: "rt-old",
+    },
+    fetchFn,
+  );
+
+  assertEquals(capturedBody.includes("client_secret"), false);
+});
+
+Deno.test(
+  "refreshAccessToken: throws MicrosoftAuthError(invalid_grant) on expired token",
+  async () => {
+    const fetchFn = mockFetch(400, {
+      error: "invalid_grant",
+      error_description: "AADSTS70008: The refresh token has expired.",
+    });
+
+    const err = await assertRejects(
+      () =>
+        refreshAccessToken(
+          {
+            tenantId: "tenant-123",
+            clientId: "client-abc",
+            refreshToken: "rt-expired",
+          },
+          fetchFn,
+        ),
+      MicrosoftAuthError,
+    );
+
+    assertEquals(err.code, "invalid_grant");
+  },
+);
+
+Deno.test(
+  "refreshAccessToken: throws MicrosoftAuthError on other errors",
+  async () => {
+    const fetchFn = mockFetch(400, {
+      error: "invalid_client",
+      error_description: "Invalid client",
+    });
+
+    const err = await assertRejects(
+      () =>
+        refreshAccessToken(
+          {
+            tenantId: "tenant-123",
+            clientId: "bad-client",
+            refreshToken: "rt-old",
+          },
+          fetchFn,
+        ),
+      MicrosoftAuthError,
+    );
+
+    assertEquals(err.code, "invalid_client");
+  },
+);
+
+// ---------------------------------------------------------------------------
+// initiateDeviceCode
+// ---------------------------------------------------------------------------
+
+Deno.test("initiateDeviceCode: returns device code response on success", async () => {
+  const deviceBody = {
+    device_code: "dc-abc123",
+    user_code: "ABCD-1234",
+    verification_uri: "https://microsoft.com/devicelogin",
+    expires_in: 900,
+    interval: 5,
+    message: "Go to https://microsoft.com/devicelogin and enter ABCD-1234",
+  };
+
+  const fetchFn = mockFetch(200, deviceBody);
+  const result = await initiateDeviceCode("tenant-123", "client-abc", fetchFn);
+
+  assertEquals(result.user_code, "ABCD-1234");
+  assertEquals(result.device_code, "dc-abc123");
+  assertEquals(result.interval, 5);
+});
+
+Deno.test("initiateDeviceCode: throws on error response", async () => {
+  const fetchFn = mockFetch(400, {
+    error: "invalid_client",
+    error_description: "Unknown client",
+  });
+
+  const err = await assertRejects(
+    () => initiateDeviceCode("tenant-123", "bad-client", fetchFn),
+    MicrosoftAuthError,
+  );
+
+  assertEquals(err.code, "invalid_client");
+});
+
+// ---------------------------------------------------------------------------
+// pollDeviceCode (public client — no client secret param)
+// ---------------------------------------------------------------------------
+
+Deno.test(
+  "pollDeviceCode: returns token when authorization_pending then success",
+  async () => {
+    let callCount = 0;
+    const tokenBody = makeTokenResponse();
+
+    const fetchFn: typeof fetch = (_input, _init) => {
+      callCount++;
+      if (callCount < 3) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: "authorization_pending" }),
+            { status: 400 },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(tokenBody), { status: 200 }),
+      );
+    };
+
+    const noopSleep = () => Promise.resolve();
+
+    const result = await pollDeviceCode(
+      "tenant-123",
+      "client-abc",
+      "dc-abc",
+      5,
+      30_000,
+      fetchFn,
+      noopSleep,
+    );
+
+    assertEquals(result.access_token, "at-test-token");
+    assertEquals(callCount, 3);
+  },
+);
+
+Deno.test("pollDeviceCode: increases interval on slow_down", async () => {
+  let callCount = 0;
+  const intervals: number[] = [];
+  const tokenBody = makeTokenResponse();
+
+  const fetchFn: typeof fetch = (_input, _init) => {
+    callCount++;
+    if (callCount === 1) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "slow_down" }), { status: 400 }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(tokenBody), { status: 200 }),
+    );
+  };
+
+  const sleepFn = (ms: number) => {
+    intervals.push(ms);
+    return Promise.resolve();
+  };
+
+  await pollDeviceCode(
+    "tenant-123",
+    "client-abc",
+    "dc-abc",
+    5,
+    30_000,
+    fetchFn,
+    sleepFn,
+  );
+
+  assertEquals(intervals[0], 5000);
+  assertEquals(intervals[1], 10_000);
+});
+
+Deno.test("pollDeviceCode: throws on terminal error", async () => {
+  const fetchFn = mockFetch(400, {
+    error: "access_denied",
+    error_description: "User denied access",
+  });
+
+  const err = await assertRejects(
+    () =>
+      pollDeviceCode(
+        "tenant-123",
+        "client-abc",
+        "dc-abc",
+        5,
+        30_000,
+        fetchFn,
+        () => Promise.resolve(),
+      ),
+    MicrosoftAuthError,
+  );
+
+  assertEquals(err.code, "access_denied");
+});
+
+Deno.test("pollDeviceCode: throws device_code_expired when deadline passes", async () => {
+  const fetchFn = mockFetch(400, { error: "authorization_pending" });
+
+  const err = await assertRejects(
+    () =>
+      pollDeviceCode(
+        "tenant-123",
+        "client-abc",
+        "dc-abc",
+        5,
+        0,
+        fetchFn,
+        () => Promise.resolve(),
+      ),
+    MicrosoftAuthError,
+  );
+
+  assertEquals(err.code, "device_code_expired");
+});
+
+Deno.test("pollDeviceCode: does not send client_secret", async () => {
+  let capturedBody = "";
+  // deno-lint-ignore no-explicit-any
+  const fetchFn = ((_input: any, init: any) => {
+    capturedBody = String(init?.body ?? "");
+    return Promise.resolve(
+      new Response(JSON.stringify(makeTokenResponse()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  }) as typeof fetch;
+
+  await pollDeviceCode(
+    "tenant-123",
+    "client-abc",
+    "dc-abc",
+    5,
+    30_000,
+    fetchFn,
+    () => Promise.resolve(),
+  );
+
+  assertEquals(capturedBody.includes("client_secret"), false);
+});
