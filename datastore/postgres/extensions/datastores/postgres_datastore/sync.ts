@@ -13,6 +13,7 @@ export interface SyncContext {
 export interface SyncCapabilities {
   scopedSync?: boolean;
   lazyHydration?: boolean;
+  twoPhaseSync?: boolean;
 }
 
 export interface DatastoreSyncOptions {
@@ -31,6 +32,28 @@ export interface DatastoreSyncService {
     relPath: string,
     options?: DatastoreSyncOptions,
   ): Promise<boolean>;
+}
+
+declare const PushManifestBrand: unique symbol;
+export type PushManifest = { readonly [PushManifestBrand]: true };
+
+interface InternalPushManifest {
+  toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }>;
+  toTombstone: string[];
+  snapshot: {
+    dirtyPaths: string[];
+    bulkInvalidated: boolean;
+    lastPulledAt: string | null;
+    lazyPullActive: boolean;
+  };
+}
+
+export interface TwoPhaseSyncService extends DatastoreSyncService {
+  preparePush(options?: DatastoreSyncOptions): Promise<PushManifest>;
+  commitPush(
+    manifest: PushManifest,
+    options?: DatastoreSyncOptions,
+  ): Promise<number | void>;
 }
 
 const DATASTORE_SUBDIRS = [
@@ -124,7 +147,7 @@ export function createSyncService(
   sql: postgres.Sql,
   filesTable: string,
   cachePath: string,
-): DatastoreSyncService {
+): TwoPhaseSyncService {
   const sidecar = new Sidecar(cachePath);
   const trace = tracerFromEnv();
 
@@ -314,14 +337,14 @@ export function createSyncService(
     return changes;
   }
 
-  async function fullWalkPush(
+  async function collectFullWalkDiff(
     lastPulledAt: string | null,
     lazyPullActive: boolean,
     signal?: AbortSignal,
-  ): Promise<number> {
-    const pushStart = performance.now();
-    await ready();
-
+  ): Promise<{
+    toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }>;
+    toTombstone: string[];
+  }> {
     // Fetch remote manifest for diff (metadata only, no content)
     const manifestDone = trace.startTimer("push", "manifest_fetch");
     const remoteRows: postgres.Row[] = await retryable(() =>
@@ -379,6 +402,23 @@ export function createSyncService(
       }
     }
 
+    return { toPush, toTombstone };
+  }
+
+  async function fullWalkPush(
+    lastPulledAt: string | null,
+    lazyPullActive: boolean,
+    signal?: AbortSignal,
+  ): Promise<number> {
+    const pushStart = performance.now();
+    await ready();
+
+    const { toPush, toTombstone } = await collectFullWalkDiff(
+      lastPulledAt,
+      lazyPullActive,
+      signal,
+    );
+
     if (toPush.length === 0 && toTombstone.length === 0) {
       trace.summary("push", Math.round(performance.now() - pushStart), {
         files: 0,
@@ -431,14 +471,16 @@ export function createSyncService(
     return changes;
   }
 
-  async function pushOneRel(
+  async function collectOneRelDiff(
     relPath: string,
     lastPulledAt: string | null,
     lazyPullActive: boolean,
     signal?: AbortSignal,
-  ): Promise<number> {
-    if (isTraversal(relPath)) return 0;
-    await ready();
+  ): Promise<{
+    toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }>;
+    toTombstone: string[];
+  }> {
+    if (isTraversal(relPath)) return { toPush: [], toTombstone: [] };
     signal?.throwIfAborted();
     const absPath = `${cachePath}/${relPath}`;
     let stat: Deno.FileInfo | null = null;
@@ -508,6 +550,25 @@ export function createSyncService(
       }
     }
 
+    return { toPush, toTombstone };
+  }
+
+  async function pushOneRel(
+    relPath: string,
+    lastPulledAt: string | null,
+    lazyPullActive: boolean,
+    signal?: AbortSignal,
+  ): Promise<number> {
+    if (isTraversal(relPath)) return 0;
+    await ready();
+
+    const { toPush, toTombstone } = await collectOneRelDiff(
+      relPath,
+      lastPulledAt,
+      lazyPullActive,
+      signal,
+    );
+
     if (toPush.length === 0 && toTombstone.length === 0) return 0;
 
     // Execute all writes in a single transaction
@@ -547,7 +608,7 @@ export function createSyncService(
 
   return {
     capabilities(): SyncCapabilities {
-      return { scopedSync: true, lazyHydration: true };
+      return { scopedSync: true, lazyHydration: true, twoPhaseSync: true };
     },
 
     markDirty(options?: DatastoreSyncOptions): Promise<void> {
@@ -636,6 +697,111 @@ export function createSyncService(
       const content = rows[0].content as Uint8Array;
       await writeFileAtomic(`${cachePath}/${relPath}`, content);
       return true;
+    },
+
+    async preparePush(options?: DatastoreSyncOptions): Promise<PushManifest> {
+      await ready();
+      const signal = options?.signal;
+
+      // Capture snapshot (same as pushChanged)
+      let snapshot!: {
+        dirtyPaths: string[];
+        bulkInvalidated: boolean;
+        lastPulledAt: string | null;
+        lazyPullActive: boolean;
+      };
+      await sidecar.update((state) => {
+        snapshot = {
+          dirtyPaths: [...state.dirtyPaths],
+          bulkInvalidated: state.bulkInvalidated,
+          lastPulledAt: state.lastPulledAt,
+          lazyPullActive: state.lazyPullActive,
+        };
+      });
+
+      const lazy = snapshot.lazyPullActive;
+      let toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }> =
+        [];
+      let toTombstone: string[] = [];
+
+      if (snapshot.bulkInvalidated) {
+        // Mirror fullWalkPush logic but only collect, don't write
+        const result = await collectFullWalkDiff(
+          snapshot.lastPulledAt,
+          lazy,
+          signal,
+        );
+        toPush = result.toPush;
+        toTombstone = result.toTombstone;
+      } else if (snapshot.dirtyPaths.length > 0) {
+        // Mirror pushOneRel logic for each dirty path
+        for (const relPath of snapshot.dirtyPaths) {
+          signal?.throwIfAborted();
+          const result = await collectOneRelDiff(
+            relPath,
+            snapshot.lastPulledAt,
+            lazy,
+            signal,
+          );
+          toPush.push(...result.toPush);
+          toTombstone.push(...result.toTombstone);
+        }
+      }
+
+      const internal: InternalPushManifest = { toPush, toTombstone, snapshot };
+      return internal as unknown as PushManifest;
+    },
+
+    async commitPush(
+      manifest: PushManifest,
+      options?: DatastoreSyncOptions,
+    ): Promise<number | void> {
+      const internal = manifest as unknown as InternalPushManifest;
+      const signal = options?.signal;
+
+      if (internal.toPush.length === 0 && internal.toTombstone.length === 0) {
+        // Still clear sidecar dirty state even on no-op
+        await sidecar.clearPushed(internal.snapshot);
+        return 0;
+      }
+
+      await ready();
+
+      const changes = await retryable(async () => {
+        let count = 0;
+        await sql.begin(async (tx) => {
+          for (const f of internal.toPush) {
+            signal?.throwIfAborted();
+            await tx.unsafe(
+              `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
+               VALUES ($1, $2, $3, $4, now(), NULL)
+               ON CONFLICT (path) DO UPDATE SET
+                 hash = EXCLUDED.hash, size = EXCLUDED.size,
+                 content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
+              [f.relPath, f.hash, f.bytes.byteLength, f.bytes],
+            );
+            count++;
+          }
+          for (const path of internal.toTombstone) {
+            signal?.throwIfAborted();
+            await tx.unsafe(
+              `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
+              [path],
+            );
+            count++;
+          }
+          // Update team-global watermark
+          await tx.unsafe(
+            `INSERT INTO ${syncStateTable} (key, value, updated_at)
+             VALUES ('last_pushed_at', to_jsonb(now()::text), now())
+             ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
+          );
+        });
+        return count;
+      });
+
+      await sidecar.clearPushed(internal.snapshot);
+      return changes;
     },
   };
 }

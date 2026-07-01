@@ -311,3 +311,35 @@ Deno.test("createSyncService rejects filesTable not ending in .files", () => {
     'must end with ".files"',
   );
 });
+
+Deno.test({
+  name: "createSyncService advertises twoPhaseSync capability",
+  sanitizeResources: false,
+  fn: () => {
+    const provider = datastore.createProvider({
+      connectionString: "postgres://user:pass@localhost:5432/swamp",
+      ssl: "disable",
+    });
+    const syncService = provider.createSyncService!("/repo", "/tmp/cache");
+    const caps = syncService.capabilities!();
+    assertEquals(caps.twoPhaseSync, true);
+  },
+});
+
+Deno.test({
+  name: "createSyncService exposes preparePush and commitPush",
+  sanitizeResources: false,
+  fn: () => {
+    const provider = datastore.createProvider({
+      connectionString: "postgres://user:pass@localhost:5432/swamp",
+      ssl: "disable",
+    });
+    const syncService = provider.createSyncService!("/repo", "/tmp/cache");
+    // deno-lint-ignore no-explicit-any
+    const svc = syncService as any;
+    assertExists(svc.preparePush);
+    assertExists(svc.commitPush);
+    assertEquals(typeof svc.preparePush, "function");
+    assertEquals(typeof svc.commitPush, "function");
+  },
+});
