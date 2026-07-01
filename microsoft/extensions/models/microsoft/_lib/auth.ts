@@ -1,5 +1,5 @@
 // Microsoft Graph Authentication Helper
-// Implements delegated OAuth2 with device code flow and silent token refresh.
+// Implements delegated OAuth2 with device code flow (public client) and silent token refresh.
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 const TOKEN_ENDPOINT_BASE = "https://login.microsoftonline.com";
@@ -11,7 +11,6 @@ const TOKEN_ENDPOINT_BASE = "https://login.microsoftonline.com";
 export interface MicrosoftCredentials {
   tenantId: string;
   clientId: string;
-  clientSecret: string;
   refreshToken: string;
 }
 
@@ -32,29 +31,24 @@ export interface DeviceCodeResponse {
   message: string;
 }
 
-// The scopes required for Outlook and Teams delegated access.
-//
-// Intentionally minimal — scoped to the signed-in user's own data only:
-//   - Mail.Send is excluded (extension never sends mail)
-//   - Team.ReadBasic.All, Channel.ReadBasic.All, ChannelMessage.Read.All are
-//     excluded because "All" variants cover the entire tenant and
-//     ChannelMessage.Read.All additionally requires admin consent.
-//     list_channel_messages and list_teams will return 403 unless those scopes
-//     are separately granted; Chat.Read is sufficient for 1:1 and group chats.
+// Scopes matching the appsvc_teams_data_client app registration.
+// This is a public client with delegated permissions for Teams read access.
 export const GRAPH_SCOPES = [
   "offline_access",
   "User.Read",
-  "Mail.ReadWrite",
-  "MailboxSettings.Read",
+  "Team.ReadBasic.All",
+  "Group.Read.All",
+  "ChannelMessage.Read.All",
   "Chat.Read",
 ].join(" ");
 
 // ---------------------------------------------------------------------------
-// Token refresh
+// Token refresh (public client — no client_secret)
 // ---------------------------------------------------------------------------
 
 /**
  * Exchange a refresh token for a new access token.
+ * Public client flow: no client_secret is sent.
  * Throws MicrosoftAuthError with code "invalid_grant" when the refresh token
  * has expired (90-day inactivity or password change) — callers should direct
  * the user to re-run `bootstrap`.
@@ -68,7 +62,6 @@ export async function refreshAccessToken(
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     client_id: creds.clientId,
-    client_secret: creds.clientSecret,
     refresh_token: creds.refreshToken,
     scope: GRAPH_SCOPES,
   });
@@ -102,7 +95,7 @@ export async function refreshAccessToken(
 }
 
 // ---------------------------------------------------------------------------
-// Device code flow
+// Device code flow (public client — no client_secret)
 // ---------------------------------------------------------------------------
 
 /**
@@ -143,12 +136,12 @@ export async function initiateDeviceCode(
 
 /**
  * Poll the token endpoint until the user completes device code authentication.
+ * Public client: no client_secret in the poll request.
  * Returns the token once granted, or throws on permanent failure.
  */
 export async function pollDeviceCode(
   tenantId: string,
   clientId: string,
-  clientSecret: string,
   deviceCode: string,
   intervalSeconds: number,
   timeoutMs: number,
@@ -163,9 +156,8 @@ export async function pollDeviceCode(
     await sleepFn(intervalSeconds * 1000);
 
     const body = new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth2:grant-type:device_code",
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
       client_id: clientId,
-      client_secret: clientSecret,
       device_code: deviceCode,
     });
 
@@ -184,17 +176,14 @@ export async function pollDeviceCode(
     const errorCode = String(data["error"] ?? "");
 
     if (errorCode === "authorization_pending") {
-      // Normal — keep polling.
       continue;
     }
 
     if (errorCode === "slow_down") {
-      // Server requests a slower poll interval.
       intervalSeconds += 5;
       continue;
     }
 
-    // Any other error is terminal.
     throw new MicrosoftAuthError(
       errorCode,
       String(

@@ -1,4 +1,4 @@
-// Tests for _lib/auth.ts
+// Tests for _lib/auth.ts (public client — no client secret)
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
@@ -19,12 +19,11 @@ function makeTokenResponse(overrides: Record<string, unknown> = {}) {
     refresh_token: "rt-new-refresh",
     expires_in: 3600,
     token_type: "Bearer",
-    scope: "Mail.ReadWrite offline_access",
+    scope: "Chat.Read offline_access User.Read",
     ...overrides,
   };
 }
 
-/** Build a mock fetch that returns a pre-defined response for any URL. */
 function mockFetch(
   status: number,
   body: Record<string, unknown>,
@@ -42,7 +41,7 @@ function mockFetch(
 // refreshAccessToken
 // ---------------------------------------------------------------------------
 
-Deno.test("refreshAccessToken: returns token on success", async () => {
+Deno.test("refreshAccessToken: returns token on success (no client secret)", async () => {
   const tokenBody = makeTokenResponse();
   const fetchFn = mockFetch(200, tokenBody);
 
@@ -50,7 +49,6 @@ Deno.test("refreshAccessToken: returns token on success", async () => {
     {
       tenantId: "tenant-123",
       clientId: "client-abc",
-      clientSecret: "secret-xyz",
       refreshToken: "rt-old",
     },
     fetchFn,
@@ -58,6 +56,30 @@ Deno.test("refreshAccessToken: returns token on success", async () => {
 
   assertEquals(result.access_token, "at-test-token");
   assertEquals(result.refresh_token, "rt-new-refresh");
+});
+
+Deno.test("refreshAccessToken: does not send client_secret in request body", async () => {
+  let capturedBody = "";
+  const fetchFn: typeof fetch = (_input, init) => {
+    capturedBody = (init?.body as string) ?? "";
+    return Promise.resolve(
+      new Response(JSON.stringify(makeTokenResponse()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  await refreshAccessToken(
+    {
+      tenantId: "tenant-123",
+      clientId: "client-abc",
+      refreshToken: "rt-old",
+    },
+    fetchFn,
+  );
+
+  assertEquals(capturedBody.includes("client_secret"), false);
 });
 
 Deno.test(
@@ -74,7 +96,6 @@ Deno.test(
           {
             tenantId: "tenant-123",
             clientId: "client-abc",
-            clientSecret: "secret-xyz",
             refreshToken: "rt-expired",
           },
           fetchFn,
@@ -87,11 +108,11 @@ Deno.test(
 );
 
 Deno.test(
-  "refreshAccessToken: throws MicrosoftAuthError on other token errors",
+  "refreshAccessToken: throws MicrosoftAuthError on other errors",
   async () => {
     const fetchFn = mockFetch(400, {
       error: "invalid_client",
-      error_description: "Invalid client credentials",
+      error_description: "Invalid client",
     });
 
     const err = await assertRejects(
@@ -100,7 +121,6 @@ Deno.test(
           {
             tenantId: "tenant-123",
             clientId: "bad-client",
-            clientSecret: "bad-secret",
             refreshToken: "rt-old",
           },
           fetchFn,
@@ -149,7 +169,7 @@ Deno.test("initiateDeviceCode: throws on error response", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// pollDeviceCode
+// pollDeviceCode (public client — no client secret param)
 // ---------------------------------------------------------------------------
 
 Deno.test(
@@ -178,7 +198,6 @@ Deno.test(
     const result = await pollDeviceCode(
       "tenant-123",
       "client-abc",
-      "secret-xyz",
       "dc-abc",
       5,
       30_000,
@@ -216,7 +235,6 @@ Deno.test("pollDeviceCode: increases interval on slow_down", async () => {
   await pollDeviceCode(
     "tenant-123",
     "client-abc",
-    "secret-xyz",
     "dc-abc",
     5,
     30_000,
@@ -224,7 +242,6 @@ Deno.test("pollDeviceCode: increases interval on slow_down", async () => {
     sleepFn,
   );
 
-  // First poll uses 5s, second poll uses 10s (5+5 slow_down penalty)
   assertEquals(intervals[0], 5000);
   assertEquals(intervals[1], 10_000);
 });
@@ -240,7 +257,6 @@ Deno.test("pollDeviceCode: throws on terminal error", async () => {
       pollDeviceCode(
         "tenant-123",
         "client-abc",
-        "secret-xyz",
         "dc-abc",
         5,
         30_000,
@@ -261,10 +277,9 @@ Deno.test("pollDeviceCode: throws device_code_expired when deadline passes", asy
       pollDeviceCode(
         "tenant-123",
         "client-abc",
-        "secret-xyz",
         "dc-abc",
         5,
-        0, // immediate timeout
+        0,
         fetchFn,
         () => Promise.resolve(),
       ),
@@ -272,4 +287,29 @@ Deno.test("pollDeviceCode: throws device_code_expired when deadline passes", asy
   );
 
   assertEquals(err.code, "device_code_expired");
+});
+
+Deno.test("pollDeviceCode: does not send client_secret", async () => {
+  let capturedBody = "";
+  const fetchFn: typeof fetch = (_input, init) => {
+    capturedBody = (init?.body as string) ?? "";
+    return Promise.resolve(
+      new Response(JSON.stringify(makeTokenResponse()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  };
+
+  await pollDeviceCode(
+    "tenant-123",
+    "client-abc",
+    "dc-abc",
+    5,
+    30_000,
+    fetchFn,
+    () => Promise.resolve(),
+  );
+
+  assertEquals(capturedBody.includes("client_secret"), false);
 });
