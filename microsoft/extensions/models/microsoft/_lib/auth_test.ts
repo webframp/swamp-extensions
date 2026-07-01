@@ -61,7 +61,7 @@ Deno.test("refreshAccessToken: returns token on success (no client secret)", asy
 Deno.test("refreshAccessToken: does not send client_secret in request body", async () => {
   let capturedBody = "";
   const fetchFn: typeof fetch = (_input, init) => {
-    capturedBody = (init?.body as string) ?? "";
+    capturedBody = String((init as RequestInit)?.body ?? "");
     return Promise.resolve(
       new Response(JSON.stringify(makeTokenResponse()), {
         status: 200,
@@ -292,7 +292,7 @@ Deno.test("pollDeviceCode: throws device_code_expired when deadline passes", asy
 Deno.test("pollDeviceCode: does not send client_secret", async () => {
   let capturedBody = "";
   const fetchFn: typeof fetch = (_input, init) => {
-    capturedBody = (init?.body as string) ?? "";
+    capturedBody = String((init as RequestInit)?.body ?? "");
     return Promise.resolve(
       new Response(JSON.stringify(makeTokenResponse()), {
         status: 200,
