@@ -114,6 +114,7 @@ const ChannelMessagesSchema = z.object({
   channelName: z.string(),
   messages: z.array(MessageSchema),
   totalRoots: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -142,6 +143,7 @@ const ChatSchema = z.object({
 const ChatsListSchema = z.object({
   chats: z.array(ChatSchema),
   totalFetched: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -149,6 +151,7 @@ const ChatMessagesSchema = z.object({
   chatId: z.string(),
   messages: z.array(MessageSchema),
   totalFetched: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -163,6 +166,7 @@ const AttentionItemSchema = z.object({
 const AttentionSchema = z.object({
   items: z.array(AttentionItemSchema),
   totalItems: z.number(),
+  truncated: z.boolean(),
   since: z.string(),
   fetchedAt: z.string(),
 });
@@ -170,7 +174,7 @@ const AttentionSchema = z.object({
 const BootstrapResultSchema = z.object({
   status: z.string(),
   message: z.string(),
-  refreshToken: z.string().optional(),
+  refreshToken: z.string().meta({ sensitive: true }).optional(),
 });
 
 // =============================================================================
@@ -301,8 +305,7 @@ export const model = {
       garbageCollection: 20,
     },
     attention: {
-      description:
-        "Aggregated attention items: unread chats and @mentions",
+      description: "Aggregated attention items: unread chats and @mentions",
       schema: AttentionSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
@@ -469,7 +472,12 @@ export const model = {
         ),
       }),
       execute: async (
-        args: { teamId: string; channelId: string; limit: number; includeReplies: boolean },
+        args: {
+          teamId: string;
+          channelId: string;
+          limit: number;
+          includeReplies: boolean;
+        },
         context: {
           globalArgs: GlobalArgs;
           writeResource: (
@@ -497,9 +505,14 @@ export const model = {
           `https://graph.microsoft.com/v1.0/teams/${args.teamId}/channels/${args.channelId}/messages?$top=50`;
         let pages = 0;
 
-        while (nextUrl && roots.length < args.limit && pages < MAX_CHANNEL_PAGES) {
-          const page: GraphPagedResponse<GraphMessage> =
-            await graphRequest(accessToken, "GET", nextUrl);
+        while (
+          nextUrl && roots.length < args.limit && pages < MAX_CHANNEL_PAGES
+        ) {
+          const page: GraphPagedResponse<GraphMessage> = await graphRequest(
+            accessToken,
+            "GET",
+            nextUrl,
+          );
 
           for (const m of page.value) {
             if (roots.length >= args.limit) break;
@@ -529,6 +542,9 @@ export const model = {
           }
         }
 
+        const wasTruncated = roots.length >= args.limit ||
+          pages >= MAX_CHANNEL_PAGES;
+
         const instanceId = `${args.teamId}__${args.channelId}`;
         const handle = await context.writeResource(
           "channelMessages",
@@ -539,6 +555,7 @@ export const model = {
             channelName: channel.displayName,
             messages: userRoots,
             totalRoots: userRoots.length,
+            truncated: wasTruncated,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -589,11 +606,16 @@ export const model = {
         const match = args.nameFilter?.toLowerCase();
 
         let nextUrl: string | undefined =
-          `https://graph.microsoft.com/v1.0/me/chats?${new URLSearchParams(params).toString()}`;
+          `https://graph.microsoft.com/v1.0/me/chats?${
+            new URLSearchParams(params).toString()
+          }`;
 
         while (nextUrl && allChats.length < args.limit) {
-          const page: GraphPagedResponse<GraphChat> =
-            await graphRequest(accessToken, "GET", nextUrl);
+          const page: GraphPagedResponse<GraphChat> = await graphRequest(
+            accessToken,
+            "GET",
+            nextUrl,
+          );
 
           for (const ch of page.value) {
             if (match) {
@@ -615,6 +637,7 @@ export const model = {
         const handle = await context.writeResource("chats", "main", {
           chats: allChats,
           totalFetched: allChats.length,
+          truncated: allChats.length >= args.limit,
           fetchedAt: new Date().toISOString(),
         });
 
@@ -658,8 +681,11 @@ export const model = {
           `https://graph.microsoft.com/v1.0/chats/${args.chatId}/messages?$top=50`;
 
         while (nextUrl && messages.length < args.limit) {
-          const page: GraphPagedResponse<GraphMessage> =
-            await graphRequest(accessToken, "GET", nextUrl);
+          const page: GraphPagedResponse<GraphMessage> = await graphRequest(
+            accessToken,
+            "GET",
+            nextUrl,
+          );
 
           for (const m of page.value) {
             if (sinceCutoff && new Date(m.createdDateTime) < sinceCutoff) {
@@ -684,6 +710,7 @@ export const model = {
             chatId: args.chatId,
             messages,
             totalFetched: messages.length,
+            truncated: messages.length >= args.limit,
             fetchedAt: new Date().toISOString(),
           },
         );
@@ -748,11 +775,16 @@ export const model = {
 
         const chats: GraphChat[] = [];
         let nextUrl: string | undefined =
-          `https://graph.microsoft.com/v1.0/me/chats?${new URLSearchParams(params).toString()}`;
+          `https://graph.microsoft.com/v1.0/me/chats?${
+            new URLSearchParams(params).toString()
+          }`;
 
         while (nextUrl && chats.length < args.chatLimit) {
-          const page: GraphPagedResponse<GraphChat> =
-            await graphRequest(accessToken, "GET", nextUrl);
+          const page: GraphPagedResponse<GraphChat> = await graphRequest(
+            accessToken,
+            "GET",
+            nextUrl,
+          );
 
           chats.push(...page.value);
           nextUrl = page["@odata.nextLink"] ?? undefined;
@@ -795,8 +827,11 @@ export const model = {
           const chatMsgs: GraphMessage[] = [];
 
           while (msgUrl) {
-            const page: GraphPagedResponse<GraphMessage> =
-              await graphRequest(accessToken, "GET", msgUrl);
+            const page: GraphPagedResponse<GraphMessage> = await graphRequest(
+              accessToken,
+              "GET",
+              msgUrl,
+            );
 
             for (const m of page.value) {
               if (new Date(m.createdDateTime) < cutoff) {
@@ -835,6 +870,7 @@ export const model = {
         const handle = await context.writeResource("attention", "main", {
           items,
           totalItems: items.length,
+          truncated: chats.length >= args.chatLimit,
           since: cutoff.toISOString(),
           fetchedAt: new Date().toISOString(),
         });

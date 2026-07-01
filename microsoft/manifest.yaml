@@ -6,7 +6,10 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - microsoft/teams.ts
 reports:
-  - ../reports/teams_digest_report.ts
+  - teams_digest_report.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
 platforms:
   - linux-x86_64
   - linux-aarch64

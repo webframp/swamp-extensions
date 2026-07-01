@@ -1,5 +1,9 @@
-// Teams Digest Report
-// Surfaces active threads, unread @mentions, and recent activity across chats.
+/**
+ * Teams digest report — surfaces active threads, unread @mentions, and recent
+ * activity across chats into a daily review format.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 interface DataHandle {
@@ -88,6 +92,7 @@ interface MentionsData {
   fetchedAt: string;
 }
 
+/** Workflow-scoped report aggregating Teams mentions, chat threads, and channel activity. */
 export const report = {
   name: "@webframp/teams-digest-report",
   description:
