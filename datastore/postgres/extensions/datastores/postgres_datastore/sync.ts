@@ -53,7 +53,7 @@ export interface TwoPhaseSyncService extends DatastoreSyncService {
   commitPush(
     manifest: PushManifest,
     options?: DatastoreSyncOptions,
-  ): Promise<number | void>;
+  ): Promise<number>;
 }
 
 const DATASTORE_SUBDIRS = [
@@ -755,7 +755,7 @@ export function createSyncService(
     async commitPush(
       manifest: PushManifest,
       options?: DatastoreSyncOptions,
-    ): Promise<number | void> {
+    ): Promise<number> {
       const internal = manifest as unknown as InternalPushManifest;
       const signal = options?.signal;
 

@@ -1204,6 +1204,17 @@ Deno.test({
       const twoPhaseKeys = Array.from(twoPhaseState.keys()).sort();
       const singlePhaseKeys = Array.from(mock.states.keys()).sort();
       assertEquals(twoPhaseKeys, singlePhaseKeys);
+
+      // Same content bytes (unwrapped from Terraform state)
+      for (const key of twoPhaseKeys) {
+        const twoPhaseContent = unwrapFromTerraformState(
+          new TextDecoder().decode(twoPhaseState.get(key)!),
+        );
+        const singlePhaseContent = unwrapFromTerraformState(
+          new TextDecoder().decode(mock.states.get(key)!),
+        );
+        assertEquals(twoPhaseContent, singlePhaseContent);
+      }
     } finally {
       await mock.server.shutdown();
       await Deno.remove(tempDir1, { recursive: true });

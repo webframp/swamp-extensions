@@ -94,12 +94,12 @@ interface DatastoreSyncService {
   ): Promise<boolean>;
 }
 
-interface TwoPhaseSyncService extends DatastoreSyncService {
+export interface TwoPhaseSyncService extends DatastoreSyncService {
   preparePush(options?: DatastoreSyncOptions): Promise<PushManifest>;
   commitPush(
     manifest: PushManifest,
     options?: DatastoreSyncOptions,
-  ): Promise<number | void>;
+  ): Promise<number>;
 }
 
 /**
@@ -786,6 +786,23 @@ function isDataRawFile(relPath: string): boolean {
   return relPath.startsWith("data/") && relPath.endsWith("/raw");
 }
 
+const EXCLUDED_DIRS = new Set([
+  "bundles",
+  "vault-bundles",
+  "driver-bundles",
+  "datastore-bundles",
+  "report-bundles",
+  "cache",
+  "telemetry",
+  "logs",
+]);
+
+function isExcludedFile(name: string): boolean {
+  return name === "_extension_catalog.db" ||
+    name.endsWith(".db-shm") ||
+    name.endsWith(".db-wal");
+}
+
 /**
  * Sync service for GitLab datastore
  */
@@ -921,26 +938,6 @@ class GitLabSyncService implements TwoPhaseSyncService {
         !processed.has(p)
       );
     } else {
-      // Directories that contain local-only build artifacts regenerated
-      // from pulled extensions. Never need to cross the wire.
-      const EXCLUDED_DIRS = new Set([
-        "bundles",
-        "vault-bundles",
-        "driver-bundles",
-        "datastore-bundles",
-        "report-bundles",
-        "cache",
-        "telemetry",
-        "logs",
-      ]);
-
-      // Excluded file patterns (SQLite databases and journals)
-      const isExcludedFile = (name: string): boolean =>
-        name === "_extension_catalog.db" ||
-        name.endsWith(".db-shm") ||
-        name.endsWith(".db-wal");
-
-      // Iterative directory walk to avoid stack overflow from deep recursion
       const queue: Array<{ dir: string; base: string }> = [
         { dir: this.cachePath, base: "" },
       ];
@@ -1058,22 +1055,6 @@ class GitLabSyncService implements TwoPhaseSyncService {
         await collectFile(relPath);
       }
     } else {
-      const EXCLUDED_DIRS = new Set([
-        "bundles",
-        "vault-bundles",
-        "driver-bundles",
-        "datastore-bundles",
-        "report-bundles",
-        "cache",
-        "telemetry",
-        "logs",
-      ]);
-
-      const isExcludedFile = (name: string): boolean =>
-        name === "_extension_catalog.db" ||
-        name.endsWith(".db-shm") ||
-        name.endsWith(".db-wal");
-
       const queue: Array<{ dir: string; base: string }> = [
         { dir: this.cachePath, base: "" },
       ];
@@ -1120,28 +1101,33 @@ class GitLabSyncService implements TwoPhaseSyncService {
   ): Promise<number> {
     const signal = options?.signal;
     const internal = manifest as unknown as InternalPushManifest;
-    const syncState = internal.syncState;
 
     for (const entry of internal.entries) {
       signal?.throwIfAborted();
       const stateName = encodeStateName(this.prefix, entry.relPath);
       await this.client.putState(stateName, entry.content, undefined, signal);
-      syncState.hashes[entry.relPath] = entry.hash;
+    }
+
+    // Re-read fresh state to avoid overwriting concurrent updates
+    const freshState = await readSyncState(this.cachePath);
+
+    // Merge manifest hashes into fresh state
+    for (const entry of internal.entries) {
+      freshState.hashes[entry.relPath] = entry.hash;
     }
 
     // Clear dirty state after successful commit.
-    // For dirty-path mode: remove processed paths. For full walk: clear all.
     if (internal.processedDirtyPaths.size > 0) {
-      syncState.dirtyPaths = syncState.dirtyPaths.filter((p) =>
+      // Dirty-path mode: remove only the paths we processed
+      freshState.dirtyPaths = freshState.dirtyPaths.filter((p) =>
         !internal.processedDirtyPaths.has(p)
       );
-    } else if (!syncState.dirtyOverflow && syncState.dirtyPaths.length === 0) {
-      // Already empty, no-op
-    } else {
-      syncState.dirtyPaths = [];
+    } else if (internal.syncState.dirtyOverflow) {
+      // Full-walk mode: clear everything
+      freshState.dirtyPaths = [];
+      freshState.dirtyOverflow = false;
     }
-    syncState.dirtyOverflow = false;
-    await writeSyncState(this.cachePath, syncState);
+    await writeSyncState(this.cachePath, freshState);
 
     return internal.entries.length;
   }
