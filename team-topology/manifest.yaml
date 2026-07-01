@@ -1,0 +1,30 @@
+manifestVersion: 1
+name: "@webframp/team-topology"
+version: "2026.06.29.1"
+description: |
+  Agent-guided team topology and value stream mapping model.
+  Captures teams (type, cognitive load, domains), interactions (modes,
+  health), system ownership, and value stream flows as versioned snapshots.
+  Designed for incremental discovery through structured conversations —
+  the agent interviews, the model persists.
+
+  Draws on Team Topologies (Skelton & Pais), Conway's Law, Westrum
+  organizational typology, GROWS method tracer bullets, and Ruth Malan's
+  evolutionary architecture thinking.
+labels:
+  - team-topologies
+  - value-stream
+  - conways-law
+  - organization-design
+  - cognitive-load
+repository: https://github.com/webframp/swamp-extensions
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+models:
+  - team-topology/mod.ts
+additionalFiles:
+  - LICENSE.md
+  - README.md
