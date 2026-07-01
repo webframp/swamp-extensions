@@ -60,15 +60,16 @@ Deno.test("refreshAccessToken: returns token on success (no client secret)", asy
 
 Deno.test("refreshAccessToken: does not send client_secret in request body", async () => {
   let capturedBody = "";
-  const fetchFn: typeof fetch = (_input, init) => {
-    capturedBody = String((init as RequestInit)?.body ?? "");
+  // deno-lint-ignore no-explicit-any
+  const fetchFn = ((_input: any, init: any) => {
+    capturedBody = String(init?.body ?? "");
     return Promise.resolve(
       new Response(JSON.stringify(makeTokenResponse()), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
     );
-  };
+  }) as typeof fetch;
 
   await refreshAccessToken(
     {
@@ -291,15 +292,16 @@ Deno.test("pollDeviceCode: throws device_code_expired when deadline passes", asy
 
 Deno.test("pollDeviceCode: does not send client_secret", async () => {
   let capturedBody = "";
-  const fetchFn: typeof fetch = (_input, init) => {
-    capturedBody = String((init as RequestInit)?.body ?? "");
+  // deno-lint-ignore no-explicit-any
+  const fetchFn = ((_input: any, init: any) => {
+    capturedBody = String(init?.body ?? "");
     return Promise.resolve(
       new Response(JSON.stringify(makeTokenResponse()), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),
     );
-  };
+  }) as typeof fetch;
 
   await pollDeviceCode(
     "tenant-123",
