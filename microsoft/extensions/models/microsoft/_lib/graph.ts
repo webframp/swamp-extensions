@@ -79,9 +79,14 @@ export async function graphRequest<T>(
 // Paginated list request
 // ---------------------------------------------------------------------------
 
+export interface PaginatedResult<T> {
+  items: T[];
+  truncated: boolean;
+}
+
 /**
- * Fetch all pages of a Graph API list endpoint, following @odata.nextLink
- * until exhausted. Returns the concatenated value array.
+ * Fetch pages of a Graph API list endpoint, following @odata.nextLink up to
+ * maxPages (default 20). Returns items and whether results were truncated.
  */
 export async function graphRequestPaginated<T>(
   accessToken: string,
@@ -89,7 +94,8 @@ export async function graphRequestPaginated<T>(
   params?: Record<string, string>,
   extraHeaders?: Record<string, string>,
   fetchFn: typeof fetch = fetch,
-): Promise<T[]> {
+  maxPages: number = 20,
+): Promise<PaginatedResult<T>> {
   const allItems: T[] = [];
 
   let url: string;
@@ -104,7 +110,8 @@ export async function graphRequestPaginated<T>(
     url = `${GRAPH_BASE}${path}${qs}`;
   }
 
-  while (true) {
+  let pages = 0;
+  while (pages < maxPages) {
     const page = await graphRequest<GraphListResponse<T>>(
       accessToken,
       "GET",
@@ -115,14 +122,14 @@ export async function graphRequestPaginated<T>(
     );
 
     allItems.push(...(page.value ?? []));
+    pages++;
 
     if (!page["@odata.nextLink"]) {
-      break;
+      return { items: allItems, truncated: false };
     }
 
-    // The nextLink is an absolute URL — pass it through as-is.
     url = page["@odata.nextLink"];
   }
 
-  return allItems;
+  return { items: allItems, truncated: true };
 }

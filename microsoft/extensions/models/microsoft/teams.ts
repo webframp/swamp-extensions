@@ -388,18 +388,20 @@ export const model = {
       ) => {
         const accessToken = await getAccessToken(context.globalArgs);
 
-        const teams = await graphRequestPaginated<GraphTeam>(
+        const result = await graphRequestPaginated<GraphTeam>(
           accessToken,
           "/me/joinedTeams",
           { "$select": "id,displayName,description" },
         );
 
         const handle = await context.writeResource("teams", "main", {
-          teams,
+          teams: result.items,
           fetchedAt: new Date().toISOString(),
         });
 
-        context.logger.info("Found {count} teams", { count: teams.length });
+        context.logger.info("Found {count} teams", {
+          count: result.items.length,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -431,7 +433,7 @@ export const model = {
           `/teams/${args.teamId}`,
         );
 
-        const channels = await graphRequestPaginated<GraphChannel>(
+        const channelsResult = await graphRequestPaginated<GraphChannel>(
           accessToken,
           `/teams/${args.teamId}/channels`,
           { "$select": "id,displayName,description,membershipType" },
@@ -443,14 +445,14 @@ export const model = {
           {
             teamId: args.teamId,
             teamName: team.displayName,
-            channels,
+            channels: channelsResult.items,
             fetchedAt: new Date().toISOString(),
           },
         );
 
         context.logger.info(
           "Found {count} channels in {team}",
-          { count: channels.length, team: team.displayName },
+          { count: channelsResult.items.length, team: team.displayName },
         );
         return { dataHandles: [handle] };
       },
@@ -528,16 +530,21 @@ export const model = {
           (m) => !m.messageType || m.messageType === "message",
         );
 
-        // Fetch replies for each root.
+        // Fetch replies for each root (capped at 10 pages per thread).
         if (args.includeReplies) {
           for (const root of userRoots) {
-            const replies = await graphRequestPaginated<GraphMessage>(
+            const repliesResult = await graphRequestPaginated<GraphMessage>(
               accessToken,
               `/teams/${args.teamId}/channels/${args.channelId}/messages/${root.id}/replies`,
+              undefined,
+              undefined,
+              undefined,
+              10,
             );
             (root as GraphMessage & { replies: GraphMessage[] }).replies =
-              replies.filter(
-                (r) => !r.messageType || r.messageType === "message",
+              repliesResult.items.filter(
+                (r: GraphMessage) =>
+                  !r.messageType || r.messageType === "message",
               );
           }
         }
@@ -596,26 +603,32 @@ export const model = {
       ) => {
         const accessToken = await getAccessToken(context.globalArgs);
 
+        const pageSize = Math.min(args.limit * 5, 50).toString();
         const params: Record<string, string> = {
-          "$top": "20",
+          "$top": pageSize,
           "$orderby": "lastMessagePreview/createdDateTime desc",
           "$expand": "members,viewpoint",
         };
 
+        const MAX_CHAT_PAGES = 10;
         const allChats: GraphChat[] = [];
         const match = args.nameFilter?.toLowerCase();
+        let chatPages = 0;
 
         let nextUrl: string | undefined =
           `https://graph.microsoft.com/v1.0/me/chats?${
             new URLSearchParams(params).toString()
           }`;
 
-        while (nextUrl && allChats.length < args.limit) {
+        while (
+          nextUrl && allChats.length < args.limit && chatPages < MAX_CHAT_PAGES
+        ) {
           const page: GraphPagedResponse<GraphChat> = await graphRequest(
             accessToken,
             "GET",
             nextUrl,
           );
+          chatPages++;
 
           for (const ch of page.value) {
             if (match) {
@@ -634,10 +647,13 @@ export const model = {
           nextUrl = page["@odata.nextLink"] ?? undefined;
         }
 
+        const truncated = allChats.length >= args.limit ||
+          (nextUrl !== undefined && chatPages >= MAX_CHAT_PAGES);
+
         const handle = await context.writeResource("chats", "main", {
           chats: allChats,
           totalFetched: allChats.length,
-          truncated: allChats.length >= args.limit,
+          truncated,
           fetchedAt: new Date().toISOString(),
         });
 
@@ -786,7 +802,8 @@ export const model = {
             nextUrl,
           );
 
-          chats.push(...page.value);
+          const remaining = args.chatLimit - chats.length;
+          chats.push(...page.value.slice(0, remaining));
           nextUrl = page["@odata.nextLink"] ?? undefined;
         }
 
@@ -822,16 +839,19 @@ export const model = {
           // Scan for mentions.
           if (args.mode === "unread_only" || !me.id) continue;
 
+          const MAX_MSG_PAGES_PER_CHAT = 5;
           let msgUrl: string | undefined =
             `https://graph.microsoft.com/v1.0/chats/${ch.id}/messages?$top=50`;
           const chatMsgs: GraphMessage[] = [];
+          let msgPages = 0;
 
-          while (msgUrl) {
+          while (msgUrl && msgPages < MAX_MSG_PAGES_PER_CHAT) {
             const page: GraphPagedResponse<GraphMessage> = await graphRequest(
               accessToken,
               "GET",
               msgUrl,
             );
+            msgPages++;
 
             for (const m of page.value) {
               if (new Date(m.createdDateTime) < cutoff) {

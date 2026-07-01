@@ -185,13 +185,14 @@ Deno.test({
     const restore = installGraphMock(url);
 
     try {
-      const items = await graphRequestPaginated<{ id: string }>(
+      const result = await graphRequestPaginated<{ id: string }>(
         "token",
         "/me/messages",
       );
-      assertEquals(items.length, 3);
-      assertEquals(items[0].id, "msg-1");
-      assertEquals(items[2].id, "msg-3");
+      assertEquals(result.items.length, 3);
+      assertEquals(result.items[0].id, "msg-1");
+      assertEquals(result.items[2].id, "msg-3");
+      assertEquals(result.truncated, false);
       assertEquals(page, 2);
     } finally {
       restore();
