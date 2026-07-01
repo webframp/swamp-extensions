@@ -5,7 +5,7 @@ import { z } from "npm:zod@4.4.3";
 import postgres from "npm:postgres@3.4.9";
 import {
   createSyncService as createSync,
-  type DatastoreSyncService,
+  type TwoPhaseSyncService,
 } from "./sync.ts";
 
 interface LockInfo {
@@ -52,7 +52,7 @@ interface DatastoreProvider {
   createSyncService?(
     repoDir: string,
     cachePath: string,
-  ): DatastoreSyncService;
+  ): TwoPhaseSyncService;
   resolveDatastorePath(repoDir: string): string;
   resolveCachePath?(repoDir: string): string | undefined;
 }

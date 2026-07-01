@@ -57,10 +57,22 @@ interface SyncContext {
   models?: ReadonlyArray<{ modelType: string; modelId: string }>;
 }
 
+declare const PushManifestBrand: unique symbol;
+/** Opaque branded type for push manifests — keeps phase internals hidden from callers. */
+export type PushManifest = { readonly [PushManifestBrand]: true };
+
+/** Internal manifest structure — cast to/from PushManifest via `as unknown`. */
+interface InternalPushManifest {
+  entries: Array<{ relPath: string; hash: string; content: Uint8Array }>;
+  syncState: SyncState;
+  processedDirtyPaths: Set<string>;
+}
+
 /** Capabilities a sync service advertises to swamp core. */
 interface SyncCapabilities {
   scopedSync?: boolean;
   lazyHydration?: boolean;
+  twoPhaseSync?: boolean;
 }
 
 /** Options accepted by sync service methods. */
@@ -80,6 +92,15 @@ interface DatastoreSyncService {
     relPath: string,
     options?: DatastoreSyncOptions,
   ): Promise<boolean>;
+}
+
+/** Two-phase sync protocol: collect diff outside the lock, then commit under lock. */
+export interface TwoPhaseSyncService extends DatastoreSyncService {
+  preparePush(options?: DatastoreSyncOptions): Promise<PushManifest>;
+  commitPush(
+    manifest: PushManifest,
+    options?: DatastoreSyncOptions,
+  ): Promise<number>;
 }
 
 /**
@@ -766,10 +787,27 @@ function isDataRawFile(relPath: string): boolean {
   return relPath.startsWith("data/") && relPath.endsWith("/raw");
 }
 
+const EXCLUDED_DIRS = new Set([
+  "bundles",
+  "vault-bundles",
+  "driver-bundles",
+  "datastore-bundles",
+  "report-bundles",
+  "cache",
+  "telemetry",
+  "logs",
+]);
+
+function isExcludedFile(name: string): boolean {
+  return name === "_extension_catalog.db" ||
+    name.endsWith(".db-shm") ||
+    name.endsWith(".db-wal");
+}
+
 /**
  * Sync service for GitLab datastore
  */
-class GitLabSyncService implements DatastoreSyncService {
+class GitLabSyncService implements TwoPhaseSyncService {
   constructor(
     private readonly client: GitLabStateClient,
     private readonly prefix: string,
@@ -777,7 +815,7 @@ class GitLabSyncService implements DatastoreSyncService {
   ) {}
 
   capabilities(): SyncCapabilities {
-    return { scopedSync: true, lazyHydration: true };
+    return { scopedSync: true, lazyHydration: true, twoPhaseSync: true };
   }
 
   async markDirty(options?: DatastoreSyncOptions): Promise<void> {
@@ -901,26 +939,6 @@ class GitLabSyncService implements DatastoreSyncService {
         !processed.has(p)
       );
     } else {
-      // Directories that contain local-only build artifacts regenerated
-      // from pulled extensions. Never need to cross the wire.
-      const EXCLUDED_DIRS = new Set([
-        "bundles",
-        "vault-bundles",
-        "driver-bundles",
-        "datastore-bundles",
-        "report-bundles",
-        "cache",
-        "telemetry",
-        "logs",
-      ]);
-
-      // Excluded file patterns (SQLite databases and journals)
-      const isExcludedFile = (name: string): boolean =>
-        name === "_extension_catalog.db" ||
-        name.endsWith(".db-shm") ||
-        name.endsWith(".db-wal");
-
-      // Iterative directory walk to avoid stack overflow from deep recursion
       const queue: Array<{ dir: string; base: string }> = [
         { dir: this.cachePath, base: "" },
       ];
@@ -996,6 +1014,128 @@ class GitLabSyncService implements DatastoreSyncService {
     await writeSyncState(this.cachePath, state);
 
     return true;
+  }
+
+  async preparePush(options?: DatastoreSyncOptions): Promise<PushManifest> {
+    const signal = options?.signal;
+    const scopeFilter = buildScopeFilter(options?.context);
+    const syncState = await readSyncState(this.cachePath);
+    const entries: Array<
+      { relPath: string; hash: string; content: Uint8Array }
+    > = [];
+
+    const collectFile = async (relativePath: string): Promise<void> => {
+      const fullPath = `${this.cachePath}/${relativePath}`;
+      let content: Uint8Array;
+      try {
+        const stat = await Deno.stat(fullPath);
+        if (stat.isDirectory) return;
+        content = await Deno.readFile(fullPath);
+      } catch (error) {
+        if (error instanceof Deno.errors.NotFound) return;
+        throw error;
+      }
+
+      const MAX_FILE_SIZE = 4 * 1024 * 1024;
+      if (content.length > MAX_FILE_SIZE) return;
+
+      const hash = await sha256Hex(content);
+      if (syncState.hashes[relativePath] === hash) return;
+
+      entries.push({ relPath: relativePath, hash, content });
+    };
+
+    const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
+      !syncState.dirtyOverflow;
+    const processedDirtyPaths: Set<string> = new Set();
+
+    if (useDirtyPaths) {
+      for (const relPath of syncState.dirtyPaths) {
+        signal?.throwIfAborted();
+        if (scopeFilter && !scopeFilter(relPath)) continue;
+        processedDirtyPaths.add(relPath);
+        await collectFile(relPath);
+      }
+    } else {
+      const queue: Array<{ dir: string; base: string }> = [
+        { dir: this.cachePath, base: "" },
+      ];
+
+      while (queue.length > 0) {
+        signal?.throwIfAborted();
+        const { dir, base } = queue.shift()!;
+
+        try {
+          for await (const entry of Deno.readDir(dir)) {
+            const fullPath = `${dir}/${entry.name}`;
+            const relativePath = base ? `${base}/${entry.name}` : entry.name;
+
+            if (entry.isDirectory) {
+              if (EXCLUDED_DIRS.has(entry.name)) continue;
+              if (
+                scopeFilter &&
+                !couldMatchScope(relativePath, options?.context)
+              ) {
+                continue;
+              }
+              queue.push({ dir: fullPath, base: relativePath });
+            } else if (entry.isFile) {
+              if (relativePath === SYNC_STATE_FILE) continue;
+              if (isExcludedFile(entry.name)) continue;
+              if (scopeFilter && !scopeFilter(relativePath)) continue;
+              await collectFile(relativePath);
+            }
+          }
+        } catch (error) {
+          if (!(error instanceof Deno.errors.NotFound)) {
+            throw error;
+          }
+        }
+      }
+    }
+
+    return {
+      entries,
+      syncState,
+      processedDirtyPaths,
+    } as unknown as PushManifest;
+  }
+
+  async commitPush(
+    manifest: PushManifest,
+    options?: DatastoreSyncOptions,
+  ): Promise<number> {
+    const signal = options?.signal;
+    const internal = manifest as unknown as InternalPushManifest;
+
+    for (const entry of internal.entries) {
+      signal?.throwIfAborted();
+      const stateName = encodeStateName(this.prefix, entry.relPath);
+      await this.client.putState(stateName, entry.content, undefined, signal);
+    }
+
+    // Re-read fresh state to avoid overwriting concurrent updates
+    const freshState = await readSyncState(this.cachePath);
+
+    // Merge manifest hashes into fresh state
+    for (const entry of internal.entries) {
+      freshState.hashes[entry.relPath] = entry.hash;
+    }
+
+    // Clear dirty state after successful commit.
+    if (internal.processedDirtyPaths.size > 0) {
+      // Dirty-path mode: remove only the paths we processed
+      freshState.dirtyPaths = freshState.dirtyPaths.filter((p) =>
+        !internal.processedDirtyPaths.has(p)
+      );
+    } else if (internal.syncState.dirtyOverflow) {
+      // Full-walk mode: clear everything
+      freshState.dirtyPaths = [];
+      freshState.dirtyOverflow = false;
+    }
+    await writeSyncState(this.cachePath, freshState);
+
+    return internal.entries.length;
   }
 }
 
@@ -1079,7 +1219,7 @@ export const datastore = {
       createSyncService: (
         _repoDir: string,
         cachePath: string,
-      ): DatastoreSyncService => {
+      ): TwoPhaseSyncService => {
         return new GitLabSyncService(client, parsed.statePrefix, cachePath);
       },
 

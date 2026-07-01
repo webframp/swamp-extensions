@@ -1086,3 +1086,226 @@ Deno.test({
     }
   },
 });
+
+// --- Two-phase sync tests ---
+
+Deno.test({
+  name: "preparePush uploads nothing to remote",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      await Deno.mkdir(`${tempDir}/data/t/m/d/1`, { recursive: true });
+      await Deno.writeTextFile(`${tempDir}/data/t/m/d/1/raw`, "local content");
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      await syncService.preparePush();
+
+      // Nothing should have been uploaded to the remote
+      assertEquals(mock.states.size, 0);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "commitPush uploads manifest entries",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      await Deno.mkdir(`${tempDir}/data/t/m/d/1`, { recursive: true });
+      await Deno.writeTextFile(
+        `${tempDir}/data/t/m/d/1/raw`,
+        "two-phase content",
+      );
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+      const manifest = await syncService.preparePush();
+
+      // Nothing uploaded yet
+      assertEquals(mock.states.size, 0);
+
+      const count = await syncService.commitPush(manifest);
+
+      // Now the file should be on the remote
+      assertEquals(count, 1);
+      assertEquals(mock.states.has("swamp--data--t--m--d--1--raw"), true);
+
+      const uploaded = mock.states.get("swamp--data--t--m--d--1--raw");
+      assertExists(uploaded);
+      const unwrapped = unwrapFromTerraformState(
+        new TextDecoder().decode(uploaded),
+      );
+      assertEquals(unwrapped, "two-phase content");
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "round-trip parity with pushChanged",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir1 = await Deno.makeTempDir();
+    const tempDir2 = await Deno.makeTempDir();
+
+    try {
+      // Same files in both temp dirs
+      const fileContent = "parity-test-content";
+      await Deno.mkdir(`${tempDir1}/models`, { recursive: true });
+      await Deno.writeTextFile(`${tempDir1}/models/a.yaml`, fileContent);
+      await Deno.mkdir(`${tempDir2}/models`, { recursive: true });
+      await Deno.writeTextFile(`${tempDir2}/models/a.yaml`, fileContent);
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      // Two-phase sync
+      const syncService1 = provider.createSyncService!(tempDir1, tempDir1);
+      const manifest = await syncService1.preparePush();
+      const twoPhaseCount = await syncService1.commitPush(manifest);
+
+      // Capture remote state after two-phase
+      const twoPhaseState = new Map(mock.states);
+
+      // Clear remote for pushChanged comparison
+      mock.states.clear();
+
+      // Single-phase pushChanged
+      const syncService2 = provider.createSyncService!(tempDir2, tempDir2);
+      const singlePhaseCount = await syncService2.pushChanged();
+
+      // Same count
+      assertEquals(twoPhaseCount, singlePhaseCount);
+
+      // Same remote state keys
+      const twoPhaseKeys = Array.from(twoPhaseState.keys()).sort();
+      const singlePhaseKeys = Array.from(mock.states.keys()).sort();
+      assertEquals(twoPhaseKeys, singlePhaseKeys);
+
+      // Same content bytes (unwrapped from Terraform state)
+      for (const key of twoPhaseKeys) {
+        const twoPhaseContent = unwrapFromTerraformState(
+          new TextDecoder().decode(twoPhaseState.get(key)!),
+        );
+        const singlePhaseContent = unwrapFromTerraformState(
+          new TextDecoder().decode(mock.states.get(key)!),
+        );
+        assertEquals(twoPhaseContent, singlePhaseContent);
+      }
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir1, { recursive: true });
+      await Deno.remove(tempDir2, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "preparePush returns empty manifest for no changes",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      await Deno.mkdir(`${tempDir}/data/t/m/d/1`, { recursive: true });
+      await Deno.writeTextFile(`${tempDir}/data/t/m/d/1/raw`, "stable content");
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+
+      // First push to establish hashes
+      await syncService.pushChanged();
+
+      // preparePush again with same content — should produce empty manifest
+      const manifest = await syncService.preparePush();
+
+      // Cast to inspect internals (test-only)
+      const internal = manifest as unknown as {
+        entries: Array<{ relPath: string }>;
+      };
+      assertEquals(internal.entries.length, 0);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "commitPush with empty manifest still clears dirty state",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+    const tempDir = await Deno.makeTempDir();
+
+    try {
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const syncService = provider.createSyncService!(tempDir, tempDir);
+
+      // Mark a path dirty that doesn't actually exist on disk
+      await syncService.markDirty({ relPath: "data/t/m/d/99/raw" });
+
+      // Verify dirty state is set
+      const beforeJson = await Deno.readTextFile(
+        `${tempDir}/.datastore-sync-state.json`,
+      );
+      const before = JSON.parse(beforeJson);
+      assertEquals(before.dirtyPaths.length, 1);
+
+      // preparePush — file doesn't exist so manifest will be empty
+      const manifest = await syncService.preparePush();
+
+      // commitPush with empty manifest
+      const count = await syncService.commitPush(manifest);
+      assertEquals(count, 0);
+
+      // Dirty state should be cleared
+      const afterJson = await Deno.readTextFile(
+        `${tempDir}/.datastore-sync-state.json`,
+      );
+      const after = JSON.parse(afterJson);
+      assertEquals(after.dirtyPaths.length, 0);
+      assertEquals(after.dirtyOverflow, false);
+    } finally {
+      await mock.server.shutdown();
+      await Deno.remove(tempDir, { recursive: true });
+    }
+  },
+});
