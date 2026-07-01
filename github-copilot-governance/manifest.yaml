@@ -1,0 +1,55 @@
+manifestVersion: 1
+name: "@webframp/github-copilot-governance"
+version: "2026.06.01.1"
+description: |
+  Manage GitHub Copilot budgets, monitor AI credit usage, and automate
+  tier-based governance for Enterprise Cloud organizations.
+
+  Full budget lifecycle (create, read, update, delete) via the GitHub
+  Enterprise billing API. Usage monitoring with cycle-aware diffing.
+  Tier-based budget synchronization from team membership.
+
+  ## Authentication
+
+  Requires a classic PAT with enterprise admin or billing manager scope,
+  stored in a swamp vault. Fine-grained PATs and GitHub App tokens are
+  NOT supported by the billing API.
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/github-copilot-governance copilot-gov \
+    --global-arg enterprise=my-enterprise \
+    --global-arg org=my-org \
+    --global-arg 'token=vault://my-vault/github-enterprise-token'
+
+  # List all budgets
+  swamp model method run copilot-gov list_budgets
+
+  # Get usage summary
+  swamp model method run copilot-gov get_usage_summary
+
+  # Sync tier budgets from team membership
+  swamp model method run copilot-gov sync_tier_budgets \
+    --input 'tiers:json=[{"teamSlug":"tier-50","perUserBudget":50,"costCenterName":"dev-tier-50"}]'
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - github/copilot_governance.ts
+workflows:
+  - copilot-monthly-review.yaml
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - github
+  - copilot
+  - billing
+  - governance
+  - enterprise
+  - budget
