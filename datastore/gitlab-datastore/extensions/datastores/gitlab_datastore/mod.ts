@@ -57,8 +57,8 @@ interface SyncContext {
   models?: ReadonlyArray<{ modelType: string; modelId: string }>;
 }
 
-/** Opaque branded type for push manifests — keeps phase internals hidden from callers. */
 declare const PushManifestBrand: unique symbol;
+/** Opaque branded type for push manifests — keeps phase internals hidden from callers. */
 export type PushManifest = { readonly [PushManifestBrand]: true };
 
 /** Internal manifest structure — cast to/from PushManifest via `as unknown`. */
@@ -94,6 +94,7 @@ interface DatastoreSyncService {
   ): Promise<boolean>;
 }
 
+/** Two-phase sync protocol: collect diff outside the lock, then commit under lock. */
 export interface TwoPhaseSyncService extends DatastoreSyncService {
   preparePush(options?: DatastoreSyncOptions): Promise<PushManifest>;
   commitPush(
