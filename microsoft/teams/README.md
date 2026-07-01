@@ -1,4 +1,4 @@
-# @webframp/microsoft
+# @webframp/microsoft/teams
 
 Read-only Microsoft Teams integration via the Graph API. Uses a public client
 app registration with device code flow authentication — no client secret

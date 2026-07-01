@@ -462,7 +462,7 @@ jobs:
         run: deno test --allow-env --allow-read --allow-write extensions/reports/
 
   microsoft-check:
-    name: microsoft - ${{ matrix.task }}
+    name: microsoft/teams - ${{ matrix.task }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -470,7 +470,7 @@ jobs:
         task: [check, lint, fmt]
     defaults:
       run:
-        working-directory: microsoft
+        working-directory: microsoft/teams
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
@@ -487,11 +487,11 @@ jobs:
           fi
 
   microsoft-test:
-    name: microsoft - test
+    name: microsoft/teams - test
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: microsoft
+        working-directory: microsoft/teams
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
