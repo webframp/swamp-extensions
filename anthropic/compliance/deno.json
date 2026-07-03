@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true
+  },
+  "tasks": {
+    "check": "deno check extensions/models/anthropic/compliance.ts",
+    "lint": "deno lint extensions/",
+    "fmt": "deno fmt extensions/",
+    "fmt:check": "deno fmt --check extensions/",
+    "test": "deno test --allow-net --allow-env extensions/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix", "no-explicit-any"]
+    }
+  },
+  "imports": {
+    "zod": "npm:zod@4.4.3",
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260504.10"
+  }
+}
