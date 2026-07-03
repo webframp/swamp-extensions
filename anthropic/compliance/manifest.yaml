@@ -1,0 +1,66 @@
+manifestVersion: 1
+name: "@webframp/anthropic/compliance"
+version: "2026.07.02.1"
+description: |
+  Observe a Claude Enterprise account via the Compliance API. Covers the
+  6-year activity audit feed, organization directory (users, roles, groups
+  with SCIM source attribution), and effective runtime settings (retention,
+  redaction, IP allowlist, SSO mode, code execution egress).
+
+  ## Authentication
+
+  Requires a Compliance Access Key (`sk-ant-api01-...`) created by the
+  primary owner in claude.ai → Org settings → API access. Store in a
+  swamp vault.
+
+  ## Usage
+
+  ```bash
+  swamp extension pull @webframp/anthropic/compliance
+  swamp model create @webframp/anthropic/compliance claude-compliance \
+    --global-arg 'complianceKey=${{ vault.get("anthropic", "COMPLIANCE_KEY") }}'
+
+  # Discover org
+  swamp model method run claude-compliance sync_organizations
+
+  # Full directory sync (users + roles + groups)
+  swamp model method run claude-compliance sync_directory
+
+  # Effective settings
+  swamp model method run claude-compliance sync_effective_settings
+
+  # Audit feed
+  swamp model method run claude-compliance collect_activities
+  swamp model method run claude-compliance collect_activities \
+    --input activity_types=user.login,conversation.create
+  ```
+
+  ## Methods
+
+  - sync_organizations — discover orgs visible to the key
+  - sync_users — paginate all directory users
+  - sync_roles — list defined roles
+  - sync_groups — list groups
+  - get_group_members — members with SCIM source attribution
+  - sync_directory — fan-out: users + roles + groups in one call
+  - sync_effective_settings — observe runtime config
+  - collect_activities — filterable audit feed (6-year retention)
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - anthropic/compliance.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - anthropic
+  - claude
+  - enterprise
+  - compliance
+  - audit
+  - directory
+  - settings

@@ -1,0 +1,50 @@
+manifestVersion: 1
+name: "@webframp/anthropic/analytics"
+version: "2026.07.02.1"
+description: |
+  Observe Claude Enterprise analytics: seat counts, DAU/WAU/MAU, pending
+  invites, and feature adoption (projects, skills, connectors). Stores
+  raw metrics and extracts structured seat/adoption data into separate
+  versioned resources for CEL queries.
+
+  ## Authentication
+
+  Requires an Analytics API key (scope `read:analytics`) created by the
+  primary owner in claude.ai. Store in a swamp vault.
+
+  ## Usage
+
+  ```bash
+  swamp extension pull @webframp/anthropic/analytics
+  swamp model create @webframp/anthropic/analytics claude-analytics \
+    --global-arg 'analyticsKey=${{ vault.get("anthropic", "ANALYTICS_KEY") }}'
+
+  # Collect analytics
+  swamp model method run claude-analytics collect_analytics
+
+  # With date range
+  swamp model method run claude-analytics collect_analytics \
+    --input startDate=2026-06-01 --input endDate=2026-07-01
+  ```
+
+  ## Methods
+
+  - collect_analytics — full snapshot, seat counts, and adoption metrics
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - anthropic/analytics.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - anthropic
+  - claude
+  - enterprise
+  - analytics
+  - seats
+  - adoption
