@@ -32,9 +32,9 @@ type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 const ActivityActorSchema = z.object({
   type: z.string(),
-  id: z.string().nullable(),
-  email: z.string().nullable(),
-  name: z.string().nullable(),
+  id: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
 });
 
 const ActivitySchema = z.object({
@@ -43,7 +43,7 @@ const ActivitySchema = z.object({
   created_at: z.string(),
   actor: ActivityActorSchema,
   organization_id: z.string().nullable(),
-  details: z.record(z.string(), z.unknown()).nullable(),
+  details: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 const ActivityFeedSchema = z.object({
@@ -186,7 +186,10 @@ async function resolveOrgId(
   if (globalArgs.orgId) return globalArgs.orgId;
   const data = await complianceRequest(key, "/v1/compliance/organizations");
   const orgs = data.data ?? data.organizations ?? data;
-  if (Array.isArray(orgs) && orgs.length > 0) return orgs[0].id;
+  if (Array.isArray(orgs) && orgs.length > 0) {
+    const id = orgs[0].uuid ?? orgs[0].id;
+    if (id) return id;
+  }
   throw new Error(
     "Could not discover org ID from /v1/compliance/organizations. Set orgId in globalArguments.",
   );
@@ -250,7 +253,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.07.02.1",
+  version: "2026.07.03.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -345,7 +348,7 @@ export const model = {
         };
         const handle = await ctx.writeResource(
           "activities",
-          "latest",
+          "recent",
           result,
         );
         ctx.logger.info("Collected {count} activities", {
@@ -367,7 +370,7 @@ export const model = {
         const orgs = data.data ?? data.organizations ?? [];
         const result = {
           organizations: orgs.map((o: any) => ({
-            id: o.id ?? "",
+            id: o.uuid ?? o.id ?? "",
             name: o.name ?? "",
             type: o.type ?? null,
           })),
