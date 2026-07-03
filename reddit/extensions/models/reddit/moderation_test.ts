@@ -1,7 +1,7 @@
 // Reddit Moderation Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertMatch, assertEquals, assertExists } from "@std/assert";
+import { assertEquals, assertExists, assertMatch } from "@std/assert";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./moderation.ts";
 

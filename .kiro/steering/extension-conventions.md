@@ -62,7 +62,7 @@ pass. For each code change, verify:
 Before pushing any branch, run in the extension directory:
 
 ```bash
-deno task check && deno task lint && deno task fmt:check && deno task test
+deno task check && deno task lint && deno task fmt && deno task test
 swamp extension quality manifest.yaml --json
 ```
 

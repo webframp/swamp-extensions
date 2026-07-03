@@ -92,6 +92,7 @@ interface ModEventsData {
   fetchedAt: string;
 }
 
+/** Twitch moderation activity report — summarizes ban/timeout/message-delete events by moderator and target. */
 export const report = {
   name: "@webframp/twitch-mod-report",
   description:
