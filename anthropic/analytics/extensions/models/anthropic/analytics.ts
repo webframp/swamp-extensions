@@ -194,7 +194,7 @@ export const model = {
         );
 
         const findMetric = (name: string): any =>
-          metrics.find((m) => m.name.toLowerCase().includes(name.toLowerCase()))
+          metrics.find((m) => m.name.toLowerCase() === name.toLowerCase())
             ?.value ?? null;
 
         handles.push(

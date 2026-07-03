@@ -214,8 +214,11 @@ async function paginateAll(
     const results = data[dataKey] ?? data.data ?? [];
     items.push(...results);
     hasMore = data.has_more ?? false;
-    if (results.length > 0) afterId = results[results.length - 1].id;
-    else hasMore = false;
+    if (results.length > 0 && results[results.length - 1].id) {
+      afterId = results[results.length - 1].id;
+    } else {
+      hasMore = false;
+    }
     page++;
   }
   return { items, hasMore };
@@ -316,7 +319,7 @@ export const model = {
           params.activity_types = args.activity_types;
         }
         if (args.since) params["created_at[gte]"] = args.since;
-        const pageLimit = args.limit ? parseInt(args.limit, 10) : 100;
+        const pageLimit = args.limit ? parseInt(args.limit, 10) || 100 : 100;
         params.limit = String(Math.min(pageLimit, 5000));
 
         const data = await complianceRequest(
@@ -487,6 +490,7 @@ export const model = {
       execute: async (args: { groupId: string }, ctx: ModelContext) => {
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
+        // Groups are globally addressable by ID, not org-scoped like /organizations/{orgId}/users
         const { items } = await paginateAll(
           key,
           `/v1/compliance/groups/${args.groupId}/members`,
