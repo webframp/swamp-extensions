@@ -4,5 +4,8 @@
   },
   "compilerOptions": {
     "strict": true
+  },
+  "tasks": {
+    "fmt:check": "deno fmt --check"
   }
 }

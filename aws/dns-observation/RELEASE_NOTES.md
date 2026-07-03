@@ -1,4 +1,7 @@
-# @webframp/aws/dns-observation v2026.06.27.2
+# @webframp/aws/dns-observation v2026.07.03.1
+
+**Changed:** Added JSDoc documentation to the model export for improved
+`deno doc` and quality rubric compliance.
 
 Initial release.
 

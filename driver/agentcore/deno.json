@@ -3,16 +3,23 @@
     "check": "deno check extensions/drivers/agentcore_driver.ts extensions/drivers/agentcore_driver_test.ts",
     "lint": "deno lint",
     "fmt": "deno fmt",
-    "test": "deno test --allow-env --allow-net --allow-read --allow-write"
+    "test": "deno test --allow-env --allow-net --allow-read --allow-write",
+    "fmt:check": "deno fmt --check"
   },
   "lint": {
-    "exclude": ["worker/"],
+    "exclude": [
+      "worker/"
+    ],
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": [
+        "no-import-prefix"
+      ]
     }
   },
   "fmt": {
-    "exclude": ["worker/"]
+    "exclude": [
+      "worker/"
+    ]
   },
   "imports": {
     "@aws-sdk/client-bedrock-agentcore": "npm:@aws-sdk/client-bedrock-agentcore@3.1066.0",

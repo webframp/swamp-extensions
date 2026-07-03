@@ -1,4 +1,4 @@
-import { assertMatch, assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertMatch, assertRejects } from "@std/assert";
 import { model } from "./container_image.ts";
 
 type CommandHandler = (

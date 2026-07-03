@@ -8,7 +8,9 @@ import type {
   TwitchCredentials,
 } from "./types.ts";
 
+/** Twitch Helix API base URL. */
 export const HELIX_BASE = "https://api.twitch.tv/helix";
+/** Twitch OAuth2 token endpoint. */
 export const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 
 /**
@@ -168,6 +170,7 @@ export async function helixApi<T>(
  */
 const MAX_PAGINATED_RESULTS = 50_000;
 
+/** Paginate a Helix API list endpoint, collecting all pages up to the internal cap. */
 export async function helixApiPaginated<T>(
   creds: TwitchCredentials,
   path: string,

@@ -7,11 +7,15 @@
     "smoke": "deno run --allow-net --allow-env --allow-read --allow-write --allow-sys smoke_test.ts",
     "check": "deno check extensions/datastores/gitlab_datastore/mod.ts",
     "lint": "deno lint extensions/",
-    "fmt": "deno fmt extensions/"
+    "fmt": "deno fmt extensions/",
+    "fmt:check": "deno fmt --check extensions/"
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix", "no-slow-types"]
+      "exclude": [
+        "no-import-prefix",
+        "no-slow-types"
+      ]
     }
   },
   "imports": {
