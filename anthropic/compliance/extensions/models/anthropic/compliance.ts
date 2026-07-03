@@ -95,6 +95,7 @@ const RoleListSchema = z.object({
   orgId: z.string(),
   roles: z.array(RoleSchema),
   count: z.number(),
+  has_more: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -116,6 +117,7 @@ const GroupListSchema = z.object({
   orgId: z.string(),
   groups: z.array(GroupSchema),
   count: z.number(),
+  has_more: z.boolean(),
   fetchedAt: z.string(),
 });
 
@@ -214,8 +216,11 @@ async function paginateAll(
     const results = data[dataKey] ?? data.data ?? [];
     items.push(...results);
     hasMore = data.has_more ?? false;
-    if (results.length > 0 && results[results.length - 1].id) {
-      afterId = results[results.length - 1].id;
+    const lastId = results.length > 0
+      ? results[results.length - 1].id
+      : undefined;
+    if (lastId !== undefined && lastId !== null) {
+      afterId = String(lastId);
     } else {
       hasMore = false;
     }
@@ -436,6 +441,7 @@ export const model = {
           orgId,
           roles,
           count: roles.length,
+          has_more: data.has_more ?? false,
           fetchedAt: new Date().toISOString(),
         };
         const handle = await ctx.writeResource("roles", orgId, result);
@@ -468,6 +474,7 @@ export const model = {
           orgId,
           groups,
           count: groups.length,
+          has_more: data.has_more ?? false,
           fetchedAt: new Date().toISOString(),
         };
         const handle = await ctx.writeResource("groups", orgId, result);
@@ -623,6 +630,7 @@ export const model = {
             orgId,
             roles,
             count: roles.length,
+            has_more: rolesData.has_more ?? false,
             fetchedAt: new Date().toISOString(),
           }),
         );
@@ -642,6 +650,7 @@ export const model = {
             orgId,
             groups,
             count: groups.length,
+            has_more: groupsData.has_more ?? false,
             fetchedAt: new Date().toISOString(),
           }),
         );
