@@ -8,6 +8,7 @@
     "npm:@aws-sdk/client-cloudwatch@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-service-quotas@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-sts@3.1069.0": "3.1069.0",
+    "npm:@aws-sdk/client-support@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/credential-providers@3.1069.0": "3.1069.0",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
@@ -127,6 +128,21 @@
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",
         "@aws-sdk/signature-v4-multi-region",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-support@3.1069.0": {
+      "integrity": "sha512-4HTRell7kqblAu2SvTfZTpB39dsP9K6+t6HOmvChC9HV+EUPJHcYGDqXlB/9qE/qjPQtF9A0LuPGna6wTI0XRQ==",
+      "dependencies": [
+        "@aws-crypto/sha256-browser",
+        "@aws-crypto/sha256-js",
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
         "@aws-sdk/types",
         "@smithy/core",
         "@smithy/fetch-http-handler",

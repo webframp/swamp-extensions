@@ -10,6 +10,7 @@
 
 import { z } from "npm:zod@4.4.3";
 import {
+  GetRequestedServiceQuotaChangeCommand,
   GetServiceQuotaCommand,
   ListServiceQuotasCommand,
   ListServicesCommand,
@@ -25,6 +26,11 @@ import {
   STSClient,
 } from "npm:@aws-sdk/client-sts@3.1069.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1069.0";
+import {
+  DescribeCasesCommand,
+  DescribeCommunicationsCommand,
+  SupportClient,
+} from "npm:@aws-sdk/client-support@3.1069.0";
 
 // =============================================================================
 // Schemas
@@ -122,9 +128,41 @@ const IncreaseRequestSchema = z.object({
   requestedAt: z.string(),
 });
 
+const CommunicationSchema = z.object({
+  body: z.string(),
+  submittedBy: z.string(),
+  timeCreated: z.string(),
+});
+
+const CaseCommunicationsSchema = z.object({
+  profile: z.string(),
+  accountId: z.string(),
+  region: z.string(),
+  caseId: z.string(),
+  displayId: z.string(),
+  subject: z.string(),
+  status: z.string(),
+  severityCode: z.string(),
+  serviceCode: z.string(),
+  communications: z.array(CommunicationSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
 // Helpers
 // =============================================================================
+
+function createSupportClient(
+  profile: string,
+  _region: string,
+): SupportClient {
+  const opts: Record<string, unknown> = { region: "us-east-1" };
+  if (profile !== "default") {
+    opts.credentials = fromIni({ profile });
+  }
+  return new SupportClient(opts as { region: string });
+}
 
 function createQuotasClient(
   profile: string,
@@ -243,7 +281,7 @@ interface ModelContext {
 /** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.06.25.3",
+  version: "2026.07.04.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -274,6 +312,13 @@ export const model = {
     increaseRequest: {
       description: "Record of a submitted quota increase request",
       schema: IncreaseRequestSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    caseCommunications: {
+      description:
+        "Communications on a support case associated with a quota increase request",
+      schema: CaseCommunicationsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -764,6 +809,203 @@ export const model = {
           return { dataHandles: [handle] };
         } finally {
           client.destroy();
+        }
+      },
+    },
+
+    get_request_status: {
+      description:
+        "Check the status of a previously submitted quota increase request. " +
+        "Returns the current status, case ID, and timestamps. Use the requestId " +
+        "from a prior request_increase call.",
+      arguments: z.object({
+        requestId: z
+          .string()
+          .describe("Request ID from a prior quota increase request"),
+        profile: z
+          .string()
+          .optional()
+          .describe("Profile to query (default: first configured)"),
+        region: z
+          .string()
+          .optional()
+          .describe("Override region for this call"),
+      }),
+      execute: async (
+        args: {
+          requestId: string;
+          profile?: string;
+          region?: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const profile = args.profile ?? ctx.globalArgs.profiles[0];
+        const region = args.region ?? ctx.globalArgs.defaultRegion;
+        const client = createQuotasClient(profile, region);
+        try {
+          const accountId = await getAccountId(profile, region);
+
+          const resp = await client.send(
+            new GetRequestedServiceQuotaChangeCommand({
+              RequestId: args.requestId,
+            }),
+          );
+
+          const req = resp.RequestedQuota;
+          if (!req) {
+            throw new Error(
+              `No quota change request found for ID: ${args.requestId}`,
+            );
+          }
+
+          const handle = await ctx.writeResource(
+            "increaseRequest",
+            `${req.ServiceCode ?? "unknown"}-${req.QuotaCode ?? "unknown"}-${
+              sanitizeName(profile)
+            }`,
+            {
+              profile,
+              accountId,
+              region,
+              serviceCode: req.ServiceCode ?? "",
+              quotaCode: req.QuotaCode ?? "",
+              quotaName: req.QuotaName ?? "",
+              requestId: req.Id ?? args.requestId,
+              desiredValue: req.DesiredValue ?? 0,
+              previousValue: req.QuotaValue ?? 0,
+              status: req.Status ?? "UNKNOWN",
+              requestedAt: req.Created
+                ? req.Created.toISOString()
+                : new Date().toISOString(),
+            } as unknown as Record<string, unknown>,
+          );
+
+          ctx.logger.info(
+            "Quota request {id} status: {status} (service: {service}, quota: {code}, desired: {desired})",
+            {
+              id: args.requestId,
+              status: req.Status ?? "UNKNOWN",
+              service: req.ServiceCode ?? "",
+              code: req.QuotaCode ?? "",
+              desired: req.DesiredValue ?? 0,
+            },
+          );
+
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
+      },
+    },
+
+    get_case_communications: {
+      description:
+        "Retrieve communications on a support case associated with a quota " +
+        "increase request. Uses the case display ID from a prior request_increase " +
+        "or get_request_status call. Requires AWS Business or Enterprise support " +
+        "plan and support:DescribeCases + support:DescribeCommunications permissions.",
+      arguments: z.object({
+        displayId: z
+          .string()
+          .describe(
+            "Support case display ID (numeric, from the quota increase request)",
+          ),
+        profile: z
+          .string()
+          .optional()
+          .describe("Profile to query (default: first configured)"),
+      }),
+      execute: async (
+        args: {
+          displayId: string;
+          profile?: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const profile = args.profile ?? ctx.globalArgs.profiles[0];
+        const region = ctx.globalArgs.defaultRegion;
+        const support = createSupportClient(profile, region);
+        try {
+          const accountId = await getAccountId(profile, region);
+
+          const casesResp = await support.send(
+            new DescribeCasesCommand({
+              displayId: args.displayId,
+              includeCommunications: false,
+            }),
+          );
+
+          const caseDetail = casesResp.cases?.[0];
+          if (!caseDetail) {
+            throw new Error(
+              `No support case found with display ID: ${args.displayId}`,
+            );
+          }
+
+          const internalCaseId = caseDetail.caseId ?? "";
+          const communications: Array<{
+            body: string;
+            submittedBy: string;
+            timeCreated: string;
+          }> = [];
+          let nextToken: string | undefined;
+          let pages = 0;
+          let truncated = false;
+
+          do {
+            const commsResp = await support.send(
+              new DescribeCommunicationsCommand({
+                caseId: internalCaseId,
+                nextToken,
+              }),
+            );
+
+            for (const comm of commsResp.communications ?? []) {
+              communications.push({
+                body: comm.body ?? "",
+                submittedBy: comm.submittedBy ?? "",
+                timeCreated: comm.timeCreated ?? "",
+              });
+            }
+
+            nextToken = commsResp.nextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
+
+          if (nextToken) truncated = true;
+
+          const handle = await ctx.writeResource(
+            "caseCommunications",
+            `case-${args.displayId}-${sanitizeName(profile)}`,
+            {
+              profile,
+              accountId,
+              region: "us-east-1",
+              caseId: internalCaseId,
+              displayId: args.displayId,
+              subject: caseDetail.subject ?? "",
+              status: caseDetail.status ?? "",
+              severityCode: caseDetail.severityCode ?? "",
+              serviceCode: caseDetail.serviceCode ?? "",
+              communications,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+            } as unknown as Record<string, unknown>,
+          );
+
+          ctx.logger.info(
+            "Case {displayId} ({status}, severity: {severity}): {count} communications",
+            {
+              displayId: args.displayId,
+              status: caseDetail.status ?? "unknown",
+              severity: caseDetail.severityCode ?? "unknown",
+              count: communications.length,
+            },
+          );
+
+          return { dataHandles: [handle] };
+        } finally {
+          support.destroy();
         }
       },
     },
