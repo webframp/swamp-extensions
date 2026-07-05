@@ -155,8 +155,8 @@ const CaseCommunicationsSchema = z.object({
 
 function createSupportClient(
   profile: string,
-  _region: string,
 ): SupportClient {
+  // AWS Support API is only available in us-east-1
   const opts: Record<string, unknown> = { region: "us-east-1" };
   if (profile !== "default") {
     opts.credentials = fromIni({ profile });
@@ -281,7 +281,7 @@ interface ModelContext {
 /** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.07.04.1",
+  version: "2026.07.05.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -860,9 +860,7 @@ export const model = {
 
           const handle = await ctx.writeResource(
             "increaseRequest",
-            `${req.ServiceCode ?? "unknown"}-${req.QuotaCode ?? "unknown"}-${
-              sanitizeName(profile)
-            }`,
+            `status-${sanitizeName(args.requestId)}-${sanitizeName(profile)}`,
             {
               profile,
               accountId,
@@ -921,10 +919,9 @@ export const model = {
         ctx: ModelContext,
       ) => {
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
-        const region = ctx.globalArgs.defaultRegion;
-        const support = createSupportClient(profile, region);
+        const support = createSupportClient(profile);
         try {
-          const accountId = await getAccountId(profile, region);
+          const accountId = await getAccountId(profile, "us-east-1");
 
           const casesResp = await support.send(
             new DescribeCasesCommand({
