@@ -379,22 +379,46 @@ function createSyncService(
     return val ? parseInt(val, 10) : 0;
   }
 
+  const PATH_LIMIT = 50_000;
+
   async function pathsForPrefixes(
     prefixes: string[],
-  ): Promise<string[]> {
+  ): Promise<{ paths: string[]; truncated: boolean }> {
     const results: string[] = [];
+    let truncated = false;
     for (const p of prefixes) {
-      // ZRANGEBYLEX with [ inclusive prefix to [ prefix + \xff
       const end = p.slice(0, -1) +
         String.fromCharCode(p.charCodeAt(p.length - 1) + 1);
-      const members = await redis.zrangebylex(pathIdx, `[${p}`, `[${end}`);
+      const remaining = PATH_LIMIT - results.length;
+      if (remaining <= 0) {
+        truncated = true;
+        break;
+      }
+      const members = await redis.zrangebylex(
+        pathIdx,
+        `[${p}`,
+        `[${end}`,
+        "LIMIT",
+        0,
+        remaining,
+      );
       results.push(...members);
+      if (results.length >= PATH_LIMIT) truncated = true;
     }
-    return results;
+    return { paths: results, truncated };
   }
 
-  async function allPaths(): Promise<string[]> {
-    return await redis.zrangebylex(pathIdx, "-", "+");
+  async function allPaths(): Promise<{ paths: string[]; truncated: boolean }> {
+    const paths = await redis.zrangebylex(
+      pathIdx,
+      "-",
+      "+",
+      "LIMIT",
+      0,
+      PATH_LIMIT,
+    );
+    const total = await redis.zcard(pathIdx);
+    return { paths, truncated: total > PATH_LIMIT };
   }
 
   async function pullFiles(
@@ -469,8 +493,8 @@ function createSyncService(
     toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }>;
     toDelete: string[];
   }> {
-    // Fetch all remote path metadata
-    const remotePaths = new Set(await allPaths());
+    const { paths: allRemote } = await allPaths();
+    const remotePaths = new Set(allRemote);
     const remoteHashes = new Map<string, string>();
 
     if (remotePaths.size > 0) {
@@ -558,13 +582,19 @@ function createSyncService(
       }, signal);
     }
 
-    // Fetch remote state for this subtree via path index
-    const end = relPath + String.fromCharCode(0xff);
-    const remotePaths = await redis.zrangebylex(
-      pathIdx,
-      `[${relPath}`,
-      `[${end}`,
-    );
+    // Fetch remote state: point lookup for files, prefix range for directories
+    let remotePaths: string[];
+    if (stat?.isFile) {
+      const score = await redis.zscore(pathIdx, relPath);
+      remotePaths = score !== null ? [relPath] : [];
+    } else {
+      const end = relPath + String.fromCharCode(0xff);
+      remotePaths = await redis.zrangebylex(
+        pathIdx,
+        `[${relPath}`,
+        `[${end}`,
+      );
+    }
 
     const remoteHashes = new Map<string, string>();
     if (remotePaths.length > 0) {
@@ -667,11 +697,11 @@ function createSyncService(
 
       // Determine which paths to pull
       const scopePrefixes = modelPrefixes(options?.context?.models);
-      const paths = scopePrefixes.length > 0
+      const result = scopePrefixes.length > 0
         ? await pathsForPrefixes(scopePrefixes)
         : await allPaths();
 
-      const changes = await pullFiles(paths, metadataOnly, signal);
+      const changes = await pullFiles(result.paths, metadataOnly, signal);
 
       if (scopePrefixes.length === 0 && !metadataOnly) {
         await sidecar.setLastPulledSeq(remoteSeq);
@@ -900,7 +930,6 @@ export const datastore = {
         verify: async (): Promise<DatastoreHealthResult> => {
           const start = performance.now();
           try {
-            await redis.connect();
             const pong = await redis.ping();
             if (pong !== "PONG") {
               return {

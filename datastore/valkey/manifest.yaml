@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/valkey-datastore"
-version: "2026.07.05.1"
+version: "2026.07.05.2"
 description: >
   Stores swamp runtime data in Valkey/Redis with sorted-set path indexing
   for O(log n + k) prefix lookups and SET NX distributed locking.
@@ -19,3 +19,4 @@ datastores:
 additionalFiles:
   - README.md
   - LICENSE.md
+  - RELEASE_NOTES.md

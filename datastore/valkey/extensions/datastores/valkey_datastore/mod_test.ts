@@ -277,3 +277,20 @@ Deno.test({
     assertEquals(caps.twoPhaseSync, true);
   },
 });
+
+Deno.test({
+  name: "verifier works after sync operation (no double-connect)",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    const provider = datastore.createProvider(testConfig());
+    const sync = provider.createSyncService!("/repo", "/tmp/valkey-test-cache");
+    // Trigger an implicit connect via sync
+    await sync.pullChanged();
+    // Verifier must still report healthy (no "already connecting" error)
+    const verifier = provider.createVerifier();
+    const result = await verifier.verify();
+    assertEquals(result.healthy, true);
+    assertEquals(result.message, "OK");
+  },
+});
