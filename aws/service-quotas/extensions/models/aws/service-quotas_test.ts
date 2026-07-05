@@ -8,6 +8,7 @@ import {
 } from "npm:@aws-sdk/client-service-quotas@3.1069.0";
 import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1069.0";
 import { STSClient } from "npm:@aws-sdk/client-sts@3.1069.0";
+import { SupportClient } from "npm:@aws-sdk/client-support@3.1069.0";
 import { model } from "./service-quotas.ts";
 
 // =============================================================================
@@ -50,6 +51,18 @@ function mockCloudWatch(handler: (command: any) => unknown): () => void {
   };
 }
 
+// deno-lint-ignore no-explicit-any
+function mockSupport(handler: (command: any) => unknown): () => void {
+  const original = SupportClient.prototype.send;
+  // deno-lint-ignore no-explicit-any
+  SupportClient.prototype.send = function (_command: any) {
+    return Promise.resolve(handler(_command));
+  } as typeof original;
+  return () => {
+    SupportClient.prototype.send = original;
+  };
+}
+
 // =============================================================================
 // Structure Tests
 // =============================================================================
@@ -62,12 +75,12 @@ Deno.test("model version matches CalVer", () => {
   assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
-Deno.test("model has 5 resources", () => {
-  assertEquals(Object.keys(model.resources).length, 5);
+Deno.test("model has 6 resources", () => {
+  assertEquals(Object.keys(model.resources).length, 6);
 });
 
-Deno.test("model has 5 methods", () => {
-  assertEquals(Object.keys(model.methods).length, 5);
+Deno.test("model has 7 methods", () => {
+  assertEquals(Object.keys(model.methods).length, 7);
 });
 
 // =============================================================================
@@ -444,6 +457,288 @@ Deno.test({
     } finally {
       restoreSts();
       restoreQuotas();
+    }
+  },
+});
+
+// =============================================================================
+// get_request_status Tests
+// =============================================================================
+
+Deno.test({
+  name: "get_request_status returns current request state",
+  sanitizeResources: false,
+  fn: async () => {
+    const restoreSts = mockSTS(() => ({ Account: "891377232878" }));
+    const restoreQuotas = mockQuotas(() => ({
+      RequestedQuota: {
+        Id: "1cff7e34-test-request-id",
+        ServiceCode: "chime",
+        QuotaCode: "L-7F583998",
+        QuotaName: "Amazon Chime SDK media pipeline - Maximum pipelines",
+        DesiredValue: 400,
+        QuotaValue: 200,
+        Status: "CASE_OPENED",
+        Created: new Date("2026-07-04T14:56:43.939Z"),
+      },
+    }));
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { profiles: ["default"], defaultRegion: "us-east-1" },
+      });
+
+      await model.methods.get_request_status.execute(
+        { requestId: "1cff7e34-test-request-id" },
+        context as unknown as Parameters<
+          typeof model.methods.get_request_status.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "increaseRequest");
+      const data = resources[0].data as {
+        requestId: string;
+        status: string;
+        desiredValue: number;
+        previousValue: number;
+        serviceCode: string;
+        quotaCode: string;
+        requestedAt: string | null;
+      };
+      assertEquals(data.requestId, "1cff7e34-test-request-id");
+      assertEquals(data.status, "CASE_OPENED");
+      assertEquals(data.desiredValue, 400);
+      assertEquals(data.previousValue, 0);
+      assertEquals(data.serviceCode, "chime");
+      assertEquals(data.quotaCode, "L-7F583998");
+      assertEquals(data.requestedAt, "2026-07-04T14:56:43.939Z");
+    } finally {
+      restoreSts();
+      restoreQuotas();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_request_status uses null when Created is absent",
+  sanitizeResources: false,
+  fn: async () => {
+    const restoreSts = mockSTS(() => ({ Account: "123456789012" }));
+    const restoreQuotas = mockQuotas(() => ({
+      RequestedQuota: {
+        Id: "req-no-date",
+        ServiceCode: "iam",
+        QuotaCode: "L-FE177D64",
+        QuotaName: "Roles",
+        DesiredValue: 2000,
+        QuotaValue: 1000,
+        Status: "PENDING",
+        Created: undefined,
+      },
+    }));
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { profiles: ["default"], defaultRegion: "us-east-1" },
+      });
+
+      await model.methods.get_request_status.execute(
+        { requestId: "req-no-date" },
+        context as unknown as Parameters<
+          typeof model.methods.get_request_status.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      const data = resources[0].data as { requestedAt: string | null };
+      assertEquals(data.requestedAt, null);
+    } finally {
+      restoreSts();
+      restoreQuotas();
+    }
+  },
+});
+
+// =============================================================================
+// get_case_communications Tests
+// =============================================================================
+
+Deno.test({
+  name: "get_case_communications retrieves case and communications",
+  sanitizeResources: false,
+  fn: async () => {
+    const restoreSts = mockSTS(() => ({ Account: "891377232878" }));
+    const restoreSupport = mockSupport((command) => {
+      const name = command.constructor.name;
+      if (name === "DescribeCasesCommand") {
+        return {
+          cases: [
+            {
+              caseId: "case-891377232878-muen-2026-5de2a9d5d40652c8",
+              displayId: "178317700500245",
+              subject: "Quota Increase: Chime",
+              status: "opened",
+              severityCode: "critical",
+              serviceCode: "service-limit-increase",
+            },
+          ],
+        };
+      }
+      if (name === "DescribeCommunicationsCommand") {
+        return {
+          communications: [
+            {
+              body: "We have escalated your request.",
+              submittedBy: "Amazon Web Services",
+              timeCreated: "2026-07-04T16:21:06.147Z",
+            },
+            {
+              body: "This is causing an urgent production outage.",
+              submittedBy: "admin@example.com",
+              timeCreated: "2026-07-04T15:05:01.937Z",
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { profiles: ["default"], defaultRegion: "us-east-1" },
+      });
+
+      await model.methods.get_case_communications.execute(
+        { displayId: "178317700500245" },
+        context as unknown as Parameters<
+          typeof model.methods.get_case_communications.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "caseCommunications");
+      const data = resources[0].data as {
+        caseId: string;
+        displayId: string;
+        subject: string;
+        status: string;
+        severityCode: string;
+        communications: Array<{ body: string; submittedBy: string }>;
+        truncated: boolean;
+      };
+      assertEquals(
+        data.caseId,
+        "case-891377232878-muen-2026-5de2a9d5d40652c8",
+      );
+      assertEquals(data.displayId, "178317700500245");
+      assertEquals(data.subject, "Quota Increase: Chime");
+      assertEquals(data.status, "opened");
+      assertEquals(data.severityCode, "critical");
+      assertEquals(data.communications.length, 2);
+      assertEquals(
+        data.communications[0].submittedBy,
+        "Amazon Web Services",
+      );
+      assertEquals(data.truncated, false);
+    } finally {
+      restoreSts();
+      restoreSupport();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_case_communications throws when case has no internal ID",
+  sanitizeResources: false,
+  fn: async () => {
+    const restoreSts = mockSTS(() => ({ Account: "123456789012" }));
+    const restoreSupport = mockSupport((command) => {
+      const name = command.constructor.name;
+      if (name === "DescribeCasesCommand") {
+        return {
+          cases: [
+            {
+              caseId: undefined,
+              displayId: "999999999",
+              subject: "Test",
+              status: "opened",
+              severityCode: "low",
+              serviceCode: "general-info",
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { profiles: ["default"], defaultRegion: "us-east-1" },
+      });
+
+      let threw = false;
+      try {
+        await model.methods.get_case_communications.execute(
+          { displayId: "999999999" },
+          context as unknown as Parameters<
+            typeof model.methods.get_case_communications.execute
+          >[1],
+        );
+      } catch (e) {
+        threw = true;
+        assertEquals(
+          (e as Error).message.includes("no internal case ID"),
+          true,
+        );
+      }
+      assertEquals(threw, true);
+    } finally {
+      restoreSts();
+      restoreSupport();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_case_communications throws when case not found",
+  sanitizeResources: false,
+  fn: async () => {
+    const restoreSts = mockSTS(() => ({ Account: "123456789012" }));
+    const restoreSupport = mockSupport((command) => {
+      const name = command.constructor.name;
+      if (name === "DescribeCasesCommand") {
+        return { cases: [] };
+      }
+      return {};
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { profiles: ["default"], defaultRegion: "us-east-1" },
+      });
+
+      let threw = false;
+      try {
+        await model.methods.get_case_communications.execute(
+          { displayId: "000000000" },
+          context as unknown as Parameters<
+            typeof model.methods.get_case_communications.execute
+          >[1],
+        );
+      } catch (e) {
+        threw = true;
+        assertEquals(
+          (e as Error).message.includes("No support case found"),
+          true,
+        );
+      }
+      assertEquals(threw, true);
+    } finally {
+      restoreSts();
+      restoreSupport();
     }
   },
 });

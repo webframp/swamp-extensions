@@ -125,7 +125,7 @@ const IncreaseRequestSchema = z.object({
   desiredValue: z.number(),
   previousValue: z.number(),
   status: z.string(),
-  requestedAt: z.string(),
+  requestedAt: z.string().nullable(),
 });
 
 const CommunicationSchema = z.object({
@@ -872,11 +872,9 @@ export const model = {
               quotaName: req.QuotaName ?? "",
               requestId: req.Id ?? args.requestId,
               desiredValue: req.DesiredValue ?? 0,
-              previousValue: req.QuotaValue ?? 0,
+              previousValue: 0,
               status: req.Status ?? "UNKNOWN",
-              requestedAt: req.Created
-                ? req.Created.toISOString()
-                : new Date().toISOString(),
+              requestedAt: req.Created ? req.Created.toISOString() : null,
             } as unknown as Record<string, unknown>,
           );
 
@@ -942,7 +940,12 @@ export const model = {
             );
           }
 
-          const internalCaseId = caseDetail.caseId ?? "";
+          const internalCaseId = caseDetail.caseId;
+          if (!internalCaseId) {
+            throw new Error(
+              `Support case ${args.displayId} exists but has no internal case ID — cannot retrieve communications`,
+            );
+          }
           const communications: Array<{
             body: string;
             submittedBy: string;
