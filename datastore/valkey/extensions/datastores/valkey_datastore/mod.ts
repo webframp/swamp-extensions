@@ -445,15 +445,6 @@ function createSyncService(
         if (err || !meta || typeof meta !== "object") continue;
 
         const remoteMeta = meta as Record<string, string>;
-        if (remoteMeta.deleted === "true") {
-          try {
-            await Deno.remove(`${cachePath}/${relPath}`);
-            changes++;
-          } catch (e) {
-            if (!(e instanceof Deno.errors.NotFound)) throw e;
-          }
-          continue;
-        }
 
         if (
           metadataOnly && relPath.startsWith("data/") &&
@@ -579,18 +570,21 @@ function createSyncService(
       }, signal);
     }
 
-    // Fetch remote state: point lookup for files, prefix range for directories
+    // Fetch remote state: prefix range for directories, point lookup otherwise
     let remotePaths: string[];
-    if (stat?.isFile) {
-      const score = await redis.zscore(pathIdx, relPath);
-      remotePaths = score !== null ? [relPath] : [];
-    } else {
+    if (stat?.isDirectory) {
       const end = relPath + String.fromCharCode(0xff);
       remotePaths = await redis.zrangebylex(
         pathIdx,
         `[${relPath}`,
-        `[${end}`,
+        `(${end}`,
+        "LIMIT",
+        0,
+        PATH_LIMIT,
       );
+    } else {
+      const score = await redis.zscore(pathIdx, relPath);
+      remotePaths = score !== null ? [relPath] : [];
     }
 
     const remoteHashes = new Map<string, string>();

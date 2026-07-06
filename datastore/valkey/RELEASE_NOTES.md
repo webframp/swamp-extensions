@@ -1,3 +1,17 @@
+## 2026.07.05.4
+
+### Fixed
+
+- `collectOneRelDiff` still used ZRANGEBYLEX prefix scan when a file was deleted
+  locally (`stat === null` fell through to the else branch). Inverted the
+  branch: prefix scan only for `stat?.isDirectory`, ZSCORE point lookup for
+  everything else (existing files and deleted files).
+- `collectOneRelDiff` directory branch had no LIMIT clause — added 50k cap
+  matching `allPaths`/`pathsForPrefixes`.
+- Removed dead `deleted === "true"` branch in `pullFiles` — `applyChanges`
+  hard-deletes via `redis.del`/`zrem`, so no meta with `deleted:true` is ever
+  written.
+
 ## 2026.07.05.3
 
 ### Fixed
