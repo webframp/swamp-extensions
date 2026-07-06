@@ -28,7 +28,7 @@ function sidecarPath(cachePath: string): string {
 }
 
 function isTraversal(p: string): boolean {
-  return p.split("/").some((s) => s === "..");
+  return !p || p.split("/").some((s) => s === "..");
 }
 
 async function readState(cachePath: string): Promise<SidecarState> {

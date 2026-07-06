@@ -253,7 +253,7 @@ function createValkeyLock(
       throw new Error("Lock already acquired; call release() first");
     }
     const start = Date.now();
-    nonce = crypto.randomUUID();
+    const candidate = crypto.randomUUID();
 
     let hostname = "unknown";
     try {
@@ -271,7 +271,7 @@ function createValkeyLock(
           pid: Deno.pid,
           acquiredAt: new Date().toISOString(),
           ttlMs,
-          nonce,
+          nonce: candidate,
         }),
         "PX",
         ttlMs,
@@ -279,14 +279,13 @@ function createValkeyLock(
       );
 
       if (result === "OK") {
-        const acquiredNonce = nonce;
+        nonce = candidate;
         heartbeatId = setInterval(async () => {
           try {
-            // Refresh TTL only if we still own the lock
             const current = await redis.get(key);
             if (current) {
               const parsed = JSON.parse(current);
-              if (parsed.nonce === acquiredNonce) {
+              if (parsed.nonce === candidate) {
                 await redis.pexpire(key, ttlMs);
               }
             }
@@ -300,7 +299,6 @@ function createValkeyLock(
       await new Promise((r) => setTimeout(r, retryIntervalMs));
     }
 
-    nonce = undefined;
     throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
   };
 
@@ -387,8 +385,7 @@ function createSyncService(
     const results: string[] = [];
     let truncated = false;
     for (const p of prefixes) {
-      const end = p.slice(0, -1) +
-        String.fromCharCode(p.charCodeAt(p.length - 1) + 1);
+      const end = p + String.fromCharCode(0xff);
       const remaining = PATH_LIMIT - results.length;
       if (remaining <= 0) {
         truncated = true;
@@ -397,7 +394,7 @@ function createSyncService(
       const members = await redis.zrangebylex(
         pathIdx,
         `[${p}`,
-        `[${end}`,
+        `(${end}`,
         "LIMIT",
         0,
         remaining,
@@ -703,6 +700,8 @@ function createSyncService(
 
       const changes = await pullFiles(result.paths, metadataOnly, signal);
 
+      // Only advance seq on unscoped full pulls. Advancing on scoped pulls
+      // would cause a subsequent full pull to skip changes outside the scope.
       if (scopePrefixes.length === 0 && !metadataOnly) {
         await sidecar.setLastPulledSeq(remoteSeq);
         await sidecar.setLazyPullActive(false);
