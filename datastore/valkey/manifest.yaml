@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@webframp/valkey-datastore"
+version: "2026.07.05.5"
+description: >
+  Stores swamp runtime data in Valkey/Redis with sorted-set path indexing
+  for O(log n + k) prefix lookups and SET NX distributed locking.
+  Compatible with local Valkey, AWS ElastiCache Serverless, and AWS
+  MemoryDB. Implements two-phase sync to minimize time under the global lock.
+license: Apache-2.0
+repository: https://github.com/webframp/swamp-extensions
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels: [valkey, redis, elasticache, memorydb, datastore]
+datastores:
+  - valkey_datastore/mod.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
