@@ -1,3 +1,20 @@
+## 2026.07.05.5
+
+### Fixed
+
+- `collectFullWalkDiff` silently discarded the truncated flag from `allPaths()`,
+  causing deletions beyond the 50k cap to be invisible. Now throws when
+  truncated, refusing to run an incomplete diff.
+- `applyChanges` pipeline errors were silently swallowed — `pipeline.exec()`
+  returns per-command `[Error, result]` tuples that were never inspected. Dirty
+  state was cleared despite partial write failures. Now inspects every result
+  tuple and throws with the list of failed paths.
+- `allPaths()` truncation check used a separate `ZCARD` after `ZRANGEBYLEX`
+  (TOCTOU race). Replaced with LIMIT+1 pattern: fetch one extra entry and check
+  length.
+- `createRedisClient` TLS CA read: wrapped `readTextFileSync` with contextual
+  error message for missing CA files.
+
 ## 2026.07.05.4
 
 ### Fixed

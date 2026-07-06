@@ -412,10 +412,11 @@ function createSyncService(
       "+",
       "LIMIT",
       0,
-      PATH_LIMIT,
+      PATH_LIMIT + 1,
     );
-    const total = await redis.zcard(pathIdx);
-    return { paths, truncated: total > PATH_LIMIT };
+    const truncated = paths.length > PATH_LIMIT;
+    if (truncated) paths.length = PATH_LIMIT;
+    return { paths, truncated };
   }
 
   async function pullFiles(
@@ -481,7 +482,12 @@ function createSyncService(
     toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }>;
     toDelete: string[];
   }> {
-    const { paths: allRemote } = await allPaths();
+    const { paths: allRemote, truncated } = await allPaths();
+    if (truncated) {
+      throw new Error(
+        `Remote path index exceeds ${PATH_LIMIT} entries; full diff is unsafe`,
+      );
+    }
     const remotePaths = new Set(allRemote);
     const remoteHashes = new Map<string, string>();
 
@@ -626,6 +632,9 @@ function createSyncService(
     const BATCH = 50;
     let changes = 0;
 
+    const failedPaths: string[] = [];
+    const CMDS_PER_FILE = 3;
+
     for (let i = 0; i < toPush.length; i += BATCH) {
       signal?.throwIfAborted();
       const batch = toPush.slice(i, i + BATCH);
@@ -641,8 +650,17 @@ function createSyncService(
         pipeline.zadd(pathIdx, 0, f.relPath);
       }
 
-      await pipeline.exec();
-      changes += batch.length;
+      const results = await pipeline.exec();
+      if (results) {
+        for (let j = 0; j < batch.length; j++) {
+          const base = j * CMDS_PER_FILE;
+          const hasError = results.slice(base, base + CMDS_PER_FILE).some(
+            ([err]) => err !== null,
+          );
+          if (hasError) failedPaths.push(batch[j].relPath);
+          else changes++;
+        }
+      }
     }
 
     // Delete tombstones
@@ -654,8 +672,25 @@ function createSyncService(
         pipeline.del(metaKey(prefix, relPath));
         pipeline.zrem(pathIdx, relPath);
       }
-      await pipeline.exec();
-      changes += toDelete.length;
+      const delResults = await pipeline.exec();
+      if (delResults) {
+        for (let j = 0; j < toDelete.length; j++) {
+          const base = j * CMDS_PER_FILE;
+          const hasError = delResults.slice(base, base + CMDS_PER_FILE).some(
+            ([err]) => err !== null,
+          );
+          if (hasError) failedPaths.push(toDelete[j]);
+          else changes++;
+        }
+      }
+    }
+
+    if (failedPaths.length > 0) {
+      throw new Error(
+        `Pipeline errors on ${failedPaths.length} path(s): ${
+          failedPaths.slice(0, 5).join(", ")
+        }`,
+      );
     }
 
     // Increment sequence counter
@@ -876,7 +911,13 @@ function createRedisClient(parsed: ValkeyConfig): Redis {
       rejectUnauthorized: parsed.tls.rejectUnauthorized,
     };
     if (parsed.tls.ca) {
-      tlsOpts.ca = Deno.readTextFileSync(parsed.tls.ca);
+      try {
+        tlsOpts.ca = Deno.readTextFileSync(parsed.tls.ca);
+      } catch (err) {
+        throw new Error(
+          `Failed to read TLS CA file "${parsed.tls.ca}": ${err}`,
+        );
+      }
     }
     opts.tls = tlsOpts;
   }
