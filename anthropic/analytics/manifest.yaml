@@ -1,11 +1,12 @@
 manifestVersion: 1
 name: "@webframp/anthropic/analytics"
-version: "2026.07.02.1"
+version: "2026.07.07.1"
 description: |
-  Observe Claude Enterprise analytics: seat counts, DAU/WAU/MAU, pending
-  invites, and feature adoption (projects, skills, connectors). Stores
-  raw metrics and extracts structured seat/adoption data into separate
-  versioned resources for CEL queries.
+  Observe Claude Enterprise analytics via the Enterprise Analytics API
+  (`/v1/organizations/analytics/*`): seat counts, DAU/WAU/MAU, pending
+  invites, feature adoption (projects, skills, connectors), and token
+  cost/usage. Extracts structured seat, adoption, and cost data into
+  separate versioned resources for CEL queries.
 
   ## Authentication
 
@@ -29,7 +30,8 @@ description: |
 
   ## Methods
 
-  - collect_analytics — full snapshot, seat counts, and adoption metrics
+  - collect_analytics — fans out across /summaries, /users, and /cost_report;
+    writes snapshot, seats, adoption, and cost resources
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - anthropic/analytics.ts

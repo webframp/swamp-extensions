@@ -1,3 +1,12 @@
+## 2026.07.07.1
+
+**Fixed:**
+
+- `collect_activities` `since` filter: the Compliance API expects the dotted
+  range parameter `created_at.gte`, not the bracketed `created_at[gte]`, which
+  returned HTTP 400 (`Unknown query parameter: 'created_at[gte]'`). The `since`
+  argument now filters activities correctly.
+
 ## 2026.07.03.1
 
 **Fixed:**

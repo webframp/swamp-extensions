@@ -253,7 +253,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.07.03.1",
+  version: "2026.07.07.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -326,7 +326,9 @@ export const model = {
         if (args.activity_types) {
           params.activity_types = args.activity_types;
         }
-        if (args.since) params["created_at[gte]"] = args.since;
+        // The Compliance API expects dotted range filters (created_at.gte),
+        // not bracketed ones (created_at[gte]) — the latter returns HTTP 400.
+        if (args.since) params["created_at.gte"] = args.since;
         const pageLimit = args.limit ? parseInt(args.limit, 10) || 100 : 100;
         params.limit = String(Math.min(pageLimit, 5000));
 
