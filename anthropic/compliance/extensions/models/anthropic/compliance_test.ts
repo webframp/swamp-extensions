@@ -64,7 +64,12 @@ Deno.test("compliance model: all resources have lifetime and gc", () => {
 // Mock Anthropic Compliance API Server
 // ---------------------------------------------------------------------------
 
-const MOCK_ORG = { uuid: "a1b2c3d4-5678-9abc-def0-123456789abc", id: "org_abc123", name: "Test Org", type: "enterprise" };
+const MOCK_ORG = {
+  uuid: "a1b2c3d4-5678-9abc-def0-123456789abc",
+  id: "org_abc123",
+  name: "Test Org",
+  type: "enterprise",
+};
 
 const MOCK_USERS = [
   {
@@ -237,7 +242,10 @@ Deno.test({
       assertEquals(resources[0].specName, "organizations");
       const data = resources[0].data as { organizations: typeof MOCK_ORG[] };
       assertEquals(data.organizations.length, 1);
-      assertEquals(data.organizations[0].id, "a1b2c3d4-5678-9abc-def0-123456789abc");
+      assertEquals(
+        data.organizations[0].id,
+        "a1b2c3d4-5678-9abc-def0-123456789abc",
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -672,7 +680,7 @@ Deno.test({
         captured["activity_types"],
         "user.login,conversation.create",
       );
-      assertEquals(captured["created_at[gte]"], "2026-07-01T00:00:00Z");
+      assertEquals(captured["created_at.gte"], "2026-07-01T00:00:00Z");
       assertEquals(captured["limit"], "500");
     } finally {
       uninstall();
