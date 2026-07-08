@@ -431,6 +431,245 @@ Deno.test("post_review writes reviewPosted before approve — partial failure pr
   }
 });
 
+const OPENED_MR_DIFF = {
+  project: "group/repo",
+  iid: 1,
+  title: "Test",
+  state: "opened",
+  description: null,
+  sourceBranch: "a",
+  targetBranch: "b",
+  author: "x",
+  diffs: [],
+  fetchedAt: "2026-01-01T00:00:00Z",
+  truncated: false,
+};
+
+Deno.test("post_review request_changes tolerates 404 unapprove (never-approved MR)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+    if (method === "POST" && url.includes("/api/graphql")) {
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      if (body.query?.includes("mrMetadata")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: {
+                project: {
+                  mergeRequest: {
+                    id: "gid://gitlab/MergeRequest/100",
+                    iid: "1",
+                    title: "Test",
+                    state: "opened",
+                    sourceBranch: "a",
+                    targetBranch: "b",
+                    author: { username: "x" },
+                  },
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              createNote: {
+                note: { id: "gid://gitlab/Note/999", body: "Test review" },
+                errors: [],
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    // REST unapprove: MR was never approved → GitLab returns 404
+    if (method === "POST" && url.includes("/unapprove")) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ message: "404 Not Found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+      [`reviewDraft-${encodeURIComponent("group/repo")}-1`]: {
+        body: "Test review",
+        project: "group/repo",
+        iid: 1,
+        createdAt: "2026-01-01T00:00:00Z",
+      },
+    },
+  });
+
+  try {
+    // Must NOT throw even though unapprove 404s — the comment posted and the
+    // MR is left unapproved, which is the intended "request changes" outcome.
+    await model.methods.post_review.execute(
+      { project: "group/repo", iid: 1, action: "request_changes" },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals((resources[0].data as any).noteId, 999);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+// Mock for unapprove_mr: answers the live MR-metadata GraphQL probe, then the
+// REST /unapprove. `mrAccessible:false` makes the probe return no MR; `unapprove`
+// sets the REST status/body; `onUnapprove` captures the URL that was hit.
+function unapproveFetchMock(opts: {
+  unapprove?: { status: number; body?: unknown };
+  mrAccessible?: boolean;
+  onUnapprove?: (url: string) => void;
+}): () => void {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+    if (method === "POST" && url.includes("/api/graphql")) {
+      const mergeRequest = opts.mrAccessible === false ? null : {
+        id: "gid://gitlab/MergeRequest/100",
+        iid: "1",
+        title: "T",
+        state: "opened",
+        sourceBranch: "a",
+        targetBranch: "b",
+        author: { username: "x" },
+      };
+      return Promise.resolve(
+        new Response(JSON.stringify({ data: { project: { mergeRequest } } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    if (method === "POST" && url.includes("/unapprove")) {
+      opts.onUnapprove?.(url);
+      const u = opts.unapprove ?? { status: 201 };
+      return Promise.resolve(
+        new Response(JSON.stringify(u.body ?? {}), {
+          status: u.status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
+  return () => {
+    globalThis.fetch = original;
+  };
+}
+
+function unapproveContext() {
+  return createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "t" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+}
+
+Deno.test("unapprove_mr is idempotent when there is no approval (404)", async () => {
+  const restore = unapproveFetchMock({
+    unapprove: { status: 404, body: { message: "404 Not Found" } },
+  });
+  try {
+    const { context } = unapproveContext();
+    const res = await model.methods.unapprove_mr.execute(
+      { project: "group/repo", iid: 1 },
+      context as any,
+    );
+    assertEquals(res.dataHandles.length, 0);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("unapprove_mr propagates non-404 errors", async () => {
+  const restore = unapproveFetchMock({
+    unapprove: { status: 500, body: { message: "500 Server Error" } },
+  });
+  try {
+    const { context } = unapproveContext();
+    await assertRejects(
+      () =>
+        model.methods.unapprove_mr.execute(
+          { project: "group/repo", iid: 1 },
+          context as any,
+        ),
+      Error,
+      "500",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("unapprove_mr hits the correct REST endpoint on success", async () => {
+  // Guards against an endpoint typo silently degrading to a 404 no-op.
+  let hit = "";
+  const restore = unapproveFetchMock({
+    unapprove: { status: 201 },
+    onUnapprove: (u) => (hit = u),
+  });
+  try {
+    const { context } = unapproveContext();
+    const res = await model.methods.unapprove_mr.execute(
+      { project: "group/repo", iid: 1 },
+      context as any,
+    );
+    assertEquals(res.dataHandles.length, 0);
+    assertEquals(
+      hit.endsWith("/merge_requests/1/unapprove"),
+      true,
+      `unexpected unapprove URL: ${hit}`,
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("unapprove_mr throws when the MR is not live-accessible", async () => {
+  // A 404 must NOT be silently swallowed if the MR itself is inaccessible.
+  const restore = unapproveFetchMock({ mrAccessible: false });
+  try {
+    const { context } = unapproveContext();
+    await assertRejects(
+      () =>
+        model.methods.unapprove_mr.execute(
+          { project: "group/repo", iid: 1 },
+          context as any,
+        ),
+      Error,
+      "not found or not accessible",
+    );
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("analyze stores review draft", async () => {
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: { host: "localhost", token: "x" },

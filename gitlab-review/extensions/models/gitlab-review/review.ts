@@ -157,6 +157,43 @@ async function contextFetch(
   }
 }
 
+/**
+ * Remove approval from an MR, idempotently. GitLab's unapprove endpoint returns
+ * 404 when the caller has no approval to remove; that is the desired end state
+ * for "request changes", not an error, so we treat it as success. Any other
+ * non-2xx status still throws. Returns whether an approval was actually removed.
+ */
+async function unapproveMr(
+  ctx: string,
+  host: string,
+  token: string,
+  project: string,
+  iid: number,
+): Promise<{ removed: boolean }> {
+  const url = apiUrl(
+    host,
+    `/projects/${encodeProject(project)}/merge_requests/${iid}/unapprove`,
+  );
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "PRIVATE-TOKEN": token, "Content-Type": "application/json" },
+  });
+  if (resp.status === 404) {
+    // Nothing to unapprove — the MR was not approved by this user. Idempotent.
+    return { removed: false };
+  }
+  if (!resp.ok) {
+    let body: string;
+    try {
+      body = await resp.text();
+    } catch {
+      body = "[unable to read response body]";
+    }
+    throw new Error(`${ctx}: GitLab API ${resp.status}: ${body}`);
+  }
+  return { removed: true };
+}
+
 // =============================================================================
 // GraphQL Client
 // =============================================================================
@@ -221,7 +258,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.06.24.1",
+  version: "2026.07.08.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     mrDiff: {
@@ -430,20 +467,31 @@ export const model = {
       ) => {
         await assertMrOpen(context, args.project, args.iid);
         const { host, token } = context.globalArgs;
-        const pid = encodeProject(args.project);
-        await contextFetch(
+        // Confirm the MR is live-accessible before treating a 404 from unapprove
+        // as "no approval to remove". GitLab also returns 404 for MRs the token
+        // cannot see, and the cached mrDiff state may be stale relative to the
+        // current token — without this probe an inaccessible MR would be
+        // reported as a successful request-changes.
+        const gql = await graphqlRequest(host, token, MR_METADATA_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        if (!gql.project?.mergeRequest?.id) {
+          throw new Error(
+            `unapprove_mr ${args.project}!${args.iid}: MR not found or not accessible`,
+          );
+        }
+        const { removed } = await unapproveMr(
           `unapprove_mr ${args.project}!${args.iid}`,
           host,
           token,
-          `/projects/${pid}/merge_requests/${args.iid}/unapprove`,
-          {
-            method: "POST",
-          },
+          args.project,
+          args.iid,
         );
-        context.logger.info("Unapproved MR", {
-          project: args.project,
-          iid: args.iid,
-        });
+        context.logger.info(
+          removed ? "Unapproved MR" : "MR had no approval to remove",
+          { project: args.project, iid: args.iid },
+        );
         return { dataHandles: [] };
       },
     },
@@ -608,17 +656,22 @@ export const model = {
             iid: args.iid,
           });
         } else if (args.action === "request_changes") {
-          await contextFetch(
+          // Idempotent: a never-approved MR has nothing to unapprove (404),
+          // which is fine — the comment is already posted and the MR is left
+          // unapproved either way.
+          const { removed } = await unapproveMr(
             `post_review unapprove ${args.project}!${args.iid}`,
             host,
             token,
-            `/projects/${pid}/merge_requests/${args.iid}/unapprove`,
-            { method: "POST" },
+            args.project,
+            args.iid,
           );
-          context.logger.info("Requested changes on MR", {
-            project: args.project,
-            iid: args.iid,
-          });
+          context.logger.info(
+            removed
+              ? "Requested changes on MR (approval removed)"
+              : "Requested changes on MR (was not approved)",
+            { project: args.project, iid: args.iid },
+          );
         }
 
         context.logger.info("Posted review to GitLab", {

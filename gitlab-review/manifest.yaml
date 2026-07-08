@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab-review"
-version: "2026.06.24.1"
+version: "2026.07.08.1"
 description: |
   AI-assisted GitLab merge request code review with human approval gate.
   Uses GraphQL for notes and MR metadata, REST fallback for diff content
@@ -20,7 +20,7 @@ description: |
   - **edit_draft** — Revise the draft (versioned, retains history)
   - **update_review** — Edit an existing comment via GraphQL updateNote
   - **approve_mr** — Approve the MR without posting a comment (REST)
-  - **unapprove_mr** — Remove approval / request changes (REST)
+  - **unapprove_mr** — Remove approval / request changes (REST; idempotent — a never-approved MR is a no-op)
   - **post_review** — Post draft via GraphQL createNote, optionally approve/unapprove
 repository: "https://github.com/webframp/swamp-extensions"
 models:
