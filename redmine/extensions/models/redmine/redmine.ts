@@ -239,6 +239,12 @@ export const model = {
         "Add Zod schemas to all resource specs — no globalArguments changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.06.21.1",
+      description:
+        "Method additions (journal edit, file upload, relations) — no globalArguments changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: z.object({
