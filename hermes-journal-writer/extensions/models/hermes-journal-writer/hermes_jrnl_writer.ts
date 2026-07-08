@@ -2,13 +2,17 @@
  * Journal Writer — reads swamp research data and writes org-mode journal entries.
  *
  * Consumes data from research-collector and materializes it as org-mode
- * files in ~/org/journal/. The org files are the living knowledge store —
+ * files in ~/org/journal/. One file per day: YYYY-MM-DD-dow.org
+ * The org files are the living knowledge store —
  * this model is a data consumer + formatter, not a storage layer.
  *
  * @module
  */
 
 import { z } from "npm:zod@4.4.3";
+
+const ALL_SOURCES = ["hn", "lobsters", "sre", "ifin", "redmonk", "arxiv"] as const;
+type SourceName = typeof ALL_SOURCES[number];
 
 const GlobalArgsSchema = z.object({
   orgDir: z.string().default("~/org")
@@ -25,6 +29,11 @@ const GlobalArgsSchema = z.object({
     .describe("Git commit user name"),
   gitUserEmail: z.string().default("hermes@localhost")
     .describe("Git commit user email"),
+  sources: z.array(z.enum(ALL_SOURCES))
+    .default([...ALL_SOURCES])
+    .describe(
+      "Which sources to include in the journal entry. Omit a source name to disable it.",
+    ),
 }).strict();
 
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
@@ -68,15 +77,20 @@ async function runCommand(
   };
 }
 
-function _makeHeading(text: string, level: number): string {
-  return `${"*".repeat(level)} ${text}`;
-}
-
+/** YYYY-MM-DD dow — used as the org #+DATE and in the filename. */
 function formatAsOrgDate(date: Date): string {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return `${date.getFullYear()}-${
     String(date.getMonth() + 1).padStart(2, "0")
   }-${String(date.getDate()).padStart(2, "0")} ${days[date.getDay()]}`;
+}
+
+/** YYYY-MM-DD-dow — used in the filename (lowercase day). */
+function formatAsFileSuffix(date: Date): string {
+  const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  return `${date.getFullYear()}-${
+    String(date.getMonth() + 1).padStart(2, "0")
+  }-${String(date.getDate()).padStart(2, "0")}-${days[date.getDay()]}`;
 }
 
 function formatTimestamp(date: Date): string {
@@ -96,63 +110,71 @@ async function readResearchData(
   swampBin: string,
   repoDir: string,
 ): Promise<Record<string, unknown> | null> {
-  const result = await runCommand(
-    [swampBin, "data", "get", "research-collector", "brief", "--json"],
-    repoDir,
-    15000,
-  );
-  if (!result.success) return null;
-  try {
-    const parsed = JSON.parse(result.stdout);
-    const content = parsed.content;
-    if (typeof content === "string") {
-      try {
-        return JSON.parse(content);
-      } catch {
-        return null;
+  // Try spec name "research" first (the actual output spec of @webframp/research-collector),
+  // falling back to legacy "brief" for older instances.
+  for (const spec of ["research", "brief"]) {
+    const result = await runCommand(
+      [swampBin, "data", "get", "research-collector", spec, "--json"],
+      repoDir,
+      15000,
+    );
+    if (!result.success) continue;
+    try {
+      const parsed = JSON.parse(result.stdout);
+      const content = parsed.content;
+      if (typeof content === "string") {
+        try {
+          return JSON.parse(content);
+        } catch {
+          continue;
+        }
       }
+      if (content && typeof content === "object") {
+        return content as Record<string, unknown>;
+      }
+    } catch {
+      continue;
     }
-    if (content && typeof content === "object") {
-      return content as Record<string, unknown>;
-    }
-    return null;
-  } catch {
-    return null;
   }
+  return null;
 }
 
 // =============================================================================
-// Org entry builder
+// Org file builder — one complete standalone file per day
 // =============================================================================
 
-function buildDailyEntry(data: Record<string, unknown>): string {
-  const now = new Date();
+function buildDailyFile(
+  data: Record<string, unknown>,
+  enabledSources: Set<SourceName>,
+  now: Date,
+): string {
   const orgDate = formatAsOrgDate(now);
   const ts = formatTimestamp(now);
 
-  const allTags: Set<string> = new Set(["research"]);
+  const allTags: Set<string> = new Set(["research", "journal"]);
   const allSources: string[] = [];
 
-  const hnStories =
-    ((data["hnFrontPage"] as Record<string, unknown>)?.stories ?? []) as Array<
-      Record<string, unknown>
-    >;
-  const lobStories =
-    ((data["lobstersHottest"] as Record<string, unknown>)?.stories ??
-      []) as Array<Record<string, unknown>>;
-  const sreItems =
-    ((data["sreWeekly"] as Record<string, unknown>)?.items ?? []) as Array<
-      Record<string, unknown>
-    >;
-  const ifinTopics =
-    ((data["ifin"] as Record<string, unknown>)?.topics ?? []) as Array<
-      Record<string, unknown>
-    >;
-  const redmonkItems =
-    ((data["redmonk"] as Record<string, unknown>)?.items ?? []) as Array<
-      Record<string, unknown>
-    >;
+  // Extract each source (guarded — absent if collector didn't fetch it)
+  const hnStories = enabledSources.has("hn")
+    ? (((data["hnFrontPage"] as Record<string, unknown>)?.stories ?? []) as Array<Record<string, unknown>>)
+    : [];
+  const lobStories = enabledSources.has("lobsters")
+    ? (((data["lobstersHottest"] as Record<string, unknown>)?.stories ?? []) as Array<Record<string, unknown>>)
+    : [];
+  const sreItems = enabledSources.has("sre")
+    ? (((data["sreWeekly"] as Record<string, unknown>)?.items ?? []) as Array<Record<string, unknown>>)
+    : [];
+  const ifinTopics = enabledSources.has("ifin")
+    ? (((data["ifin"] as Record<string, unknown>)?.topics ?? []) as Array<Record<string, unknown>>)
+    : [];
+  const redmonkItems = enabledSources.has("redmonk")
+    ? (((data["redmonk"] as Record<string, unknown>)?.items ?? []) as Array<Record<string, unknown>>)
+    : [];
+  const arxivEntries = enabledSources.has("arxiv")
+    ? (((data["arxiv"] as Record<string, unknown>)?.entries ?? []) as Array<Record<string, unknown>>)
+    : [];
 
+  // Collect tags from tagged sources
   for (const s of lobStories) {
     const t = s["tags"] as string[] | undefined;
     if (t) { for (const tag of t) allTags.add(sanitizeTag(tag)); }
@@ -161,7 +183,12 @@ function buildDailyEntry(data: Record<string, unknown>): string {
     const tags = t["tags"] as string[] | undefined;
     if (tags) { for (const tag of tags) allTags.add(sanitizeTag(String(tag))); }
   }
+  for (const e of arxivEntries) {
+    const cat = e["category"] as string | undefined;
+    if (cat) allTags.add(sanitizeTag(cat));
+  }
 
+  // Collect source URLs for the SOURCES property
   for (const s of hnStories) {
     const u = s["url"] as string | null;
     if (u) allSources.push(u);
@@ -184,96 +211,117 @@ function buildDailyEntry(data: Record<string, unknown>): string {
     const l = item["link"] as string;
     if (l) allSources.push(l);
   }
+  for (const e of arxivEntries) {
+    const l = e["link"] as string;
+    if (l) allSources.push(l);
+  }
 
-  const tagList = Array.from(allTags).sort().join(" ");
+  const filetags = Array.from(allTags).sort().map((t) => `:${t}:`).join("");
 
-  let entry = `*** ${orgDate}\n`;
-  entry += ":PROPERTIES:\n";
-  entry += `:SOURCE: research-brief\n`;
-  entry += `:TAGS: ${tagList}\n`;
-  entry += `:SOURCES: ${
-    allSources.slice(0, 10).map((u) => u.replace(/[\r\n]/g, "")).join(", ")
-  }\n`;
-  entry += `:UPDATED: ${ts}\n`;
-  entry += ":END:\n\n";
-  entry +=
-    `Research brief — ${hnStories.length} HN, ${lobStories.length} Lobste.rs, ${sreItems.length} SRE Weekly, ${ifinTopics.length} IFIN, ${redmonkItems.length} RedMonk\n\n`;
+  // Build the counts summary line
+  const counts: string[] = [];
+  if (hnStories.length) counts.push(`${hnStories.length} HN`);
+  if (lobStories.length) counts.push(`${lobStories.length} Lobste.rs`);
+  if (sreItems.length) counts.push(`${sreItems.length} SRE Weekly`);
+  if (ifinTopics.length) counts.push(`${ifinTopics.length} IFIN`);
+  if (redmonkItems.length) counts.push(`${redmonkItems.length} RedMonk`);
+  if (arxivEntries.length) counts.push(`${arxivEntries.length} arXiv`);
 
+  // === File header ===
+  let file = `#+TITLE: Research Journal ${orgDate}\n`;
+  file += `#+DATE: <${orgDate}>\n`;
+  file += `#+FILETAGS: ${filetags}\n`;
+  file += `:PROPERTIES:\n`;
+  file += `:SOURCE: research-brief\n`;
+  file += `:SOURCES: ${allSources.slice(0, 10).map((u) => u.replace(/[\r\n]/g, "")).join(", ")}\n`;
+  file += `:UPDATED: ${ts}\n`;
+  file += `:END:\n\n`;
+  file += `Research brief — ${counts.join(", ")}\n\n`;
+
+  // === Sections (level-1 headings — they're the top level in a per-day file) ===
   if (hnStories.length > 0) {
-    entry += `**** Hacker News\n`;
+    file += `* Hacker News\n`;
     for (const s of hnStories.slice(0, 10)) {
       const title = s["title"] as string;
       const url = s["url"] as string | null;
-      entry += `- *${title}* (${s["score"]}pts by ${s["by"]})\n`;
-      if (url) entry += `  ${url}\n`;
+      file += `- *${title}* (${s["score"]}pts by ${s["by"]})\n`;
+      if (url) file += `  ${url}\n`;
     }
-    entry += "\n";
+    file += "\n";
   }
 
   if (lobStories.length > 0) {
-    entry += `**** Lobste.rs\n`;
+    file += `* Lobste.rs\n`;
     for (const s of lobStories.slice(0, 10)) {
       const title = s["title"] as string;
       const tags = (s["tags"] as string[]) ?? [];
       const url = s["url"] as string | null;
-      entry += `- *${title}* (${s["score"]}pts)\n`;
-      if (tags.length > 0) entry += `  tags: ${tags.join(", ")}\n`;
-      if (url) entry += `  ${url}\n`;
+      file += `- *${title}* (${s["score"]}pts)\n`;
+      if (tags.length > 0) file += `  tags: ${tags.join(", ")}\n`;
+      if (url) file += `  ${url}\n`;
     }
-    entry += "\n";
+    file += "\n";
   }
 
   if (sreItems.length > 0) {
-    entry += `**** SRE Weekly\n`;
+    file += `* SRE Weekly\n`;
     for (const item of sreItems) {
       const title = item["title"] as string;
       const link = item["link"] as string;
       const desc = (item["description"] as string ?? "").slice(0, 150);
-      entry += `- *${title}*\n`;
-      if (desc) entry += `  ${desc}\n`;
-      if (link) entry += `  ${link}\n`;
+      file += `- *${title}*\n`;
+      if (desc) file += `  ${desc}\n`;
+      if (link) file += `  ${link}\n`;
     }
-    entry += "\n";
+    file += "\n";
   }
 
   if (ifinTopics.length > 0) {
-    entry += `**** IFIN Security Topics\n`;
+    file += `* IFIN Security Topics\n`;
     for (const t of ifinTopics.slice(0, 8)) {
       const title = t["title"] as string;
       const tags = (t["tags"] as string[]) ?? [];
       const slug = t["slug"] as string;
       const excerpt = (t["excerpt"] as string ?? "").slice(0, 200);
-      entry += `- *${title}* (${t["views"]} views, ${
-        t["posts_count"]
-      } posts)\n`;
-      if (tags.length > 0) entry += `  tags: ${tags.join(", ")}\n`;
-      if (excerpt) entry += `  ${excerpt}\n`;
+      file += `- *${title}* (${t["views"]} views, ${t["posts_count"]} posts)\n`;
+      if (tags.length > 0) file += `  tags: ${tags.join(", ")}\n`;
+      if (excerpt) file += `  ${excerpt}\n`;
       if (slug) {
-        entry += `  https://discourse.ifin.network/t/${slug}/${t["id"]}\n`;
+        file += `  https://discourse.ifin.network/t/${slug}/${t["id"]}\n`;
       }
     }
-    entry += "\n";
+    file += "\n";
   }
 
   if (redmonkItems.length > 0) {
-    entry += `**** RedMonk\n`;
+    file += `* RedMonk\n`;
     for (const item of redmonkItems) {
       const title = item["title"] as string;
       const author = item["author"] as string;
       const link = item["link"] as string;
-      entry += `- *${title}* by ${author}\n`;
-      if (link) entry += `  ${link}\n`;
+      file += `- *${title}* by ${author}\n`;
+      if (link) file += `  ${link}\n`;
     }
-    entry += "\n";
+    file += "\n";
   }
 
-  if (allSources.length > 0) {
-    entry += `**** Sources\n`;
-    for (const url of allSources.slice(0, 30)) entry += `- ${url}\n`;
-    entry += "\n";
+  if (arxivEntries.length > 0) {
+    file += `* arXiv\n`;
+    for (const e of arxivEntries) {
+      const title = e["title"] as string;
+      const authors = (e["authors"] as string[]) ?? [];
+      const link = e["link"] as string;
+      const summary = (e["summary"] as string ?? "").replace(/\n/g, " ").slice(0, 200);
+      file += `- *${title}*`;
+      if (authors.length > 0) file += ` — ${authors.slice(0, 3).join(", ")}`;
+      file += "\n";
+      if (summary) file += `  ${summary}\n`;
+      if (link) file += `  ${link}\n`;
+    }
+    file += "\n";
   }
 
-  return entry;
+  return file;
 }
 
 async function gitCommit(
@@ -339,6 +387,7 @@ async function writeDailyEntry(
     );
   }
 
+  const enabledSources = new Set(cfg.sources as SourceName[]);
   const data = await readResearchData(cfg.swampBin, cfg.repoDir);
   if (!data) {
     ctx.logger.warn(
@@ -346,50 +395,34 @@ async function writeDailyEntry(
     );
   }
 
-  const year = String(now.getFullYear());
-  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const fileSuffix = formatAsFileSuffix(now);
+  const orgDate = formatAsOrgDate(now);
   const journalDir = `${orgDir}/${cfg.jrnlSubdir}`;
-  const journalFile = `${journalDir}/${year}-${month}.org`;
+  const journalFile = `${journalDir}/${fileSuffix}.org`;
+  const instanceKey = `daily-${fileSuffix}`;
 
   await Deno.mkdir(journalDir, { recursive: true });
 
-  const entry = data
-    ? buildDailyEntry(data)
-    : `*** ${formatAsOrgDate(now)}\n:PROPERTIES:\n:UPDATED: ${
-      formatTimestamp(now)
-    }\n:END:\n\nNo research data available. Run \`swamp workflow run research-brief\` first.\n\n`;
-
-  let fileExists = true;
+  // Check for existing file — idempotent, don't overwrite
   try {
     await Deno.stat(journalFile);
+    ctx.logger.info("Entry for today already exists, skipping", { file: journalFile });
+    const handle = await ctx.writeResource("journalEntry", instanceKey, {
+      date: orgDate,
+      file: journalFile,
+      status: "already-exists",
+      createdAt: formatTimestamp(now),
+    });
+    return { dataHandles: [handle] };
   } catch {
-    fileExists = false;
+    // File doesn't exist — proceed
   }
 
-  if (!fileExists) {
-    await Deno.writeTextFile(
-      journalFile,
-      `#+TITLE: Research Journal ${year}-${month}\n#+FILETAGS: :research:journal:\n\n${entry}`,
-    );
-  } else {
-    const existing = await Deno.readTextFile(journalFile);
-    const todayHeading = `*** ${formatAsOrgDate(now)}`;
-    if (existing.includes(todayHeading)) {
-      ctx.logger.info("Entry for today already exists, skipping");
-      const handle = await ctx.writeResource(
-        "journalEntry",
-        `daily-${year}-${month}`,
-        {
-          date: formatAsOrgDate(now),
-          file: journalFile,
-          status: "already-exists",
-          createdAt: formatTimestamp(now),
-        },
-      );
-      return { dataHandles: [handle] };
-    }
-    await Deno.writeTextFile(journalFile, existing + "\n" + entry);
-  }
+  const fileContent = data
+    ? buildDailyFile(data, enabledSources, now)
+    : `#+TITLE: Research Journal ${orgDate}\n#+DATE: <${orgDate}>\n#+FILETAGS: :research:journal:\n:PROPERTIES:\n:UPDATED: ${formatTimestamp(now)}\n:END:\n\nNo research data available. Run \`swamp workflow run research-brief\` first.\n`;
+
+  await Deno.writeTextFile(journalFile, fileContent);
 
   try {
     await gitCommit(
@@ -397,7 +430,7 @@ async function writeDailyEntry(
       cfg.jrnlSubdir,
       cfg.gitUserName,
       cfg.gitUserEmail,
-      `Auto-journal: research entry for ${formatAsOrgDate(now)}`,
+      `journal: research entry for ${orgDate}`,
     );
     ctx.logger.info(`Committed ${journalFile}`);
   } catch (e) {
@@ -410,23 +443,19 @@ async function writeDailyEntry(
     ctx.logger.warn("Git push failed", { error: String(e) });
   }
 
-  const handle = await ctx.writeResource(
-    "journalEntry",
-    `daily-${year}-${month}`,
-    {
-      date: formatAsOrgDate(now),
-      file: journalFile,
-      status: "written",
-      createdAt: formatTimestamp(now),
-    },
-  );
+  const handle = await ctx.writeResource("journalEntry", instanceKey, {
+    date: orgDate,
+    file: journalFile,
+    status: "written",
+    createdAt: formatTimestamp(now),
+  });
   return { dataHandles: [handle] };
 }
 
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.06.21.1",
+  version: "2026.07.08.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     journalEntry: {
@@ -445,7 +474,7 @@ export const model = {
     write_daily_entry: {
       description:
         "Write a daily research journal entry to the org repo with commit/push.",
-      arguments: z.object({}),
+      arguments: z.object({}).strict(),
       execute: writeDailyEntry,
     },
   },
