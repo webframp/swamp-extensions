@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.07.08.3"
+version: "2026.07.08.4"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -50,6 +50,8 @@ description: |
   **Write:**
   - create_issue, update_issue, add_issue_note
   - create_merge_request, update_merge_request, merge, add_mr_note
+  - update_mr_note / delete_mr_note (edit or remove an MR comment by id)
+  - set_mr_assignees (assign/reassign/unassign by username; CE keeps one, EE many)
   - create_label
   - mark_todo_done (clear a handled to-do off the pending queue)
   - rebase_merge_request (rebase a stale MR onto its target, polling to completion)

@@ -68,6 +68,7 @@ Deno.test("model has all expected methods", () => {
     "create_issue",
     "create_label",
     "create_merge_request",
+    "delete_mr_note",
     "get_job_log",
     "get_merge_request",
     "get_pipeline_jobs",
@@ -88,8 +89,10 @@ Deno.test("model has all expected methods", () => {
     "rebase_merge_request",
     "retry_job",
     "retry_pipeline",
+    "set_mr_assignees",
     "update_issue",
     "update_merge_request",
+    "update_mr_note",
   ]);
 });
 
@@ -105,6 +108,8 @@ Deno.test("model has all expected resources", () => {
     "members",
     "mergeRequests",
     "mergeStatus",
+    "mrAssignees",
+    "noteDeleted",
     "notes",
     "pipelineJobs",
     "pipelines",
@@ -1262,6 +1267,146 @@ Deno.test("retry_pipeline records the pipeline retry", async () => {
   }
 });
 
+Deno.test("update_mr_note sends the note gid and edits the note", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      updateNote: {
+        note: {
+          id: "gid://gitlab/Note/5",
+          body: "edited body",
+          createdAt: "2026-01-01T00:00:00Z",
+          author: { username: "sescriva" },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.update_mr_note.execute(
+      { project: "o11n/glue", iid: 2156, noteId: 5, body: "edited body" },
+      context as any,
+    );
+    assertEquals(m.vars().id, "gid://gitlab/Note/5");
+    assertEquals(m.vars().body, "edited body");
+    const d = getWrittenResources().find((x) => x.specName === "notes")!
+      .data as any;
+    assertEquals(d.notes[0].id, 5);
+    assertEquals(d.notes[0].body, "edited body");
+    assertEquals(d.noteableType, "merge_request");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("delete_mr_note sends the note gid and records deletion", async () => {
+  const m = mockGraphqlCapture({
+    data: { destroyNote: { note: { id: "gid://gitlab/Note/5" }, errors: [] } },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.delete_mr_note.execute(
+      { project: "o11n/glue", iid: 2156, noteId: 5 },
+      context as any,
+    );
+    assertEquals(m.vars().id, "gid://gitlab/Note/5");
+    const d = getWrittenResources().find((x) => x.specName === "noteDeleted")!
+      .data as any;
+    assertEquals(d.deleted, true);
+    assertEquals(d.noteId, 5);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("set_mr_assignees sends usernames with REPLACE and records result", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      mergeRequestSetAssignees: {
+        mergeRequest: {
+          iid: "2156",
+          assignees: { nodes: [{ username: "sescriva" }] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.set_mr_assignees.execute(
+      { project: "o11n/glue", iid: 2156, usernames: ["sescriva"] },
+      context as any,
+    );
+    assertEquals(m.vars().usernames, ["sescriva"]);
+    assertEquals(m.vars().projectPath, "o11n/glue");
+    const d = getWrittenResources().find((x) => x.specName === "mrAssignees")!
+      .data as any;
+    assertEquals(d.assignees, ["sescriva"]);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("set_mr_assignees with an empty list sends [] to unassign", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      mergeRequestSetAssignees: {
+        mergeRequest: { iid: "2156", assignees: { nodes: [] } },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.set_mr_assignees.execute(
+      { project: "o11n/glue", iid: 2156, usernames: [] },
+      context as any,
+    );
+    assertEquals(m.vars().usernames, []);
+    const d = getWrittenResources().find((x) => x.specName === "mrAssignees")!
+      .data as any;
+    assertEquals(d.assignees, []);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("set_mr_assignees throws when a requested user was not assigned", async () => {
+  // GitLab silently omits an unknown user (no error) — the method must catch it.
+  const m = mockGraphqlCapture({
+    data: {
+      mergeRequestSetAssignees: {
+        mergeRequest: { iid: "2156", assignees: { nodes: [] } },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.set_mr_assignees.execute(
+          { project: "o11n/glue", iid: 2156, usernames: ["ghost"] },
+          context as any,
+        ),
+      Error,
+      "did not assign ghost",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
 Deno.test("create_merge_request writes mergeRequests resource via GraphQL", async () => {
   const restore = mockGraphqlFetch({
     data: {
@@ -1613,6 +1758,39 @@ const MOCK_GRAPHQL_RESPONSE = {
     },
   },
 };
+
+// Like mockGraphqlFetch but records the variables sent on the last GraphQL call
+// so tests can assert what the method actually requested (not just echo output).
+function mockGraphqlCapture(
+  responseBody: unknown,
+): { restore: () => void; vars: () => any } {
+  const original = globalThis.fetch;
+  let sent: any = null;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if ((init?.method ?? "GET") === "POST" && url.includes("/api/graphql")) {
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      sent = body.variables ?? null;
+      return Promise.resolve(
+        new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  return {
+    restore: () => {
+      globalThis.fetch = original;
+    },
+    vars: () => sent,
+  };
+}
 
 function mockGraphqlFetch(
   responseBody: unknown,
