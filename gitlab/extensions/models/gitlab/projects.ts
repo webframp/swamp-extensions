@@ -246,6 +246,34 @@ const DashboardSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const MergeStatusSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  title: z.string(),
+  state: z.string(),
+  draft: z.boolean(),
+  mergeable: z.boolean().nullable(),
+  // GitLab's detailed_merge_status enum, e.g. mergeable, need_rebase, conflict,
+  // ci_must_pass, not_approved, discussions_not_resolved, draft_status.
+  detailedMergeStatus: z.string().nullable(),
+  conflicts: z.boolean().nullable(),
+  headPipelineStatus: z.string().nullable(),
+  // Human-readable reasons the MR cannot merge (empty when mergeable).
+  blockers: z.array(z.string()),
+  summary: z.string(),
+  fetchedAt: z.string(),
+});
+
+const RebaseResultSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  // "rebased" (finished clean), "error" (see mergeError), or "in_progress"
+  // (still running when polling gave up — re-check with get_merge_request).
+  status: z.enum(["rebased", "error", "in_progress"]),
+  mergeError: z.string().nullable(),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
 // GraphQL Client
 // =============================================================================
@@ -461,6 +489,57 @@ mutation todoMarkDone($id: TodoID!) {
     errors
   }
 }`;
+
+const MR_STATUS_QUERY = `
+query mrStatus($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    mergeRequest(iid: $iid) {
+      iid title state draft
+      detailedMergeStatus
+      mergeable
+      conflicts
+      headPipeline { status }
+    }
+  }
+}`;
+
+/**
+ * Plain-English reasons keyed by GitLab's detailed_merge_status (GraphQL returns
+ * the enum upper-cased). Unlisted values fall back to a humanized form.
+ */
+const MERGE_STATUS_EXPLANATION: Record<string, string> = {
+  MERGEABLE: "ready to merge",
+  NEED_REBASE: "the source branch is behind the target and must be rebased",
+  CONFLICT: "there are merge conflicts with the target branch",
+  CI_MUST_PASS: "a required CI/CD pipeline must succeed first",
+  CI_STILL_RUNNING: "the CI/CD pipeline is still running",
+  DRAFT_STATUS: "the merge request is marked as a draft",
+  NOT_APPROVED: "required approvals are missing",
+  DISCUSSIONS_NOT_RESOLVED: "there are unresolved discussions",
+  NOT_OPEN: "the merge request is not open",
+  BLOCKED_STATUS: "it is blocked by another merge request",
+  EXTERNAL_STATUS_CHECKS: "external status checks must pass",
+  REQUESTED_CHANGES: "changes were requested in review",
+  CHECKING: "GitLab is still checking mergeability — try again shortly",
+  UNCHECKED: "mergeability has not been checked yet",
+  PREPARING: "GitLab is still preparing the merge request",
+};
+
+/** Max status polls for a triggered rebase before reporting it still in progress. */
+const REBASE_MAX_POLLS = 15;
+
+/**
+ * Delay between rebase status polls, in ms. Env-overridable so tests can run the
+ * loop fast; defaults to 2s and falls back safely if env access is denied.
+ */
+function rebasePollMs(): number {
+  try {
+    const v = Number(Deno.env.get("SWAMP_GITLAB_REBASE_POLL_MS"));
+    return Number.isFinite(v) && v > 0 ? v : 2000;
+  } catch {
+    return 2000;
+  }
+}
 
 const LABELS_QUERY = `
 query labels($fullPath: ID!, $first: Int!) {
@@ -698,7 +777,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.08.1",
+  version: "2026.07.08.2",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -736,6 +815,19 @@ export const model = {
     notes: {
       description: "Notes/comments on an issue or MR",
       schema: NoteListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    mergeStatus: {
+      description:
+        "Mergeability of an MR — detailed_merge_status plus human-readable blockers",
+      schema: MergeStatusSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    rebaseResult: {
+      description: "Outcome of a triggered MR rebase",
+      schema: RebaseResultSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -1344,6 +1436,132 @@ export const model = {
           iid: mr.iid,
           project: args.project,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_merge_request: {
+      description:
+        "Report an MR's mergeability: detailed_merge_status plus a plain-English summary of why it can or cannot merge.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, MR_STATUS_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const mr = data.project?.mergeRequest;
+        if (!mr) {
+          throw new Error(
+            `get_merge_request: MR !${args.iid} not found in ${args.project}`,
+          );
+        }
+        const dms: string | null = mr.detailedMergeStatus ?? null;
+        const mergeable = mr.mergeable ?? (dms === "MERGEABLE");
+        const blockers: string[] = [];
+        if (!mergeable) {
+          const key = dms ?? "";
+          blockers.push(
+            MERGE_STATUS_EXPLANATION[key] ??
+              (key ? key.toLowerCase().replace(/_/g, " ") : "not mergeable"),
+          );
+        }
+        const summary = mergeable
+          ? `!${args.iid} is mergeable.`
+          : `!${args.iid} cannot merge: ${blockers.join("; ")}${
+            dms ? ` (${dms.toLowerCase()})` : ""
+          }.`;
+        const handle = await ctx.writeResource(
+          "mergeStatus",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            title: mr.title ?? "",
+            state: mr.state ?? "",
+            draft: mr.draft ?? false,
+            mergeable,
+            detailedMergeStatus: dms,
+            conflicts: mr.conflicts ?? null,
+            headPipelineStatus: mr.headPipeline?.status ?? null,
+            blockers,
+            summary,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(summary, { project: args.project, iid: args.iid });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    rebase_merge_request: {
+      description:
+        "Trigger a rebase of an MR's source branch onto its target (async), polling until it finishes or errors.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        skipCi: z.boolean().default(false),
+      }),
+      execute: async (
+        args: { project: string; iid: number; skipCi: boolean },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const client = new GitLabClient(host, token);
+        // Trigger the async rebase (202 { rebase_in_progress: true }).
+        await client.put(
+          args.project,
+          `/merge_requests/${args.iid}/rebase${
+            args.skipCi ? "?skip_ci=true" : ""
+          }`,
+          {},
+        );
+        // Poll for completion. The rebase is asynchronous, so we wait BEFORE
+        // each check (including the first) to give the job time to register —
+        // otherwise a first read could see a stale `rebase_in_progress: false`
+        // (or a leftover `merge_error`) and report a false result. Bounded so we
+        // never hang; if it never finishes we report "in_progress".
+        let status: "rebased" | "error" | "in_progress" = "in_progress";
+        let mergeError: string | null = null;
+        const pollMs = rebasePollMs();
+        for (let i = 0; i < REBASE_MAX_POLLS; i++) {
+          await new Promise((resolve) => setTimeout(resolve, pollMs));
+          const { data } = await client.getProjectList(
+            args.project,
+            `/merge_requests/${args.iid}`,
+            { include_rebase_in_progress: "true" },
+          );
+          if (!data.rebase_in_progress) {
+            mergeError = data.merge_error ?? null;
+            status = mergeError ? "error" : "rebased";
+            break;
+          }
+        }
+        const handle = await ctx.writeResource(
+          "rebaseResult",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            status,
+            mergeError,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(
+          status === "rebased"
+            ? "Rebased MR !{iid}"
+            : status === "error"
+            ? "Rebase of MR !{iid} failed: {error}"
+            : "Rebase of MR !{iid} still running",
+          { iid: args.iid, error: mergeError ?? "" },
+        );
         return { dataHandles: [handle] };
       },
     },

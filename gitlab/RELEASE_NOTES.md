@@ -1,3 +1,15 @@
+## 2026.07.08.2
+
+**Added:**
+
+- `get_merge_request` — report an MR's mergeability via GitLab's
+  `detailed_merge_status`, with a plain-English `summary` and `blockers` list
+  (answers "why can't this MR merge?": need_rebase, conflict, ci_must_pass,
+  not_approved, discussions_not_resolved, draft, …).
+- `rebase_merge_request` — trigger a rebase of an MR's source branch onto its
+  target (REST), polling until it finishes (`rebased`), errors (`error` with
+  `merge_error`), or is still running (`in_progress`). Supports `skipCi`.
+
 ## 2026.07.08.1
 
 **Added:**

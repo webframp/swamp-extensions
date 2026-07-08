@@ -68,6 +68,7 @@ Deno.test("model has all expected methods", () => {
     "create_issue",
     "create_label",
     "create_merge_request",
+    "get_merge_request",
     "get_project_info",
     "list_branches",
     "list_issue_notes",
@@ -82,6 +83,7 @@ Deno.test("model has all expected methods", () => {
     "list_releases",
     "mark_todo_done",
     "merge",
+    "rebase_merge_request",
     "update_issue",
     "update_merge_request",
   ]);
@@ -97,10 +99,12 @@ Deno.test("model has all expected resources", () => {
     "labels",
     "members",
     "mergeRequests",
+    "mergeStatus",
     "notes",
     "pipelines",
     "projectInfo",
     "projects",
+    "rebaseResult",
     "releases",
   ]);
 });
@@ -745,6 +749,250 @@ Deno.test("mark_todo_done throws on mutation errors", async () => {
     );
   } finally {
     restore();
+  }
+});
+
+Deno.test("get_merge_request summarizes a non-mergeable MR", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequest: {
+          iid: 2127,
+          title: "Update ruby",
+          state: "opened",
+          draft: false,
+          detailedMergeStatus: "NEED_REBASE",
+          mergeable: false,
+          conflicts: false,
+          headPipeline: { status: "SUCCESS" },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_merge_request.execute(
+      { project: "o11n/glue", iid: 2127 },
+      context as any,
+    );
+    const r = getWrittenResources().find((x) => x.specName === "mergeStatus");
+    assertExists(r);
+    const d = r.data as any;
+    assertEquals(d.mergeable, false);
+    assertEquals(d.detailedMergeStatus, "NEED_REBASE");
+    assertEquals(d.blockers.length, 1);
+    assertEquals(d.blockers[0].includes("rebased"), true);
+    assertEquals(d.summary.includes("cannot merge"), true);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_merge_request reports a mergeable MR with no blockers", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequest: {
+          iid: 5,
+          title: "x",
+          state: "opened",
+          draft: false,
+          detailedMergeStatus: "MERGEABLE",
+          mergeable: true,
+          conflicts: false,
+          headPipeline: { status: "SUCCESS" },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_merge_request.execute(
+      { project: "g/p", iid: 5 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "mergeStatus")!
+      .data as any;
+    assertEquals(d.mergeable, true);
+    assertEquals(d.blockers.length, 0);
+    assertEquals(d.summary.includes("is mergeable"), true);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_merge_request throws when the MR is not found", async () => {
+  const restore = mockGraphqlFetch({
+    data: { project: { mergeRequest: null } },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_merge_request.execute(
+          { project: "g/p", iid: 9 },
+          context as any,
+        ),
+      Error,
+      "not found",
+    );
+  } finally {
+    restore();
+  }
+});
+
+// Stateful mock for rebase polling: PUT → 202; successive GET polls return the
+// queued statuses (clamping to the last). Poll interval is forced to 1ms.
+function rebaseFetchMock(opts: {
+  polls: Array<{ rebase_in_progress: boolean; merge_error?: string | null }>;
+  onPut?: (url: string) => void;
+}): () => void {
+  const original = globalThis.fetch;
+  let idx = 0;
+  const json = (body: unknown, status: number) =>
+    Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+    if (method === "PUT" && url.includes("/rebase")) {
+      opts.onPut?.(url);
+      return json({ rebase_in_progress: true }, 202);
+    }
+    if (method === "GET" && url.includes("/merge_requests/")) {
+      const step = opts.polls[Math.min(idx, opts.polls.length - 1)];
+      idx++;
+      return json(
+        {
+          rebase_in_progress: step.rebase_in_progress,
+          merge_error: step.merge_error ?? null,
+        },
+        200,
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  return () => {
+    globalThis.fetch = original;
+  };
+}
+
+function withFastRebasePolls(): () => void {
+  const prev = Deno.env.get("SWAMP_GITLAB_REBASE_POLL_MS");
+  Deno.env.set("SWAMP_GITLAB_REBASE_POLL_MS", "1");
+  return () => {
+    if (prev === undefined) Deno.env.delete("SWAMP_GITLAB_REBASE_POLL_MS");
+    else Deno.env.set("SWAMP_GITLAB_REBASE_POLL_MS", prev);
+  };
+}
+
+Deno.test("rebase_merge_request reports rebased after polling through in_progress", async () => {
+  const restoreEnv = withFastRebasePolls();
+  const restore = rebaseFetchMock({
+    polls: [
+      { rebase_in_progress: true },
+      { rebase_in_progress: true },
+      { rebase_in_progress: false, merge_error: null },
+    ],
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.rebase_merge_request.execute(
+      { project: "o11n/glue", iid: 2127, skipCi: false },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "rebaseResult")!
+      .data as any;
+    assertEquals(d.status, "rebased");
+    assertEquals(d.mergeError, null);
+  } finally {
+    restore();
+    restoreEnv();
+  }
+});
+
+Deno.test("rebase_merge_request surfaces merge_error as an error status", async () => {
+  const restoreEnv = withFastRebasePolls();
+  const restore = rebaseFetchMock({
+    polls: [
+      { rebase_in_progress: true },
+      { rebase_in_progress: false, merge_error: "conflict" },
+    ],
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.rebase_merge_request.execute(
+      { project: "o11n/glue", iid: 2223, skipCi: false },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "rebaseResult")!
+      .data as any;
+    assertEquals(d.status, "error");
+    assertEquals(d.mergeError, "conflict");
+  } finally {
+    restore();
+    restoreEnv();
+  }
+});
+
+Deno.test("rebase_merge_request reports in_progress when it never completes", async () => {
+  const restoreEnv = withFastRebasePolls();
+  // Always in progress → loop exhausts REBASE_MAX_POLLS and reports in_progress.
+  const restore = rebaseFetchMock({ polls: [{ rebase_in_progress: true }] });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.rebase_merge_request.execute(
+      { project: "o11n/glue", iid: 2127, skipCi: false },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "rebaseResult")!
+      .data as any;
+    assertEquals(d.status, "in_progress");
+  } finally {
+    restore();
+    restoreEnv();
+  }
+});
+
+Deno.test("rebase_merge_request appends skip_ci=true when requested", async () => {
+  const restoreEnv = withFastRebasePolls();
+  let putUrl = "";
+  const restore = rebaseFetchMock({
+    polls: [{ rebase_in_progress: false, merge_error: null }],
+    onPut: (u) => (putUrl = u),
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.rebase_merge_request.execute(
+      { project: "o11n/glue", iid: 2127, skipCi: true },
+      context as any,
+    );
+    assertEquals(putUrl.includes("skip_ci=true"), true, `PUT url: ${putUrl}`);
+  } finally {
+    restore();
+    restoreEnv();
   }
 });
 
