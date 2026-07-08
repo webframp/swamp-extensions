@@ -1,3 +1,18 @@
+## 2026.07.08.3
+
+**Added:** CI-failure diagnosis for merge requests.
+
+- `get_pipeline_jobs(project, pipelineId, scope=failed)` — list a pipeline's jobs
+  with GitLab's `failure_reason`, so a caller can tell a transient failure
+  (`runner_system_failure`, `stuck_or_timeout_failure`, `job_execution_timeout`,
+  `api_failure`) from a real one (`script_failure`).
+- `get_job_log(project, jobId, tailLines=200)` — the tail of a job's trace, to
+  diagnose why it failed (never the whole log).
+- `retry_job(project, jobId)` / `retry_pipeline(project, pipelineId)` — re-run CI
+  after a transient failure.
+- `get_merge_request` now also returns `headPipelineId`, so you can go straight
+  from a blocked MR to its failed jobs.
+
 ## 2026.07.08.2
 
 **Added:**

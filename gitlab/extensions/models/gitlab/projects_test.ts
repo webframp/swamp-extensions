@@ -68,7 +68,9 @@ Deno.test("model has all expected methods", () => {
     "create_issue",
     "create_label",
     "create_merge_request",
+    "get_job_log",
     "get_merge_request",
+    "get_pipeline_jobs",
     "get_project_info",
     "list_branches",
     "list_issue_notes",
@@ -84,6 +86,8 @@ Deno.test("model has all expected methods", () => {
     "mark_todo_done",
     "merge",
     "rebase_merge_request",
+    "retry_job",
+    "retry_pipeline",
     "update_issue",
     "update_merge_request",
   ]);
@@ -96,16 +100,19 @@ Deno.test("model has all expected resources", () => {
     "dashboard",
     "issueDetail",
     "issues",
+    "jobLog",
     "labels",
     "members",
     "mergeRequests",
     "mergeStatus",
     "notes",
+    "pipelineJobs",
     "pipelines",
     "projectInfo",
     "projects",
     "rebaseResult",
     "releases",
+    "retryResult",
   ]);
 });
 
@@ -993,6 +1000,265 @@ Deno.test("rebase_merge_request appends skip_ci=true when requested", async () =
   } finally {
     restore();
     restoreEnv();
+  }
+});
+
+Deno.test("get_merge_request extracts the head pipeline id", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequest: {
+          iid: 7,
+          title: "x",
+          state: "opened",
+          draft: false,
+          detailedMergeStatus: "CI_MUST_PASS",
+          mergeable: false,
+          conflicts: false,
+          headPipeline: {
+            id: "gid://gitlab/Ci::Pipeline/12345",
+            status: "FAILED",
+          },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_merge_request.execute(
+      { project: "g/p", iid: 7 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "mergeStatus")!
+      .data as any;
+    assertEquals(d.headPipelineId, 12345);
+    assertEquals(d.headPipelineStatus, "FAILED");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_pipeline_jobs lists failed jobs with failure_reason", async () => {
+  const pid = encodeURIComponent("o11n/glue");
+  const restore = mockFetch({
+    [`GET /api/v4/projects/${pid}/pipelines/999/jobs?per_page=100&scope=failed`]:
+      {
+        status: 200,
+        body: [
+          {
+            id: 1,
+            name: "lint",
+            stage: "test",
+            status: "failed",
+            failure_reason: "script_failure",
+            allow_failure: false,
+            web_url: "https://x/1",
+          },
+          {
+            id: 2,
+            name: "flaky",
+            stage: "test",
+            status: "failed",
+            failure_reason: "runner_system_failure",
+            allow_failure: false,
+            web_url: "https://x/2",
+          },
+          {
+            // A success job in the response must be dropped by the scope filter.
+            id: 3,
+            name: "build",
+            stage: "build",
+            status: "success",
+            failure_reason: null,
+            allow_failure: false,
+            web_url: "https://x/3",
+          },
+        ],
+      },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_pipeline_jobs.execute(
+      { project: "o11n/glue", pipelineId: 999, scope: "failed" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "pipelineJobs")!
+      .data as any;
+    assertEquals(d.count, 2); // success job filtered out
+    assertEquals(d.jobs.map((j: any) => j.id), [1, 2]);
+    assertEquals(d.jobs[0].failureReason, "script_failure");
+    assertEquals(d.jobs[1].failureReason, "runner_system_failure");
+    assertEquals(d.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_job_log returns the redacted tail of the trace", async () => {
+  const original = globalThis.fetch;
+  // 500 lines, one carries a token, ending with a newline (as real traces do)
+  // — the trailing "" must not inflate the line count.
+  const trace = Array.from(
+    { length: 500 },
+    (_, i) =>
+      i === 479
+        ? "Using PAT glpat-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"
+        : `line ${i + 1}`,
+  ).join("\n") + "\n";
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if ((init?.method ?? "GET") === "GET" && url.includes("/jobs/77/trace")) {
+      return Promise.resolve(
+        new Response(trace, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_job_log.execute(
+      { project: "o11n/glue", jobId: 77, tailLines: 50 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "jobLog")!
+      .data as any;
+    // trailing newline stripped → exactly 500 lines, tail is the last 50
+    assertEquals(d.totalLines, 500);
+    assertEquals(d.returnedLines, 50);
+    assertEquals(d.truncated, true);
+    assertEquals(d.log.split("\n").length, 50);
+    assertEquals(d.log.endsWith("line 500"), true);
+    // the token (which is inside the tail) is redacted
+    assertEquals(d.log.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), false);
+    assertEquals(d.log.includes("[REDACTED]"), true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequest: {
+          iid: 8,
+          title: "x",
+          state: "opened",
+          draft: false,
+          detailedMergeStatus: "MERGEABLE",
+          mergeable: true,
+          conflicts: false,
+          headPipeline: null,
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_merge_request.execute(
+      { project: "g/p", iid: 8 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "mergeStatus")!
+      .data as any;
+    assertEquals(d.headPipelineId, null);
+    assertEquals(d.headPipelineStatus, null);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("retry_job surfaces a non-retryable job error", async () => {
+  const pid = encodeURIComponent("o11n/glue");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/jobs/5/retry`]: {
+      status: 403,
+      body: { message: "403 Forbidden" },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.retry_job.execute(
+          { project: "o11n/glue", jobId: 5 },
+          context as any,
+        ),
+      Error,
+      "403",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("retry_job returns the new job id and status", async () => {
+  const pid = encodeURIComponent("o11n/glue");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/jobs/1/retry`]: {
+      status: 201,
+      body: { id: 42, status: "pending" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.retry_job.execute(
+      { project: "o11n/glue", jobId: 1 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "retryResult")!
+      .data as any;
+    assertEquals(d.kind, "job");
+    assertEquals(d.id, 1);
+    assertEquals(d.newJobId, 42);
+    assertEquals(d.status, "pending");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("retry_pipeline records the pipeline retry", async () => {
+  const pid = encodeURIComponent("o11n/glue");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/pipelines/999/retry`]: {
+      status: 201,
+      body: { id: 999, status: "running" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.retry_pipeline.execute(
+      { project: "o11n/glue", pipelineId: 999 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "retryResult")!
+      .data as any;
+    assertEquals(d.kind, "pipeline");
+    assertEquals(d.id, 999);
+    assertEquals(d.status, "running");
+  } finally {
+    restore();
   }
 });
 
