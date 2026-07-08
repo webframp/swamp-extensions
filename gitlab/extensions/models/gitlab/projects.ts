@@ -442,6 +442,26 @@ query issueNotes($fullPath: ID!, $iid: String!, $first: Int!) {
   }
 }`;
 
+const MR_NOTES_QUERY = `
+query mrNotes($fullPath: ID!, $iid: String!, $last: Int!) {
+  project(fullPath: $fullPath) {
+    mergeRequest(iid: $iid) {
+      notes(last: $last) {
+        nodes { id body createdAt author { username } }
+        pageInfo { hasPreviousPage }
+      }
+    }
+  }
+}`;
+
+const MARK_TODO_DONE_MUTATION = `
+mutation todoMarkDone($id: TodoID!) {
+  todoMarkDone(input: { id: $id }) {
+    todo { id state }
+    errors
+  }
+}`;
+
 const LABELS_QUERY = `
 query labels($fullPath: ID!, $first: Int!) {
   project(fullPath: $fullPath) {
@@ -678,7 +698,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.06.26.1",
+  version: "2026.07.08.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1192,6 +1212,80 @@ export const model = {
           iid: args.iid,
         });
         return { dataHandles: [handle] };
+      },
+    },
+
+    list_mr_notes: {
+      description:
+        "List the most recent comments/discussion notes on a merge request (newest 50; truncated=true when older notes exist)",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        // last:50 returns the most recent notes — what a reviewer/replier wants
+        // — rather than first:50 (the oldest). truncated flags older history.
+        const data = await graphqlRequest(host, token, MR_NOTES_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+          last: 50,
+        });
+        const conn = data.project?.mergeRequest?.notes;
+        const notes = (conn?.nodes ?? []).map(gqlMapNote);
+        const truncated = conn?.pageInfo?.hasPreviousPage ?? false;
+        const handle = await ctx.writeResource(
+          "notes",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            noteableType: "merge_request",
+            noteableIid: args.iid,
+            notes,
+            count: notes.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Found {count} notes on MR !{iid}", {
+          count: notes.length,
+          iid: args.iid,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    mark_todo_done: {
+      description:
+        "Mark a to-do as done so it drops off the pending list (todoMarkDone).",
+      arguments: z.object({
+        todoId: z.string().min(1).describe(
+          "Todo ID — the gid (gid://gitlab/Todo/NNN) or the numeric id",
+        ),
+      }),
+      execute: async (args: { todoId: string }, ctx: ModelContext) => {
+        const { host, token } = ctx.globalArgs;
+        const id = /^\d+$/.test(args.todoId)
+          ? `gid://gitlab/Todo/${args.todoId}`
+          : args.todoId;
+        const data = await graphqlRequest(
+          host,
+          token,
+          MARK_TODO_DONE_MUTATION,
+          { id },
+        );
+        const errors = data.todoMarkDone?.errors ?? [];
+        if (errors.length) {
+          throw new Error(`mark_todo_done failed: ${errors.join("; ")}`);
+        }
+        ctx.logger.info("Marked todo done: {id} -> {state}", {
+          id,
+          state: data.todoMarkDone?.todo?.state ?? "unknown",
+        });
+        return { dataHandles: [] };
       },
     },
 

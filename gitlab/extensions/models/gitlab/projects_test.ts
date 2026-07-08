@@ -75,10 +75,12 @@ Deno.test("model has all expected methods", () => {
     "list_labels",
     "list_members",
     "list_merge_requests",
+    "list_mr_notes",
     "list_my_merge_requests",
     "list_pipelines",
     "list_projects",
     "list_releases",
+    "mark_todo_done",
     "merge",
     "update_issue",
     "update_merge_request",
@@ -611,6 +613,136 @@ Deno.test("list_issue_notes writes notes resource via GraphQL", async () => {
     const resources = getWrittenResources();
     assertEquals(resources[0].name, "org~repo-issue-3");
     assertEquals((resources[0].data as any).count, 2);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_mr_notes writes notes resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequest: {
+          notes: {
+            nodes: [
+              {
+                id: "gid://gitlab/Note/10",
+                body: "lgtm",
+                author: { username: "a" },
+                createdAt: "2026-01-01T00:00:00Z",
+              },
+              {
+                id: "gid://gitlab/Note/11",
+                body: "one nit",
+                author: { username: "b" },
+                createdAt: "2026-01-02T00:00:00Z",
+              },
+            ],
+            pageInfo: { hasPreviousPage: false },
+          },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_mr_notes.execute(
+      { project: "org/repo", iid: 7 },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources[0].name, "org~repo-mr-7");
+    const data = resources[0].data as any;
+    assertEquals(data.count, 2);
+    assertEquals(data.noteableType, "merge_request");
+    assertEquals(data.notes[0].id, 10);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("mark_todo_done succeeds and writes no resources", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      todoMarkDone: {
+        todo: { id: "gid://gitlab/Todo/5", state: "done" },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    const res = await model.methods.mark_todo_done.execute(
+      { todoId: "gid://gitlab/Todo/5" },
+      context as any,
+    );
+    assertEquals(res.dataHandles.length, 0);
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("mark_todo_done normalizes a numeric id to a Todo gid", async () => {
+  let sentId = "";
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if ((init?.method ?? "GET") === "POST" && url.includes("/api/graphql")) {
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      sentId = body.variables?.id ?? "";
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              todoMarkDone: { todo: { id: sentId, state: "done" }, errors: [] },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.mark_todo_done.execute(
+      { todoId: "2949150" },
+      context as any,
+    );
+    assertEquals(sentId, "gid://gitlab/Todo/2949150");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("mark_todo_done throws on mutation errors", async () => {
+  const restore = mockGraphqlFetch({
+    data: { todoMarkDone: { todo: null, errors: ["Todo not found"] } },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.mark_todo_done.execute(
+          { todoId: "gid://gitlab/Todo/9" },
+          context as any,
+        ),
+      Error,
+      "Todo not found",
+    );
   } finally {
     restore();
   }

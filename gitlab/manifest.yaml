@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.06.26.1"
+version: "2026.07.08.1"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -40,7 +40,7 @@ description: |
 
   **Read:**
   - list_projects, get_project_info, list_merge_requests, list_issues
-  - list_releases, list_pipelines, list_issue_notes
+  - list_releases, list_pipelines, list_issue_notes, list_mr_notes
   - list_labels, list_members, list_branches
   - list_my_merge_requests (GraphQL — cross-project dashboard + todos)
 
@@ -48,6 +48,7 @@ description: |
   - create_issue, update_issue, add_issue_note
   - create_merge_request, update_merge_request, merge, add_mr_note
   - create_label
+  - mark_todo_done (clear a handled to-do off the pending queue)
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gitlab/projects.ts
