@@ -258,9 +258,57 @@ const MergeStatusSchema = z.object({
   detailedMergeStatus: z.string().nullable(),
   conflicts: z.boolean().nullable(),
   headPipelineStatus: z.string().nullable(),
+  // Head pipeline id — feed to get_pipeline_jobs to drill into CI failures.
+  headPipelineId: z.number().nullable(),
   // Human-readable reasons the MR cannot merge (empty when mergeable).
   blockers: z.array(z.string()),
   summary: z.string(),
+  fetchedAt: z.string(),
+});
+
+const PipelineJobSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  stage: z.string(),
+  status: z.string(),
+  // GitLab failure_reason: script_failure (real/code) vs runner_system_failure,
+  // stuck_or_timeout_failure, job_execution_timeout, api_failure (transient).
+  failureReason: z.string().nullable(),
+  allowFailure: z.boolean(),
+  webUrl: z.string().nullable(),
+});
+
+const PipelineJobsSchema = z.object({
+  project: z.string(),
+  pipelineId: z.number(),
+  scope: z.string().nullable(),
+  jobs: z.array(PipelineJobSchema),
+  count: z.number(),
+  // true when the pipeline has more jobs than one page (100) returned.
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const JobLogSchema = z.object({
+  project: z.string(),
+  jobId: z.number(),
+  totalLines: z.number(),
+  returnedLines: z.number(),
+  truncated: z.boolean(),
+  // Tail of the job trace. Common credential patterns are redacted, but CI logs
+  // can still leak secrets — treat as sensitive.
+  log: z.string(),
+  fetchedAt: z.string(),
+});
+
+const RetryResultSchema = z.object({
+  project: z.string(),
+  kind: z.enum(["job", "pipeline"]),
+  // The id retried (job id or pipeline id).
+  id: z.number(),
+  // For job retries, the id of the new job GitLab created.
+  newJobId: z.number().nullable(),
+  status: z.string(),
   fetchedAt: z.string(),
 });
 
@@ -498,7 +546,7 @@ query mrStatus($fullPath: ID!, $iid: String!) {
       detailedMergeStatus
       mergeable
       conflicts
-      headPipeline { status }
+      headPipeline { id status }
     }
   }
 }`;
@@ -731,6 +779,35 @@ class GitLabClient {
     }
     return resp.json();
   }
+
+  async post(
+    project: string,
+    path: string,
+    body: Record<string, unknown> = {},
+  ): Promise<any> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab POST ${project}${path}: ${resp.status} ${text}`);
+    }
+    return resp.json();
+  }
+
+  /** GET a project endpoint returning raw text (e.g. a job trace, not JSON). */
+  async getProjectText(project: string, path: string): Promise<string> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      headers: this.headers(),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
+    }
+    return resp.text();
+  }
 }
 
 // =============================================================================
@@ -756,6 +833,28 @@ function sanitizeName(project: string): string {
   return project.replace(/\//g, "~");
 }
 
+/**
+ * Best-effort redaction of common credential patterns from CI log text before
+ * it is persisted. Not exhaustive — CI logs can still leak secrets — but masks
+ * the obvious ones (GitLab/GitHub tokens, AWS keys, bearer tokens, URL creds,
+ * and token/password assignments).
+ */
+function redactSecrets(text: string): string {
+  return text
+    .replace(
+      /\b(glpat|glptt|gldt|gloas|github_pat|ghp|gho|ghs|ghr)-[A-Za-z0-9_-]{16,}/g,
+      "$1-[REDACTED]",
+    )
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, "AKIA[REDACTED]")
+    .replace(/\b(sk-ant-[A-Za-z0-9-]{6})[A-Za-z0-9_-]{12,}/g, "$1[REDACTED]")
+    .replace(/(bearer\s+)[A-Za-z0-9._-]{12,}/gi, "$1[REDACTED]")
+    .replace(/(\/\/[^:@/\s]+:)[^@/\s]+@/g, "$1[REDACTED]@")
+    .replace(
+      /((?:password|passwd|token|secret|api[_-]?key|private[_-]?token)["']?\s*[:=]\s*["']?)[^\s"']{6,}/gi,
+      "$1[REDACTED]",
+    );
+}
+
 // =============================================================================
 // Context Type
 // =============================================================================
@@ -777,7 +876,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.08.2",
+  version: "2026.07.08.3",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -828,6 +927,24 @@ export const model = {
     rebaseResult: {
       description: "Outcome of a triggered MR rebase",
       schema: RebaseResultSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    pipelineJobs: {
+      description: "Jobs in a pipeline (with failure_reason), for CI diagnosis",
+      schema: PipelineJobsSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    jobLog: {
+      description: "Tail of a CI job's trace/log",
+      schema: JobLogSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    retryResult: {
+      description: "Outcome of a triggered job/pipeline retry",
+      schema: RetryResultSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -1464,6 +1581,11 @@ export const model = {
         }
         const dms: string | null = mr.detailedMergeStatus ?? null;
         const mergeable = mr.mergeable ?? (dms === "MERGEABLE");
+        // headPipeline.id is a gid (gid://gitlab/Ci::Pipeline/123) — extract the number.
+        const headPipelineId = mr.headPipeline?.id
+          ? (parseInt(String(mr.headPipeline.id).split("/").pop() ?? "", 10) ||
+            null)
+          : null;
         const blockers: string[] = [];
         if (!mergeable) {
           const key = dms ?? "";
@@ -1490,6 +1612,7 @@ export const model = {
             detailedMergeStatus: dms,
             conflicts: mr.conflicts ?? null,
             headPipelineStatus: mr.headPipeline?.status ?? null,
+            headPipelineId,
             blockers,
             summary,
             fetchedAt: new Date().toISOString(),
@@ -1562,6 +1685,194 @@ export const model = {
             : "Rebase of MR !{iid} still running",
           { iid: args.iid, error: mergeError ?? "" },
         );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_pipeline_jobs: {
+      description:
+        "List a pipeline's jobs with failure_reason (script_failure = real; runner_system_failure / stuck_or_timeout_failure / job_execution_timeout / api_failure = transient). Defaults to failed jobs only.",
+      arguments: z.object({
+        project: z.string().min(1),
+        pipelineId: z.number(),
+        scope: z.enum(["failed", "success", "running", "all"]).default(
+          "failed",
+        ),
+      }),
+      execute: async (
+        args: { project: string; pipelineId: number; scope: string },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const params: Record<string, string> = { per_page: "100" };
+        if (args.scope !== "all") params.scope = args.scope;
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          `/pipelines/${args.pipelineId}/jobs`,
+          params,
+        );
+        const raw = Array.isArray(data) ? data : [];
+        // Filter client-side too, so the result is correct regardless of how
+        // the server interprets the scope query param.
+        const filtered = args.scope === "all"
+          ? raw
+          : raw.filter((j: any) => j.status === args.scope);
+        const jobs = filtered.map((j: any) => ({
+          id: j.id,
+          name: j.name ?? "",
+          stage: j.stage ?? "",
+          status: j.status ?? "",
+          failureReason: j.failure_reason ?? null,
+          allowFailure: j.allow_failure ?? false,
+          webUrl: j.web_url ?? null,
+        }));
+        const handle = await ctx.writeResource(
+          "pipelineJobs",
+          `${sanitizeName(args.project)}-pipeline-${args.pipelineId}`,
+          {
+            project: args.project,
+            pipelineId: args.pipelineId,
+            scope: args.scope,
+            jobs,
+            count: jobs.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Pipeline {pid}: {count} {scope} job(s)", {
+          pid: args.pipelineId,
+          count: jobs.length,
+          scope: args.scope,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_job_log: {
+      description:
+        "Fetch the tail of a CI job's trace/log (last N lines) to diagnose a failure.",
+      arguments: z.object({
+        project: z.string().min(1),
+        jobId: z.number(),
+        tailLines: z.number().default(200),
+      }),
+      execute: async (
+        args: { project: string; jobId: number; tailLines: number },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const full = await client.getProjectText(
+          args.project,
+          `/jobs/${args.jobId}/trace`,
+        );
+        // Drop a single trailing newline so it doesn't count as a blank last
+        // "line" (traces normally end with \n).
+        const lines = full.replace(/\n$/, "").split("\n");
+        const total = lines.length;
+        const n = Math.max(1, args.tailLines);
+        const tail = lines.slice(Math.max(0, total - n));
+        const handle = await ctx.writeResource(
+          "jobLog",
+          `${sanitizeName(args.project)}-job-${args.jobId}`,
+          {
+            project: args.project,
+            jobId: args.jobId,
+            totalLines: total,
+            returnedLines: tail.length,
+            truncated: total > tail.length,
+            log: redactSecrets(tail.join("\n")),
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Fetched job {jobId} log tail ({n}/{total} lines)", {
+          jobId: args.jobId,
+          n: tail.length,
+          total,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    retry_job: {
+      description:
+        "Retry a CI job (e.g. after a transient failure). Returns the new job's id and status.",
+      arguments: z.object({
+        project: z.string().min(1),
+        jobId: z.number(),
+      }),
+      execute: async (
+        args: { project: string; jobId: number },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(
+          args.project,
+          `/jobs/${args.jobId}/retry`,
+        );
+        const handle = await ctx.writeResource(
+          "retryResult",
+          `${sanitizeName(args.project)}-job-${args.jobId}`,
+          {
+            project: args.project,
+            kind: "job",
+            id: args.jobId,
+            newJobId: raw.id ?? null,
+            status: raw.status ?? "",
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Retried job {jobId} → new job {newId} ({status})", {
+          jobId: args.jobId,
+          newId: raw.id ?? "?",
+          status: raw.status ?? "?",
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    retry_pipeline: {
+      description: "Retry the failed jobs in a pipeline.",
+      arguments: z.object({
+        project: z.string().min(1),
+        pipelineId: z.number(),
+      }),
+      execute: async (
+        args: { project: string; pipelineId: number },
+        ctx: ModelContext,
+      ) => {
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(
+          args.project,
+          `/pipelines/${args.pipelineId}/retry`,
+        );
+        const handle = await ctx.writeResource(
+          "retryResult",
+          `${sanitizeName(args.project)}-pipeline-${args.pipelineId}`,
+          {
+            project: args.project,
+            kind: "pipeline",
+            id: args.pipelineId,
+            newJobId: null,
+            status: raw.status ?? "",
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Retried pipeline {pid} ({status})", {
+          pid: args.pipelineId,
+          status: raw.status ?? "?",
+        });
         return { dataHandles: [handle] };
       },
     },
