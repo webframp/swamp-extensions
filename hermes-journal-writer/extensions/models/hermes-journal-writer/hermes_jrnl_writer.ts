@@ -446,11 +446,6 @@ async function writeDailyEntry(
     (cfg.sources ?? ALL_SOURCES) as SourceName[],
   );
   const data = await readResearchData(cfg.swampBin, cfg.repoDir);
-  if (!data) {
-    ctx.logger.warn(
-      "No research data available — run research-brief workflow first",
-    );
-  }
 
   const fileSuffix = formatAsFileSuffix(now);
   const orgDate = formatAsOrgDate(now);
@@ -458,9 +453,8 @@ async function writeDailyEntry(
   const journalFile = `${journalDir}/${fileSuffix}.org`;
   const instanceKey = `daily-${fileSuffix}`;
 
-  await Deno.mkdir(journalDir, { recursive: true });
-
-  // Check for existing file — idempotent, don't overwrite
+  // Check for existing file — idempotent, don't overwrite. An entry already
+  // written for today wins even if this run has no fresh data.
   try {
     await Deno.stat(journalFile);
     ctx.logger.info("Entry for today already exists, skipping", {
@@ -480,12 +474,25 @@ async function writeDailyEntry(
     if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
 
-  const fileContent = data
-    ? buildDailyFile(data, enabledSources, now)
-    : `#+TITLE: Research Journal ${orgDate}\n#+DATE: <${orgDate}>\n#+FILETAGS: :research:journal:\n:PROPERTIES:\n:UPDATED: ${
-      formatTimestamp(now)
-    }\n:END:\n\nNo research data available. Run \`swamp workflow run research-brief\` first.\n`;
+  // No research data yet (e.g. the collector hasn't run this morning): write
+  // and commit nothing, so a later run today can still create the real entry.
+  // Committing an empty placeholder would let the idempotency guard above lock
+  // it in for the day.
+  if (!data) {
+    ctx.logger.warn(
+      "No research data available — skipping (run the research-brief workflow first)",
+    );
+    const handle = await ctx.writeResource("journalEntry", instanceKey, {
+      date: orgDate,
+      file: journalFile,
+      status: "skipped-no-data",
+      createdAt: formatTimestamp(now),
+    });
+    return { dataHandles: [handle] };
+  }
 
+  await Deno.mkdir(journalDir, { recursive: true });
+  const fileContent = buildDailyFile(data, enabledSources, now);
   await Deno.writeTextFile(journalFile, fileContent);
 
   // Stage/commit only this day's file, and let the recorded status reflect what

@@ -12,6 +12,10 @@
 - `#+FILETAGS` are now joined with single colons (`:a:b:`); the previous join
   emitted a doubled colon (`:a::b:`) that org parses as an empty tag. Tags that
   sanitize to an empty string are dropped rather than emitted.
+- A run with no research data now writes and commits nothing (status
+  `skipped-no-data`) instead of committing a "No research data" placeholder.
+  The placeholder would trip the idempotency guard and permanently block a
+  later run that day from writing the real entry once the collector had run.
 
 **Added:**
 
