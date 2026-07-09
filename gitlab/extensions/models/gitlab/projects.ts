@@ -2108,6 +2108,13 @@ export const model = {
           body: args.body,
         });
         const result = data.updateNote;
+        // GitLab returns a null payload (not a userland error) when the caller
+        // can't edit the note — another user's note, a system note, a locked MR.
+        if (!result) {
+          throw new Error(
+            `update_mr_note: note ${args.noteId} not found or permission denied`,
+          );
+        }
         if (result.errors?.length) {
           throw new Error(`updateNote failed: ${result.errors.join("; ")}`);
         }
@@ -2154,6 +2161,13 @@ export const model = {
           id: `gid://gitlab/Note/${args.noteId}`,
         });
         const result = data.destroyNote;
+        // Null payload = permission denied / note not found (not a userland
+        // error). A successful delete returns { note: null, errors: [] }.
+        if (!result) {
+          throw new Error(
+            `delete_mr_note: note ${args.noteId} not found or permission denied`,
+          );
+        }
         if (result.errors?.length) {
           throw new Error(`destroyNote failed: ${result.errors.join("; ")}`);
         }
@@ -2208,7 +2222,13 @@ export const model = {
         // omits it. Fail loudly so an assign to a typo'd user isn't reported as
         // success (and, on CE, so dropping an extra assignee surfaces).
         if (args.usernames.length > 0) {
-          const missing = args.usernames.filter((u) => !assignees.includes(u));
+          // GitLab lowercases usernames in responses but accepts mixed case in
+          // requests — compare case-insensitively so a valid assign isn't
+          // reported as failed.
+          const got = new Set(assignees.map((u) => u.toLowerCase()));
+          const missing = args.usernames.filter((u) =>
+            !got.has(u.toLowerCase())
+          );
           if (missing.length) {
             throw new Error(
               `set_mr_assignees: GitLab did not assign ${

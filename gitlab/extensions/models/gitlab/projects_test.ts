@@ -1407,6 +1407,76 @@ Deno.test("set_mr_assignees throws when a requested user was not assigned", asyn
   }
 });
 
+Deno.test("delete_mr_note throws on a null payload (permission denied)", async () => {
+  // GitLab returns { destroyNote: null } when the caller can't delete the note.
+  const restore = mockGraphqlFetch({ data: { destroyNote: null } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.delete_mr_note.execute(
+          { project: "o11n/glue", iid: 2156, noteId: 9999 },
+          context as any,
+        ),
+      Error,
+      "not found or permission denied",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("update_mr_note throws on a null payload (permission denied)", async () => {
+  const restore = mockGraphqlFetch({ data: { updateNote: null } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.update_mr_note.execute(
+          { project: "o11n/glue", iid: 2156, noteId: 9999, body: "x" },
+          context as any,
+        ),
+      Error,
+      "not found or permission denied",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("set_mr_assignees matches usernames case-insensitively", async () => {
+  // Request "DevUser"; GitLab returns lowercase "devuser" — must NOT throw.
+  const restore = mockGraphqlFetch({
+    data: {
+      mergeRequestSetAssignees: {
+        mergeRequest: {
+          iid: "2156",
+          assignees: { nodes: [{ username: "devuser" }] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.set_mr_assignees.execute(
+      { project: "o11n/glue", iid: 2156, usernames: ["DevUser"] },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "mrAssignees")!
+      .data as any;
+    assertEquals(d.assignees, ["devuser"]);
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("create_merge_request writes mergeRequests resource via GraphQL", async () => {
   const restore = mockGraphqlFetch({
     data: {
