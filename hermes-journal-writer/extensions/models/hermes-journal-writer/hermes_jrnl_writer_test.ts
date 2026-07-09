@@ -119,17 +119,32 @@ Deno.test("globalArguments rejects extra fields (strict)", () => {
 // Execute Tests
 // =============================================================================
 
+/** A mockDenoCommand handler that returns one HN story for `data get` and
+ * succeeds for every git command. */
+function mockWithHnData(cmd: string[]): { stdout: string; success: boolean } {
+  if (cmd.includes("data") && cmd.includes("get")) {
+    return {
+      stdout: JSON.stringify({
+        content: JSON.stringify({
+          hnFrontPage: {
+            stories: [{ title: "Test", score: 10, by: "user", url: "u" }],
+          },
+        }),
+      }),
+      success: true,
+    };
+  }
+  // git status reports the day's file staged, so a commit (and push) happens.
+  if (cmd.includes("status")) {
+    return { stdout: " A journal/x.org", success: true };
+  }
+  return { stdout: "", success: true };
+}
+
 Deno.test("write_daily_entry creates new file when none exists", async () => {
   const files: Record<string, string> = {};
   const restoreFs = mockFs(files);
-  const restoreCmd = mockDenoCommand((cmd) => {
-    // swamp data get returns no data
-    if (cmd.includes("data") && cmd.includes("get")) {
-      return { stdout: "", success: false };
-    }
-    // git commands succeed
-    return { stdout: "", success: true };
-  });
+  const restoreCmd = mockDenoCommand(mockWithHnData);
   try {
     const { context, getWrittenResources } = createModelTestContext({
       globalArgs: TEST_ARGS,
@@ -150,17 +165,46 @@ Deno.test("write_daily_entry creates new file when none exists", async () => {
   }
 });
 
+Deno.test("write_daily_entry skips (no file, no commit) when there is no data", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  const restoreCmd = mockDenoCommand((cmd) => {
+    // No research data available.
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return { stdout: "", success: false };
+    }
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_ARGS,
+    });
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    // No file written — a later run today can still create the real entry.
+    assertEquals(Object.keys(files).length, 0);
+    assertEquals(
+      (getWrittenResources()[0].data as any).status,
+      "skipped-no-data",
+    );
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
 Deno.test("write_daily_entry skips when entry already exists", async () => {
   const now = new Date();
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const orgDate = `${year}-${month}-${String(now.getDate()).padStart(2, "0")} ${
-    days[now.getDay()]
-  }`;
-  const filePath = `/tmp/test-org/journal/${year}-${month}.org`;
+  const day = String(now.getDate()).padStart(2, "0");
+  const lowerDays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const orgDate = `${year}-${month}-${day} ${lowerDays[now.getDay()]}`;
+  // Per-day file: the code stats YYYY-MM-DD-dow.org, so mock exactly that path.
+  const filePath = `/tmp/test-org/journal/${year}-${month}-${day}-${
+    lowerDays[now.getDay()]
+  }.org`;
   const files: Record<string, string> = {
-    [filePath]: `#+TITLE: Test\n\n*** ${orgDate}\nExisting content`,
+    [filePath]: `#+TITLE: Research Journal ${orgDate}\n\nExisting content`,
   };
   const restoreFs = mockFs(files);
   const restoreCmd = mockDenoCommand((cmd) => {
@@ -257,7 +301,8 @@ Deno.test("write_daily_entry rejects invalid git email", async () => {
 Deno.test("write_daily_entry expands tilde in orgDir", async () => {
   const files: Record<string, string> = {};
   const restoreFs = mockFs(files);
-  const restoreCmd = mockDenoCommand(() => ({ stdout: "", success: false }));
+  // Needs data so a file is actually written (tilde expansion is what we check).
+  const restoreCmd = mockDenoCommand(mockWithHnData);
   const origEnv = Deno.env.get;
   (Deno.env as any).get = (k: string) =>
     k === "HOME" ? "/home/testuser" : origEnv.call(Deno.env, k);
@@ -319,6 +364,9 @@ Deno.test("write_daily_entry handles research data gracefully", async () => {
         success: true,
       };
     }
+    if (cmd.includes("status")) {
+      return { stdout: " A journal/x.org", success: true };
+    }
     return { stdout: "", success: true };
   });
   try {
@@ -327,10 +375,205 @@ Deno.test("write_daily_entry handles research data gracefully", async () => {
     });
     await model.methods.write_daily_entry.execute({} as any, context as any);
     const writtenFile = Object.keys(files)[0];
-    assertEquals(files[writtenFile].includes("**** Hacker News"), true);
-    // Verify no bare H2 headings (would be "** X" at line start without leading *)
-    assertEquals(/^\*\* \w/m.test(files[writtenFile]), false);
+    // Per-day file: the entry IS the whole document, so sections are level-1 (`* `).
+    assertEquals(files[writtenFile].includes("* Hacker News"), true);
+    // Verify no nested headings (would be "** X" or deeper at line start).
+    assertEquals(/^\*\*+ \w/m.test(files[writtenFile]), false);
     assertEquals((getWrittenResources()[0].data as any).status, "written");
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
+Deno.test("write_daily_entry never emits a doubled colon in FILETAGS from empty-sanitizing tags", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  const restoreCmd = mockDenoCommand((cmd) => {
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return {
+        stdout: JSON.stringify({
+          content: JSON.stringify({
+            // tags that sanitize to "" ("!!!" and "@@@") must be dropped,
+            // not rendered as an extra `::` pair in #+FILETAGS.
+            lobstersHottest: {
+              stories: [{
+                title: "T",
+                score: 1,
+                url: "x",
+                tags: ["!!!", "go"],
+              }],
+            },
+            arxiv: {
+              entries: [{ title: "A", link: "l", category: "@@@" }],
+            },
+          }),
+        }),
+        success: true,
+      };
+    }
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context } = createModelTestContext({ globalArgs: TEST_ARGS });
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    const content = files[Object.keys(files)[0]];
+    const filetagsLine = content.split("\n").find((l) =>
+      l.startsWith("#+FILETAGS:")
+    )!;
+    assertEquals(filetagsLine.includes("::"), false);
+    // The valid tag survived.
+    assertEquals(filetagsLine.includes(":go:"), true);
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
+Deno.test("write_daily_entry rethrows non-NotFound stat errors", async () => {
+  const files: Record<string, string> = {};
+  const origMkdir = Deno.mkdir;
+  const origStat = Deno.stat;
+  (Deno as any).mkdir = () => Promise.resolve();
+  (Deno as any).stat = () =>
+    Promise.reject(new Deno.errors.PermissionDenied("denied"));
+  const restoreCmd = mockDenoCommand(() => ({ stdout: "", success: false }));
+  try {
+    const { context } = createModelTestContext({ globalArgs: TEST_ARGS });
+    await assertRejects(
+      () => model.methods.write_daily_entry.execute({} as any, context as any),
+      Deno.errors.PermissionDenied,
+    );
+    // The write must not have happened — the error surfaced instead of being masked.
+    assertEquals(Object.keys(files).length, 0);
+  } finally {
+    (Deno as any).mkdir = origMkdir;
+    (Deno as any).stat = origStat;
+    restoreCmd();
+  }
+});
+
+Deno.test("write_daily_entry records committed-not-pushed when the push fails", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  const restoreCmd = mockDenoCommand((cmd) => {
+    // Data is present so we reach the commit/push path.
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return {
+        stdout: JSON.stringify({
+          content: JSON.stringify({
+            hnFrontPage: {
+              stories: [{ title: "T", score: 1, by: "u", url: "u" }],
+            },
+          }),
+        }),
+        success: true,
+      };
+    }
+    // A push that fails must NOT be reported as a successful write.
+    if (cmd.includes("push")) return { stdout: "", success: false };
+    // Something is staged, so a commit happens.
+    if (cmd.includes("status")) {
+      return { stdout: " M journal/x.org", success: true };
+    }
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_ARGS,
+    });
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    assertEquals(
+      (getWrittenResources()[0].data as any).status,
+      "committed-not-pushed",
+    );
+    // The file was still written locally.
+    assertEquals(Object.keys(files).length, 1);
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
+Deno.test("write_daily_entry does not push when there is nothing to commit", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  let pushed = false;
+  const restoreCmd = mockDenoCommand((cmd) => {
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return {
+        stdout: JSON.stringify({
+          content: JSON.stringify({
+            hnFrontPage: {
+              stories: [{ title: "T", score: 1, by: "u", url: "u" }],
+            },
+          }),
+        }),
+        success: true,
+      };
+    }
+    if (cmd.includes("push")) {
+      pushed = true;
+      return { stdout: "", success: true };
+    }
+    // git status reports no staged changes → nothing to commit.
+    if (cmd.includes("status")) return { stdout: "", success: true };
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_ARGS,
+    });
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    assertEquals(
+      (getWrittenResources()[0].data as any).status,
+      "written-nothing-to-commit",
+    );
+    // No commit was made, so no push should advance the remote.
+    assertEquals(pushed, false);
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
+Deno.test("write_daily_entry treats a failed git status as an error, not nothing-to-commit", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  let pushed = false;
+  const restoreCmd = mockDenoCommand((cmd) => {
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return {
+        stdout: JSON.stringify({
+          content: JSON.stringify({
+            hnFrontPage: {
+              stories: [{ title: "T", score: 1, by: "u", url: "u" }],
+            },
+          }),
+        }),
+        success: true,
+      };
+    }
+    if (cmd.includes("push")) {
+      pushed = true;
+      return { stdout: "", success: true };
+    }
+    // git status fails (e.g. held index.lock): non-zero exit, empty stdout.
+    if (cmd.includes("status")) return { stdout: "", success: false };
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_ARGS,
+    });
+    // gitCommit throws; the method catches it and records not-committed —
+    // it must NOT push or claim a successful write.
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    assertEquals(
+      (getWrittenResources()[0].data as any).status,
+      "written-not-committed",
+    );
+    assertEquals(pushed, false);
   } finally {
     restoreFs();
     restoreCmd();
