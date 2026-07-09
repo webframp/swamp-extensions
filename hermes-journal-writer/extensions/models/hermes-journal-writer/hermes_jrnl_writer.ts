@@ -11,7 +11,14 @@
 
 import { z } from "npm:zod@4.4.3";
 
-const ALL_SOURCES = ["hn", "lobsters", "sre", "ifin", "redmonk", "arxiv"] as const;
+const ALL_SOURCES = [
+  "hn",
+  "lobsters",
+  "sre",
+  "ifin",
+  "redmonk",
+  "arxiv",
+] as const;
 type SourceName = typeof ALL_SOURCES[number];
 
 const GlobalArgsSchema = z.object({
@@ -68,13 +75,16 @@ async function runCommand(
       child.kill();
     } catch { /* empty */ }
   }, timeoutMs);
-  const output = await child.output();
-  clearTimeout(timer);
-  return {
-    stdout: new TextDecoder().decode(output.stdout).trim(),
-    stderr: new TextDecoder().decode(output.stderr).trim(),
-    success: output.success,
-  };
+  try {
+    const output = await child.output();
+    return {
+      stdout: new TextDecoder().decode(output.stdout).trim(),
+      stderr: new TextDecoder().decode(output.stderr).trim(),
+      success: output.success,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** YYYY-MM-DD dow — used as the org #+DATE and in the filename. */
@@ -100,6 +110,12 @@ function formatTimestamp(date: Date): string {
 function sanitizeTag(tag: string): string {
   return tag.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/** Sanitize and add a tag, dropping empties so FILETAGS never gets a `::` pair. */
+function addTag(set: Set<string>, raw: string): void {
+  const t = sanitizeTag(raw);
+  if (t) set.add(t);
 }
 
 // =============================================================================
@@ -156,36 +172,46 @@ function buildDailyFile(
 
   // Extract each source (guarded — absent if collector didn't fetch it)
   const hnStories = enabledSources.has("hn")
-    ? (((data["hnFrontPage"] as Record<string, unknown>)?.stories ?? []) as Array<Record<string, unknown>>)
+    ? (((data["hnFrontPage"] as Record<string, unknown>)?.stories ??
+      []) as Array<Record<string, unknown>>)
     : [];
   const lobStories = enabledSources.has("lobsters")
-    ? (((data["lobstersHottest"] as Record<string, unknown>)?.stories ?? []) as Array<Record<string, unknown>>)
+    ? (((data["lobstersHottest"] as Record<string, unknown>)?.stories ??
+      []) as Array<Record<string, unknown>>)
     : [];
   const sreItems = enabledSources.has("sre")
-    ? (((data["sreWeekly"] as Record<string, unknown>)?.items ?? []) as Array<Record<string, unknown>>)
+    ? (((data["sreWeekly"] as Record<string, unknown>)?.items ?? []) as Array<
+      Record<string, unknown>
+    >)
     : [];
   const ifinTopics = enabledSources.has("ifin")
-    ? (((data["ifin"] as Record<string, unknown>)?.topics ?? []) as Array<Record<string, unknown>>)
+    ? (((data["ifin"] as Record<string, unknown>)?.topics ?? []) as Array<
+      Record<string, unknown>
+    >)
     : [];
   const redmonkItems = enabledSources.has("redmonk")
-    ? (((data["redmonk"] as Record<string, unknown>)?.items ?? []) as Array<Record<string, unknown>>)
+    ? (((data["redmonk"] as Record<string, unknown>)?.items ?? []) as Array<
+      Record<string, unknown>
+    >)
     : [];
   const arxivEntries = enabledSources.has("arxiv")
-    ? (((data["arxiv"] as Record<string, unknown>)?.entries ?? []) as Array<Record<string, unknown>>)
+    ? (((data["arxiv"] as Record<string, unknown>)?.entries ?? []) as Array<
+      Record<string, unknown>
+    >)
     : [];
 
   // Collect tags from tagged sources
   for (const s of lobStories) {
     const t = s["tags"] as string[] | undefined;
-    if (t) { for (const tag of t) allTags.add(sanitizeTag(tag)); }
+    if (t) { for (const tag of t) addTag(allTags, tag); }
   }
   for (const t of ifinTopics) {
     const tags = t["tags"] as string[] | undefined;
-    if (tags) { for (const tag of tags) allTags.add(sanitizeTag(String(tag))); }
+    if (tags) { for (const tag of tags) addTag(allTags, String(tag)); }
   }
   for (const e of arxivEntries) {
     const cat = e["category"] as string | undefined;
-    if (cat) allTags.add(sanitizeTag(cat));
+    if (cat) addTag(allTags, cat);
   }
 
   // Collect source URLs for the SOURCES property
@@ -216,7 +242,10 @@ function buildDailyFile(
     if (l) allSources.push(l);
   }
 
-  const filetags = Array.from(allTags).sort().map((t) => `:${t}:`).join("");
+  // Org FILETAGS are colon-delimited: `:tag1:tag2:`. Build with a single join
+  // so adjacent tags don't produce a `::` (which org parses as an empty tag).
+  const sortedTags = Array.from(allTags).sort();
+  const filetags = sortedTags.length ? `:${sortedTags.join(":")}:` : "";
 
   // Build the counts summary line
   const counts: string[] = [];
@@ -233,7 +262,9 @@ function buildDailyFile(
   file += `#+FILETAGS: ${filetags}\n`;
   file += `:PROPERTIES:\n`;
   file += `:SOURCE: research-brief\n`;
-  file += `:SOURCES: ${allSources.slice(0, 10).map((u) => u.replace(/[\r\n]/g, "")).join(", ")}\n`;
+  file += `:SOURCES: ${
+    allSources.slice(0, 10).map((u) => u.replace(/[\r\n]/g, "")).join(", ")
+  }\n`;
   file += `:UPDATED: ${ts}\n`;
   file += `:END:\n\n`;
   file += `Research brief — ${counts.join(", ")}\n\n`;
@@ -311,7 +342,10 @@ function buildDailyFile(
       const title = e["title"] as string;
       const authors = (e["authors"] as string[]) ?? [];
       const link = e["link"] as string;
-      const summary = (e["summary"] as string ?? "").replace(/\n/g, " ").slice(0, 200);
+      const summary = (e["summary"] as string ?? "").replace(/\n/g, " ").slice(
+        0,
+        200,
+      );
       file += `- *${title}*`;
       if (authors.length > 0) file += ` — ${authors.slice(0, 3).join(", ")}`;
       file += "\n";
@@ -324,17 +358,30 @@ function buildDailyFile(
   return file;
 }
 
+/**
+ * Stage and commit a single file. Returns "committed" on success, "nothing" if
+ * the file had no changes to commit. Throws (with git's stderr) on a real
+ * failure — a caller that logs success unconditionally would otherwise hide a
+ * broken commit, which for a persistence model is the worst failure to mask.
+ */
 async function gitCommit(
   orgDir: string,
   filePath: string,
   userName: string,
   userEmail: string,
   message: string,
-): Promise<void> {
-  await runCommand(["git", "add", filePath], orgDir);
-  const status = await runCommand(["git", "status", "--porcelain"], orgDir);
-  if (!status.stdout) return;
-  await runCommand([
+): Promise<"committed" | "nothing"> {
+  const add = await runCommand(["git", "add", "--", filePath], orgDir);
+  if (!add.success) {
+    throw new Error(`git add failed: ${add.stderr || "unknown error"}`);
+  }
+  // Only this file's staged state decides whether there's anything to commit.
+  const status = await runCommand(
+    ["git", "status", "--porcelain", "--", filePath],
+    orgDir,
+  );
+  if (!status.stdout) return "nothing";
+  const commit = await runCommand([
     "git",
     "-c",
     `user.name=${userName}`,
@@ -343,7 +390,13 @@ async function gitCommit(
     "commit",
     "-m",
     message,
+    "--",
+    filePath,
   ], orgDir);
+  if (!commit.success) {
+    throw new Error(`git commit failed: ${commit.stderr || "unknown error"}`);
+  }
+  return "committed";
 }
 
 // =============================================================================
@@ -387,7 +440,11 @@ async function writeDailyEntry(
     );
   }
 
-  const enabledSources = new Set(cfg.sources as SourceName[]);
+  // `sources` defaults to all via the schema, but guard against an undefined
+  // value (e.g. a caller that skips schema validation): no list means all.
+  const enabledSources = new Set(
+    (cfg.sources ?? ALL_SOURCES) as SourceName[],
+  );
   const data = await readResearchData(cfg.swampBin, cfg.repoDir);
   if (!data) {
     ctx.logger.warn(
@@ -406,7 +463,9 @@ async function writeDailyEntry(
   // Check for existing file — idempotent, don't overwrite
   try {
     await Deno.stat(journalFile);
-    ctx.logger.info("Entry for today already exists, skipping", { file: journalFile });
+    ctx.logger.info("Entry for today already exists, skipping", {
+      file: journalFile,
+    });
     const handle = await ctx.writeResource("journalEntry", instanceKey, {
       date: orgDate,
       file: journalFile,
@@ -414,39 +473,55 @@ async function writeDailyEntry(
       createdAt: formatTimestamp(now),
     });
     return { dataHandles: [handle] };
-  } catch {
-    // File doesn't exist — proceed
+  } catch (e) {
+    // Only "file doesn't exist" is expected here — proceed to write it.
+    // Any other stat failure (permission denied, I/O error) is real: rethrow
+    // it with context rather than masking it behind a later writeTextFile error.
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
 
   const fileContent = data
     ? buildDailyFile(data, enabledSources, now)
-    : `#+TITLE: Research Journal ${orgDate}\n#+DATE: <${orgDate}>\n#+FILETAGS: :research:journal:\n:PROPERTIES:\n:UPDATED: ${formatTimestamp(now)}\n:END:\n\nNo research data available. Run \`swamp workflow run research-brief\` first.\n`;
+    : `#+TITLE: Research Journal ${orgDate}\n#+DATE: <${orgDate}>\n#+FILETAGS: :research:journal:\n:PROPERTIES:\n:UPDATED: ${
+      formatTimestamp(now)
+    }\n:END:\n\nNo research data available. Run \`swamp workflow run research-brief\` first.\n`;
 
   await Deno.writeTextFile(journalFile, fileContent);
 
+  // Stage/commit only this day's file, and let the recorded status reflect what
+  // actually reached the remote — logging "Pushed" when the push failed would
+  // mask the one failure this model exists to prevent.
+  const relFile = `${cfg.jrnlSubdir}/${fileSuffix}.org`;
+  let status = "written-not-committed";
   try {
-    await gitCommit(
+    const committed = await gitCommit(
       orgDir,
-      cfg.jrnlSubdir,
+      relFile,
       cfg.gitUserName,
       cfg.gitUserEmail,
       `journal: research entry for ${orgDate}`,
     );
-    ctx.logger.info(`Committed ${journalFile}`);
+    if (committed === "committed") {
+      ctx.logger.info(`Committed ${journalFile}`);
+    }
+    const push = await runCommand(["git", "push"], orgDir, 30000);
+    if (push.success) {
+      ctx.logger.info("Pushed to remote");
+      status = "written";
+    } else {
+      ctx.logger.warn("Git push failed", {
+        error: push.stderr || "non-zero exit",
+      });
+      status = "committed-not-pushed";
+    }
   } catch (e) {
     ctx.logger.warn("Git commit failed", { error: String(e) });
-  }
-  try {
-    await runCommand(["git", "push"], orgDir, 30000);
-    ctx.logger.info("Pushed to remote");
-  } catch (e) {
-    ctx.logger.warn("Git push failed", { error: String(e) });
   }
 
   const handle = await ctx.writeResource("journalEntry", instanceKey, {
     date: orgDate,
     file: journalFile,
-    status: "written",
+    status,
     createdAt: formatTimestamp(now),
   });
   return { dataHandles: [handle] };
