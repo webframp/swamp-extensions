@@ -132,6 +132,22 @@ const NoteListSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const NoteDeletedSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  noteId: z.number(),
+  deleted: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const MrAssigneesSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  // Resulting assignee usernames after the set (empty when unassigned).
+  assignees: z.array(z.string()),
+  fetchedAt: z.string(),
+});
+
 const ReleaseSchema = z.object({
   tagName: z.string(),
   name: z.string(),
@@ -625,6 +641,32 @@ mutation createNote($noteableId: NoteableID!, $body: String!) {
   }
 }`;
 
+const UPDATE_NOTE_MUTATION = `
+mutation updateNote($id: NoteID!, $body: String!) {
+  updateNote(input: { id: $id, body: $body }) {
+    note { id body createdAt author { username } }
+    errors
+  }
+}`;
+
+const DESTROY_NOTE_MUTATION = `
+mutation destroyNote($id: NoteID!) {
+  destroyNote(input: { id: $id }) {
+    note { id }
+    errors
+  }
+}`;
+
+// operationMode REPLACE sets the full assignee set: [] unassigns, one username
+// assigns one (all GitLab CE supports), multiple assigns many (EE/Premium).
+const SET_ASSIGNEES_MUTATION = `
+mutation setAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  mergeRequestSetAssignees(input: { projectPath: $projectPath, iid: $iid, assigneeUsernames: $usernames, operationMode: REPLACE }) {
+    mergeRequest { iid assignees { nodes { username } } }
+    errors
+  }
+}`;
+
 const CREATE_MR_MUTATION = `
 mutation createMR($projectPath: ID!, $title: String!, $sourceBranch: String!, $targetBranch: String!, $description: String) {
   mergeRequestCreate(input: { projectPath: $projectPath, title: $title, sourceBranch: $sourceBranch, targetBranch: $targetBranch, description: $description }) {
@@ -876,7 +918,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.08.3",
+  version: "2026.07.08.4",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -945,6 +987,18 @@ export const model = {
     retryResult: {
       description: "Outcome of a triggered job/pipeline retry",
       schema: RetryResultSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    noteDeleted: {
+      description: "Record of a deleted MR note",
+      schema: NoteDeletedSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    mrAssignees: {
+      description: "Assignees of an MR after a set/unassign",
+      schema: MrAssigneesSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -2032,6 +2086,173 @@ export const model = {
           iid: args.iid,
           project: args.project,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    update_mr_note: {
+      description: "Edit an existing comment on a merge request by note id.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        noteId: z.number(),
+        body: z.string().min(1),
+      }),
+      execute: async (
+        args: { project: string; iid: number; noteId: number; body: string },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, UPDATE_NOTE_MUTATION, {
+          id: `gid://gitlab/Note/${args.noteId}`,
+          body: args.body,
+        });
+        const result = data.updateNote;
+        // GitLab returns a null payload (not a userland error) when the caller
+        // can't edit the note — another user's note, a system note, a locked MR.
+        if (!result) {
+          throw new Error(
+            `update_mr_note: note ${args.noteId} not found or permission denied`,
+          );
+        }
+        if (result.errors?.length) {
+          throw new Error(`updateNote failed: ${result.errors.join("; ")}`);
+        }
+        if (!result.note) {
+          throw new Error(
+            `updateNote returned no note (noteId: ${args.noteId}, project: ${args.project})`,
+          );
+        }
+        const note = gqlMapNote(result.note);
+        const handle = await ctx.writeResource(
+          "notes",
+          `${sanitizeName(args.project)}-mr-${args.iid}-note-${note.id}`,
+          {
+            project: args.project,
+            noteableType: "merge_request",
+            noteableIid: args.iid,
+            notes: [note],
+            count: 1,
+            truncated: false,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Updated note {noteId} on MR !{iid}", {
+          noteId: args.noteId,
+          iid: args.iid,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    delete_mr_note: {
+      description: "Delete a comment on a merge request by note id.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        noteId: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number; noteId: number },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, DESTROY_NOTE_MUTATION, {
+          id: `gid://gitlab/Note/${args.noteId}`,
+        });
+        const result = data.destroyNote;
+        // Null payload = permission denied / note not found (not a userland
+        // error). A successful delete returns { note: null, errors: [] }.
+        if (!result) {
+          throw new Error(
+            `delete_mr_note: note ${args.noteId} not found or permission denied`,
+          );
+        }
+        if (result.errors?.length) {
+          throw new Error(`destroyNote failed: ${result.errors.join("; ")}`);
+        }
+        const handle = await ctx.writeResource(
+          "noteDeleted",
+          `${sanitizeName(args.project)}-mr-${args.iid}-note-${args.noteId}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            noteId: args.noteId,
+            deleted: true,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Deleted note {noteId} on MR !{iid}", {
+          noteId: args.noteId,
+          iid: args.iid,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    set_mr_assignees: {
+      description:
+        "Set (replace) an MR's assignees by username; pass an empty list to unassign. GitLab CE keeps one; EE/Premium support multiple.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        usernames: z.array(z.string()).default([]),
+      }),
+      execute: async (
+        args: { project: string; iid: number; usernames: string[] },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, SET_ASSIGNEES_MUTATION, {
+          projectPath: args.project,
+          iid: String(args.iid),
+          usernames: args.usernames,
+        });
+        const result = data.mergeRequestSetAssignees;
+        if (result.errors?.length) {
+          throw new Error(
+            `mergeRequestSetAssignees failed: ${result.errors.join("; ")}`,
+          );
+        }
+        const assignees: string[] =
+          (result.mergeRequest?.assignees?.nodes ?? []).map((n: any) =>
+            n.username
+          );
+        // GitLab does NOT error on an unknown/unassignable username — it just
+        // omits it. Fail loudly so an assign to a typo'd user isn't reported as
+        // success (and, on CE, so dropping an extra assignee surfaces).
+        if (args.usernames.length > 0) {
+          // GitLab lowercases usernames in responses but accepts mixed case in
+          // requests — compare case-insensitively so a valid assign isn't
+          // reported as failed.
+          const got = new Set(assignees.map((u) => u.toLowerCase()));
+          const missing = args.usernames.filter((u) =>
+            !got.has(u.toLowerCase())
+          );
+          if (missing.length) {
+            throw new Error(
+              `set_mr_assignees: GitLab did not assign ${
+                missing.join(", ")
+              } (unknown user, or GitLab CE's single-assignee limit)`,
+            );
+          }
+        }
+        const handle = await ctx.writeResource(
+          "mrAssignees",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            assignees,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(
+          assignees.length
+            ? "Set MR !{iid} assignees: {who}"
+            : "Unassigned MR !{iid}",
+          { iid: args.iid, who: assignees.join(", ") },
+        );
         return { dataHandles: [handle] };
       },
     },

@@ -1,3 +1,16 @@
+## 2026.07.08.4
+
+**Added:** MR note management and assignee control.
+
+- `update_mr_note(project, iid, noteId, body)` — edit an MR comment by id
+  (GraphQL `updateNote`).
+- `delete_mr_note(project, iid, noteId)` — remove an MR comment by id (GraphQL
+  `destroyNote`). Previously a comment could be created but not deleted in-model.
+- `set_mr_assignees(project, iid, usernames)` — set/replace assignees by
+  username (GraphQL `mergeRequestSetAssignees`, `operationMode: REPLACE`); pass
+  an empty list to unassign. GitLab CE keeps a single assignee; EE/Premium
+  support multiple.
+
 ## 2026.07.08.3
 
 **Added:** CI-failure diagnosis for merge requests.
