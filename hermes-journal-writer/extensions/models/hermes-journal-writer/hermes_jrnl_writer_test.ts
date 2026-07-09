@@ -134,6 +134,10 @@ function mockWithHnData(cmd: string[]): { stdout: string; success: boolean } {
       success: true,
     };
   }
+  // git status reports the day's file staged, so a commit (and push) happens.
+  if (cmd.includes("status")) {
+    return { stdout: " A journal/x.org", success: true };
+  }
   return { stdout: "", success: true };
 }
 
@@ -360,6 +364,9 @@ Deno.test("write_daily_entry handles research data gracefully", async () => {
         success: true,
       };
     }
+    if (cmd.includes("status")) {
+      return { stdout: " A journal/x.org", success: true };
+    }
     return { stdout: "", success: true };
   });
   try {
@@ -482,6 +489,91 @@ Deno.test("write_daily_entry records committed-not-pushed when the push fails", 
     );
     // The file was still written locally.
     assertEquals(Object.keys(files).length, 1);
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
+Deno.test("write_daily_entry does not push when there is nothing to commit", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  let pushed = false;
+  const restoreCmd = mockDenoCommand((cmd) => {
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return {
+        stdout: JSON.stringify({
+          content: JSON.stringify({
+            hnFrontPage: {
+              stories: [{ title: "T", score: 1, by: "u", url: "u" }],
+            },
+          }),
+        }),
+        success: true,
+      };
+    }
+    if (cmd.includes("push")) {
+      pushed = true;
+      return { stdout: "", success: true };
+    }
+    // git status reports no staged changes → nothing to commit.
+    if (cmd.includes("status")) return { stdout: "", success: true };
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_ARGS,
+    });
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    assertEquals(
+      (getWrittenResources()[0].data as any).status,
+      "written-nothing-to-commit",
+    );
+    // No commit was made, so no push should advance the remote.
+    assertEquals(pushed, false);
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});
+
+Deno.test("write_daily_entry treats a failed git status as an error, not nothing-to-commit", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  let pushed = false;
+  const restoreCmd = mockDenoCommand((cmd) => {
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return {
+        stdout: JSON.stringify({
+          content: JSON.stringify({
+            hnFrontPage: {
+              stories: [{ title: "T", score: 1, by: "u", url: "u" }],
+            },
+          }),
+        }),
+        success: true,
+      };
+    }
+    if (cmd.includes("push")) {
+      pushed = true;
+      return { stdout: "", success: true };
+    }
+    // git status fails (e.g. held index.lock): non-zero exit, empty stdout.
+    if (cmd.includes("status")) return { stdout: "", success: false };
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_ARGS,
+    });
+    // gitCommit throws; the method catches it and records not-committed —
+    // it must NOT push or claim a successful write.
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    assertEquals(
+      (getWrittenResources()[0].data as any).status,
+      "written-not-committed",
+    );
+    assertEquals(pushed, false);
   } finally {
     restoreFs();
     restoreCmd();

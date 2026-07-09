@@ -28,10 +28,12 @@
 
 **Fixed:**
 
-- Git failures are no longer reported as success. A failed `git push` now
-  records the entry as `committed-not-pushed` (and a failed commit as
-  `written-not-committed`) instead of logging "Pushed to remote" and recording
-  `written`. The recorded status reflects what actually reached the remote.
+- Git failures are no longer reported as success. The recorded status now
+  reflects what actually reached the remote: `written` (committed and pushed),
+  `committed-not-pushed` (push failed), `written-not-committed` (commit failed),
+  or `written-nothing-to-commit` (the file already matched the last commit, so
+  no push was attempted). A failed `git status` (e.g. a held `index.lock`) is
+  treated as an error rather than "nothing to commit".
 - The commit now stages and commits only the day's file (`git add -- <file>`)
   rather than the whole journal subdirectory, so an unrelated in-progress edit
   is never swept into the bot commit.

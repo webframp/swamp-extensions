@@ -32,9 +32,11 @@ const GlobalArgsSchema = z.object({
     ),
   repoDir: z.string().default(".")
     .describe("Path to the swamp repo directory"),
-  gitUserName: z.string().default("Hermes Research Bot")
+  gitUserName: z.string().regex(/^[^\r\n]+$/, "must not contain a newline")
+    .default("Hermes Research Bot")
     .describe("Git commit user name"),
-  gitUserEmail: z.string().default("hermes@localhost")
+  gitUserEmail: z.string().regex(/^[^\r\n]+$/, "must not contain a newline")
+    .default("hermes@localhost")
     .describe("Git commit user email"),
   sources: z.array(z.enum(ALL_SOURCES))
     .default([...ALL_SOURCES])
@@ -244,8 +246,9 @@ function buildDailyFile(
 
   // Org FILETAGS are colon-delimited: `:tag1:tag2:`. Build with a single join
   // so adjacent tags don't produce a `::` (which org parses as an empty tag).
+  // allTags is always seeded with "research"/"journal", so it is never empty.
   const sortedTags = Array.from(allTags).sort();
-  const filetags = sortedTags.length ? `:${sortedTags.join(":")}:` : "";
+  const filetags = `:${sortedTags.join(":")}:`;
 
   // Build the counts summary line
   const counts: string[] = [];
@@ -380,6 +383,12 @@ async function gitCommit(
     ["git", "status", "--porcelain", "--", filePath],
     orgDir,
   );
+  // A failed `git status` (e.g. a held .git/index.lock) exits non-zero with
+  // empty stdout — that is NOT "nothing to commit", so throw rather than let
+  // the caller record a false success.
+  if (!status.success) {
+    throw new Error(`git status failed: ${status.stderr || "unknown error"}`);
+  }
   if (!status.stdout) return "nothing";
   const commit = await runCommand([
     "git",
@@ -508,18 +517,26 @@ async function writeDailyEntry(
       cfg.gitUserEmail,
       `journal: research entry for ${orgDate}`,
     );
-    if (committed === "committed") {
-      ctx.logger.info(`Committed ${journalFile}`);
-    }
-    const push = await runCommand(["git", "push"], orgDir, 30000);
-    if (push.success) {
-      ctx.logger.info("Pushed to remote");
-      status = "written";
-    } else {
-      ctx.logger.warn("Git push failed", {
-        error: push.stderr || "non-zero exit",
+    if (committed === "nothing") {
+      // The file on disk already matches what's committed — this run created no
+      // commit, so don't push (a push here would only advance the remote with
+      // some unrelated pre-existing commit and mislabel it as ours).
+      ctx.logger.info("Journal file unchanged — nothing to commit", {
+        file: journalFile,
       });
-      status = "committed-not-pushed";
+      status = "written-nothing-to-commit";
+    } else {
+      ctx.logger.info(`Committed ${journalFile}`);
+      const push = await runCommand(["git", "push"], orgDir, 30000);
+      if (push.success) {
+        ctx.logger.info("Pushed to remote");
+        status = "written";
+      } else {
+        ctx.logger.warn("Git push failed", {
+          error: push.stderr || "non-zero exit",
+        });
+        status = "committed-not-pushed";
+      }
     }
   } catch (e) {
     ctx.logger.warn("Git commit failed", { error: String(e) });
