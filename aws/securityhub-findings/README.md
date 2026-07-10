@@ -57,7 +57,7 @@ retrieve the actual `ProductArn` from each finding before updating.
 On-demand triage workflow that collects all security data in one run:
 
 ```bash
-AWS_PROFILE="jw-cd-security-tooling/ReadOnlyPlus" \
+AWS_PROFILE="my-account/ReadOnlyPlus" \
   swamp workflow run @webframp/securityhub-triage --input modelName=sh-findings
 
 # Custom time window:
@@ -99,7 +99,7 @@ Workflow-scope report that aggregates triage data into actionable markdown:
 swamp extension pull @webframp/aws/securityhub-findings
 
 # Create model instance (pointed at delegated admin)
-AWS_PROFILE="jw-cd-security-tooling/ReadOnlyPlus" \
+AWS_PROFILE="my-account/ReadOnlyPlus" \
   swamp model create @webframp/aws/securityhub-findings sh-findings --global-arg region=us-east-1
 
 # List all findings from last 24h

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gcp/vertex-usage"
-version: "2026.06.21.1"
+version: "2026.07.10.1"
 description: |
   GCP Vertex AI token usage monitoring — multi-project scanning of
   token_count metrics via the Cloud Monitoring API. Provides per-model
@@ -19,13 +19,13 @@ description: |
 
   ```bash
   swamp model create @webframp/gcp/vertex-usage vertex-usage \
-    --global-arg 'projects=["jw-cd-apps-ai","jw-avs-genmedia"]'
+    --global-arg 'projects=["my-project","my-other-project"]'
 
   # Scan all projects
   swamp model method run vertex-usage scan_projects
 
   # Single project
-  swamp model method run vertex-usage get_token_usage --input project=jw-cd-apps-ai
+  swamp model method run vertex-usage get_token_usage --input project=my-project
   ```
 
   ## Methods

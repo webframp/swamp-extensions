@@ -17,13 +17,13 @@ Requires an authenticated gcloud CLI session.
 
 ```bash
 swamp model create @webframp/gcp/vertex-usage vertex-usage \
-  --global-arg 'projects=["jw-cd-apps-ai","jw-avs-genmedia"]'
+  --global-arg 'projects=["my-project","my-other-project"]'
 
 # Scan all projects
 swamp model method run vertex-usage scan_projects
 
 # Single project
-swamp model method run vertex-usage get_token_usage --input project=jw-cd-apps-ai
+swamp model method run vertex-usage get_token_usage --input project=my-project
 ```
 
 ## Methods

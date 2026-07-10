@@ -22,7 +22,7 @@ swamp model create @webframp/aws/bedrock-usage bedrock-usage
 
 # Multi-account with cross-account roles
 swamp model create @webframp/aws/bedrock-usage bedrock-usage \
-  --global-arg 'profiles=["jw-cd-lab-1/ReadOnlyPlus","jw-broadcasting-soc/ReadOnlyPlus"]' \
+  --global-arg 'profiles=["my-account/ReadOnlyPlus","my-other-account/ReadOnlyPlus"]' \
   --global-arg 'regions=["us-east-1","us-west-2"]'
 
 # Scan all accounts
@@ -30,7 +30,7 @@ swamp model method run bedrock-usage scan_accounts
 
 # Single account/region
 swamp model method run bedrock-usage get_token_usage \
-  --input profile=jw-cd-lab-1/ReadOnlyPlus --input region=us-east-1
+  --input profile=my-account/ReadOnlyPlus --input region=us-east-1
 
 # List active models
 swamp model method run bedrock-usage list_active_models

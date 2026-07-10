@@ -18,7 +18,7 @@ import { z } from "npm:zod@4.4.3";
 
 const GlobalArgsSchema = z.object({
   host: z.string().min(1).describe(
-    "GitLab hostname (e.g. git.bethelservice.org)",
+    "GitLab hostname (e.g. git.example.org)",
   ),
   token: z.string().min(1).meta({ sensitive: true }).describe(
     "GitLab personal access token with api scope (use vault reference)",
