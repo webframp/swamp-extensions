@@ -903,7 +903,7 @@ Deno.test({
       assertEquals(err, "sso-login-required");
       // No portal URL, no ANSI escapes leaked.
       assertEquals(err.includes("awsapps.com"), false);
-      assertEquals(err.includes(""), false);
+      assertEquals(err.includes(String.fromCharCode(27)), false);
     } finally {
       restoreSts();
       restoreQuotas();
@@ -990,6 +990,20 @@ Deno.test({
     // Must keep the real cause, not hide it behind a re-login prompt.
     assertEquals(err === "sso-login-required", false);
     assertMatch(err, /not found/);
+  },
+});
+
+Deno.test({
+  name: "a generic session/token-expired error is NOT collapsed to sso code",
+  sanitizeResources: false,
+  fn: async () => {
+    // TLS/DB/STS 'session expired' shares the word 'expired' but is a
+    // different fault — must not be mislabeled as an SSO re-login prompt.
+    const err = await runFailingSweep(
+      new Error("STS session has expired; the request cannot be retried"),
+    );
+    assertEquals(err === "sso-login-required", false);
+    assertMatch(err, /expired/); // real cause retained
   },
 });
 

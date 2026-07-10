@@ -256,7 +256,7 @@ function redactError(e: unknown): string {
   // malformed output, network reset) is a different fault and must keep its
   // (redacted) text so the operator sees the real cause, not a login prompt.
   if (
-    /sso login|please login|Identity Center token|token[^\n]*expired|session[^\n]*expired/i
+    /sso login|please login|Identity Center token|sso[^\n]*expired|identity[\s-]*center[^\n]*expired/i
       .test(msg)
   ) {
     return "sso-login-required";
