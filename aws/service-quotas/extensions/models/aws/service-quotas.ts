@@ -236,17 +236,42 @@ function sanitizeName(s: string): string {
 }
 
 /**
- * Redact identifiers from an error message before it is persisted. AWS
- * authorization errors embed the caller ARN (account id + principal/username)
- * and bare 12-digit account ids; this data feeds the daily briefing, which must
- * never surface internal identifiers. Keeps the actionable text (the missing
- * permission, the error class) while stripping who/where.
+ * Redact identifiers from an error message before it is persisted. This data
+ * feeds the daily briefing, which must never surface internal identifiers —
+ * ARNs (account id + principal/username), bare 12-digit account ids, or
+ * internal URLs. The most common failure, a `granted`/AWS SSO
+ * credential-process error, embeds the org's SSO portal URL and login hints;
+ * collapse it to a short, actionable, identifier-free code. Otherwise keep the
+ * actionable text (missing permission, error class) while stripping who/where.
  */
 function redactError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
+  const msg = (e instanceof Error ? e.message : String(e))
+    // Strip ANSI escape sequences (granted/AWS CLI errors are colorized) —
+    // full CSI + charset selects, not just SGR color codes.
+    // deno-lint-ignore no-control-regex
+    .replace(/\x1b(?:\[[0-9;?]*[ -/]*[@-~]|[()][@-~])/g, "");
+  // Collapse the granted / AWS SSO re-login failure — its raw text embeds the
+  // org SSO portal URL — to a short, actionable code. Match ONLY phrases that
+  // imply re-authentication; a bare credential-process failure (missing binary,
+  // malformed output, network reset) is a different fault and must keep its
+  // (redacted) text so the operator sees the real cause, not a login prompt.
+  if (
+    /sso login|please login|Identity Center token|token[^\n]*expired|session[^\n]*expired/i
+      .test(msg)
+  ) {
+    return "sso-login-required";
+  }
   return msg
+    .replace(/https?:\/\/\S+/gi, "<url>")
     .replace(/arn:aws[^\s"']*/gi, "arn:***")
-    .replace(/\b\d{12}\b/g, "***");
+    // Bare hostnames/FQDNs (no scheme): cert altnames, ENOTFOUND, VPC
+    // endpoints, internal domains. Requires a leading letter and >=2 dots so
+    // version strings (2026.07.10.1) and single-dot tokens (model.ts) survive.
+    .replace(/\b[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+\.[a-z]{2,}\b/gi, "<host>")
+    .replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "<ip>")
+    .replace(/\b\d{4}-\d{4}-\d{4}\b/g, "***")
+    .replace(/\b\d{12}\b/g, "***")
+    .trim();
 }
 
 async function getAccountId(profile: string, region: string): Promise<string> {
@@ -332,7 +357,7 @@ interface ModelContext {
 /** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.07.09.1",
+  version: "2026.07.10.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
