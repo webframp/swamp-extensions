@@ -22,6 +22,13 @@ swamp model method run quotas list_services
 # Find quotas above 80% utilization across all accounts
 swamp model method run quotas check_utilization \
   --input serviceCode=iam --input threshold=0.8
+
+# Sweep several services in one fan-out — writes one utilization snapshot per service
+swamp model method run quotas check_utilization \
+  --input serviceCodes='["ec2","vpc","eks"]' --input threshold=0.8
+
+# List open quota-increase requests (PENDING/CASE_OPENED) across all accounts
+swamp model method run quotas list_pending_requests
 ```
 
 ## Querying Stored Data
@@ -52,6 +59,8 @@ data.latest("quotas", "utilization").attributes.entries.filter(
 | `quotas` | All quotas for a service in an account |
 | `services` | Available service codes |
 | `utilization` | Quotas above threshold across accounts |
+| `increaseRequest` | Record of a submitted quota increase request |
+| `pendingRequests` | Open quota-increase requests (PENDING/CASE_OPENED) across accounts |
 
 ## Required Permissions
 
@@ -62,6 +71,7 @@ Read-only methods need:
 servicequotas:GetServiceQuota
 servicequotas:ListServiceQuotas
 servicequotas:ListServices
+servicequotas:ListRequestedServiceQuotaChangeHistory
 servicequotas:GetAWSDefaultServiceQuota
 cloudwatch:GetMetricData
 sts:GetCallerIdentity

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/service-quotas"
-version: "2026.07.05.1"
+version: "2026.07.09.1"
 description: |
   Query and monitor AWS Service Quotas across accounts. Fan-out utilization
   checks identify quotas approaching their limits before they cause failures.
@@ -14,6 +14,7 @@ description: |
   - `servicequotas:GetServiceQuota`
   - `servicequotas:ListServiceQuotas`
   - `servicequotas:ListServices`
+  - `servicequotas:ListRequestedServiceQuotaChangeHistory` (for list_pending_requests)
   - `servicequotas:GetAWSDefaultServiceQuota`
   - `cloudwatch:GetMetricData` (for usage metrics)
   - `sts:GetCallerIdentity`
@@ -35,6 +36,13 @@ description: |
   # Find quotas above 80% utilization across accounts
   swamp model method run quotas check_utilization \
     --input serviceCode=iam --input threshold=0.8
+
+  # Sweep several services in one fan-out (one utilization snapshot each)
+  swamp model method run quotas check_utilization \
+    --input serviceCodes='["ec2","vpc","eks"]' --input threshold=0.8
+
+  # List open quota-increase requests (PENDING/CASE_OPENED) across accounts
+  swamp model method run quotas list_pending_requests
   ```
 repository: "https://github.com/webframp/swamp-extensions"
 models:
