@@ -212,6 +212,22 @@ const UnassignResultSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const RemoveReviewerResultSchema = z.object({
+  project: z.string(),
+  // The reviewer removed from each MR (the authenticated user unless overridden).
+  username: z.string(),
+  // Only confirmed removals land here (user absent from the resulting
+  // reviewers). Unconfirmable results — null payload, no mergeRequest, or the
+  // user still present after a REMOVE — go to `failed` instead.
+  results: z.array(z.object({
+    iid: z.number(),
+    // Reviewers remaining after removal — proof co-reviewers are preserved.
+    remainingReviewers: z.array(z.string()),
+  })),
+  failed: z.array(z.object({ iid: z.number(), error: z.string() })),
+  fetchedAt: z.string(),
+});
+
 const ReleaseSchema = z.object({
   tagName: z.string(),
   name: z.string(),
@@ -824,6 +840,14 @@ mutation removeAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]
   }
 }`;
 
+const REMOVE_REVIEWERS_MUTATION = `
+mutation removeReviewers($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  mergeRequestSetReviewers(input: { projectPath: $projectPath, iid: $iid, reviewerUsernames: $usernames, operationMode: REMOVE }) {
+    mergeRequest { iid reviewers { nodes { username } } }
+    errors
+  }
+}`;
+
 const CURRENT_USER_QUERY = `
 query { currentUser { username } }`;
 
@@ -1078,7 +1102,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.10.3",
+  version: "2026.07.10.4",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1173,6 +1197,13 @@ export const model = {
       description:
         "Result of a fan-out unassign across MRs (remaining assignees + failures)",
       schema: UnassignResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    reviewerRemovalResult: {
+      description:
+        "Result of a fan-out reviewer removal across MRs (remaining reviewers + failures)",
+      schema: RemoveReviewerResultSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -2551,6 +2582,114 @@ export const model = {
         );
         ctx.logger.info(
           "Unassigned {user} from {ok}/{total} MRs in {project} ({failed} failed)",
+          {
+            user: username,
+            ok: results.length,
+            total: args.iids.length,
+            project: args.project,
+            failed: failed.length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    remove_mr_reviewers: {
+      description:
+        "Remove a reviewer (default: the authenticated user) from multiple MRs " +
+        "in a project, in one fan-out. Uses operationMode REMOVE, so other " +
+        "reviewers are preserved. Idempotent: removing a user who isn't a " +
+        "reviewer is a no-op. Per-MR failures are recorded and never abort the batch. " +
+        "Useful to clear yourself off MRs you've already reviewed.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iids: z.array(z.number()).min(1),
+        username: z.string().optional(),
+      }),
+      execute: async (
+        args: { project: string; iids: number[]; username?: string },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        let resolved = args.username;
+        if (!resolved) {
+          const who = await graphqlRequest(host, token, CURRENT_USER_QUERY, {});
+          resolved = who.currentUser?.username;
+        }
+        if (!resolved) {
+          throw new Error(
+            "remove_mr_reviewers: could not resolve the authenticated user; pass `username` explicitly",
+          );
+        }
+        const username: string = resolved;
+
+        const results: z.infer<typeof RemoveReviewerResultSchema>["results"] =
+          [];
+        const failed: z.infer<typeof RemoveReviewerResultSchema>["failed"] = [];
+        for (const iid of args.iids) {
+          try {
+            const data = await graphqlRequest(
+              host,
+              token,
+              REMOVE_REVIEWERS_MUTATION,
+              {
+                projectPath: args.project,
+                iid: String(iid),
+                usernames: [username],
+              },
+            );
+            const result = data.mergeRequestSetReviewers;
+            // GitLab returns a null payload on permission-denied / missing MR
+            // as a routine path — guard before reading .errors.
+            if (!result) {
+              throw new Error(
+                "mergeRequestSetReviewers returned null (permission denied or MR not found)",
+              );
+            }
+            if (result.errors?.length) {
+              throw new Error(result.errors.join("; "));
+            }
+            if (!result.mergeRequest) {
+              throw new Error(
+                "mergeRequestSetReviewers returned no mergeRequest — removal unconfirmed",
+              );
+            }
+            const remainingReviewers: string[] =
+              (result.mergeRequest.reviewers?.nodes ?? []).map((
+                n: any,
+              ) => n.username);
+            // "No error" is not "removed": if the user is still a reviewer,
+            // treat it as a failure rather than report a false success.
+            const stillReviewer = remainingReviewers
+              .map((u) => u.toLowerCase())
+              .includes(username.toLowerCase());
+            if (stillReviewer) {
+              throw new Error(
+                "REMOVE reported success but the user is still a reviewer",
+              );
+            }
+            results.push({ iid, remainingReviewers });
+          } catch (e) {
+            failed.push({
+              iid,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        const handle = await ctx.writeResource(
+          "reviewerRemovalResult",
+          `${sanitizeName(args.project)}-reviewer-remove-${username}`,
+          {
+            project: args.project,
+            username,
+            results,
+            failed,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(
+          "Removed reviewer {user} from {ok}/{total} MRs in {project} ({failed} failed)",
           {
             user: username,
             ok: results.length,

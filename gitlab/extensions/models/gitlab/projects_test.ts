@@ -88,6 +88,7 @@ Deno.test("model has all expected methods", () => {
     "mark_todo_done",
     "merge",
     "rebase_merge_request",
+    "remove_mr_reviewers",
     "resolve_mr_discussion",
     "retry_job",
     "retry_pipeline",
@@ -123,6 +124,7 @@ Deno.test("model has all expected resources", () => {
     "rebaseResult",
     "releases",
     "retryResult",
+    "reviewerRemovalResult",
     "unassignResult",
   ]);
 });
@@ -2814,5 +2816,175 @@ Deno.test("resolve_mr_discussion throws on a null payload (permission denied)", 
     );
   } finally {
     restore();
+  }
+});
+
+// =============================================================================
+// remove_mr_reviewers Tests
+// =============================================================================
+
+Deno.test("remove_mr_reviewers resolves self, removes via REMOVE, preserves co-reviewers", async () => {
+  const cap = mockGraphqlCapture({
+    data: {
+      currentUser: { username: "operator" },
+      mergeRequestSetReviewers: {
+        mergeRequest: {
+          iid: 334,
+          reviewers: { nodes: [{ username: "other" }] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.remove_mr_reviewers.execute(
+      { project: "group/proj", iids: [334] },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources[0].specName, "reviewerRemovalResult");
+    const data = resources[0].data as {
+      username: string;
+      results: Array<{ iid: number; remainingReviewers: string[] }>;
+      failed: Array<{ iid: number; error: string }>;
+    };
+    assertEquals(data.username, "operator");
+    assertEquals(data.results.map((r) => r.iid), [334]);
+    assertEquals(data.results[0].remainingReviewers, ["other"]);
+    assertEquals(data.failed.length, 0);
+    // The mutation targeted the resolved user's reviewer entry.
+    assertEquals(cap.vars().usernames, ["operator"]);
+  } finally {
+    cap.restore();
+  }
+});
+
+Deno.test("remove_mr_reviewers routes a still-a-reviewer result to failed", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      currentUser: { username: "operator" },
+      mergeRequestSetReviewers: {
+        mergeRequest: {
+          iid: 1,
+          reviewers: {
+            nodes: [{ username: "operator" }, { username: "other" }],
+          },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.remove_mr_reviewers.execute(
+      { project: "group/proj", iids: [1] },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as {
+      results: unknown[];
+      failed: Array<{ iid: number; error: string }>;
+    };
+    assertEquals(data.results.length, 0);
+    assertEquals(data.failed.map((f) => f.iid), [1]);
+    assertEquals(data.failed[0].error.includes("still a reviewer"), true);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("remove_mr_reviewers records a null payload as a per-MR failure", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      currentUser: { username: "operator" },
+      mergeRequestSetReviewers: null,
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.remove_mr_reviewers.execute(
+      { project: "group/proj", iids: [7] },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as {
+      results: unknown[];
+      failed: Array<{ iid: number; error: string }>;
+    };
+    assertEquals(data.results.length, 0);
+    assertEquals(data.failed.map((f) => f.iid), [7]);
+    assertEquals(data.failed[0].error.includes("null"), true);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("remove_mr_reviewers throws when the authenticated user cannot be resolved", async () => {
+  const restore = mockGraphqlFetch({ data: { currentUser: null } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.remove_mr_reviewers.execute(
+          { project: "group/proj", iids: [1] },
+          context as any,
+        ),
+      Error,
+      "could not resolve the authenticated user",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("remove_mr_reviewers isolates a per-MR failure and still writes a result", async () => {
+  const original = globalThis.fetch;
+  // iid 20 fails (null payload); iid 10 succeeds. username passed, so no currentUser call.
+  globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+    const parsed = JSON.parse((init?.body as string) ?? "{}");
+    const iid = parsed?.variables?.iid;
+    const payload = iid === "20"
+      ? { data: { mergeRequestSetReviewers: null } }
+      : {
+        data: {
+          mergeRequestSetReviewers: {
+            mergeRequest: {
+              iid: 10,
+              reviewers: { nodes: [{ username: "other" }] },
+            },
+            errors: [],
+          },
+        },
+      };
+    return Promise.resolve(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.remove_mr_reviewers.execute(
+      { project: "group/proj", iids: [10, 20], username: "operator" },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as {
+      results: Array<{ iid: number }>;
+      failed: Array<{ iid: number }>;
+    };
+    assertEquals(data.results.map((r) => r.iid), [10]);
+    assertEquals(data.failed.map((f) => f.iid), [20]);
+  } finally {
+    globalThis.fetch = original;
   }
 });

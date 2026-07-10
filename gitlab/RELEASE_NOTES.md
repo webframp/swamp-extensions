@@ -1,3 +1,13 @@
+## 2026.07.10.4
+
+**Added:** `remove_mr_reviewers(project, iids, username?)` — remove a reviewer
+(default: the authenticated user) from multiple MRs in one fan-out, via GraphQL
+`mergeRequestSetReviewers` with `operationMode: REMOVE`. Other reviewers are
+preserved; it is idempotent; per-MR failures land in `failed[]` rather than
+aborting the batch. The reviewer-side sibling of `unassign_from_mrs`, for
+clearing yourself off MRs you've already reviewed (the "approved-but-still-listed"
+clutter). Writes a `reviewerRemovalResult` resource.
+
 ## 2026.07.10.3
 
 **Added:** `list_mr_discussions(project, iid)` — resolvable discussion threads on

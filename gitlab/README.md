@@ -110,6 +110,7 @@ fires the `@webframp/review-dashboard` report automatically.
 | `resolve_mr_discussion`| Resolve/unresolve an MR discussion thread | `project`, `iid`, `discussionId`, `resolved?`                 |
 | `set_mr_assignees`     | Set (replace) an MR's assignees | `project`, `iid`, `usernames`                                  |
 | `unassign_from_mrs`    | Remove a user (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?`    |
+| `remove_mr_reviewers`  | Remove a reviewer (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?` |
 | `create_label`         | Create a label             | `project`, `name`, `color?`, `description?`                          |
 
 ## Reports
