@@ -1823,7 +1823,10 @@ const MOCK_GRAPHQL_RESPONSE = {
               "https://git.example.org/group/proj/-/merge_requests/101",
             createdAt: "2026-06-11T12:00:00Z",
             author: { username: "alice" },
-            project: { nameWithNamespace: "Group / Proj" },
+            project: {
+              fullPath: "group/proj",
+              nameWithNamespace: "Group / Proj",
+            },
           },
         ],
       },
@@ -1941,6 +1944,8 @@ Deno.test("list_my_merge_requests writes dashboard resource with all roles", asy
     // Verify MR mapping
     assertEquals(data.reviewing[0].iid, 101);
     assertEquals(data.reviewing[0].project, "group/proj");
+    // GitLab-flavored reference for the MR.
+    assertEquals(data.reviewing[0].reference, "group/proj!101");
     assertEquals(data.reviewing[0].author, "alice");
     assertEquals(data.reviewing[0].labels, ["security"]);
     assertEquals(data.reviewing[0].approvedByMe, true);
@@ -1953,10 +1958,104 @@ Deno.test("list_my_merge_requests writes dashboard resource with all roles", asy
     assertEquals(data.todos[0].targetType, "MERGEREQUEST");
     assertEquals(data.todos[0].author, "alice");
     assertEquals(data.todos[0].project, "Group / Proj");
+    // Reference + iid parsed from the todo's targetUrl (path is the slug, not
+    // the display-name `project` field).
+    assertEquals(data.todos[0].iid, 101);
+    assertEquals(data.todos[0].reference, "group/proj!101");
   } finally {
     restore();
   }
 });
+
+Deno.test(
+  "list_my_merge_requests derives issue (#) references and null for unparseable todos",
+  async () => {
+    const restore = mockGraphqlFetch({
+      data: {
+        currentUser: {
+          username: "testuser",
+          reviewRequestedMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          assignedMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          authoredMergeRequests: {
+            nodes: [],
+            pageInfo: { hasNextPage: false },
+          },
+          todos: {
+            nodes: [
+              {
+                id: "gid://gitlab/Todo/9",
+                action: "directly_addressed",
+                body: "?",
+                targetType: "ISSUE",
+                targetUrl: "https://git.example.org/group/beta/-/issues/7",
+                createdAt: "2026-06-11T12:00:00Z",
+                author: { username: "as" },
+                project: {
+                  fullPath: "group/beta",
+                  nameWithNamespace: "Appsvc / Planning",
+                },
+              },
+              {
+                id: "gid://gitlab/Todo/10",
+                action: "mentioned",
+                body: "?",
+                // A target with no MR/issue path (e.g. an epic or design) —
+                // reference and iid should be null, not a bad guess.
+                targetType: "EPIC",
+                targetUrl: "https://git.example.org/groups/beta/-/epics/3",
+                createdAt: "2026-06-11T12:00:00Z",
+                author: { username: "bh" },
+                project: null,
+              },
+              {
+                id: "gid://gitlab/Todo/11",
+                action: "review_requested",
+                body: "?",
+                targetType: "MERGEREQUEST",
+                // Nested subgroup + trailing URL segment: path comes from
+                // fullPath (not the URL), iid from the /-/…/<n> tail.
+                targetUrl:
+                  "https://git.example.org/group/sub/proj/-/merge_requests/88/diffs",
+                createdAt: "2026-06-11T12:00:00Z",
+                author: { username: "wi" },
+                project: {
+                  fullPath: "group/sub/proj",
+                  nameWithNamespace: "Group / Sub / Proj",
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.list_my_merge_requests.execute(
+        { role: "all", state: "opened", includeArchived: false },
+        context as any,
+      );
+      const data = getWrittenResources()[0].data as any;
+      assertEquals(data.todos[0].reference, "group/beta#7");
+      assertEquals(data.todos[0].iid, 7);
+      // Non MR/issue target: no fabricated reference.
+      assertEquals(data.todos[1].reference, null);
+      assertEquals(data.todos[1].iid, null);
+      // Nested subgroup path + trailing /diffs segment.
+      assertEquals(data.todos[2].reference, "group/sub/proj!88");
+      assertEquals(data.todos[2].iid, 88);
+    } finally {
+      restore();
+    }
+  },
+);
 
 Deno.test("list_my_merge_requests filters by role=reviewer", async () => {
   const restore = mockGraphqlFetch(MOCK_GRAPHQL_RESPONSE);

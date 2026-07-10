@@ -245,6 +245,10 @@ const BranchListSchema = z.object({
 const DashboardMRSchema = z.object({
   project: z.string(),
   iid: z.number(),
+  // GitLab-flavored, cross-project unique reference (e.g. group/project!123).
+  // Autolinks in GitLab markdown; unambiguous in cross-project lists. Optional
+  // for read-back parity with dashboards written before this field existed.
+  reference: z.string().optional(),
   title: z.string(),
   author: z.string(),
   updatedAt: z.string(),
@@ -265,6 +269,12 @@ const TodoSchema = z.object({
   targetType: z.string(),
   targetUrl: z.string(),
   project: z.string().nullable(),
+  // Work-item iid parsed from targetUrl (null for targets without one).
+  // Optional so dashboards written before this field existed still validate.
+  iid: z.number().nullable().optional(),
+  // GitLab-flavored, cross-project unique reference derived from targetUrl:
+  // group/project!123 for MRs, group/project#123 for issues (null otherwise).
+  reference: z.string().nullable().optional(),
   author: z.string(),
   createdAt: z.string(),
 });
@@ -404,7 +414,7 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
       pageInfo { hasNextPage }
     }
     todos(state: pending, first: 20) {
-      nodes { id action body targetType targetUrl createdAt author { username } project { nameWithNamespace } }
+      nodes { id action body targetType targetUrl createdAt author { username } project { fullPath nameWithNamespace } }
       pageInfo { hasNextPage }
     }
   }
@@ -437,9 +447,16 @@ function mapDashboardMR(
   };
   const normalized = rawState?.toLowerCase() ?? null;
   const myReviewState = normalized ? (STATE_MAP[normalized] ?? null) : null;
+  const project = node.project?.fullPath ?? "";
+  const iid = typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid;
   return {
-    project: node.project?.fullPath ?? "",
-    iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
+    project,
+    iid,
+    // Omit rather than emit a malformed reference when the project path is
+    // absent or the iid isn't a valid integer (e.g. GraphQL returned null).
+    reference: project && Number.isInteger(iid)
+      ? `${project}!${iid}`
+      : undefined,
     title: node.title ?? "",
     author: node.author?.username ?? "",
     updatedAt: node.updatedAt ?? "",
@@ -452,7 +469,29 @@ function mapDashboardMR(
   };
 }
 
+// Parse the work-item iid from a GitLab MR/issue targetUrl. Only the
+// `/-/(merge_requests|issues)/<iid>` tail is matched, so this is robust to
+// subpath installs, nested subgroups, and trailing URL segments.
+function iidFromTargetUrl(url: string): number | null {
+  const m = url.match(/\/-\/(?:merge_requests|issues)\/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 function mapTodo(node: any): z.infer<typeof TodoSchema> {
+  // Build the reference from the authoritative project path (GraphQL fullPath),
+  // the target type (MR → `!`, issue → `#`), and the iid parsed from the URL.
+  // The todo's own `project` display field is a name, not a path, so it is kept
+  // only for display and never used to form a reference.
+  const fullPath: string | null = node.project?.fullPath ?? null;
+  const iid = iidFromTargetUrl(node.targetUrl ?? "");
+  const sep = node.targetType === "MERGEREQUEST"
+    ? "!"
+    : node.targetType === "ISSUE"
+    ? "#"
+    : null;
+  const reference = fullPath && iid !== null && sep
+    ? `${fullPath}${sep}${iid}`
+    : null;
   return {
     id: node.id ?? "",
     action: node.action ?? "",
@@ -460,6 +499,8 @@ function mapTodo(node: any): z.infer<typeof TodoSchema> {
     targetType: node.targetType ?? "",
     targetUrl: node.targetUrl ?? "",
     project: node.project?.nameWithNamespace ?? null,
+    iid,
+    reference,
     author: node.author?.username ?? "",
     createdAt: node.createdAt ?? "",
   };
@@ -950,7 +991,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.10.1",
+  version: "2026.07.10.2",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 

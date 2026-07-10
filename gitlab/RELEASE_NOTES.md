@@ -1,3 +1,14 @@
+## 2026.07.10.2
+
+**Added:** A canonical, GitLab-flavored `reference` on every dashboard work item
+from `list_my_merge_requests` — `group/project!123` for MRs, `group/project#123`
+for issue todos — so items in a cross-project list are uniquely identifiable and
+autolink in GitLab markdown. MRs derive it from the project path + iid; todos
+parse it (and a new `iid`) from `targetUrl` (the todo's own `project` field is a
+display name, not a path). The `@webframp/review-dashboard` report now renders
+these references, unfenced, in the MR tables and the todos table (falling back
+to the project path / target type for data written before this release).
+
 ## 2026.07.10.1
 
 **Added:** `unassign_from_mrs(project, iids, username?)` — remove an assignee
