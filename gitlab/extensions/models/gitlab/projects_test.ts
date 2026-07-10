@@ -788,7 +788,7 @@ Deno.test("get_merge_request summarizes a non-mergeable MR", async () => {
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.get_merge_request.execute(
-      { project: "o11n/glue", iid: 2127 },
+      { project: "group/proj", iid: 2127 },
       context as any,
     );
     const r = getWrittenResources().find((x) => x.specName === "mergeStatus");
@@ -928,7 +928,7 @@ Deno.test("rebase_merge_request reports rebased after polling through in_progres
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.rebase_merge_request.execute(
-      { project: "o11n/glue", iid: 2127, skipCi: false },
+      { project: "group/proj", iid: 2127, skipCi: false },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "rebaseResult")!
@@ -954,7 +954,7 @@ Deno.test("rebase_merge_request surfaces merge_error as an error status", async 
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.rebase_merge_request.execute(
-      { project: "o11n/glue", iid: 2223, skipCi: false },
+      { project: "group/proj", iid: 2223, skipCi: false },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "rebaseResult")!
@@ -976,7 +976,7 @@ Deno.test("rebase_merge_request reports in_progress when it never completes", as
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.rebase_merge_request.execute(
-      { project: "o11n/glue", iid: 2127, skipCi: false },
+      { project: "group/proj", iid: 2127, skipCi: false },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "rebaseResult")!
@@ -1000,7 +1000,7 @@ Deno.test("rebase_merge_request appends skip_ci=true when requested", async () =
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.rebase_merge_request.execute(
-      { project: "o11n/glue", iid: 2127, skipCi: true },
+      { project: "group/proj", iid: 2127, skipCi: true },
       context as any,
     );
     assertEquals(putUrl.includes("skip_ci=true"), true, `PUT url: ${putUrl}`);
@@ -1048,7 +1048,7 @@ Deno.test("get_merge_request extracts the head pipeline id", async () => {
 });
 
 Deno.test("get_pipeline_jobs lists failed jobs with failure_reason", async () => {
-  const pid = encodeURIComponent("o11n/glue");
+  const pid = encodeURIComponent("group/proj");
   const restore = mockFetch({
     [`GET /api/v4/projects/${pid}/pipelines/999/jobs?per_page=100&scope=failed`]:
       {
@@ -1090,7 +1090,7 @@ Deno.test("get_pipeline_jobs lists failed jobs with failure_reason", async () =>
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.get_pipeline_jobs.execute(
-      { project: "o11n/glue", pipelineId: 999, scope: "failed" },
+      { project: "group/proj", pipelineId: 999, scope: "failed" },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "pipelineJobs")!
@@ -1137,7 +1137,7 @@ Deno.test("get_job_log returns the redacted tail of the trace", async () => {
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.get_job_log.execute(
-      { project: "o11n/glue", jobId: 77, tailLines: 50 },
+      { project: "group/proj", jobId: 77, tailLines: 50 },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "jobLog")!
@@ -1191,7 +1191,7 @@ Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
 });
 
 Deno.test("retry_job surfaces a non-retryable job error", async () => {
-  const pid = encodeURIComponent("o11n/glue");
+  const pid = encodeURIComponent("group/proj");
   const restore = mockFetch({
     [`POST /api/v4/projects/${pid}/jobs/5/retry`]: {
       status: 403,
@@ -1205,7 +1205,7 @@ Deno.test("retry_job surfaces a non-retryable job error", async () => {
     await assertRejects(
       () =>
         model.methods.retry_job.execute(
-          { project: "o11n/glue", jobId: 5 },
+          { project: "group/proj", jobId: 5 },
           context as any,
         ),
       Error,
@@ -1217,7 +1217,7 @@ Deno.test("retry_job surfaces a non-retryable job error", async () => {
 });
 
 Deno.test("retry_job returns the new job id and status", async () => {
-  const pid = encodeURIComponent("o11n/glue");
+  const pid = encodeURIComponent("group/proj");
   const restore = mockFetch({
     [`POST /api/v4/projects/${pid}/jobs/1/retry`]: {
       status: 201,
@@ -1229,7 +1229,7 @@ Deno.test("retry_job returns the new job id and status", async () => {
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.retry_job.execute(
-      { project: "o11n/glue", jobId: 1 },
+      { project: "group/proj", jobId: 1 },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "retryResult")!
@@ -1244,7 +1244,7 @@ Deno.test("retry_job returns the new job id and status", async () => {
 });
 
 Deno.test("retry_pipeline records the pipeline retry", async () => {
-  const pid = encodeURIComponent("o11n/glue");
+  const pid = encodeURIComponent("group/proj");
   const restore = mockFetch({
     [`POST /api/v4/projects/${pid}/pipelines/999/retry`]: {
       status: 201,
@@ -1256,7 +1256,7 @@ Deno.test("retry_pipeline records the pipeline retry", async () => {
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.retry_pipeline.execute(
-      { project: "o11n/glue", pipelineId: 999 },
+      { project: "group/proj", pipelineId: 999 },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "retryResult")!
@@ -1277,7 +1277,7 @@ Deno.test("update_mr_note sends the note gid and edits the note", async () => {
           id: "gid://gitlab/Note/5",
           body: "edited body",
           createdAt: "2026-01-01T00:00:00Z",
-          author: { username: "sescriva" },
+          author: { username: "operator" },
         },
         errors: [],
       },
@@ -1288,7 +1288,7 @@ Deno.test("update_mr_note sends the note gid and edits the note", async () => {
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.update_mr_note.execute(
-      { project: "o11n/glue", iid: 2156, noteId: 5, body: "edited body" },
+      { project: "group/proj", iid: 2156, noteId: 5, body: "edited body" },
       context as any,
     );
     assertEquals(m.vars().id, "gid://gitlab/Note/5");
@@ -1312,7 +1312,7 @@ Deno.test("delete_mr_note sends the note gid and records deletion", async () => 
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.delete_mr_note.execute(
-      { project: "o11n/glue", iid: 2156, noteId: 5 },
+      { project: "group/proj", iid: 2156, noteId: 5 },
       context as any,
     );
     assertEquals(m.vars().id, "gid://gitlab/Note/5");
@@ -1331,7 +1331,7 @@ Deno.test("set_mr_assignees sends usernames with REPLACE and records result", as
       mergeRequestSetAssignees: {
         mergeRequest: {
           iid: "2156",
-          assignees: { nodes: [{ username: "sescriva" }] },
+          assignees: { nodes: [{ username: "operator" }] },
         },
         errors: [],
       },
@@ -1342,14 +1342,14 @@ Deno.test("set_mr_assignees sends usernames with REPLACE and records result", as
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.set_mr_assignees.execute(
-      { project: "o11n/glue", iid: 2156, usernames: ["sescriva"] },
+      { project: "group/proj", iid: 2156, usernames: ["operator"] },
       context as any,
     );
-    assertEquals(m.vars().usernames, ["sescriva"]);
-    assertEquals(m.vars().projectPath, "o11n/glue");
+    assertEquals(m.vars().usernames, ["operator"]);
+    assertEquals(m.vars().projectPath, "group/proj");
     const d = getWrittenResources().find((x) => x.specName === "mrAssignees")!
       .data as any;
-    assertEquals(d.assignees, ["sescriva"]);
+    assertEquals(d.assignees, ["operator"]);
   } finally {
     m.restore();
   }
@@ -1369,7 +1369,7 @@ Deno.test("set_mr_assignees with an empty list sends [] to unassign", async () =
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.set_mr_assignees.execute(
-      { project: "o11n/glue", iid: 2156, usernames: [] },
+      { project: "group/proj", iid: 2156, usernames: [] },
       context as any,
     );
     assertEquals(m.vars().usernames, []);
@@ -1398,7 +1398,7 @@ Deno.test("set_mr_assignees throws when a requested user was not assigned", asyn
     await assertRejects(
       () =>
         model.methods.set_mr_assignees.execute(
-          { project: "o11n/glue", iid: 2156, usernames: ["ghost"] },
+          { project: "group/proj", iid: 2156, usernames: ["ghost"] },
           context as any,
         ),
       Error,
@@ -1419,7 +1419,7 @@ Deno.test("delete_mr_note throws on a null payload (permission denied)", async (
     await assertRejects(
       () =>
         model.methods.delete_mr_note.execute(
-          { project: "o11n/glue", iid: 2156, noteId: 9999 },
+          { project: "group/proj", iid: 2156, noteId: 9999 },
           context as any,
         ),
       Error,
@@ -1439,7 +1439,7 @@ Deno.test("update_mr_note throws on a null payload (permission denied)", async (
     await assertRejects(
       () =>
         model.methods.update_mr_note.execute(
-          { project: "o11n/glue", iid: 2156, noteId: 9999, body: "x" },
+          { project: "group/proj", iid: 2156, noteId: 9999, body: "x" },
           context as any,
         ),
       Error,
@@ -1468,7 +1468,7 @@ Deno.test("set_mr_assignees matches usernames case-insensitively", async () => {
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.set_mr_assignees.execute(
-      { project: "o11n/glue", iid: 2156, usernames: ["DevUser"] },
+      { project: "group/proj", iid: 2156, usernames: ["DevUser"] },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "mrAssignees")!
@@ -2407,7 +2407,7 @@ Deno.test(
       requests.push(JSON.parse((init?.body as string) ?? "{}"));
       const body = {
         data: {
-          currentUser: { username: "sescriva" },
+          currentUser: { username: "operator" },
           mergeRequestSetAssignees: {
             mergeRequest: {
               iid: 1,
@@ -2429,7 +2429,7 @@ Deno.test(
         globalArgs: TEST_GLOBAL_ARGS,
       });
       await model.methods.unassign_from_mrs.execute(
-        { project: "o11n/glue", iids: [2115, 2223] },
+        { project: "group/proj", iids: [2115, 2223] },
         context as unknown as Parameters<
           typeof model.methods.unassign_from_mrs.execute
         >[1],
@@ -2442,7 +2442,7 @@ Deno.test(
         results: Array<{ iid: number; remainingAssignees: string[] }>;
         failed: Array<{ iid: number; error: string }>;
       };
-      assertEquals(data.username, "sescriva");
+      assertEquals(data.username, "operator");
       assertEquals(data.results.map((r) => r.iid), [2115, 2223]);
       // Co-assignee preserved by REMOVE mode.
       assertEquals(data.results[0].remainingAssignees, ["otheruser"]);
@@ -2455,7 +2455,7 @@ Deno.test(
       assertEquals(mutations.length, 2);
       for (const m of mutations) {
         assertEquals(m.query.includes("operationMode: REMOVE"), true);
-        assertEquals(m.variables.usernames, ["sescriva"]);
+        assertEquals(m.variables.usernames, ["operator"]);
       }
     } finally {
       globalThis.fetch = original;
@@ -2470,12 +2470,12 @@ Deno.test(
     // non-removal case. Must not be reported as a success.
     const restore = mockGraphqlFetch({
       data: {
-        currentUser: { username: "sescriva" },
+        currentUser: { username: "operator" },
         mergeRequestSetAssignees: {
           mergeRequest: {
             iid: 1,
             assignees: {
-              nodes: [{ username: "sescriva" }, { username: "otheruser" }],
+              nodes: [{ username: "operator" }, { username: "otheruser" }],
             },
           },
           errors: [],
@@ -2487,7 +2487,7 @@ Deno.test(
         globalArgs: TEST_GLOBAL_ARGS,
       });
       await model.methods.unassign_from_mrs.execute(
-        { project: "o11n/glue", iids: [42] },
+        { project: "group/proj", iids: [42] },
         context as unknown as Parameters<
           typeof model.methods.unassign_from_mrs.execute
         >[1],
@@ -2516,7 +2516,7 @@ Deno.test(
       await assertRejects(
         () =>
           model.methods.unassign_from_mrs.execute(
-            { project: "o11n/glue", iids: [1] },
+            { project: "group/proj", iids: [1] },
             context as unknown as Parameters<
               typeof model.methods.unassign_from_mrs.execute
             >[1],
@@ -2564,7 +2564,7 @@ Deno.test(
         globalArgs: TEST_GLOBAL_ARGS,
       });
       await model.methods.unassign_from_mrs.execute(
-        { project: "o11n/glue", iids: [10, 20], username: "sescriva" },
+        { project: "group/proj", iids: [10, 20], username: "operator" },
         context as unknown as Parameters<
           typeof model.methods.unassign_from_mrs.execute
         >[1],

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/securityhub-findings"
-version: "2026.06.21.1"
+version: "2026.07.10.1"
 description: |
   Query and manage AWS Security Hub findings from a delegated administrator
   account. Leverages cross-region aggregation to cover the entire AWS
@@ -25,7 +25,7 @@ description: |
 
   ```bash
   # Create model (pointed at delegated admin account)
-  AWS_PROFILE="jw-cd-security-tooling/ReadOnlyPlus" \
+  AWS_PROFILE="my-account/ReadOnlyPlus" \
     swamp model create @webframp/aws/securityhub-findings sh-findings --global-arg region=us-east-1
 
   # List all findings from last 24h
