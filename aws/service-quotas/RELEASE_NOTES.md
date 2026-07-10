@@ -1,17 +1,24 @@
-## 2026.07.04.1
+## 2026.07.09.1
 
-**Added:** `get_request_status` method — check the status of a previously
-submitted quota increase request using `GetRequestedServiceQuotaChange` API.
-Returns the current status, case ID, desired value, and timestamps.
+**Added:** `list_pending_requests` method — read-only fan-out across all
+configured profiles listing quota-increase requests still open (`PENDING` or
+`CASE_OPENED`) via the `ListRequestedServiceQuotaChangeHistory` API. Produces one
+`pendingRequests` resource aggregating every open request across accounts.
 
-**Added:** `get_case_communications` method — retrieve support case
-correspondence for quota increase requests. Uses the AWS Support
-`DescribeCases` and `DescribeCommunications` APIs. Requires AWS Business or
-Enterprise support plan.
+**Changed:** `check_utilization` now accepts `serviceCodes` (an array) in
+addition to the single `serviceCode`. It sweeps all requested services in one
+run — acquiring the per-model lock once — and writes one `utilization` snapshot
+per service. Passing a single `serviceCode` is unchanged and fully
+back-compatible. Duplicate service codes are de-duplicated.
 
-**Added:** `caseCommunications` resource spec storing case metadata (subject,
-status, severity) and the communications array.
+**Added:** Per-profile fault tolerance. A single unreachable account (expired
+credentials, `AccessDenied`, throttling) no longer aborts the whole sweep. The
+failure is recorded in a new `failedProfiles` field and the snapshot is still
+emitted, so a large multi-account run degrades gracefully instead of producing
+nothing. `failedProfiles` was added to the `utilization` resource and the new
+`pendingRequests` resource. Persisted error text has ARNs and account ids
+redacted.
 
-**Upgrade note:** Two new IAM permissions required for `get_case_communications`:
-`support:DescribeCases` and `support:DescribeCommunications`. Existing methods
-are unaffected — the new permissions are only needed if you call the new method.
+**Upgrade note:** One new IAM permission is required for `list_pending_requests`:
+`servicequotas:ListRequestedServiceQuotaChangeHistory`. Existing methods are
+unaffected — the permission is only needed if you call the new method.

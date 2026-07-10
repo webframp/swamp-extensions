@@ -106,6 +106,12 @@ const UtilizationEntrySchema = z.object({
   adjustable: z.boolean(),
 });
 
+// A profile whose sweep raised an error. NOTE: on a multi-service
+// check_utilization run a profile can fail partway — it may already have
+// contributed entries for an earlier service before a later one threw, so a
+// profile listed here is not necessarily absent from `entries`. Treat this as
+// "the run for this account was incomplete", i.e. a degraded/staleness signal,
+// not "this account contributed nothing".
 const FailedProfileSchema = z.object({
   profile: z.string(),
   error: z.string(),
@@ -810,11 +816,12 @@ export const model = {
         }
 
         ctx.logger.info(
-          "Utilization check complete: {total} quotas above {threshold}% across {accounts} accounts, {services} services",
+          "Utilization check complete: {total} quotas above {threshold}% across {accounts} accounts ({failed} failed), {services} services",
           {
             total,
             threshold: threshold * 100,
-            accounts: profiles.length,
+            accounts: profiles.length - failedProfiles.length,
+            failed: failedProfiles.length,
             services: codes.length,
           },
         );
@@ -1106,10 +1113,11 @@ export const model = {
         );
 
         ctx.logger.info(
-          "Open quota-increase requests: {total} across {accounts} accounts",
+          "Open quota-increase requests: {total} across {accounts} accounts ({failed} failed)",
           {
             total: entries.length,
-            accounts: profiles.length,
+            accounts: profiles.length - failedProfiles.length,
+            failed: failedProfiles.length,
           },
         );
 
