@@ -79,6 +79,7 @@ Deno.test("model has all expected methods", () => {
     "list_labels",
     "list_members",
     "list_merge_requests",
+    "list_mr_discussions",
     "list_mr_notes",
     "list_my_merge_requests",
     "list_pipelines",
@@ -87,6 +88,7 @@ Deno.test("model has all expected methods", () => {
     "mark_todo_done",
     "merge",
     "rebase_merge_request",
+    "resolve_mr_discussion",
     "retry_job",
     "retry_pipeline",
     "set_mr_assignees",
@@ -102,6 +104,8 @@ Deno.test("model has all expected resources", () => {
   assertEquals(resourceNames.sort(), [
     "branches",
     "dashboard",
+    "discussionResolution",
+    "discussions",
     "issueDetail",
     "issues",
     "jobLog",
@@ -2582,3 +2586,233 @@ Deno.test(
     }
   },
 );
+
+// =============================================================================
+// list_mr_discussions / resolve_mr_discussion / add_mr_note reply
+// =============================================================================
+
+Deno.test("list_mr_discussions hoists fields, drops system-only threads", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequest: {
+          discussions: {
+            nodes: [
+              {
+                id: "gid://gitlab/Discussion/aaa",
+                resolvable: true,
+                resolved: false,
+                resolvedBy: null,
+                notes: {
+                  nodes: [
+                    {
+                      id: "gid://gitlab/DiscussionNote/101",
+                      system: false,
+                      body: "needs a guard here",
+                      createdAt: "2026-07-10T00:00:00Z",
+                      author: { username: "operator" },
+                      position: {
+                        filePath: "src/app.ts",
+                        oldLine: null,
+                        newLine: 42,
+                      },
+                    },
+                  ],
+                },
+              },
+              {
+                id: "gid://gitlab/Discussion/bbb",
+                resolvable: false,
+                resolved: false,
+                resolvedBy: null,
+                notes: {
+                  nodes: [
+                    {
+                      id: "gid://gitlab/Note/9",
+                      system: true,
+                      body: "changed the description",
+                      createdAt: "2026-07-10T00:00:00Z",
+                      author: { username: "someone" },
+                      position: null,
+                    },
+                  ],
+                },
+              },
+              {
+                id: "gid://gitlab/Discussion/ccc",
+                resolvable: false,
+                resolved: false,
+                resolvedBy: null,
+                notes: {
+                  nodes: [
+                    {
+                      id: "gid://gitlab/Note/12",
+                      system: false,
+                      body: "general comment",
+                      createdAt: "2026-07-10T00:00:00Z",
+                      author: { username: "reviewer" },
+                      position: null,
+                    },
+                  ],
+                },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_mr_discussions.execute(
+      { project: "group/proj", iid: 5 },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals(resources[0].specName, "discussions");
+    const data = resources[0].data as {
+      discussions: Array<
+        {
+          id: string;
+          resolvable: boolean;
+          resolved: boolean;
+          file: string | null;
+          line: number | null;
+          author: string | null;
+          notes: Array<{ id: number }>;
+        }
+      >;
+      truncated: boolean;
+    };
+    // System-only thread bbb is dropped; aaa and ccc remain.
+    assertEquals(data.discussions.map((d) => d.id), [
+      "gid://gitlab/Discussion/aaa",
+      "gid://gitlab/Discussion/ccc",
+    ]);
+    const a = data.discussions[0];
+    assertEquals(a.resolvable, true);
+    assertEquals(a.resolved, false);
+    assertEquals(a.file, "src/app.ts");
+    assertEquals(a.line, 42);
+    assertEquals(a.author, "operator");
+    assertEquals(a.notes[0].id, 101); // gid mapped to number
+    // General comment ccc has no diff position.
+    assertEquals(data.discussions[1].file, null);
+    assertEquals(data.discussions[1].line, null);
+    assertEquals(data.truncated, false);
+    // Unresolved count is a CEL filter away — verify the data supports it.
+    assertEquals(
+      data.discussions.filter((d) => d.resolvable && !d.resolved).length,
+      1,
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("add_mr_note replies into a thread when discussionId is given", async () => {
+  const cap = mockGraphqlCapture({
+    data: {
+      project: { mergeRequest: { id: "gid://gitlab/MergeRequest/999" } },
+      createNote: {
+        note: {
+          id: "gid://gitlab/Note/1",
+          body: "ack",
+          createdAt: "2026-07-10T00:00:00Z",
+          author: { username: "operator" },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.add_mr_note.execute(
+      {
+        project: "group/proj",
+        iid: 5,
+        body: "ack",
+        discussionId: "gid://gitlab/Discussion/aaa",
+      },
+      context as any,
+    );
+    // The reply mutation carried the discussionId — a top-level createNote would not.
+    assertEquals(cap.vars().discussionId, "gid://gitlab/Discussion/aaa");
+    // ...and still targets the resolved MR gid.
+    assertEquals(cap.vars().noteableId, "gid://gitlab/MergeRequest/999");
+  } finally {
+    cap.restore();
+  }
+});
+
+Deno.test("resolve_mr_discussion records the new resolved state", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      discussionToggleResolve: {
+        discussion: {
+          id: "gid://gitlab/Discussion/aaa",
+          resolved: true,
+          resolvedBy: { username: "operator" },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.resolve_mr_discussion.execute(
+      {
+        project: "group/proj",
+        iid: 5,
+        discussionId: "gid://gitlab/Discussion/aaa",
+        resolved: true,
+      },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as {
+      discussionId: string;
+      resolved: boolean;
+      resolvedBy: string | null;
+    };
+    assertEquals(getWrittenResources()[0].specName, "discussionResolution");
+    assertEquals(data.resolved, true);
+    assertEquals(data.resolvedBy, "operator");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("resolve_mr_discussion throws on a null payload (permission denied)", async () => {
+  const restore = mockGraphqlFetch({
+    data: { discussionToggleResolve: null },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.resolve_mr_discussion.execute(
+          {
+            project: "group/proj",
+            iid: 5,
+            discussionId: "gid://gitlab/Discussion/aaa",
+            resolved: true,
+          },
+          context as any,
+        ),
+      Error,
+      "null",
+    );
+  } finally {
+    restore();
+  }
+});

@@ -91,6 +91,8 @@ fires the `@webframp/review-dashboard` report automatically.
 | `list_releases`       | Releases                            | `project`                                      |
 | `list_pipelines`      | Recent CI/CD pipelines              | `project`                                      |
 | `list_issue_notes`    | Comments on an issue                | `project`, `iid`                               |
+| `list_mr_notes`       | Comments on a merge request         | `project`, `iid`                               |
+| `list_mr_discussions` | Resolvable MR threads with resolution state + slim diff position | `project`, `iid`, `first?` |
 | `list_labels`         | Project labels                      | `project`                                      |
 | `list_members`        | Project members                     | `project`                                      |
 | `list_branches`       | Repository branches                 | `project`                                      |
@@ -104,7 +106,8 @@ fires the `@webframp/review-dashboard` report automatically.
 | `add_issue_note`       | Comment on an issue        | `project`, `iid`, `body`                                             |
 | `create_merge_request` | Create a merge request     | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
 | `merge`                | Merge a merge request      | `project`, `iid`, `squash?`                                          |
-| `add_mr_note`          | Comment on a merge request | `project`, `iid`, `body`                                             |
+| `add_mr_note`          | Comment on a merge request, or reply into a thread | `project`, `iid`, `body`, `discussionId?`           |
+| `resolve_mr_discussion`| Resolve/unresolve an MR discussion thread | `project`, `iid`, `discussionId`, `resolved?`                 |
 | `set_mr_assignees`     | Set (replace) an MR's assignees | `project`, `iid`, `usernames`                                  |
 | `unassign_from_mrs`    | Remove a user (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?`    |
 | `create_label`         | Create a label             | `project`, `name`, `color?`, `description?`                          |
