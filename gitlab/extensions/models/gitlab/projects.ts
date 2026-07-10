@@ -148,6 +148,24 @@ const MrAssigneesSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const UnassignResultSchema = z.object({
+  project: z.string(),
+  // The user removed from each MR (the authenticated user unless overridden).
+  username: z.string(),
+  // Only confirmed removals land here (user absent from the resulting
+  // assignees). Anything unconfirmable — null payload, no mergeRequest, or the
+  // user still present after a REMOVE — goes to `failed` instead.
+  results: z.array(z.object({
+    iid: z.number(),
+    // Assignees remaining after removal — proof co-assignees are preserved.
+    remainingAssignees: z.array(z.string()),
+  })),
+  // Per-MR failures (permission denied, missing MR); one bad MR does not sink
+  // the batch.
+  failed: z.array(z.object({ iid: z.number(), error: z.string() })),
+  fetchedAt: z.string(),
+});
+
 const ReleaseSchema = z.object({
   tagName: z.string(),
   name: z.string(),
@@ -667,6 +685,20 @@ mutation setAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) 
   }
 }`;
 
+// operationMode REMOVE drops the given usernames and leaves every other
+// assignee in place — atomic, no read-modify-write, so no race and no risk of
+// clobbering a co-assignee. Removing a user who isn't assigned is a no-op.
+const REMOVE_ASSIGNEES_MUTATION = `
+mutation removeAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  mergeRequestSetAssignees(input: { projectPath: $projectPath, iid: $iid, assigneeUsernames: $usernames, operationMode: REMOVE }) {
+    mergeRequest { iid assignees { nodes { username } } }
+    errors
+  }
+}`;
+
+const CURRENT_USER_QUERY = `
+query { currentUser { username } }`;
+
 const CREATE_MR_MUTATION = `
 mutation createMR($projectPath: ID!, $title: String!, $sourceBranch: String!, $targetBranch: String!, $description: String) {
   mergeRequestCreate(input: { projectPath: $projectPath, title: $title, sourceBranch: $sourceBranch, targetBranch: $targetBranch, description: $description }) {
@@ -918,7 +950,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.08.4",
+  version: "2026.07.10.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -994,6 +1026,13 @@ export const model = {
       description: "Record of a deleted MR note",
       schema: NoteDeletedSchema,
       lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    unassignResult: {
+      description:
+        "Result of a fan-out unassign across MRs (remaining assignees + failures)",
+      schema: UnassignResultSchema,
+      lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     mrAssignees: {
@@ -2252,6 +2291,115 @@ export const model = {
             ? "Set MR !{iid} assignees: {who}"
             : "Unassigned MR !{iid}",
           { iid: args.iid, who: assignees.join(", ") },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    unassign_from_mrs: {
+      description:
+        "Remove an assignee (default: the authenticated user) from multiple MRs " +
+        "in a project, in one fan-out. Uses operationMode REMOVE, so other " +
+        "assignees are preserved. Idempotent: removing a user who isn't assigned " +
+        "is a no-op. Per-MR failures are recorded and never abort the batch.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iids: z.array(z.number()).min(1),
+        username: z.string().optional(),
+      }),
+      execute: async (
+        args: { project: string; iids: number[]; username?: string },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        let resolved = args.username;
+        if (!resolved) {
+          const who = await graphqlRequest(host, token, CURRENT_USER_QUERY, {});
+          resolved = who.currentUser?.username;
+        }
+        if (!resolved) {
+          throw new Error(
+            "unassign_from_mrs: could not resolve the authenticated user; pass `username` explicitly",
+          );
+        }
+        const username: string = resolved;
+
+        const results: z.infer<typeof UnassignResultSchema>["results"] = [];
+        const failed: z.infer<typeof UnassignResultSchema>["failed"] = [];
+        for (const iid of args.iids) {
+          try {
+            const data = await graphqlRequest(
+              host,
+              token,
+              REMOVE_ASSIGNEES_MUTATION,
+              {
+                projectPath: args.project,
+                iid: String(iid),
+                usernames: [username],
+              },
+            );
+            const result = data.mergeRequestSetAssignees;
+            // GitLab returns a null payload on permission-denied / missing MR
+            // as a routine path — guard before reading .errors.
+            if (!result) {
+              throw new Error(
+                "mergeRequestSetAssignees returned null (permission denied or MR not found)",
+              );
+            }
+            if (result.errors?.length) {
+              throw new Error(result.errors.join("; "));
+            }
+            // A null mergeRequest with empty errors is unconfirmable — do not
+            // read `assignees` off it and report a fabricated empty success.
+            if (!result.mergeRequest) {
+              throw new Error(
+                "mergeRequestSetAssignees returned no mergeRequest — removal unconfirmed",
+              );
+            }
+            const remainingAssignees: string[] =
+              (result.mergeRequest.assignees?.nodes ?? []).map((
+                n: any,
+              ) => n.username);
+            // "No error" is not "removed". If the user is still in the
+            // resulting set, treat it as a failure so a queue-clearing caller
+            // isn't told it succeeded (mirrors set_mr_assignees failing loudly).
+            const stillAssigned = remainingAssignees
+              .map((u) => u.toLowerCase())
+              .includes(username.toLowerCase());
+            if (stillAssigned) {
+              throw new Error(
+                "REMOVE reported success but the user is still assigned",
+              );
+            }
+            results.push({ iid, remainingAssignees });
+          } catch (e) {
+            failed.push({
+              iid,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        const handle = await ctx.writeResource(
+          "unassignResult",
+          `${sanitizeName(args.project)}-unassign-${username}`,
+          {
+            project: args.project,
+            username,
+            results,
+            failed,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(
+          "Unassigned {user} from {ok}/{total} MRs in {project} ({failed} failed)",
+          {
+            user: username,
+            ok: results.length,
+            total: args.iids.length,
+            project: args.project,
+            failed: failed.length,
+          },
         );
         return { dataHandles: [handle] };
       },

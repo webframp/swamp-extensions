@@ -1,3 +1,13 @@
+## 2026.07.10.1
+
+**Added:** `unassign_from_mrs(project, iids, username?)` — remove an assignee
+(default: the authenticated user) from multiple MRs in a single fan-out call.
+Uses GraphQL `mergeRequestSetAssignees` with `operationMode: REMOVE`, so other
+assignees are preserved; it is idempotent, and per-MR failures are recorded in a
+`failed[]` list rather than aborting the batch. Complements `set_mr_assignees`
+(REPLACE, single MR) for the common "clear my review queue" case without a
+read-modify-write. Writes a new `unassignResult` resource.
+
 ## 2026.07.08.4
 
 **Added:** MR note management and assignee control.

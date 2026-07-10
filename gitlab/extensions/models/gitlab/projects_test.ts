@@ -90,6 +90,7 @@ Deno.test("model has all expected methods", () => {
     "retry_job",
     "retry_pipeline",
     "set_mr_assignees",
+    "unassign_from_mrs",
     "update_issue",
     "update_merge_request",
     "update_mr_note",
@@ -118,6 +119,7 @@ Deno.test("model has all expected resources", () => {
     "rebaseResult",
     "releases",
     "retryResult",
+    "unassignResult",
   ]);
 });
 
@@ -2287,6 +2289,197 @@ Deno.test(
       assertEquals(data.assigned[0].myReviewState, null);
     } finally {
       restore();
+    }
+  },
+);
+
+// =============================================================================
+// unassign_from_mrs Tests
+// =============================================================================
+
+Deno.test(
+  "unassign_from_mrs resolves the authenticated user and removes them across MRs via REMOVE",
+  async () => {
+    const requests: Array<{ query: string; variables: any }> = [];
+    const original = globalThis.fetch;
+    // Capturing mock. Combined body: the currentUser query reads `.currentUser`;
+    // each remove mutation reads `.mergeRequestSetAssignees` from the same payload.
+    globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+      requests.push(JSON.parse((init?.body as string) ?? "{}"));
+      const body = {
+        data: {
+          currentUser: { username: "sescriva" },
+          mergeRequestSetAssignees: {
+            mergeRequest: {
+              iid: 1,
+              assignees: { nodes: [{ username: "otheruser" }] },
+            },
+            errors: [],
+          },
+        },
+      };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.unassign_from_mrs.execute(
+        { project: "o11n/glue", iids: [2115, 2223] },
+        context as unknown as Parameters<
+          typeof model.methods.unassign_from_mrs.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "unassignResult");
+      const data = resources[0].data as {
+        username: string;
+        results: Array<{ iid: number; remainingAssignees: string[] }>;
+        failed: Array<{ iid: number; error: string }>;
+      };
+      assertEquals(data.username, "sescriva");
+      assertEquals(data.results.map((r) => r.iid), [2115, 2223]);
+      // Co-assignee preserved by REMOVE mode.
+      assertEquals(data.results[0].remainingAssignees, ["otheruser"]);
+      assertEquals(data.failed.length, 0);
+      // The mutations must be REMOVE for the resolved user. A regression to
+      // REPLACE (which would clobber co-assignees) fails here.
+      const mutations = requests.filter((r) =>
+        r.query.includes("mergeRequestSetAssignees")
+      );
+      assertEquals(mutations.length, 2);
+      for (const m of mutations) {
+        assertEquals(m.query.includes("operationMode: REMOVE"), true);
+        assertEquals(m.variables.usernames, ["sescriva"]);
+      }
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+);
+
+Deno.test(
+  "unassign_from_mrs routes a still-assigned result (no GraphQL error) to failed",
+  async () => {
+    // GitLab returns success but the user is STILL present — the silent
+    // non-removal case. Must not be reported as a success.
+    const restore = mockGraphqlFetch({
+      data: {
+        currentUser: { username: "sescriva" },
+        mergeRequestSetAssignees: {
+          mergeRequest: {
+            iid: 1,
+            assignees: {
+              nodes: [{ username: "sescriva" }, { username: "otheruser" }],
+            },
+          },
+          errors: [],
+        },
+      },
+    });
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.unassign_from_mrs.execute(
+        { project: "o11n/glue", iids: [42] },
+        context as unknown as Parameters<
+          typeof model.methods.unassign_from_mrs.execute
+        >[1],
+      );
+      const data = getWrittenResources()[0].data as {
+        results: unknown[];
+        failed: Array<{ iid: number; error: string }>;
+      };
+      assertEquals(data.results.length, 0);
+      assertEquals(data.failed.map((f) => f.iid), [42]);
+      assertEquals(data.failed[0].error.includes("still assigned"), true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "unassign_from_mrs throws when the authenticated user cannot be resolved",
+  async () => {
+    const restore = mockGraphqlFetch({ data: { currentUser: null } });
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await assertRejects(
+        () =>
+          model.methods.unassign_from_mrs.execute(
+            { project: "o11n/glue", iids: [1] },
+            context as unknown as Parameters<
+              typeof model.methods.unassign_from_mrs.execute
+            >[1],
+          ),
+        Error,
+        "could not resolve the authenticated user",
+      );
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "unassign_from_mrs records per-MR failures and still writes a result",
+  async () => {
+    const original = globalThis.fetch;
+    // Body-inspecting mock: iid 20 returns a null payload (permission denied /
+    // MR not found); iid 10 succeeds with a preserved co-assignee.
+    globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+      const parsed = JSON.parse((init?.body as string) ?? "{}");
+      const iid = parsed?.variables?.iid;
+      const payload = iid === "20"
+        ? { data: { mergeRequestSetAssignees: null } }
+        : {
+          data: {
+            mergeRequestSetAssignees: {
+              mergeRequest: {
+                iid: 10,
+                assignees: { nodes: [{ username: "keeper" }] },
+              },
+              errors: [],
+            },
+          },
+        };
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.unassign_from_mrs.execute(
+        { project: "o11n/glue", iids: [10, 20], username: "sescriva" },
+        context as unknown as Parameters<
+          typeof model.methods.unassign_from_mrs.execute
+        >[1],
+      );
+      const data = getWrittenResources()[0].data as {
+        results: Array<{ iid: number; remainingAssignees: string[] }>;
+        failed: Array<{ iid: number; error: string }>;
+      };
+      assertEquals(data.results.map((r) => r.iid), [10]);
+      assertEquals(data.results[0].remainingAssignees, ["keeper"]);
+      assertEquals(data.failed.map((f) => f.iid), [20]);
+      assertEquals(data.failed[0].error.length > 0, true);
+    } finally {
+      globalThis.fetch = original;
     }
   },
 );
