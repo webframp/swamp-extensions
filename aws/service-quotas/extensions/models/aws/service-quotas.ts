@@ -12,6 +12,7 @@ import { z } from "npm:zod@4.4.3";
 import {
   GetRequestedServiceQuotaChangeCommand,
   GetServiceQuotaCommand,
+  ListRequestedServiceQuotaChangeHistoryCommand,
   ListServiceQuotasCommand,
   ListServicesCommand,
   RequestServiceQuotaIncreaseCommand,
@@ -105,12 +106,24 @@ const UtilizationEntrySchema = z.object({
   adjustable: z.boolean(),
 });
 
+// A profile whose sweep raised an error. NOTE: on a multi-service
+// check_utilization run a profile can fail partway — it may already have
+// contributed entries for an earlier service before a later one threw, so a
+// profile listed here is not necessarily absent from `entries`. Treat this as
+// "the run for this account was incomplete", i.e. a degraded/staleness signal,
+// not "this account contributed nothing".
+const FailedProfileSchema = z.object({
+  profile: z.string(),
+  error: z.string(),
+});
+
 const UtilizationResourceSchema = z.object({
   serviceCode: z.string(),
   threshold: z.number(),
   region: z.string(),
   entries: z.array(UtilizationEntrySchema),
   truncated: z.boolean(),
+  failedProfiles: z.array(FailedProfileSchema),
   fetchedAt: z.string(),
 });
 
@@ -126,6 +139,30 @@ const IncreaseRequestSchema = z.object({
   previousValue: z.number(),
   status: z.string(),
   requestedAt: z.string().nullable(),
+});
+
+const PendingRequestEntrySchema = z.object({
+  profile: z.string(),
+  accountId: z.string(),
+  region: z.string(),
+  serviceCode: z.string(),
+  quotaCode: z.string(),
+  quotaName: z.string(),
+  requestId: z.string(),
+  desiredValue: z.number(),
+  status: z.string(),
+  requestedAt: z.string().nullable(),
+  caseId: z.string().nullable(),
+});
+
+const PendingRequestsResourceSchema = z.object({
+  region: z.string(),
+  statuses: z.array(z.string()),
+  entries: z.array(PendingRequestEntrySchema),
+  profilesChecked: z.number(),
+  truncated: z.boolean(),
+  failedProfiles: z.array(FailedProfileSchema),
+  fetchedAt: z.string(),
 });
 
 const CommunicationSchema = z.object({
@@ -196,6 +233,20 @@ function createStsClient(profile: string, region: string): STSClient {
 
 function sanitizeName(s: string): string {
   return s.replace(/[/\\]/g, "-");
+}
+
+/**
+ * Redact identifiers from an error message before it is persisted. AWS
+ * authorization errors embed the caller ARN (account id + principal/username)
+ * and bare 12-digit account ids; this data feeds the daily briefing, which must
+ * never surface internal identifiers. Keeps the actionable text (the missing
+ * permission, the error class) while stripping who/where.
+ */
+function redactError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  return msg
+    .replace(/arn:aws[^\s"']*/gi, "arn:***")
+    .replace(/\b\d{12}\b/g, "***");
 }
 
 async function getAccountId(profile: string, region: string): Promise<string> {
@@ -281,7 +332,7 @@ interface ModelContext {
 /** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.07.05.1",
+  version: "2026.07.09.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -312,6 +363,13 @@ export const model = {
     increaseRequest: {
       description: "Record of a submitted quota increase request",
       schema: IncreaseRequestSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    pendingRequests: {
+      description:
+        "Open quota-increase requests (PENDING/CASE_OPENED) across accounts",
+      schema: PendingRequestsResourceSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -587,10 +645,22 @@ export const model = {
     check_utilization: {
       description:
         "Fan-out across all configured profiles to find quotas above a usage " +
-        "threshold. Uses CloudWatch metrics where available. Produces a single " +
-        "'utilization' resource with all over-threshold entries.",
+        "threshold. Accepts one serviceCode or several via serviceCodes; sweeps " +
+        "all requested services in a single run and writes one 'utilization' " +
+        "resource per service. Uses CloudWatch metrics where available.",
       arguments: z.object({
-        serviceCode: z.string().describe("AWS service code (e.g. 'iam')"),
+        serviceCode: z
+          .string()
+          .optional()
+          .describe(
+            "Single AWS service code (e.g. 'ec2'). Use this or serviceCodes.",
+          ),
+        serviceCodes: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Multiple AWS service codes to sweep in one fan-out (e.g. ['ec2','vpc','eks']).",
+          ),
         threshold: z
           .number()
           .min(0)
@@ -608,18 +678,39 @@ export const model = {
       }),
       execute: async (
         args: {
-          serviceCode: string;
+          serviceCode?: string;
+          serviceCodes?: string[];
           threshold?: number;
           profiles?: string[];
           region?: string;
         },
         ctx: ModelContext,
       ) => {
+        const rawCodes = args.serviceCodes ??
+          (args.serviceCode ? [args.serviceCode] : []);
+        if (rawCodes.length === 0) {
+          throw new Error(
+            "check_utilization requires a serviceCode or a non-empty serviceCodes array",
+          );
+        }
+        // Dedup so a repeated service code isn't fetched or written twice.
+        const codes = [...new Set(rawCodes)];
         const profiles = args.profiles ?? ctx.globalArgs.profiles;
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const threshold = args.threshold ?? 0.8;
-        const entries: z.infer<typeof UtilizationEntrySchema>[] = [];
-        let anyTruncated = false;
+
+        // Accumulate over-threshold entries per service across all profiles.
+        const entriesByService = new Map<
+          string,
+          z.infer<typeof UtilizationEntrySchema>[]
+        >();
+        const truncatedByService = new Map<string, boolean>();
+        for (const code of codes) {
+          entriesByService.set(code, []);
+          truncatedByService.set(code, false);
+        }
+        // A single unreachable account must not sink the whole fleet sweep.
+        const failedProfiles: z.infer<typeof FailedProfileSchema>[] = [];
 
         for (const profile of profiles) {
           const client = createQuotasClient(profile, region);
@@ -627,65 +718,75 @@ export const model = {
           try {
             const accountId = await getAccountId(profile, region);
 
-            let nextToken: string | undefined;
-            let pages = 0;
-            do {
-              const resp = await client.send(
-                new ListServiceQuotasCommand({
-                  ServiceCode: args.serviceCode,
-                  NextToken: nextToken,
-                  MaxResults: 100,
-                }),
-              );
-
-              for (const q of resp.Quotas ?? []) {
-                const usageMetric = q.UsageMetric;
-                if (!usageMetric?.MetricNamespace) continue;
-
-                const usageValue = await getUsageMetric(
-                  cw,
-                  usageMetric.MetricNamespace,
-                  usageMetric.MetricName,
-                  usageMetric.MetricDimensions
-                    ? Object.entries(usageMetric.MetricDimensions).map((
-                      [k, v],
-                    ) => ({ Name: k, Value: v as string }))
-                    : undefined,
+            for (const serviceCode of codes) {
+              const entries = entriesByService.get(serviceCode)!;
+              let nextToken: string | undefined;
+              let pages = 0;
+              do {
+                const resp = await client.send(
+                  new ListServiceQuotasCommand({
+                    ServiceCode: serviceCode,
+                    NextToken: nextToken,
+                    MaxResults: 100,
+                  }),
                 );
 
-                if (usageValue === null) continue;
-                const value = q.Value ?? 0;
-                if (value === 0) continue;
+                for (const q of resp.Quotas ?? []) {
+                  const usageMetric = q.UsageMetric;
+                  if (!usageMetric?.MetricNamespace) continue;
 
-                const pct = usageValue / value;
-                if (pct >= threshold) {
-                  entries.push({
-                    profile,
-                    accountId,
-                    serviceCode: args.serviceCode,
-                    quotaCode: q.QuotaCode ?? "",
-                    quotaName: q.QuotaName ?? "",
-                    value,
-                    usageValue,
-                    utilizationPct: Math.round(pct * 10000) / 100,
-                    adjustable: q.Adjustable ?? false,
-                  });
+                  const usageValue = await getUsageMetric(
+                    cw,
+                    usageMetric.MetricNamespace,
+                    usageMetric.MetricName,
+                    usageMetric.MetricDimensions
+                      ? Object.entries(usageMetric.MetricDimensions).map((
+                        [k, v],
+                      ) => ({ Name: k, Value: v as string }))
+                      : undefined,
+                  );
+
+                  if (usageValue === null) continue;
+                  const value = q.Value ?? 0;
+                  if (value === 0) continue;
+
+                  const pct = usageValue / value;
+                  if (pct >= threshold) {
+                    entries.push({
+                      profile,
+                      accountId,
+                      serviceCode,
+                      quotaCode: q.QuotaCode ?? "",
+                      quotaName: q.QuotaName ?? "",
+                      value,
+                      usageValue,
+                      utilizationPct: Math.round(pct * 10000) / 100,
+                      adjustable: q.Adjustable ?? false,
+                    });
+                  }
                 }
-              }
 
-              nextToken = resp.NextToken;
-              pages++;
-            } while (nextToken && pages < MAX_PAGES);
+                nextToken = resp.NextToken;
+                pages++;
+              } while (nextToken && pages < MAX_PAGES);
 
-            if (nextToken) anyTruncated = true;
+              if (nextToken) truncatedByService.set(serviceCode, true);
 
+              ctx.logger.info(
+                "Checked {service} utilization in {account}: {count} over threshold",
+                {
+                  service: serviceCode,
+                  account: accountId,
+                  count: entries.filter((e) => e.profile === profile).length,
+                },
+              );
+            }
+          } catch (e) {
+            const error = redactError(e);
+            failedProfiles.push({ profile, error });
             ctx.logger.info(
-              "Checked {service} utilization in {account}: {count} over threshold",
-              {
-                service: args.serviceCode,
-                account: accountId,
-                count: entries.filter((e) => e.profile === profile).length,
-              },
+              "Skipped profile {profile} in utilization sweep: {error}",
+              { profile, error },
             );
           } finally {
             client.destroy();
@@ -693,29 +794,39 @@ export const model = {
           }
         }
 
-        const handle = await ctx.writeResource(
-          "utilization",
-          `${args.serviceCode}-${threshold}`,
-          {
-            serviceCode: args.serviceCode,
-            threshold,
-            region,
-            entries,
-            truncated: anyTruncated,
-            fetchedAt: new Date().toISOString(),
-          } as unknown as Record<string, unknown>,
-        );
+        const dataHandles = [];
+        let total = 0;
+        for (const serviceCode of codes) {
+          const entries = entriesByService.get(serviceCode)!;
+          total += entries.length;
+          const handle = await ctx.writeResource(
+            "utilization",
+            `${serviceCode}-${threshold}`,
+            {
+              serviceCode,
+              threshold,
+              region,
+              entries,
+              truncated: truncatedByService.get(serviceCode)!,
+              failedProfiles,
+              fetchedAt: new Date().toISOString(),
+            } as unknown as Record<string, unknown>,
+          );
+          dataHandles.push(handle);
+        }
 
         ctx.logger.info(
-          "Utilization check complete: {total} quotas above {threshold}% across {accounts} accounts",
+          "Utilization check complete: {total} quotas above {threshold}% across {accounts} accounts ({failed} failed), {services} services",
           {
-            total: entries.length,
+            total,
             threshold: threshold * 100,
-            accounts: profiles.length,
+            accounts: profiles.length - failedProfiles.length,
+            failed: failedProfiles.length,
+            services: codes.length,
           },
         );
 
-        return { dataHandles: [handle] };
+        return { dataHandles };
       },
     },
 
@@ -891,6 +1002,126 @@ export const model = {
         } finally {
           client.destroy();
         }
+      },
+    },
+
+    list_pending_requests: {
+      description:
+        "Fan-out across all configured profiles to list quota-increase requests " +
+        "still open (PENDING or CASE_OPENED). Read-only. Produces one " +
+        "'pendingRequests' resource aggregating every open request across " +
+        "accounts. Requires servicequotas:ListRequestedServiceQuotaChangeHistory.",
+      arguments: z.object({
+        profiles: z
+          .array(z.string())
+          .optional()
+          .describe("Override: check only these profiles"),
+        region: z
+          .string()
+          .optional()
+          .describe("Override region for this check"),
+      }),
+      execute: async (
+        args: {
+          profiles?: string[];
+          region?: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const profiles = args.profiles ?? ctx.globalArgs.profiles;
+        const region = args.region ?? ctx.globalArgs.defaultRegion;
+        const statuses: ("PENDING" | "CASE_OPENED")[] = [
+          "PENDING",
+          "CASE_OPENED",
+        ];
+        const entries: z.infer<typeof PendingRequestEntrySchema>[] = [];
+        let anyTruncated = false;
+        // A single unreachable account must not sink the whole fleet sweep.
+        const failedProfiles: z.infer<typeof FailedProfileSchema>[] = [];
+
+        for (const profile of profiles) {
+          const client = createQuotasClient(profile, region);
+          try {
+            const accountId = await getAccountId(profile, region);
+
+            for (const status of statuses) {
+              let nextToken: string | undefined;
+              let pages = 0;
+              do {
+                const resp = await client.send(
+                  new ListRequestedServiceQuotaChangeHistoryCommand({
+                    Status: status,
+                    NextToken: nextToken,
+                    MaxResults: 100,
+                  }),
+                );
+
+                for (const req of resp.RequestedQuotas ?? []) {
+                  entries.push({
+                    profile,
+                    accountId,
+                    region,
+                    serviceCode: req.ServiceCode ?? "",
+                    quotaCode: req.QuotaCode ?? "",
+                    quotaName: req.QuotaName ?? "",
+                    requestId: req.Id ?? "",
+                    desiredValue: req.DesiredValue ?? 0,
+                    status: req.Status ?? status,
+                    requestedAt: req.Created ? req.Created.toISOString() : null,
+                    caseId: req.CaseId || null,
+                  });
+                }
+
+                nextToken = resp.NextToken;
+                pages++;
+              } while (nextToken && pages < MAX_PAGES);
+
+              if (nextToken) anyTruncated = true;
+            }
+
+            ctx.logger.info(
+              "Listed open quota requests in {account}: {count}",
+              {
+                account: accountId,
+                count: entries.filter((e) => e.profile === profile).length,
+              },
+            );
+          } catch (e) {
+            const error = redactError(e);
+            failedProfiles.push({ profile, error });
+            ctx.logger.info(
+              "Skipped profile {profile} in pending-requests sweep: {error}",
+              { profile, error },
+            );
+          } finally {
+            client.destroy();
+          }
+        }
+
+        const handle = await ctx.writeResource(
+          "pendingRequests",
+          `pending-${region}`,
+          {
+            region,
+            statuses,
+            entries,
+            profilesChecked: profiles.length,
+            truncated: anyTruncated,
+            failedProfiles,
+            fetchedAt: new Date().toISOString(),
+          } as unknown as Record<string, unknown>,
+        );
+
+        ctx.logger.info(
+          "Open quota-increase requests: {total} across {accounts} accounts ({failed} failed)",
+          {
+            total: entries.length,
+            accounts: profiles.length - failedProfiles.length,
+            failed: failedProfiles.length,
+          },
+        );
+
+        return { dataHandles: [handle] };
       },
     },
 

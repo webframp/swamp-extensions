@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        extension: [pricing, inventory, logs, metrics, alarms, alarm-investigation, traces, cost-estimate, cost-explorer, networking, guardduty, bedrock-usage, securityhub-findings]
+        extension: [pricing, inventory, logs, metrics, alarms, alarm-investigation, traces, cost-estimate, cost-explorer, networking, guardduty, bedrock-usage, securityhub-findings, service-quotas]
         task: [check, lint, fmt, test]
     defaults:
       run:
