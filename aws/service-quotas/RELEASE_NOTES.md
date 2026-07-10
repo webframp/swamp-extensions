@@ -1,24 +1,9 @@
-## 2026.07.09.1
+## 2026.07.10.1
 
-**Added:** `list_pending_requests` method — read-only fan-out across all
-configured profiles listing quota-increase requests still open (`PENDING` or
-`CASE_OPENED`) via the `ListRequestedServiceQuotaChangeHistory` API. Produces one
-`pendingRequests` resource aggregating every open request across accounts.
-
-**Changed:** `check_utilization` now accepts `serviceCodes` (an array) in
-addition to the single `serviceCode`. It sweeps all requested services in one
-run — acquiring the per-model lock once — and writes one `utilization` snapshot
-per service. Passing a single `serviceCode` is unchanged and fully
-back-compatible. Duplicate service codes are de-duplicated.
-
-**Added:** Per-profile fault tolerance. A single unreachable account (expired
-credentials, `AccessDenied`, throttling) no longer aborts the whole sweep. The
-failure is recorded in a new `failedProfiles` field and the snapshot is still
-emitted, so a large multi-account run degrades gracefully instead of producing
-nothing. `failedProfiles` was added to the `utilization` resource and the new
-`pendingRequests` resource. Persisted error text has ARNs and account ids
-redacted.
-
-**Upgrade note:** One new IAM permission is required for `list_pending_requests`:
-`servicequotas:ListRequestedServiceQuotaChangeHistory`. Existing methods are
-unaffected — the permission is only needed if you call the new method.
+**Changed:** Hardened `failedProfiles` error redaction. Persisted error text now
+also strips internal URLs and ANSI color codes, and collapses the common
+`granted`/AWS SSO credential-process failure to a short, actionable code
+(`sso-login-required`). Previously the raw error embedded the organization's SSO
+portal URL, which would surface in the briefing-facing snapshot. Real
+identifiers (ARNs, account ids) are still redacted as before. No API, schema, or
+method-signature changes.

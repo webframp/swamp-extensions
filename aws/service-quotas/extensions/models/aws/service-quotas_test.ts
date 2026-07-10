@@ -809,6 +809,205 @@ Deno.test({
 });
 
 Deno.test({
+  name: "check_utilization strips URLs from failedProfiles errors",
+  sanitizeResources: false,
+  fn: async () => {
+    let stsCall = 0;
+    const restoreSts = mockSTS(() => {
+      stsCall++;
+      if (stsCall === 2) {
+        throw new Error(
+          "endpoint https://quota.internal.example.com/v2 returned 500",
+        );
+      }
+      return { Account: "111111111111" };
+    });
+    const restoreQuotas = mockQuotas((command) => {
+      if (command.constructor.name === "ListServiceQuotasCommand") {
+        return { Quotas: [] };
+      }
+      return {};
+    });
+    const restoreCw = mockCloudWatch(() => ({ MetricDataResults: [] }));
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { profiles: ["good", "bad"], defaultRegion: "us-east-1" },
+      });
+
+      await model.methods.check_utilization.execute(
+        { serviceCode: "ec2", threshold: 0.8 },
+        context as unknown as Parameters<
+          typeof model.methods.check_utilization.execute
+        >[1],
+      );
+
+      const data = getWrittenResources()[0].data as {
+        failedProfiles: Array<{ error: string }>;
+      };
+      const err = data.failedProfiles[0].error;
+      assertEquals(err.includes("https://"), false);
+      assertEquals(err.includes("internal.example.com"), false);
+      assertMatch(err, /returned 500/); // non-URL context retained
+    } finally {
+      restoreSts();
+      restoreQuotas();
+      restoreCw();
+    }
+  },
+});
+
+Deno.test({
+  name: "check_utilization collapses SSO login errors to a short code",
+  sanitizeResources: false,
+  fn: async () => {
+    let stsCall = 0;
+    const restoreSts = mockSTS(() => {
+      stsCall++;
+      if (stsCall === 2) {
+        // Real granted/AWS SSO credential-process failure shape: embeds the
+        // org SSO portal URL and ANSI color codes.
+        throw new Error(
+          "Command failed: granted credential-process --profile acme/ReadOnlyPlus\n" +
+            "[0;31m[✘] error when retrieving credentials from custom process. " +
+            "please login using 'granted sso login --sso-start-url " +
+            "https://acme.awsapps.com/start/# --sso-region us-east-1'[0m\n",
+        );
+      }
+      return { Account: "111111111111" };
+    });
+    const restoreQuotas = mockQuotas((command) => {
+      if (command.constructor.name === "ListServiceQuotasCommand") {
+        return { Quotas: [] };
+      }
+      return {};
+    });
+    const restoreCw = mockCloudWatch(() => ({ MetricDataResults: [] }));
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { profiles: ["good", "bad"], defaultRegion: "us-east-1" },
+      });
+
+      await model.methods.check_utilization.execute(
+        { serviceCode: "ec2", threshold: 0.8 },
+        context as unknown as Parameters<
+          typeof model.methods.check_utilization.execute
+        >[1],
+      );
+
+      const data = getWrittenResources()[0].data as {
+        failedProfiles: Array<{ error: string }>;
+      };
+      const err = data.failedProfiles[0].error;
+      assertEquals(err, "sso-login-required");
+      // No portal URL, no ANSI escapes leaked.
+      assertEquals(err.includes("awsapps.com"), false);
+      assertEquals(err.includes(String.fromCharCode(27)), false);
+    } finally {
+      restoreSts();
+      restoreQuotas();
+      restoreCw();
+    }
+  },
+});
+
+// Shared harness for redaction cases: profile #2 throws `err`, and we return
+// the resulting failedProfiles[0].error.
+async function runFailingSweep(err: Error): Promise<string> {
+  let stsCall = 0;
+  const restoreSts = mockSTS(() => {
+    stsCall++;
+    if (stsCall === 2) throw err;
+    return { Account: "111111111111" };
+  });
+  const restoreQuotas = mockQuotas((command) => {
+    if (command.constructor.name === "ListServiceQuotasCommand") {
+      return { Quotas: [] };
+    }
+    return {};
+  });
+  const restoreCw = mockCloudWatch(() => ({ MetricDataResults: [] }));
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: { profiles: ["good", "bad"], defaultRegion: "us-east-1" },
+    });
+    await model.methods.check_utilization.execute(
+      { serviceCode: "ec2", threshold: 0.8 },
+      context as unknown as Parameters<
+        typeof model.methods.check_utilization.execute
+      >[1],
+    );
+    const data = getWrittenResources()[0].data as {
+      failedProfiles: Array<{ error: string }>;
+    };
+    return data.failedProfiles[0].error;
+  } finally {
+    restoreSts();
+    restoreQuotas();
+    restoreCw();
+  }
+}
+
+Deno.test({
+  name: "redaction strips a scheme-less internal hostname (VPC endpoint)",
+  sanitizeResources: false,
+  fn: async () => {
+    const err = await runFailingSweep(
+      new Error(
+        "getaddrinfo ENOTFOUND vpce-0abc123def.servicequotas.us-east-1.vpce.amazonaws.com",
+      ),
+    );
+    assertEquals(err.includes("amazonaws.com"), false);
+    assertEquals(err.includes("vpce-0abc123def"), false);
+    assertEquals(err.includes("<host>"), true);
+    assertMatch(err, /ENOTFOUND/); // real cause retained
+    assertEquals(err === "sso-login-required", false); // not misclassified
+  },
+});
+
+Deno.test({
+  name: "redaction strips a hyphen-grouped account id",
+  sanitizeResources: false,
+  fn: async () => {
+    const err = await runFailingSweep(
+      new Error("assume-role failed for account 1234-5678-9012"),
+    );
+    assertEquals(err.includes("1234-5678-9012"), false);
+    assertMatch(err, /assume-role failed/);
+  },
+});
+
+Deno.test({
+  name: "a non-login credential-process failure is NOT collapsed to sso code",
+  sanitizeResources: false,
+  fn: async () => {
+    const err = await runFailingSweep(
+      new Error(
+        'Command failed: granted credential-process --profile acme/ReadOnlyPlus: exec: "granted": executable file not found in $PATH',
+      ),
+    );
+    // Must keep the real cause, not hide it behind a re-login prompt.
+    assertEquals(err === "sso-login-required", false);
+    assertMatch(err, /not found/);
+  },
+});
+
+Deno.test({
+  name: "a generic session/token-expired error is NOT collapsed to sso code",
+  sanitizeResources: false,
+  fn: async () => {
+    // TLS/DB/STS 'session expired' shares the word 'expired' but is a
+    // different fault — must not be mislabeled as an SSO re-login prompt.
+    const err = await runFailingSweep(
+      new Error("STS session has expired; the request cannot be retried"),
+    );
+    assertEquals(err === "sso-login-required", false);
+    assertMatch(err, /expired/); // real cause retained
+  },
+});
+
+Deno.test({
   name:
     "check_utilization keeps earlier-service entries when a later service fails",
   sanitizeResources: false,
