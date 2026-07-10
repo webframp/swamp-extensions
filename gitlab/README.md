@@ -105,6 +105,8 @@ fires the `@webframp/review-dashboard` report automatically.
 | `create_merge_request` | Create a merge request     | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
 | `merge`                | Merge a merge request      | `project`, `iid`, `squash?`                                          |
 | `add_mr_note`          | Comment on a merge request | `project`, `iid`, `body`                                             |
+| `set_mr_assignees`     | Set (replace) an MR's assignees | `project`, `iid`, `usernames`                                  |
+| `unassign_from_mrs`    | Remove a user (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?`    |
 | `create_label`         | Create a label             | `project`, `name`, `color?`, `description?`                          |
 
 ## Reports
