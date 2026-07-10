@@ -132,6 +132,52 @@ const NoteListSchema = z.object({
   fetchedAt: z.string(),
 });
 
+// A single note inside a discussion thread. `file`/`line` are the slim diff
+// position (null for a general, non-diff comment).
+const DiscussionNoteSchema = z.object({
+  id: z.number(),
+  author: z.string().nullable(),
+  body: z.string(),
+  createdAt: z.string(),
+  file: z.string().nullable(),
+  line: z.number().nullable(),
+});
+
+// A discussion (thread). Resolution state, location, and opener are hoisted to
+// the top level so CEL can filter/count without reaching into `notes`, e.g.
+// size(discussions.filter(d, d.resolvable && !d.resolved)).
+const DiscussionSchema = z.object({
+  // GraphQL discussion gid — the exact id add_mr_note(discussionId) and
+  // resolve_mr_discussion consume.
+  id: z.string(),
+  resolvable: z.boolean(),
+  resolved: z.boolean(),
+  resolvedBy: z.string().nullable(),
+  // Location + opener, hoisted from the thread's root note.
+  file: z.string().nullable(),
+  line: z.number().nullable(),
+  author: z.string().nullable(),
+  createdAt: z.string(),
+  notes: z.array(DiscussionNoteSchema),
+});
+
+const DiscussionListSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  discussions: z.array(DiscussionSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const DiscussionResolutionSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  discussionId: z.string(),
+  resolved: z.boolean(),
+  resolvedBy: z.string().nullable(),
+  fetchedAt: z.string(),
+});
+
 const NoteDeletedSchema = z.object({
   project: z.string(),
   iid: z.number(),
@@ -700,6 +746,47 @@ mutation createNote($noteableId: NoteableID!, $body: String!) {
   }
 }`;
 
+// Reply into an existing thread. Separate from CREATE_NOTE_MUTATION so the
+// top-level path (also used by add_issue_note) is untouched.
+const REPLY_NOTE_MUTATION = `
+mutation replyNote($noteableId: NoteableID!, $discussionId: DiscussionID!, $body: String!) {
+  createNote(input: { noteableId: $noteableId, discussionId: $discussionId, body: $body }) {
+    note { id body createdAt author { username } }
+    errors
+  }
+}`;
+
+const RESOLVE_DISCUSSION_MUTATION = `
+mutation resolveDiscussion($id: DiscussionID!, $resolve: Boolean!) {
+  discussionToggleResolve(input: { id: $id, resolve: $resolve }) {
+    discussion { id resolved resolvedBy { username } }
+    errors
+  }
+}`;
+
+const MR_DISCUSSIONS_QUERY = `
+query mrDiscussions($fullPath: ID!, $iid: String!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    mergeRequest(iid: $iid) {
+      discussions(first: $first) {
+        nodes {
+          id
+          resolvable
+          resolved
+          resolvedBy { username }
+          notes(first: 100) {
+            nodes {
+              id system body createdAt author { username }
+              position { filePath oldLine newLine }
+            }
+          }
+        }
+        pageInfo { hasNextPage }
+      }
+    }
+  }
+}`;
+
 const UPDATE_NOTE_MUTATION = `
 mutation updateNote($id: NoteID!, $body: String!) {
   updateNote(input: { id: $id, body: $body }) {
@@ -991,7 +1078,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.10.2",
+  version: "2026.07.10.3",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1029,6 +1116,19 @@ export const model = {
     notes: {
       description: "Notes/comments on an issue or MR",
       schema: NoteListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    discussions: {
+      description:
+        "Resolvable discussion threads on an MR, with per-thread resolution state and slim diff position",
+      schema: DiscussionListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    discussionResolution: {
+      description: "Outcome of resolving/unresolving an MR discussion",
+      schema: DiscussionResolutionSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -2115,14 +2215,24 @@ export const model = {
     },
 
     add_mr_note: {
-      description: "Add a comment to a merge request",
+      description:
+        "Add a comment to a merge request, or reply into an existing thread by passing discussionId (from list_mr_discussions)",
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number(),
         body: z.string().min(1),
+        discussionId: z
+          .string()
+          .optional()
+          .describe("Reply into this discussion thread instead of top-level"),
       }),
       execute: async (
-        args: { project: string; iid: number; body: string },
+        args: {
+          project: string;
+          iid: number;
+          body: string;
+          discussionId?: string;
+        },
         ctx: ModelContext,
       ) => {
         const { host, token } = ctx.globalArgs;
@@ -2135,10 +2245,17 @@ export const model = {
         if (!mrGid) {
           throw new Error(`MR !${args.iid} not found in ${args.project}`);
         }
-        const data = await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
-          noteableId: mrGid,
-          body: args.body,
-        });
+        // Reply into a thread when discussionId is given; else top-level note.
+        const data = args.discussionId
+          ? await graphqlRequest(host, token, REPLY_NOTE_MUTATION, {
+            noteableId: mrGid,
+            discussionId: args.discussionId,
+            body: args.body,
+          })
+          : await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
+            noteableId: mrGid,
+            body: args.body,
+          });
         const result = data.createNote;
         if (result.errors?.length) {
           throw new Error(`createNote failed: ${result.errors.join("; ")}`);
@@ -2442,6 +2559,157 @@ export const model = {
             failed: failed.length,
           },
         );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_mr_discussions: {
+      description:
+        "List resolvable discussion threads on an MR with per-thread resolution state and slim diff position (file/line). System-only threads are excluded. Filter for blockers with CEL: size(discussions.filter(d, d.resolvable && !d.resolved)).",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        first: z.number().int().positive().max(100).default(50),
+      }),
+      execute: async (
+        args: { project: string; iid: number; first?: number },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        // `?? 50` is not redundant with the Zod default: the test harness (and
+        // any caller that skips schema validation) does not apply defaults.
+        const first = args.first ?? 50;
+        const data = await graphqlRequest(host, token, MR_DISCUSSIONS_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+          first,
+        });
+        const conn = data.project?.mergeRequest?.discussions;
+        if (!conn) {
+          throw new Error(`MR !${args.iid} not found in ${args.project}`);
+        }
+        const parseNoteId = (gid: unknown): number =>
+          parseInt(String(gid ?? "").split("/").pop() ?? "0", 10);
+        const slim = (
+          pos: any,
+        ): { file: string | null; line: number | null } => ({
+          file: pos?.filePath ?? null,
+          line: pos?.newLine ?? pos?.oldLine ?? null,
+        });
+        const discussions: z.infer<typeof DiscussionSchema>[] = [];
+        for (const d of conn.nodes ?? []) {
+          // Drop system-only threads (label/assignee events, not human threads).
+          const userNotes = (d.notes?.nodes ?? []).filter(
+            (n: any) => !n.system,
+          );
+          if (userNotes.length === 0) continue;
+          const root = userNotes[0];
+          const rootPos = slim(root.position);
+          discussions.push({
+            id: d.id ?? "",
+            resolvable: d.resolvable ?? false,
+            resolved: d.resolved ?? false,
+            resolvedBy: d.resolvedBy?.username ?? null,
+            file: rootPos.file,
+            line: rootPos.line,
+            author: root.author?.username ?? null,
+            createdAt: root.createdAt ?? "",
+            notes: userNotes.map((n: any) => {
+              const p = slim(n.position);
+              return {
+                id: parseNoteId(n.id),
+                author: n.author?.username ?? null,
+                body: n.body ?? "",
+                createdAt: n.createdAt ?? "",
+                file: p.file,
+                line: p.line,
+              };
+            }),
+          });
+        }
+        const handle = await ctx.writeResource(
+          "discussions",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            discussions,
+            truncated: !!conn.pageInfo?.hasNextPage,
+            fetchedAt: new Date().toISOString(),
+          } as unknown as Record<string, unknown>,
+        );
+        ctx.logger.info(
+          "Fetched {count} discussions for {project}!{iid} ({unresolved} unresolved)",
+          {
+            count: discussions.length,
+            project: args.project,
+            iid: args.iid,
+            unresolved:
+              discussions.filter((x) => x.resolvable && !x.resolved).length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    resolve_mr_discussion: {
+      description:
+        "Resolve (or unresolve) a merge request discussion thread by its discussionId (from list_mr_discussions). MUTATING.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        discussionId: z.string().min(1),
+        resolved: z.boolean().default(true),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          iid: number;
+          discussionId: string;
+          resolved?: boolean;
+        },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const resolve = args.resolved ?? true;
+        const data = await graphqlRequest(
+          host,
+          token,
+          RESOLVE_DISCUSSION_MUTATION,
+          { id: args.discussionId, resolve },
+        );
+        const result = data.discussionToggleResolve;
+        // GitLab returns null on permission-denied / missing discussion.
+        if (!result) {
+          throw new Error(
+            "discussionToggleResolve returned null (permission denied or discussion not found)",
+          );
+        }
+        if (result.errors?.length) {
+          throw new Error(
+            `discussionToggleResolve failed: ${result.errors.join("; ")}`,
+          );
+        }
+        const disc = result.discussion;
+        const handle = await ctx.writeResource(
+          "discussionResolution",
+          `${sanitizeName(args.project)}-mr-${args.iid}-disc-${
+            sanitizeName(args.discussionId)
+          }`,
+          {
+            project: args.project,
+            iid: args.iid,
+            discussionId: disc?.id ?? args.discussionId,
+            resolved: disc?.resolved ?? resolve,
+            resolvedBy: disc?.resolvedBy?.username ?? null,
+            fetchedAt: new Date().toISOString(),
+          } as unknown as Record<string, unknown>,
+        );
+        ctx.logger.info("{action} discussion on {project}!{iid}", {
+          action: (disc?.resolved ?? resolve) ? "Resolved" : "Unresolved",
+          project: args.project,
+          iid: args.iid,
+        });
         return { dataHandles: [handle] };
       },
     },

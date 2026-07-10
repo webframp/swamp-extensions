@@ -1,3 +1,19 @@
+## 2026.07.10.3
+
+**Added:** `list_mr_discussions(project, iid)` — resolvable discussion threads on
+an MR with per-thread `resolvable`/`resolved`/`resolvedBy` and a slim diff
+position (`file`/`line`) hoisted to the thread level, plus the thread notes.
+System-only threads are excluded. Unresolved threads (the `discussions_not_resolved`
+merge blocker) are a CEL filter away:
+`size(discussions.filter(d, d.resolvable && !d.resolved))`.
+
+**Added:** `resolve_mr_discussion(project, iid, discussionId, resolved)` — resolve
+or unresolve a thread (GraphQL `discussionToggleResolve`).
+
+**Changed:** `add_mr_note` takes an optional `discussionId` to reply into an
+existing thread rather than post top-level. Omitting it is unchanged behavior;
+`add_issue_note` is untouched.
+
 ## 2026.07.10.2
 
 **Added:** A canonical, GitLab-flavored `reference` on every dashboard work item
