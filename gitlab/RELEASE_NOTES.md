@@ -1,3 +1,22 @@
+## 2026.07.11.1
+
+**Added:** `list_todos(state?, maxTodos?)` — the authenticated user's todos across
+ALL pages, not the 20 the dashboard caps at. Paginates GraphQL `currentUser.todos`
+with a cursor up to a `maxTodos` safety cap (default 2000, `truncated` flag when
+hit). Each todo carries a hoisted `targetState` (`opened`/`closed`/`merged` for
+MR/issue targets, `null` otherwise) pulled via inline fragments, so classifying a
+large backlog as stale-vs-live is a flat CEL filter with no per-item fetch:
+`todos.filter(t, t.targetState in ["merged", "closed"])`. Writes a `todoList`
+resource.
+
+**Added:** `mark_todos_done(todoIds)` — bulk companion to `mark_todo_done`. Marks
+many todos done in one call, one sequential GraphQL request per todo (not parallel;
+accepts gids or numeric ids), guarding the null payload GitLab returns on
+permission-denied/not-found; per-todo failures land in `failed[]`
+rather than aborting the batch. Writes a `bulkTodoResult` resource. Together with
+`list_todos`, clearing a large stale backlog is: list → CEL-filter merged/closed →
+`mark_todos_done`.
+
 ## 2026.07.10.4
 
 **Added:** `remove_mr_reviewers(project, iids, username?)` — remove a reviewer

@@ -85,7 +85,9 @@ Deno.test("model has all expected methods", () => {
     "list_pipelines",
     "list_projects",
     "list_releases",
+    "list_todos",
     "mark_todo_done",
+    "mark_todos_done",
     "merge",
     "rebase_merge_request",
     "remove_mr_reviewers",
@@ -104,6 +106,7 @@ Deno.test("model has all expected resources", () => {
   const resourceNames = Object.keys(model.resources);
   assertEquals(resourceNames.sort(), [
     "branches",
+    "bulkTodoResult",
     "dashboard",
     "discussionResolution",
     "discussions",
@@ -125,6 +128,7 @@ Deno.test("model has all expected resources", () => {
     "releases",
     "retryResult",
     "reviewerRemovalResult",
+    "todoList",
     "unassignResult",
   ]);
 });
@@ -2988,3 +2992,342 @@ Deno.test("remove_mr_reviewers isolates a per-MR failure and still writes a resu
     globalThis.fetch = original;
   }
 });
+
+// =============================================================================
+// list_todos / mark_todos_done Tests
+// =============================================================================
+
+Deno.test("list_todos paginates across pages and hoists targetState", async () => {
+  const original = globalThis.fetch;
+  // Keyed by the `after` cursor so we return page 1 then page 2.
+  const pages: Record<string, unknown> = {
+    "null": {
+      data: {
+        currentUser: {
+          username: "operator",
+          todos: {
+            nodes: [
+              {
+                id: "gid://gitlab/Todo/1",
+                action: "review_requested",
+                body: "b1",
+                targetType: "MERGEREQUEST",
+                targetUrl: "https://git.example.org/g/p/-/merge_requests/5",
+                createdAt: "t",
+                author: { username: "a" },
+                project: { fullPath: "g/p", nameWithNamespace: "G / P" },
+                target: { __typename: "MergeRequest", state: "merged" },
+              },
+              {
+                id: "gid://gitlab/Todo/2",
+                action: "mentioned",
+                body: "b2",
+                targetType: "ISSUE",
+                targetUrl: "https://git.example.org/g/p/-/issues/7",
+                createdAt: "t",
+                author: { username: "a" },
+                project: { fullPath: "g/p", nameWithNamespace: "G / P" },
+                target: { __typename: "Issue", state: "opened" },
+              },
+            ],
+            pageInfo: { hasNextPage: true, endCursor: "cur1" },
+          },
+        },
+      },
+    },
+    "cur1": {
+      data: {
+        currentUser: {
+          username: "operator",
+          todos: {
+            nodes: [
+              {
+                id: "gid://gitlab/Todo/3",
+                action: "mentioned",
+                body: "b3",
+                targetType: "COMMIT",
+                targetUrl: "https://git.example.org/g/p/-/commit/abc",
+                createdAt: "t",
+                author: { username: "a" },
+                project: { fullPath: "g/p", nameWithNamespace: "G / P" },
+                target: { __typename: "Commit" },
+              },
+            ],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        },
+      },
+    },
+  };
+  globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+    const vars = JSON.parse((init?.body as string) ?? "{}").variables ?? {};
+    const body = pages[String(vars.after)];
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_todos.execute(
+      { state: "pending", maxTodos: 2000 },
+      context as any,
+    );
+    const res = getWrittenResources();
+    assertEquals(res.length, 1);
+    assertEquals(res[0].specName, "todoList");
+    const data = res[0].data as {
+      todos: Array<{ reference: string | null; targetState: string | null }>;
+      count: number;
+      truncated: boolean;
+    };
+    assertEquals(data.count, 3);
+    assertEquals(data.truncated, false);
+    // MR -> merged, Issue -> opened, non-stateful target (Commit) -> null.
+    assertEquals(data.todos.map((t) => t.targetState), [
+      "merged",
+      "opened",
+      null,
+    ]);
+    // reference is derived from fullPath + iid (MR uses !, issue uses #).
+    assertEquals(data.todos[0].reference, "g/p!5");
+    assertEquals(data.todos[1].reference, "g/p#7");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("list_todos respects the maxTodos cap and flags truncated", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    const body = {
+      data: {
+        currentUser: {
+          username: "operator",
+          todos: {
+            nodes: [
+              {
+                id: "gid://gitlab/Todo/1",
+                action: "x",
+                body: "",
+                targetType: "MERGEREQUEST",
+                targetUrl: "https://git.example.org/g/p/-/merge_requests/1",
+                createdAt: "t",
+                author: { username: "a" },
+                project: { fullPath: "g/p", nameWithNamespace: "G/P" },
+                target: { __typename: "MergeRequest", state: "opened" },
+              },
+              {
+                id: "gid://gitlab/Todo/2",
+                action: "x",
+                body: "",
+                targetType: "MERGEREQUEST",
+                targetUrl: "https://git.example.org/g/p/-/merge_requests/2",
+                createdAt: "t",
+                author: { username: "a" },
+                project: { fullPath: "g/p", nameWithNamespace: "G/P" },
+                target: { __typename: "MergeRequest", state: "opened" },
+              },
+            ],
+            pageInfo: { hasNextPage: true, endCursor: "cur1" },
+          },
+        },
+      },
+    };
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_todos.execute(
+      { state: "pending", maxTodos: 1 },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as {
+      count: number;
+      truncated: boolean;
+    };
+    assertEquals(data.count, 1);
+    assertEquals(data.truncated, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("list_todos argument defaults to pending state and a 2000 cap", () => {
+  const parsed = model.methods.list_todos.arguments.parse({});
+  assertEquals(parsed.state, "pending");
+  assertEquals(parsed.maxTodos, 2000);
+});
+
+Deno.test(
+  "mark_todos_done fans out; null payloads and errors go to failed",
+  async () => {
+    const original = globalThis.fetch;
+    const seen: string[] = [];
+    globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+      const vars = JSON.parse((init?.body as string) ?? "{}").variables ?? {};
+      seen.push(vars.id);
+      let todoMarkDone: unknown;
+      if (vars.id === "gid://gitlab/Todo/111") {
+        todoMarkDone = { todo: { id: vars.id, state: "done" }, errors: [] };
+      } else if (vars.id === "gid://gitlab/Todo/222") {
+        todoMarkDone = null; // permission denied / not found
+      } else {
+        todoMarkDone = { todo: null, errors: ["Todo not found"] };
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ data: { todoMarkDone } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.mark_todos_done.execute(
+        { todoIds: ["111", "gid://gitlab/Todo/222", "333"] },
+        context as any,
+      );
+      const res = getWrittenResources();
+      assertEquals(res[0].specName, "bulkTodoResult");
+      const data = res[0].data as {
+        results: Array<{ id: string; state: string }>;
+        failed: Array<{ id: string; error: string }>;
+        count: number;
+      };
+      assertEquals(data.count, 3);
+      assertEquals(data.results.map((r) => r.id), ["gid://gitlab/Todo/111"]);
+      assertEquals(data.failed.map((f) => f.id).sort(), [
+        "gid://gitlab/Todo/222",
+        "gid://gitlab/Todo/333",
+      ]);
+      // numeric ids are normalized to Todo gids before the mutation.
+      assertEquals(seen.includes("gid://gitlab/Todo/111"), true);
+      assertEquals(seen.includes("gid://gitlab/Todo/333"), true);
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+);
+
+Deno.test(
+  "list_todos does not flag truncated when the cap equals the total on the final page",
+  async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (
+      _input: string | URL | Request,
+      _init?: RequestInit,
+    ) => {
+      const body = {
+        data: {
+          currentUser: {
+            username: "operator",
+            todos: {
+              nodes: [
+                {
+                  id: "gid://gitlab/Todo/1",
+                  action: "x",
+                  body: "",
+                  targetType: "MERGEREQUEST",
+                  targetUrl: "https://git.example.org/g/p/-/merge_requests/1",
+                  createdAt: "t",
+                  author: { username: "a" },
+                  project: { fullPath: "g/p", nameWithNamespace: "G/P" },
+                  target: { __typename: "MergeRequest", state: "opened" },
+                },
+                {
+                  id: "gid://gitlab/Todo/2",
+                  action: "x",
+                  body: "",
+                  targetType: "MERGEREQUEST",
+                  targetUrl: "https://git.example.org/g/p/-/merge_requests/2",
+                  createdAt: "t",
+                  author: { username: "a" },
+                  project: { fullPath: "g/p", nameWithNamespace: "G/P" },
+                  target: { __typename: "MergeRequest", state: "closed" },
+                },
+              ],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        },
+      };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.list_todos.execute(
+        { state: "pending", maxTodos: 2 },
+        context as any,
+      );
+      const data = getWrittenResources()[0].data as {
+        count: number;
+        truncated: boolean;
+      };
+      assertEquals(data.count, 2);
+      // cap === total, but this was the last page (hasNextPage false), so the
+      // backlog was fully read — truncated must be false.
+      assertEquals(data.truncated, false);
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+);
+
+Deno.test(
+  "mark_todos_done routes a null todo with empty errors to failed (unconfirmed)",
+  async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (
+      _input: string | URL | Request,
+      _init?: RequestInit,
+    ) => {
+      // Non-null payload, no errors, but no echoed todo — unconfirmable.
+      const body = { data: { todoMarkDone: { todo: null, errors: [] } } };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.mark_todos_done.execute(
+        { todoIds: ["gid://gitlab/Todo/9"] },
+        context as any,
+      );
+      const data = getWrittenResources()[0].data as {
+        results: unknown[];
+        failed: Array<{ id: string; error: string }>;
+      };
+      assertEquals(data.results.length, 0);
+      assertEquals(data.failed.length, 1);
+      assertEquals(data.failed[0].id, "gid://gitlab/Todo/9");
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+);
