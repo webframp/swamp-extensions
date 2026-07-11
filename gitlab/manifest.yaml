@@ -55,7 +55,7 @@ description: |
   - set_mr_assignees (assign/reassign/unassign by username; CE keeps one, EE many)
   - create_label
   - mark_todo_done (clear a handled to-do off the pending queue)
-  - mark_todos_done (bulk-clear many todos in one fan-out; mirror of mark_todo_done)
+  - mark_todos_done (bulk-clear many todos in one call, sequential; companion to mark_todo_done)
   - rebase_merge_request (rebase a stale MR onto its target, polling to completion)
   - retry_job / retry_pipeline (re-run CI after a transient failure)
 repository: "https://github.com/webframp/swamp-extensions"

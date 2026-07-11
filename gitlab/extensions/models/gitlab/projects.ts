@@ -1315,7 +1315,7 @@ export const model = {
     },
     bulkTodoResult: {
       description:
-        "Result of a fan-out mark-todos-done (confirmed done + per-todo failures)",
+        "Result of a bulk mark-todos-done (confirmed done + per-todo failures)",
       schema: BulkTodoResultSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
@@ -1921,9 +1921,10 @@ export const model = {
 
     mark_todos_done: {
       description:
-        "Mark MANY todos done in one fan-out (bulk mirror of mark_todo_done). " +
-        "Accepts todo gids or numeric ids. Per-todo failures are recorded and " +
-        "never abort the batch. Writes a bulkTodoResult resource.",
+        "Mark MANY todos done in one call — one sequential GraphQL request per " +
+        "todo (not parallel). Bulk companion to mark_todo_done. Accepts todo " +
+        "gids or numeric ids; per-todo failures are recorded and never abort " +
+        "the batch. Writes a bulkTodoResult resource.",
       arguments: z.object({
         todoIds: z.array(z.string().min(1)).min(1).describe(
           "Todo ids (gid://gitlab/Todo/NNN or numeric)",
@@ -1954,8 +1955,8 @@ export const model = {
               throw new Error(payload.errors.join("; "));
             }
             // A null todo with empty errors is unconfirmable — don't fabricate
-            // a "done" success (mirrors the loud-failure pattern of the
-            // assignee/reviewer fan-outs, which never trust "no error" alone).
+            // a "done" success (mirrors the loud-failure pattern of the sibling
+            // assignee/reviewer removals, which never trust "no error" alone).
             if (!payload.todo) {
               throw new Error(
                 "todoMarkDone returned no todo — completion unconfirmed",

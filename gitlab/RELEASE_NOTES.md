@@ -9,9 +9,10 @@ large backlog as stale-vs-live is a flat CEL filter with no per-item fetch:
 `todos.filter(t, t.targetState in ["merged", "closed"])`. Writes a `todoList`
 resource.
 
-**Added:** `mark_todos_done(todoIds)` — bulk mirror of `mark_todo_done`. Marks many
-todos done in one fan-out (accepts gids or numeric ids), guarding the null payload
-GitLab returns on permission-denied/not-found; per-todo failures land in `failed[]`
+**Added:** `mark_todos_done(todoIds)` — bulk companion to `mark_todo_done`. Marks
+many todos done in one call, one sequential GraphQL request per todo (not parallel;
+accepts gids or numeric ids), guarding the null payload GitLab returns on
+permission-denied/not-found; per-todo failures land in `failed[]`
 rather than aborting the batch. Writes a `bulkTodoResult` resource. Together with
 `list_todos`, clearing a large stale backlog is: list → CEL-filter merged/closed →
 `mark_todos_done`.
