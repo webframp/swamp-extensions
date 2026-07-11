@@ -1,6 +1,6 @@
 # Swamp Extensions
 
-Extensions for [swamp](https://github.com/systeminit/swamp) providing model integrations, workflow+report combos, vault providers, datastore backends, and execution drivers.
+Extensions for [swamp](https://github.com/swamp-club/swamp) providing model integrations, workflow+report combos, vault providers, datastore backends, and execution drivers.
 
 ## Model Extensions
 
@@ -20,8 +20,39 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | [`@webframp/aws/cost-estimate`](aws/cost-estimate/) | Cost estimation from inventory specs | `@aws-sdk/client-pricing` |
 | [`@webframp/aws/cost-explorer`](aws/cost-explorer/) | AWS Cost Explorer spend analysis by service, usage type, and trend | `@aws-sdk/client-cost-explorer` |
 | [`@webframp/aws/networking`](aws/networking/) | VPC networking inspection — NAT Gateways, Load Balancers, Elastic IPs | `@aws-sdk/client-ec2`, `@aws-sdk/client-elastic-load-balancing-v2`, `@aws-sdk/client-cloudwatch` |
+| [`@webframp/aws/alarm-investigation`](aws/alarm-investigation/) | Triages CloudWatch alarms by enriching them with metric activity, SNS subscriptions, and state-change history, classifying each as healthy, stale, silent, noisy, orphaned, or unknown | `@aws-sdk/client-cloudwatch`, `@aws-sdk/client-sns` |
+| [`@webframp/aws/event-topology`](aws/event-topology/) | Discovers and analyzes the event graph across EventBridge, SNS, SQS, and Lambda event source mappings | `@aws-sdk/client-eventbridge`, `@aws-sdk/client-sns`, `@aws-sdk/client-sqs`, `@aws-sdk/client-lambda`, and others |
+| [`@webframp/aws/dns-observation`](aws/dns-observation/) | Observes Route53 hosted zones/records and flags orphaned DNS entries pointing at decommissioned infrastructure | `@aws-sdk/client-route-53` |
+| [`@webframp/aws/service-quotas`](aws/service-quotas/) | Monitors AWS Service Quotas across accounts via fan-out utilization checks, flagging limits nearing capacity | `@aws-sdk/client-service-quotas`, `@aws-sdk/client-cloudwatch`, and others |
+| [`@webframp/aws/iam`](aws/iam/) | Cross-account IAM inventory and trust-graph analysis for privilege-escalation and security review | `@aws-sdk/client-iam`, `@aws-sdk/client-sts` |
+| [`@webframp/aws/config-compliance`](aws/config-compliance/) | Reads AWS Config rule compliance evaluations as typed, queryable data (read-only) | `@aws-sdk/client-config-service`, `@aws-sdk/client-sts` |
+| [`@webframp/aws/bedrock-usage`](aws/bedrock-usage/) | Monitors AWS Bedrock token usage — input/output counts, per-model breakdowns, invocation rates via multi-account/region fan-out | `@aws-sdk/client-cloudwatch`, `@aws-sdk/credential-providers` |
+| [`@webframp/aws/guardduty`](aws/guardduty/) | Queries GuardDuty findings from a delegated administrator account across all member accounts in an AWS Organization | `@aws-sdk/client-guardduty` |
+| [`@webframp/aws/adopt`](aws/adopt/) | Discovers existing AWS infrastructure (EC2, RDS, CloudFormation, Secrets Manager) for brownfield adoption into swamp models | `@swamp/aws/ec2`, `@swamp/aws/rds`, `@swamp/aws/secretsmanager` |
+| [`@webframp/aws/drift-state`](aws/drift-state/) | Composes drift baselines, results, timelines, and velocity from existing adopt/inventory/terraform/config/dns/event-topology data, making no AWS API calls of its own | `@webframp/aws/adopt`, `@webframp/aws/inventory` |
+| [`@webframp/aws/securityhub-findings`](aws/securityhub-findings/) | Queries and manages the lifecycle (triage, archive, resolve, reopen) of AWS Security Hub findings from a delegated admin account | None |
 | [`@webframp/terraform`](terraform/) | Terraform/OpenTofu state reader — resource inventory, full state, and outputs | None (shells out to `terraform` or `tofu`) |
 | [`@webframp/twitch`](twitch/) | Twitch Moderation — cross-channel moderation visibility, suspicious user detection, ban overlap analysis | None (uses fetch) |
+| [`@webframp/ai-usage`](ai-usage/) | Cross-provider AI token usage model aggregating Bedrock, Vertex AI, and Azure OpenAI usage data | `@webframp/aws/bedrock-usage`, `@webframp/gcp/vertex-usage`, `@webframp/azure/openai-usage` |
+| [`@webframp/azure/openai-usage`](azure/openai-usage/) | Monitors Azure OpenAI / AI Services token usage across subscriptions via Azure Monitor, with per-deployment breakdowns | None (shells out to `az` CLI) |
+| [`@webframp/gcp/vertex-usage`](gcp/vertex-usage/) | Multi-project GCP Vertex AI token-usage monitor via Cloud Monitoring API, with per-model input/output breakdowns | None (shells out to `gcloud`) |
+| [`@webframp/anthropic/compliance`](anthropic/compliance/) | Syncs a Claude Enterprise account's org directory, effective runtime settings, and 6-year audit activity feed via the Compliance API | None (uses fetch) |
+| [`@webframp/anthropic/analytics`](anthropic/analytics/) | Pulls Claude Enterprise seat, adoption, and cost/usage analytics (DAU/WAU/MAU, feature adoption, token cost) via the Enterprise Analytics API | None (uses fetch) |
+| [`@webframp/microsoft/teams`](microsoft/teams/) | Read-only Microsoft Teams integration (channels, chats, mentions) via the Graph API using device-code auth | None (uses fetch) |
+| [`@webframp/gitlab-review`](gitlab-review/) | AI-assisted GitLab merge request code review (GraphQL + REST) with a human approval gate and draft/edit/post workflow | None (uses fetch) |
+| [`@webframp/reddit/moderation`](reddit/) | Reddit moderation API wrapper — modqueue inspection, reports, mod action logs, and actions (approve, remove, ban, modmail, flair) | None (uses fetch) |
+| [`@webframp/discourse`](discourse/) | Queries Discourse forums — categories, topics, and search via the public REST API | None (uses fetch) |
+| [`@webframp/artifactory`](artifactory/) | Queries and monitors JFrog Artifactory — AQL package search, repo health checks, and service status with diff detection | None (uses fetch) |
+| [`@webframp/research-collector`](research-collector/) | Collects research intelligence from HN, Lobste.rs, SRE Weekly, IFIN Discourse, and RedMonk for daily briefing workflows | None (uses fetch) |
+| [`@webframp/hermes-journal-writer`](hermes-journal-writer/) | Reads research-collector data and writes/commits/pushes daily org-mode journal entries to a local org repo | None (shells out to `git`) |
+| [`@webframp/hermes-kanban-orchestrator`](hermes-kanban-orchestrator/) | Creates and tracks Kanban tasks as versioned swamp resources via `hermes kanban create`, with idempotency-key deduplication | None |
+| [`@webframp/container-image`](container-image/) | Registry-agnostic OCI image build/push/inspect model (docker, podman, nerdctl, buildah; ECR, GHCR, DockerHub) | None (shells out to docker/podman/etc.) |
+| [`@webframp/team-topology`](team-topology/) | Agent-guided team topology and value-stream mapping (teams, interactions, ownership, flows) as versioned snapshots | None |
+| [`@webframp/threat-model`](threat-model/) | Agent-guided agile threat modeling — scope/identify/evaluate/mitigate/posture stages producing a risk matrix and posture snapshot | None |
+| [`@webframp/ddd-guidance`](ddd-guidance/) | Agent-guided Domain-Driven Design facilitator — bounded contexts, ubiquitous language, and aggregate boundaries as versioned domain knowledge | None |
+| [`@webframp/rice-scoring`](rice-scoring/) | Agent-guided RICE (Reach, Impact, Confidence, Effort) prioritization framework producing ranked, versioned scorecards | None |
+| [`@webframp/swamp-adoption`](swamp-adoption/) | Interactive onboarding model that interviews users to map their domain onto swamp primitives and scaffolds extension designs | None |
+| [`@webframp/redmine`](redmine/) | Workflow-agnostic Redmine CRUD model — 26 methods covering issues, projects, statuses, trackers, users, custom fields, relations, time entries, and more | None |
 
 ## Workflow + Report Extensions
 
@@ -29,11 +60,16 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 |-----------|-------------|--------------|
 | [`@webframp/sre`](sre/) | SRE health check — runs HTTP, TLS, DNS, and port probes plus system diagnostics, then generates a unified health report | `@webframp/network`, `@webframp/system` |
 | [`@webframp/cloudflare-audit`](cloudflare-audit/) | Cloudflare security and configuration audit — inspects zone settings, DNS, WAF, Workers, and cache, then generates a severity-rated report | `@webframp/cloudflare` |
-| [`@webframp/aws-ops`](aws/ops/) | AWS incident investigation — gathers alarms, metrics, traces, and logs, then generates an incident report | `@webframp/aws/logs`, `@webframp/aws/metrics`, `@webframp/aws/alarms`, `@webframp/aws/traces` |
+| [`@webframp/aws-ops`](aws/ops/) | AWS incident investigation and daily pulse checks — gathers logs, metrics, alarms, traces, inventory, networking, cost, and GitHub data, then generates incident and morning-pulse reports | `@webframp/aws/logs`, `@webframp/aws/metrics`, `@webframp/aws/alarms`, `@webframp/aws/traces`, `@webframp/aws/inventory`, `@webframp/aws/networking`, `@webframp/aws/alarm-investigation`, `@webframp/aws/cost-explorer`, `@webframp/github` |
 | [`@webframp/aws-cost-audit`](aws/cost-audit/) | AWS cost audit — analyzes spend, resource inventory, and networking waste, then generates savings recommendations | `@webframp/aws/cost-explorer`, `@webframp/aws/networking`, `@webframp/aws/inventory` |
 | [`@webframp/aws/terraform-drift`](aws/terraform-drift/) | Terraform drift detection — compares TF state against live AWS resources | `@webframp/terraform`, `@webframp/aws/inventory`, `@webframp/aws/networking` |
 | [`@webframp/aws/cost-report`](aws/cost-report/) | AWS cost report formatting (standalone report extension) | None |
-| [`@webframp/redmine`](redmine/) | Redmine issue tracker integration — CRUD operations on issues, projects, users, and custom fields, plus flow metrics and sprint summary reports with a scaffold-story workflow | None |
+| [`@webframp/aws/adopt`](aws/adopt/) | Brownfield AWS adoption workflow — discovers resources, generates setup commands, and orchestrates dependency-ordered import, then reports adoption status | `@swamp/aws/ec2`, `@swamp/aws/rds`, `@swamp/aws/secretsmanager` |
+| [`@webframp/aws/drift-state`](aws/drift-state/) | Drift-detection workflow — composes baseline/drift state from other AWS model data into timelines and velocity trends | `@webframp/aws/adopt`, `@webframp/aws/inventory` |
+| [`@webframp/aws/securityhub-findings`](aws/securityhub-findings/) | Security Hub findings triage workflow — queries findings across an AWS Organization and generates a triage report | None |
+| [`@webframp/ai-usage`](ai-usage/) | Cross-provider AI usage workflow — runs Bedrock, Vertex AI, and Azure OpenAI usage models in parallel, then generates a unified report, gracefully handling unconfigured providers | `@webframp/aws/bedrock-usage`, `@webframp/gcp/vertex-usage`, `@webframp/azure/openai-usage` |
+| [`@webframp/agentcore-bootstrap`](agentcore-bootstrap/) | One-shot bootstrap workflow — builds/pushes the AgentCore worker image, provisions ECR and a Bedrock AgentCore runtime, and outputs the runtimeArn for driver configuration | `@webframp/container-image`, `@webframp/agentcore` |
+| [`@webframp/redmine-kanban`](redmine-kanban/) | Kanban flow-metrics and sprint-summary reports plus a scaffold-story workflow, built on top of `@webframp/redmine` | `@webframp/redmine` |
 | [`@webframp/twitch`](twitch/) | Twitch cross-channel moderation audit — gathers chatters, bans, and mod events across channels, then generates a report highlighting ban overlap and suspicious users | None (uses fetch) |
 
 ## Vault Extensions
@@ -50,6 +86,8 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 | Extension | Description | Dependencies |
 |-----------|-------------|--------------|
 | [`@webframp/gitlab-datastore`](datastore/gitlab-datastore/) | Stores swamp runtime data in GitLab using the Terraform state HTTP API. Provides distributed locking and bidirectional sync. | None (uses fetch) |
+| [`@webframp/valkey-datastore`](datastore/valkey/) | Stores swamp runtime data in Valkey/Redis with sorted-set path indexing and SET NX distributed locking; compatible with ElastiCache Serverless and MemoryDB | `ioredis` |
+| [`@webframp/postgres-datastore`](datastore/postgres/) | Stores swamp runtime data in PostgreSQL (RDS/Aurora/Aurora Serverless v2) with fencing-token-based distributed locking | `postgres` (npm client) |
 
 ## Driver Extensions
 
@@ -57,11 +95,12 @@ Extensions for [swamp](https://github.com/systeminit/swamp) providing model inte
 |-----------|-------------|--------------|
 | [`@webframp/nix`](driver/nix/) | Nix execution driver — runs model methods inside a Nix shell environment | Requires `nix` |
 | [`@webframp/dry-run`](driver/dry-run/) | Dry-run execution driver — logs method calls without executing them | None |
+| [`@webframp/agentcore`](driver/agentcore/) | AWS Bedrock AgentCore execution driver — runs model methods in isolated microVM sessions with S3-based coordination | `@aws-sdk/client-bedrock-agentcore`, `@aws-sdk/client-s3` |
 
 ## Installation
 
 Extensions are installed automatically when referenced in a swamp repository
-(via [auto-resolution](https://github.com/systeminit/swamp/pull/725)), or
+(via [auto-resolution](https://github.com/swamp-club/swamp/pull/725)), or
 manually with:
 
 ```bash
@@ -73,6 +112,20 @@ swamp extension pull @webframp/system
 swamp extension pull @webframp/network
 swamp extension pull @webframp/terraform
 swamp extension pull @webframp/twitch
+swamp extension pull @webframp/redmine
+swamp extension pull @webframp/gitlab-review
+swamp extension pull @webframp/reddit/moderation
+swamp extension pull @webframp/discourse
+swamp extension pull @webframp/artifactory
+swamp extension pull @webframp/research-collector
+swamp extension pull @webframp/hermes-journal-writer
+swamp extension pull @webframp/hermes-kanban-orchestrator
+swamp extension pull @webframp/container-image
+swamp extension pull @webframp/team-topology
+swamp extension pull @webframp/threat-model
+swamp extension pull @webframp/ddd-guidance
+swamp extension pull @webframp/rice-scoring
+swamp extension pull @webframp/swamp-adoption
 
 # Workflow + report extensions (auto-pull model dependencies)
 swamp extension pull @webframp/sre
@@ -80,7 +133,12 @@ swamp extension pull @webframp/cloudflare-audit
 swamp extension pull @webframp/aws-ops
 swamp extension pull @webframp/aws-cost-audit
 swamp extension pull @webframp/aws/terraform-drift
-swamp extension pull @webframp/redmine
+swamp extension pull @webframp/aws/adopt
+swamp extension pull @webframp/aws/drift-state
+swamp extension pull @webframp/aws/securityhub-findings
+swamp extension pull @webframp/ai-usage
+swamp extension pull @webframp/agentcore-bootstrap
+swamp extension pull @webframp/redmine-kanban
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing
@@ -93,6 +151,27 @@ swamp extension pull @webframp/aws/cost-estimate
 swamp extension pull @webframp/aws/cost-explorer
 swamp extension pull @webframp/aws/networking
 swamp extension pull @webframp/aws/cost-report
+swamp extension pull @webframp/aws/alarm-investigation
+swamp extension pull @webframp/aws/event-topology
+swamp extension pull @webframp/aws/dns-observation
+swamp extension pull @webframp/aws/service-quotas
+swamp extension pull @webframp/aws/iam
+swamp extension pull @webframp/aws/config-compliance
+swamp extension pull @webframp/aws/bedrock-usage
+swamp extension pull @webframp/aws/guardduty
+
+# Anthropic extensions
+swamp extension pull @webframp/anthropic/compliance
+swamp extension pull @webframp/anthropic/analytics
+
+# Microsoft extensions
+swamp extension pull @webframp/microsoft/teams
+
+# GCP extensions
+swamp extension pull @webframp/gcp/vertex-usage
+
+# Azure extensions
+swamp extension pull @webframp/azure/openai-usage
 
 # Vault extensions
 swamp extension pull @webframp/pass
@@ -102,10 +181,13 @@ swamp extension pull @webframp/macos-keychain
 
 # Datastore extensions
 swamp extension pull @webframp/gitlab-datastore
+swamp extension pull @webframp/valkey-datastore
+swamp extension pull @webframp/postgres-datastore
 
 # Driver extensions
 swamp extension pull @webframp/nix
 swamp extension pull @webframp/dry-run
+swamp extension pull @webframp/agentcore
 ```
 
 ## Usage
@@ -185,7 +267,11 @@ swamp workflow run @webframp/terraform-drift
 ### Redmine issue tracking
 
 ```bash
+# @webframp/redmine alone gives you the CRUD model (26 methods).
+# Add @webframp/redmine-kanban for flow-metrics/sprint reports and the
+# scaffold-story workflow.
 swamp extension pull @webframp/redmine
+swamp extension pull @webframp/redmine-kanban
 
 swamp model create @webframp/redmine tracker \
   --global-arg host=https://your-redmine.example.org \
@@ -288,6 +374,28 @@ cd datastore/gitlab-datastore  # or any extension directory
 swamp extension push manifest.yaml
 ```
 
+## Support and Warranty
+
+These extensions are free and open source, licensed under [Apache 2.0](LICENSE) —
+provided **"AS IS," with no warranty of any kind**, express or implied.
+
+Swamp itself is AGPLv3; extensions are covered instead by Swamp's [Extension and
+Definition Exception](https://github.com/swamp-club/swamp-extensions/blob/main/COPYING-EXCEPTION),
+which is exactly why each extension can carry its own license. Appearing on the
+[swamp.club registry](https://swamp.club) isn't a certification — that's true of
+every extension there, not just this repo's.
+
+You're responsible for reading the code, testing it against a non-production
+environment, and understanding what a method does — especially anything that
+writes, deletes, merges, or requests a change — before pointing it at anything
+that matters. Infrastructure automation carries operational risk by nature;
+nothing here changes that.
+
+Bug reports are welcome. Pull requests are only occasionally accepted — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for why and how — but either way, open an
+[issue](https://github.com/webframp/swamp-extensions/issues).
+
 ## License
 
-Apache-2.0
+Apache-2.0 — see [LICENSE](LICENSE). Each extension also carries its own
+`LICENSE.md`, bundled and published independently to the registry.
