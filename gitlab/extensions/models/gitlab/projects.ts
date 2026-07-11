@@ -337,6 +337,11 @@ const TodoSchema = z.object({
   // GitLab-flavored, cross-project unique reference derived from targetUrl:
   // group/project!123 for MRs, group/project#123 for issues (null otherwise).
   reference: z.string().nullable().optional(),
+  // Target's lifecycle state (opened/closed/merged) for MR/issue targets, null
+  // otherwise. Hoisted so "is this todo stale" is a flat CEL filter. Only
+  // list_todos populates it; the capped dashboard leaves it null. Optional so
+  // dashboards written before this field existed still validate.
+  targetState: z.string().nullable().optional(),
   author: z.string(),
   createdAt: z.string(),
 });
@@ -349,6 +354,29 @@ const DashboardSchema = z.object({
   todos: z.array(TodoSchema),
   totalCount: z.number(),
   truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const TodoListSchema = z.object({
+  // All pending (or requested-state) todos for the authenticated user, fetched
+  // across every page — unlike the dashboard, which caps todos at 20. Each
+  // carries a hoisted `targetState`, so stale todos are a flat CEL filter:
+  // `todos.filter(t, t.targetState in ["merged", "closed"])`.
+  todos: z.array(TodoSchema),
+  count: z.number(),
+  // True when the safety cap (maxTodos) was hit before all pages were read.
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const BulkTodoResultSchema = z.object({
+  // Todos confirmed done — todoMarkDone returned a non-null payload with no
+  // errors. Anything unconfirmable (null payload, errors) goes to `failed`.
+  results: z.array(z.object({ id: z.string(), state: z.string() })),
+  // Per-todo failures; one bad id never sinks the batch.
+  failed: z.array(z.object({ id: z.string(), error: z.string() })),
+  // Total ids submitted (results.length + failed.length).
+  count: z.number(),
   fetchedAt: z.string(),
 });
 
@@ -482,6 +510,28 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
   }
 }`;
 
+// Paginated, state-aware todos. Unlike DASHBOARD_QUERY (first: 20, no target),
+// this pulls the target's lifecycle state via inline fragments so callers can
+// classify stale todos without a per-item MR/issue fetch.
+const LIST_TODOS_QUERY = `
+query listTodos($state: [TodoStateEnum!], $first: Int!, $after: String) {
+  currentUser {
+    username
+    todos(state: $state, first: $first, after: $after) {
+      nodes {
+        id action body targetType targetUrl createdAt
+        author { username } project { fullPath nameWithNamespace }
+        target {
+          __typename
+          ... on MergeRequest { state }
+          ... on Issue { state }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+
 function mapDashboardMR(
   node: any,
   currentUser?: string,
@@ -563,6 +613,11 @@ function mapTodo(node: any): z.infer<typeof TodoSchema> {
     project: node.project?.nameWithNamespace ?? null,
     iid,
     reference,
+    // node.target is only present in the list_todos query (MR/Issue inline
+    // fragments). The dashboard query omits it, so this is null there.
+    targetState: node.target?.state
+      ? String(node.target.state).toLowerCase()
+      : null,
     author: node.author?.username ?? "",
     createdAt: node.createdAt ?? "",
   };
@@ -1102,7 +1157,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.10.4",
+  version: "2026.07.11.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1249,6 +1304,21 @@ export const model = {
       schema: DashboardSchema,
       lifetime: "30m" as const,
       garbageCollection: 3,
+    },
+    todoList: {
+      description:
+        "All todos for the authenticated user (paginated past the dashboard's " +
+        "20-cap), each with a hoisted target lifecycle state",
+      schema: TodoListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 5,
+    },
+    bulkTodoResult: {
+      description:
+        "Result of a fan-out mark-todos-done (confirmed done + per-todo failures)",
+      schema: BulkTodoResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
     },
   },
 
@@ -1760,6 +1830,161 @@ export const model = {
           state: data.todoMarkDone?.todo?.state ?? "unknown",
         });
         return { dataHandles: [] };
+      },
+    },
+
+    list_todos: {
+      description:
+        "List the authenticated user's todos across ALL pages (the dashboard " +
+        "caps todos at 20), each with a hoisted targetState " +
+        "(opened/closed/merged for MR/issue targets, null otherwise) so stale " +
+        "todos are a flat CEL filter. Writes a todoList resource.",
+      arguments: z.object({
+        state: z.enum(["pending", "done", "all"]).default("pending").describe(
+          "Which todos to fetch (default pending)",
+        ),
+        maxTodos: z.number().int().positive().default(2000).describe(
+          "Safety cap on total todos fetched across pages",
+        ),
+      }),
+      execute: async (
+        args: { state: "pending" | "done" | "all"; maxTodos: number },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        // GraphQL `state` is a list; "all" means both pending and done.
+        const stateArg = args.state === "all"
+          ? ["pending", "done"]
+          : [args.state];
+        const PAGE = 100;
+        const todos: z.infer<typeof TodoSchema>[] = [];
+        let after: string | null = null;
+        let username = "";
+        let truncated = false;
+        let hasNext = true;
+        while (hasNext) {
+          const data = await graphqlRequest(host, token, LIST_TODOS_QUERY, {
+            state: stateArg,
+            first: PAGE,
+            after,
+          });
+          const user = data.currentUser;
+          if (!user) {
+            throw new Error(
+              "GitLab GraphQL: currentUser is null — verify the token has 'read_api' scope and is not expired",
+            );
+          }
+          username = user.username ?? username;
+          const conn = user.todos;
+          const nodes = conn?.nodes ?? [];
+          for (const node of nodes) {
+            if (todos.length >= args.maxTodos) {
+              // Unconsumed nodes remain on this page — genuinely capped.
+              truncated = true;
+              break;
+            }
+            todos.push(mapTodo(node));
+          }
+          if (truncated) break;
+          const morePages = !!conn?.pageInfo?.hasNextPage;
+          const nextCursor = conn?.pageInfo?.endCursor ?? null;
+          if (todos.length >= args.maxTodos) {
+            // Consumed the page and hit the cap exactly. Only truncated if
+            // GitLab says more pages remain — not when this was the last page.
+            truncated = morePages;
+            break;
+          }
+          // Advance. Stop when there are no more pages, no cursor came back, or
+          // the cursor didn't move (defensive against a spinning/empty page —
+          // the cap can't bound a loop whose nodes never accumulate).
+          hasNext = morePages && !!nextCursor && nextCursor !== after;
+          after = nextCursor;
+        }
+        const handle = await ctx.writeResource(
+          "todoList",
+          `todos-${username || "user"}`,
+          {
+            todos,
+            count: todos.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Fetched {count} todos for {user}{trunc}", {
+          count: todos.length,
+          user: username,
+          trunc: truncated ? ` (capped at ${args.maxTodos})` : "",
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    mark_todos_done: {
+      description:
+        "Mark MANY todos done in one fan-out (bulk mirror of mark_todo_done). " +
+        "Accepts todo gids or numeric ids. Per-todo failures are recorded and " +
+        "never abort the batch. Writes a bulkTodoResult resource.",
+      arguments: z.object({
+        todoIds: z.array(z.string().min(1)).min(1).describe(
+          "Todo ids (gid://gitlab/Todo/NNN or numeric)",
+        ),
+      }),
+      execute: async (args: { todoIds: string[] }, ctx: ModelContext) => {
+        const { host, token } = ctx.globalArgs;
+        const results: z.infer<typeof BulkTodoResultSchema>["results"] = [];
+        const failed: z.infer<typeof BulkTodoResultSchema>["failed"] = [];
+        for (const raw of args.todoIds) {
+          const id = /^\d+$/.test(raw) ? `gid://gitlab/Todo/${raw}` : raw;
+          try {
+            const data = await graphqlRequest(
+              host,
+              token,
+              MARK_TODO_DONE_MUTATION,
+              { id },
+            );
+            const payload = data.todoMarkDone;
+            // GitLab returns a null payload on permission-denied / not-found as
+            // a routine path — guard before reading .errors.
+            if (!payload) {
+              throw new Error(
+                "todoMarkDone returned null (permission denied or todo not found)",
+              );
+            }
+            if (payload.errors?.length) {
+              throw new Error(payload.errors.join("; "));
+            }
+            // A null todo with empty errors is unconfirmable — don't fabricate
+            // a "done" success (mirrors the loud-failure pattern of the
+            // assignee/reviewer fan-outs, which never trust "no error" alone).
+            if (!payload.todo) {
+              throw new Error(
+                "todoMarkDone returned no todo — completion unconfirmed",
+              );
+            }
+            results.push({ id, state: payload.todo.state ?? "done" });
+          } catch (e) {
+            failed.push({
+              id,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+        const handle = await ctx.writeResource(
+          "bulkTodoResult",
+          "todos-marked-done",
+          {
+            results,
+            failed,
+            count: args.todoIds.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Marked {ok}/{total} todos done ({failed} failed)", {
+          ok: results.length,
+          total: args.todoIds.length,
+          failed: failed.length,
+        });
+        return { dataHandles: [handle] };
       },
     },
 
