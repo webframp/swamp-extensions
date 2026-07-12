@@ -1,0 +1,64 @@
+manifestVersion: 1
+name: "@webframp/operator-briefing"
+version: "2026.07.12.1"
+description: |
+  Unified daily operator briefing report. A workflow-scope report over the
+  `daily-briefing` workflow that loops the run's step executions, dispatches
+  each step by `modelType` to a per-source normalizer, and flattens everything
+  into two projections: a prioritized four-tier review queue and a set of ops
+  signals. It renders a consistent markdown briefing plus a STABLE JSON
+  contract that downstream renderers (a live HTML view, executive R/vellum
+  reports) consume — observe once, render many.
+
+  ## Sources (today)
+
+  - `@webframp/gitlab` — cross-project review queue (MRs + todos), tiered per
+    the daily-briefing design: waiting on you / awaiting your merge / mentions /
+    your open MRs. Dedups on `reference`, folds assigned∩authored into your-MRs,
+    and drops items you have already approved.
+  - `@webframp/anthropic/analytics` — seats (DAU/WAU/MAU), adoption, cost window.
+    A `collected: false` fetch is rendered "unavailable", never as a zero.
+  - `@webframp/anthropic/compliance` — effective-settings count and recent
+    activity volume.
+  - `@webframp/aws/service-quotas` — per-service quota utilization over threshold
+    and pending increase requests, with `failedProfiles` degradation (including
+    the `sso-login-required` re-auth hint).
+
+  Adding a source is one workflow step plus one normalizer plus one registry
+  line; the render / tiering / freshness core does not change.
+
+  ## Accuracy
+
+  Freshness is judged from each source's own `fetchedAt` (stale > 24h for ops,
+  > 7d for queue items). Unknown modelType / missing normalizer / parse failure
+  are skipped and counted. The report degrades — it never throws.
+
+  ## Usage
+
+  This is a workflow-scope report. Require it on the `daily-briefing` workflow;
+  it renders after the run completes. Read the results with:
+
+  ```bash
+  swamp data get report-@webframp/operator-briefing --markdown
+  swamp data get report-@webframp/operator-briefing-json --json
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+reports:
+  - operator_briefing.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - briefing
+  - operator
+  - gitlab
+  - ops
+  - analytics
+  - compliance
+  - aws
+  - dashboard
