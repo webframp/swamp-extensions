@@ -1234,3 +1234,374 @@ Deno.test("L12: a future updatedAt renders a non-negative age", async () => {
   assertEquals(json.tiers.waitingOnYou[0].ageDays >= 0, true);
   assertEquals(json.tiers.waitingOnYou[0].ageDays, 0);
 });
+
+// --- Contract enrichment: clickable links ---
+
+Deno.test("contract: a reviewing MR with webUrl exposes QueueItem.url", async () => {
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+  ];
+  const webUrl = "https://gitlab.example.com/grp/proj/-/merge_requests/10";
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [{
+          project: "grp/proj",
+          iid: 10,
+          reference: "grp/proj!10",
+          title: "Fix thing",
+          author: "bob",
+          updatedAt: daysAgo(1),
+          webUrl,
+          draft: false,
+          approvedByMe: false,
+        }],
+      }),
+    ),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  assertEquals(json.tiers.waitingOnYou[0].url, webUrl);
+});
+
+Deno.test("contract: an issue-todo with only targetUrl (no reference) gets QueueItem.url", async () => {
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+  ];
+  // An issue-todo whose targetUrl is not a recognizable MR/issue path, so no
+  // `reference` is derived — it must still carry the url for a clickable link.
+  const targetUrl = "https://gitlab.example.com/g/p/-/design_management/x";
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        todos: [{
+          id: "gid://gitlab/Todo/77",
+          action: "directly_addressed",
+          targetType: "ISSUE",
+          // No `reference` at all — only a targetUrl.
+          targetUrl,
+          body: "please take a look",
+          author: "dave",
+          createdAt: daysAgo(1),
+        }],
+      }),
+    ),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  assertEquals(json.tiers.waitingOnYou.length, 1);
+  const item = json.tiers.waitingOnYou[0];
+  assertEquals(item.url, targetUrl);
+  // No reference was derivable, so it falls back to the targetType.
+  assertEquals(item.reference, "ISSUE");
+});
+
+// --- Contract enrichment: structured AWS entries (account-redacted) ---
+
+Deno.test("contract: utilization signal carries structured entries with NO account identifier", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.8"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.8", {
+      serviceCode: "ec2",
+      threshold: 0.8,
+      entries: [{
+        profile: "123456789012/ReadOnlyPlus",
+        accountId: "123456789012",
+        quotaName: "Spot Instances",
+        utilizationPct: 87.5,
+        usageValue: 350,
+        value: 400,
+        adjustable: true,
+      }, {
+        // A legitimately LARGE quota — its `value` is itself a 6-digit run, so
+        // a naive `/\d{6,}/` redaction check would false-fail even though no
+        // account number leaks. The value must survive untouched.
+        profile: "123456789012/ReadOnlyPlus",
+        quotaName: "Rules per security group",
+        utilizationPct: 42,
+        usageValue: 900000,
+        value: 1048576,
+        adjustable: true,
+      }],
+      truncated: false,
+      failedProfiles: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  // Structured, chartable facts are present.
+  assertEquals(sig.entries.length, 2);
+  assertEquals(sig.entries[0].quotaName, "Spot Instances");
+  assertEquals(sig.entries[0].utilizationPct, 87.5);
+  assertEquals(sig.entries[0].usageValue, 350);
+  assertEquals(sig.entries[0].value, 400);
+  assertEquals(sig.entries[0].adjustable, true);
+  // A legitimate large quota value survives — account redaction never touches
+  // real quota numbers.
+  const big = (sig.entries as Any[]).find((e) =>
+    e.quotaName === "Rules per security group"
+  );
+  assertEquals(big.value, 1048576);
+  assertEquals(big.usageValue, 900000);
+  // Redaction: NO account identifier of any form anywhere in the signal.
+  const blob = JSON.stringify(sig);
+  assertEquals("profile" in sig.entries[0], false);
+  assertEquals("accountId" in sig.entries[0], false);
+  assertEquals(blob.includes("profile"), false);
+  assertEquals(blob.includes("accountId"), false);
+  // Assert the ACTUAL account number is absent (not a coincidental "no 6-digit
+  // run", which the surviving 1048576 quota value would false-fail).
+  assertEquals(blob.includes("123456789012"), false);
+});
+
+Deno.test("contract: pending signal carries structured entries (status/desiredValue) with NO account identifier", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "list_pending_requests", [
+      "pending-us-east-1",
+    ]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "pending-us-east-1", {
+      region: "us-east-1",
+      statuses: ["CASE_OPENED"],
+      entries: [{
+        profile: "987654321098/ReadOnlyPlus",
+        accountId: "987654321098",
+        requestId: "req-abc",
+        caseId: "case-xyz",
+        serviceCode: "medialive",
+        quotaName: "Channels",
+        desiredValue: 20,
+        status: "CASE_OPENED",
+      }],
+      profilesChecked: 55,
+      truncated: false,
+      failedProfiles: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "pending");
+  assertEquals(sig.entries.length, 1);
+  assertEquals(sig.entries[0].quotaName, "Channels");
+  assertEquals(sig.entries[0].serviceCode, "medialive");
+  assertEquals(sig.entries[0].desiredValue, 20);
+  assertEquals(sig.entries[0].status, "CASE_OPENED");
+  // Redaction: no account id, requestId, or caseId leaks into the signal.
+  const blob = JSON.stringify(sig);
+  assertEquals("profile" in sig.entries[0], false);
+  assertEquals("accountId" in sig.entries[0], false);
+  assertEquals("requestId" in sig.entries[0], false);
+  assertEquals("caseId" in sig.entries[0], false);
+  assertEquals(blob.includes("987654321098"), false);
+  assertEquals(blob.includes("req-abc"), false);
+  assertEquals(blob.includes("case-xyz"), false);
+});
+
+Deno.test("contract: a degraded utilization signal has no entries and keeps 'not checked'", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.8"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.8", {
+      serviceCode: "ec2",
+      threshold: 0.8,
+      entries: [],
+      truncated: false,
+      failedProfiles: ["sso-login-required"],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  // Nothing was observed, so no structured entries.
+  assertEquals(sig.entries, undefined);
+  // Unchanged degraded phrasing.
+  assertEquals(sig.detail, "ec2: not checked");
+  assertEquals(sig.degraded, true);
+});
+
+// --- Adversarial-review round 2 regression tests ---
+
+Deno.test("FIX1: an embedded account number in a profile is redacted in detail (prod-123456789012 -> prod-****)", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.8"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.8", {
+      serviceCode: "ec2",
+      threshold: 0.8,
+      entries: [{
+        // Account number embedded inside a longer, non-all-digits name.
+        profile: "prod-123456789012/ReadOnlyPlus",
+        quotaName: "Spot",
+        utilizationPct: 91,
+      }],
+      truncated: false,
+      failedProfiles: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  // The embedded digit run is masked but the human-readable prefix survives.
+  assertEquals(sig.detail.includes("123456789012"), false);
+  assertStringIncludes(sig.detail, "prod-****");
+  // Nowhere in the serialized signal, nor the whole JSON / markdown.
+  assertEquals(JSON.stringify(sig).includes("123456789012"), false);
+  assertEquals(JSON.stringify(json).includes("123456789012"), false);
+  assertEquals(result.markdown.includes("123456789012"), false);
+});
+
+Deno.test("FIX2: a null entry element is skipped, the one valid entry survives, not degraded", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.8"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.8", {
+      serviceCode: "ec2",
+      threshold: 0.8,
+      // A null element must not throw and drop the whole section.
+      entries: [null, {
+        profile: "acct-a/ReadOnlyPlus",
+        quotaName: "Spot Instances",
+        utilizationPct: 88,
+        usageValue: 350,
+        value: 400,
+        adjustable: true,
+      }],
+      truncated: false,
+      failedProfiles: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  // The section survived (no throw), report not degraded.
+  assertEquals(sig !== undefined, true);
+  assertEquals(json.degraded, false);
+  assertEquals(json.sourceErrors.skippedSteps, 0);
+  // Exactly the one valid entry becomes structured — the null is dropped.
+  assertEquals(sig.entries.length, 1);
+  assertEquals(sig.entries[0].quotaName, "Spot Instances");
+  assertEquals(sig.entries[0].utilizationPct, 88);
+});
+
+Deno.test("FIX4: a non-string webUrl yields undefined url; a normal https webUrl survives", async () => {
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+  ];
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [
+          {
+            project: "g/p",
+            iid: 1,
+            reference: "g/p!1",
+            title: "Bad url MR",
+            author: "a",
+            updatedAt: daysAgo(1),
+            draft: false,
+            approvedByMe: false,
+            // A truthy non-string url would violate url?: string.
+            webUrl: 12345,
+          },
+          {
+            project: "g/p",
+            iid: 2,
+            reference: "g/p!2",
+            title: "Object url MR",
+            author: "b",
+            updatedAt: daysAgo(1),
+            draft: false,
+            approvedByMe: false,
+            webUrl: { href: "https://evil" },
+          },
+          {
+            project: "g/p",
+            iid: 3,
+            reference: "g/p!3",
+            title: "Good url MR",
+            author: "c",
+            updatedAt: daysAgo(1),
+            draft: false,
+            approvedByMe: false,
+            webUrl: "https://gitlab.example.com/g/p/-/merge_requests/3",
+          },
+        ],
+      }),
+    ),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const byRef = (ref: string) =>
+    (json.queue as Any[]).find((q) => q.reference === ref);
+  assertEquals(byRef("g/p!1").url, undefined);
+  assertEquals(byRef("g/p!2").url, undefined);
+  assertEquals(
+    byRef("g/p!3").url,
+    "https://gitlab.example.com/g/p/-/merge_requests/3",
+  );
+});
+
+Deno.test("FIX5: AWS entries carry a kind discriminant (utilization vs pending)", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.8"]),
+    makeStep(AWS, "aws-quotas-all", "list_pending_requests", [
+      "pending-us-east-1",
+    ]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.8", {
+      serviceCode: "ec2",
+      threshold: 0.8,
+      entries: [{
+        profile: "acct-a/ReadOnlyPlus",
+        quotaName: "Spot",
+        utilizationPct: 90,
+        value: 400,
+      }],
+      truncated: false,
+      failedProfiles: [],
+      fetchedAt: hoursAgo(1),
+    }),
+    makeArtifact(AWS, "aws-quotas-all", "pending-us-east-1", {
+      region: "us-east-1",
+      statuses: ["CASE_OPENED"],
+      entries: [{
+        profile: "acct-b/ReadOnlyPlus",
+        serviceCode: "medialive",
+        quotaName: "Channels",
+        desiredValue: 20,
+        status: "CASE_OPENED",
+      }],
+      truncated: false,
+      failedProfiles: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const util = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  const pending = (json.ops as Any[]).find((o) => o.label === "pending");
+  assertEquals(util.entries[0].kind, "utilization");
+  assertEquals(pending.entries[0].kind, "pending");
+});
