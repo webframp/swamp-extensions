@@ -17,7 +17,7 @@
  */
 // deno-lint-ignore-file no-explicit-any
 
-import { registry } from "./_lib/normalizers/registry.ts";
+import { nonSourceModelTypes, registry } from "./_lib/normalizers/registry.ts";
 import { render } from "./_lib/render.ts";
 import { type DataRepository, readJson } from "./_lib/read.ts";
 import type {
@@ -80,6 +80,12 @@ export const report = {
       const steps = context.stepExecutions ?? [];
 
       for (const step of steps) {
+        // Non-source steps (e.g. the metrics accumulator appending to the trend
+        // series) run in the same workflow but contribute no queue/ops items.
+        // Skip them silently — counting them as a skipped source would falsely
+        // mark the whole briefing degraded.
+        if (nonSourceModelTypes.has(step.modelType)) continue;
+
         const normalizer = registry[step.modelType];
         if (!normalizer) {
           skippedSteps++;

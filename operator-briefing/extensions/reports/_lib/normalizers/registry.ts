@@ -21,3 +21,18 @@ export const registry: Record<string, Normalizer> = {
   "@webframp/anthropic/compliance": complianceNormalizer,
   "@webframp/aws/service-quotas": awsQuotasNormalizer,
 };
+
+/**
+ * Model types that legitimately run inside the daily-briefing workflow but are
+ * NOT briefing sources — they consume or accumulate the briefing's own output
+ * rather than contributing queue/ops items, so they have no normalizer by
+ * design. The workflow report skips them SILENTLY: counting them as a
+ * "skipped source" would (wrongly) mark the whole briefing `degraded`.
+ *
+ * Today this is the durable metrics accumulator (`metrics_append` appends the
+ * day's numbers to the trend series). A missing normalizer for any OTHER
+ * modelType is still a real gap and is skipped-and-counted as before.
+ */
+export const nonSourceModelTypes = new Set<string>([
+  "@webframp/operator-briefing/metrics",
+]);

@@ -817,6 +817,62 @@ Deno.test("unknown modelType is skipped and counted, not thrown", async () => {
   assertEquals(json.sourceErrors.skippedSteps, 1);
 });
 
+Deno.test("non-source step (metrics accumulator) is skipped SILENTLY, not degraded", async () => {
+  // The metrics_append step runs in the daily-briefing workflow but is not a
+  // briefing source — it has no normalizer by design. It must be ignored
+  // silently: NOT counted as a skipped source, and NOT marked degraded.
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+    makeStep(
+      "@webframp/operator-briefing/metrics",
+      "briefing-metrics",
+      "append_metrics",
+      ["metrics"],
+    ),
+  ];
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [{
+          project: "g/p",
+          iid: 1,
+          reference: "g/p!1",
+          title: "T",
+          author: "a",
+          updatedAt: daysAgo(1),
+          draft: false,
+          approvedByMe: false,
+        }],
+      }),
+    ),
+    makeArtifact(
+      "@webframp/operator-briefing/metrics",
+      "briefing-metrics",
+      "metrics",
+      {
+        rows: [{ date: "2026-07-13", dau: 45 }],
+        count: 1,
+        updatedAt: hoursAgo(1),
+      },
+    ),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  // The real source still contributed.
+  assertEquals(json.queue.length, 1);
+  // The metrics step did not degrade the briefing or get counted or noted.
+  assertEquals(json.degraded, false);
+  assertEquals(json.sourceErrors.skippedSteps, 0);
+  assertEquals(json.sourceErrors.parseFailures, 0);
+  assertEquals(
+    json.notes.join(" ").includes("operator-briefing/metrics"),
+    false,
+  );
+});
+
 Deno.test("malformed JSON handle is skipped, report still renders", async () => {
   const steps = [
     makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
