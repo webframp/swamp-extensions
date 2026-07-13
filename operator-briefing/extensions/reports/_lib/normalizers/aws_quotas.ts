@@ -23,20 +23,61 @@ interface QuotaEntry {
   quotaName?: string;
   serviceCode?: string;
   utilizationPct?: number;
+  usageValue?: number;
+  value?: number;
+  adjustable?: boolean;
+  desiredValue?: number;
   status?: string;
   requestId?: string;
 }
 
 /**
+ * The account-redacted, chartable fields of a signal's structured `entries`.
+ * ONLY these quota facts are ever surfaced — never `profile`, `accountId`,
+ * `requestId`, `caseId`, or any account number (CLAUDE.md forbids exposing
+ * internal account IDs).
+ */
+type SignalEntry = NonNullable<OpsSignal["entries"]>[number];
+
+/** Map utilization rows to their chartable, account-redacted fields. */
+function utilizationEntries(entries: QuotaEntry[]): SignalEntry[] {
+  return entries
+    .filter((e) => e && typeof e === "object")
+    .map((e) => ({
+      kind: "utilization" as const,
+      quotaName: String(e.quotaName ?? ""),
+      utilizationPct: e.utilizationPct,
+      usageValue: e.usageValue,
+      value: e.value,
+      adjustable: e.adjustable,
+    }));
+}
+
+/** Map pending-request rows to their chartable, account-redacted fields. */
+function pendingEntries(entries: QuotaEntry[]): SignalEntry[] {
+  return entries
+    .filter((e) => e && typeof e === "object")
+    .map((e) => ({
+      kind: "pending" as const,
+      quotaName: String(e.quotaName ?? ""),
+      serviceCode: e.serviceCode,
+      desiredValue: e.desiredValue,
+      status: e.status,
+    }));
+}
+
+/**
  * Strip the role suffix (e.g. `/ReadOnlyPlus`) from a profile. Never expose a
  * numeric account id: if the remaining segment is all digits (a bare account
- * number), redact it to `account ****` (CLAUDE.md forbids printing raw IDs).
+ * number), redact it to `account ****`; otherwise redact ANY embedded 6+ digit
+ * run (e.g. `prod-123456789012` -> `prod-****`) so an account number never
+ * leaks even inside a longer name (CLAUDE.md forbids printing raw IDs).
  */
 function accountName(profile?: string): string {
   if (!profile) return "?";
   const name = profile.replace(/\/[^/]+$/, "");
   if (/^\d{6,}$/.test(name)) return "account ****";
-  return name;
+  return name.replace(/\d{6,}/g, "****");
 }
 
 function failureInfo(failed: unknown): { count: number; sso: boolean } {
@@ -93,6 +134,9 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
               accountName(first.profile)
             })`
             : "");
+      // Only the rows actually observed become structured entries; a degraded
+      // fetch that read nothing leaves `entries` absent.
+      const structured = pendingEntries(entries);
       ops.push({
         source: SOURCE,
         label: "pending",
@@ -103,6 +147,7 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
         degraded,
         degradedReason,
         truncated,
+        entries: structured.length > 0 ? structured : undefined,
       });
       emitted = true;
     } else if ("serviceCode" in data && "threshold" in data) {
@@ -120,6 +165,9 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
               accountName(first.profile)
             })`
             : "");
+      // Only over-threshold rows actually observed become structured entries;
+      // a degraded fetch that read nothing leaves `entries` absent.
+      const structured = utilizationEntries(entries);
       ops.push({
         source: SOURCE,
         label: `utilization:${svc}`,
@@ -130,6 +178,7 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
         degraded,
         degradedReason,
         truncated,
+        entries: structured.length > 0 ? structured : undefined,
       });
       emitted = true;
     }

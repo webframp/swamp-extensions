@@ -25,6 +25,7 @@ interface Mr {
   title?: string;
   author?: string;
   updatedAt?: string;
+  webUrl?: string;
   draft?: boolean;
   labels?: string[];
   commented?: boolean;
@@ -133,6 +134,9 @@ export function gitlabNormalizer(inputs: SourceInput[]): Contribution {
         source: SOURCE,
         kind: "mr",
         reference: canonical ?? "?",
+        url: typeof mr.webUrl === "string" && /^https?:\/\//.test(mr.webUrl)
+          ? mr.webUrl
+          : undefined,
         title: mr.title ?? "(untitled)",
         who: mr.author ?? "?",
         ageDays: days,
@@ -211,6 +215,10 @@ export function gitlabNormalizer(inputs: SourceInput[]): Contribution {
         source: SOURCE,
         kind: "todo",
         reference: canonical ?? todo.targetType ?? "(todo)",
+        url: typeof todo.targetUrl === "string" &&
+            /^https?:\/\//.test(todo.targetUrl)
+          ? todo.targetUrl
+          : undefined,
         title: todo.body ?? todo.targetType ?? "(todo)",
         who: todo.author ?? "?",
         ageDays: days,

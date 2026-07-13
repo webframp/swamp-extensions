@@ -29,6 +29,12 @@ export interface QueueItem {
   kind: "mr" | "todo";
   /** Canonical reference: `group/project!iid` for MRs, `group/project#iid` for issue todos. */
   reference: string;
+  /**
+   * Deep link to the item (MR `webUrl` / todo `targetUrl`), so a renderer can
+   * make the reference clickable. Undefined when the source carries no URL —
+   * never fabricated.
+   */
+  url?: string;
   title: string;
   /** The author / requester. */
   who: string;
@@ -59,6 +65,31 @@ export interface OpsSignal {
   degraded: boolean;
   degradedReason?: string;
   truncated?: boolean;
+  /**
+   * Structured, chartable facts backing this signal — the AWS quota rows for a
+   * utilization or pending signal. One shape spans both kinds; only the fields
+   * relevant to the kind are set (utilization sets `utilizationPct`/`usageValue`
+   * /`value`/`adjustable`; pending sets `serviceCode`/`desiredValue`/`status`).
+   * REDACTED: never carries an account identifier (`profile`, `accountId`,
+   * `requestId`, `caseId`, or a bare account number) — CLAUDE.md forbids
+   * exposing internal account IDs. Empty/absent when the fetch was degraded
+   * (nothing was actually observed).
+   *
+   * `kind` discriminates the two row shapes so a consumer iterating entries
+   * without the parent signal's label never misreads a pending row's absent
+   * `utilizationPct` as `0`.
+   */
+  entries?: Array<{
+    kind: "utilization" | "pending";
+    quotaName: string;
+    utilizationPct?: number;
+    usageValue?: number;
+    value?: number;
+    adjustable?: boolean;
+    serviceCode?: string;
+    desiredValue?: number;
+    status?: string;
+  }>;
 }
 
 /** One parsed data resource read from a step's data handle. */
