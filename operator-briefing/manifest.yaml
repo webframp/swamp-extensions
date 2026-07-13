@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/operator-briefing"
-version: "2026.07.13.2"
+version: "2026.07.13.3"
 description: |
   Unified daily operator briefing report. A workflow-scope report over the
   `daily-briefing` workflow that loops the run's step executions, dispatches
@@ -43,6 +43,17 @@ description: |
     `list_my_merge_requests` run, reusing the same normalizer and renderer so
     its output matches the briefing's GitLab section (no ops section).
 
+  ## Models
+
+  - `@webframp/operator-briefing/metrics` — a durable append-only time-series
+    accumulator. Point-in-time briefing data is re-observable, but a time series
+    is not: once a versioned snapshot is GC'd that historical point is gone. Its
+    `append_metrics` method upserts one day's metrics (spend, DAU/WAU/MAU, seats,
+    AWS quota counts, …) by date into a single `series` resource whose latest
+    version holds the entire history, so trend charts survive garbage collection.
+    It merges fields for a shared date, never throws, and never overwrites a
+    longer history with a shorter one.
+
   ## Usage
 
   Require the workflow report on the `daily-briefing` workflow; it renders after
@@ -56,6 +67,8 @@ description: |
   swamp data get "report-@webframp/operator-briefing/review-queue" --markdown
   ```
 repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - metrics/metrics.ts
 reports:
   - operator_briefing.ts
   - review_queue.ts

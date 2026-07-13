@@ -1,10 +1,10 @@
 {
   "tasks": {
-    "check": "deno check extensions/reports/*.ts",
+    "check": "deno check extensions/reports/*.ts extensions/models/metrics/metrics.ts",
     "lint": "deno lint extensions/",
     "fmt": "deno fmt extensions/",
     "fmt:check": "deno fmt --check extensions/",
-    "test": "deno test -A extensions/reports/"
+    "test": "deno test -A extensions/"
   },
   "lint": {
     "rules": {
