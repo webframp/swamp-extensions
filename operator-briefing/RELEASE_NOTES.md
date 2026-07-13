@@ -1,3 +1,38 @@
+## 2026.07.13.3
+
+**Added a durable time-series accumulator — the package's first model — so
+trends (spend, DAU burndown, adoption growth) survive version garbage
+collection.**
+
+- **New `metrics` model (`@webframp/operator-briefing/metrics`).** Point-in-time
+  briefing data is always re-observable, so GC-ing its snapshots is harmless. A
+  time series is not: once a versioned snapshot is GC'd, that historical point
+  is gone forever. So the series is stored as first-class data in a single
+  append-only `series` resource whose LATEST version holds the entire history
+  (an array of dated rows). Version-GC then only drops old _partial_ states; the
+  latest always has everything, so keeping a handful of versions is safe.
+- **`append_metrics` method.** Upserts one day's metrics onto the series by
+  date. It reads the latest series, MERGES fields for a shared date (a run that
+  carries only spend never wipes that day's dau), sorts ascending by date, and
+  writes the whole series back under the stable name "metrics" so it versions in
+  place. A one-time `backfill` array seeds prior dates (incoming wins on a
+  shared date, still field-merged).
+- **Never throws, and never clobbers.** The cardinal rule of an append-only
+  accumulator is that a shorter series must never overwrite a longer one. So a
+  write happens only when the prior history is KNOWN: a genuinely absent (null)
+  series is treated as empty and written fresh, but a prior series that can't be
+  READ (a thrown read — transient I/O, not proof of absence) or is MALFORMED
+  (`rows` not an array, or a non-empty array with zero parseable rows) SKIPS the
+  write rather than truncate real history. A degrade AFTER the read — a failing
+  `writeResource` as the payload grows, a throwing logger — likewise leaves the
+  stored series untouched (no fallback empty write). A wrong-shaped or
+  non-finite metric is skipped rather than fatal, and a metric value of `0` is
+  preserved as real data (0 is a number, not "absent"). Dates are validated as
+  zero-padded `YYYY-MM-DD`, which also guarantees the lexicographic sort is
+  chronological.
+
+Additive: the existing reports and the stable JSON contract are unchanged.
+
 ## 2026.07.13.2
 
 **Enriched the stable JSON contract so downstream renderers get clickable links
