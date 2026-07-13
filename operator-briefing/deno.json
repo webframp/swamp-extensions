@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno check extensions/reports/operator_briefing.ts",
+    "check": "deno check extensions/reports/*.ts",
     "lint": "deno lint extensions/",
     "fmt": "deno fmt extensions/",
     "fmt:check": "deno fmt --check extensions/",

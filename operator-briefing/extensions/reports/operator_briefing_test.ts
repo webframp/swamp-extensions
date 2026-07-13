@@ -614,6 +614,146 @@ Deno.test("AWS failedProfiles with sso-login-required -> re-run granted sso logi
   assertStringIncludes(sig.detail, "1 pending increase");
 });
 
+Deno.test("AWS degraded utilization with no entries says 'not checked', not 'all quotas below threshold'", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.8"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.8", {
+      serviceCode: "ec2",
+      threshold: 0.8,
+      entries: [],
+      truncated: false,
+      // Non-empty failedProfiles -> the quotas were never actually observed.
+      failedProfiles: ["sso-login-required"],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  assertEquals(sig.detail, "ec2: not checked");
+  assertEquals(sig.detail.includes("all quotas below threshold"), false);
+  assertEquals(sig.degraded, true);
+  assertStringIncludes(sig.degradedReason, "re-run granted sso login");
+});
+
+Deno.test("AWS non-degraded utilization with no entries still says 'all quotas below threshold'", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.8"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.8", {
+      serviceCode: "ec2",
+      threshold: 0.8,
+      entries: [],
+      truncated: false,
+      failedProfiles: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  assertEquals(sig.detail, "ec2: all quotas below threshold");
+  assertEquals(sig.degraded, false);
+});
+
+Deno.test("AWS degraded pending with no entries says 'not checked', not 'no pending increases'", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "list_pending_requests", [
+      "pending-us-east-1",
+    ]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "pending-us-east-1", {
+      region: "us-east-1",
+      statuses: [],
+      entries: [],
+      failedProfiles: ["sso-login-required"],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "pending");
+  assertEquals(sig.detail, "not checked");
+  assertEquals(sig.degraded, true);
+});
+
+// --- Long-cell truncation (workflow report path) ---
+
+Deno.test("workflow report: a >80-char title truncates in markdown, full in JSON", async () => {
+  const longTitle = "Z".repeat(150);
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+  ];
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [{
+          project: "g/p",
+          iid: 1,
+          reference: "g/p!1",
+          title: longTitle,
+          author: "a",
+          updatedAt: daysAgo(1),
+          draft: false,
+          approvedByMe: false,
+        }],
+      }),
+    ),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  assertEquals(json.queue[0].title, longTitle);
+  assertEquals(result.markdown.includes(longTitle), false);
+  assertStringIncludes(result.markdown, "Z".repeat(79) + "…");
+});
+
+Deno.test("workflow report: truncation does not split an emoji mid-surrogate", async () => {
+  // 88 code points; the cut lands right at the first emoji, which a UTF-16
+  // slice would split into a lone surrogate.
+  const title = "A".repeat(78) + "😀".repeat(10);
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+  ];
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [{
+          project: "g/p",
+          iid: 2,
+          reference: "g/p!2",
+          title,
+          author: "a",
+          updatedAt: daysAgo(1),
+          draft: false,
+          approvedByMe: false,
+        }],
+      }),
+    ),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  // Full text preserved in JSON.
+  assertEquals(json.queue[0].title, title);
+  // Markdown keeps a WHOLE emoji before the ellipsis (a buggy UTF-16 slice
+  // would emit a lone surrogate and "😀…" would be absent).
+  assertStringIncludes(result.markdown, "😀…");
+  // No unpaired high surrogate anywhere in the output.
+  assertEquals(
+    /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(result.markdown),
+    false,
+  );
+});
+
 // --- truncated ---
 
 Deno.test("truncated flag on an AWS resource surfaces on signal and notes", async () => {

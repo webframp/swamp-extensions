@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/operator-briefing"
-version: "2026.07.12.1"
+version: "2026.07.13.1"
 description: |
   Unified daily operator briefing report. A workflow-scope report over the
   `daily-briefing` workflow that loops the run's step executions, dispatches
@@ -33,18 +33,32 @@ description: |
   > 7d for queue items). Unknown modelType / missing normalizer / parse failure
   are skipped and counted. The report degrades — it never throws.
 
+  ## Reports
+
+  - `@webframp/operator-briefing` (workflow scope) — the full daily briefing:
+    GitLab review queue plus ops signals, rendered after a `daily-briefing`
+    workflow run completes.
+  - `@webframp/operator-briefing/review-queue` (method scope) — a fast path that
+    renders just the four GitLab review tiers LIVE on every
+    `list_my_merge_requests` run, reusing the same normalizer and renderer so
+    its output matches the briefing's GitLab section (no ops section).
+
   ## Usage
 
-  This is a workflow-scope report. Require it on the `daily-briefing` workflow;
-  it renders after the run completes. Read the results with:
+  Require the workflow report on the `daily-briefing` workflow; it renders after
+  the run completes. Require the method report on the `@webframp/gitlab` model's
+  `list_my_merge_requests` method for a live queue between briefings. Read the
+  results with:
 
   ```bash
   swamp data get report-@webframp/operator-briefing --markdown
   swamp data get report-@webframp/operator-briefing-json --json
+  swamp data get "report-@webframp/operator-briefing/review-queue" --markdown
   ```
 repository: "https://github.com/webframp/swamp-extensions"
 reports:
   - operator_briefing.ts
+  - review_queue.ts
 platforms:
   - linux-x86_64
   - linux-aarch64
