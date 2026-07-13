@@ -1,3 +1,21 @@
+## 2026.07.13.5
+
+**Fixed:** The daily briefing falsely reported `degraded: true` whenever the
+`metrics_append` step ran in the `daily-briefing` workflow.
+
+The workflow-scope report loops every step execution and dispatches by
+`modelType`. The durable metrics accumulator
+(`@webframp/operator-briefing/metrics`) runs as a step but is not a briefing
+*source* — it has no normalizer by design — so it was skipped-and-counted like
+an unknown source, which set `sourceErrors.skippedSteps` and flipped the whole
+briefing to `degraded: true` with a spurious "No normalizer …" note.
+
+The report now recognizes a set of **non-source model types**
+(`nonSourceModelTypes` in the normalizer registry; today just the metrics
+accumulator) and skips them **silently** — no skipped-source count, no note, no
+degraded flag. A missing normalizer for any *other* modelType is still a real
+gap and is skipped-and-counted as before.
+
 ## 2026.07.13.4
 
 **Added a dashboard renderer to the metrics model — the metrics series (and,
