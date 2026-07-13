@@ -27,21 +27,22 @@ line. The render / tiering / freshness core never changes.
 
 ## Sources
 
-| Source                          | Produces                                                     |
-| ------------------------------- | ------------------------------------------------------------ |
-| `@webframp/gitlab`              | Four-tier review queue (MRs + todos)                         |
-| `@webframp/anthropic/analytics` | Seats (DAU/WAU/MAU), adoption, cost window                   |
-| `@webframp/anthropic/compliance`| Effective-settings count, recent activity volume            |
-| `@webframp/aws/service-quotas`  | Quota utilization over threshold, pending increase requests  |
+| Source                           | Produces                                                    |
+| -------------------------------- | ----------------------------------------------------------- |
+| `@webframp/gitlab`               | Four-tier review queue (MRs + todos)                        |
+| `@webframp/anthropic/analytics`  | Seats (DAU/WAU/MAU), adoption, cost window                  |
+| `@webframp/anthropic/compliance` | Effective-settings count, recent activity volume            |
+| `@webframp/aws/service-quotas`   | Quota utilization over threshold, pending increase requests |
 
 ### Queue tiers (GitLab)
 
 1. **Waiting on You** — review requests (`reviewing` MRs + `review_requested`
-   todos) and `directly_addressed` todos. Drafts are held out with a note;
-   items you have already approved are dropped.
+   todos) and `directly_addressed` todos. Drafts are held out with a note; items
+   you have already approved are dropped.
 2. **Awaiting Your Merge** — assigned MRs **not** authored by you.
 3. **Mentions** — `mentioned` todos.
-4. **Your Open MRs** — authored MRs, plus assigned-and-authored-by-you folded in.
+4. **Your Open MRs** — authored MRs, plus assigned-and-authored-by-you folded
+   in.
 
 MRs are deduped on `reference`; a review-request todo for an MR already in the
 queue is folded into that MR.
@@ -73,20 +74,20 @@ queue is folded into that MR.
   "tiers": {
     "waitingOnYou": [/* QueueItem */],
     "awaitingMerge": [/* QueueItem */],
-    "mentions":      [/* QueueItem */],
-    "yourOpenMrs":   [/* QueueItem */]
+    "mentions": [/* QueueItem */],
+    "yourOpenMrs": [/* QueueItem */]
   },
   "queue": [/* all QueueItem, each carries .tier */],
-  "ops":   [/* OpsSignal */],
+  "ops": [/* OpsSignal */],
   "degraded": false,
   "sourceErrors": { "skippedSteps": 0, "parseFailures": 0 },
   "notes": ["..."]
 }
 ```
 
-`degraded` is `true` when a source failed (a skipped step or an unparseable
-data handle — see `sourceErrors`), when any ops signal is degraded, or when the
-outer catch fired. `sourceErrors` is always present (`0/0` on a clean run).
+`degraded` is `true` when a source failed (a skipped step or an unparseable data
+handle — see `sourceErrors`), when any ops signal is degraded, or when the outer
+catch fired. `sourceErrors` is always present (`0/0` on a clean run).
 
 `QueueItem`:
 `{ tier, source, kind, reference, title, who, ageDays, stale, effort?, draft?, actionHint }`
