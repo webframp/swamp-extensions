@@ -21,6 +21,11 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { z } from "npm:zod@^4.3.6";
+import {
+  type DashboardRow,
+  renderDashboardHtml,
+  type ReportLike,
+} from "./dashboard.ts";
 
 // =============================================================================
 // Schemas
@@ -122,11 +127,22 @@ type ModelContext = {
     instance: string,
     version?: number,
   ) => Promise<Record<string, unknown> | null>;
+  createFileWriter: (
+    spec: string,
+    instance: string,
+    overrides?: { contentType?: string },
+  ) => { writeText: (text: string) => Promise<{ name: string }> };
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
     warn: (msg: string, props: Record<string, unknown>) => void;
     error: (msg: string, props: Record<string, unknown>) => void;
   };
+};
+
+type RenderArgs = {
+  redact?: boolean;
+  title?: string;
+  report?: ReportLike;
 };
 
 type AppendArgs = {
@@ -152,7 +168,7 @@ type AppendArgs = {
 /** Durable append-only time-series accumulator for operator-briefing trends. */
 export const model = {
   type: "@webframp/operator-briefing/metrics",
-  version: "2026.07.13.3",
+  version: "2026.07.13.4",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -163,6 +179,16 @@ export const model = {
       lifetime: "infinite" as const,
       // Keep a handful of versions — safe because the latest holds everything.
       garbageCollection: 5,
+    },
+  },
+
+  files: {
+    dashboard: {
+      description:
+        "Self-contained HTML dashboard rendered from the series (trends) and, optionally, the operator-briefing report JSON (today's queue + ops). A downstream projection of observed data; regenerated on demand, so a short retention is enough.",
+      contentType: "text/html",
+      lifetime: "30d" as const,
+      garbageCollection: 10,
     },
   },
 
@@ -306,6 +332,83 @@ export const model = {
             });
           } catch {
             // Nothing we can safely do; never rethrow.
+          }
+          return { dataHandles: [] };
+        }
+      },
+    },
+
+    render_dashboard: {
+      description:
+        "Render a self-contained HTML dashboard from the durable metrics series (trends) and, optionally, the operator-briefing report JSON (today's queue + ops). Writes a versioned `dashboard` file resource. `redact: true` produces a shareable variant that shows only aggregate counts and numeric trends — no references, authors, or free-text ops detail (never any internal URL or identifier). Reads only its own series; never fetches. Degrades rather than throws.",
+      arguments: z.object({
+        redact: z.boolean().optional().describe(
+          "Produce a shareable, redacted dashboard: aggregate counts + numeric trends only, with every reference / author / ops detail stripped. Default false (operator-local, full detail).",
+        ),
+        title: z.string().optional().describe(
+          "Dashboard title. Defaults to 'Operator Briefing'.",
+        ),
+        report: z.record(z.string(), z.any()).optional().describe(
+          "Optional operator-briefing report JSON (the BriefingJson contract: tiers, ops, generatedAt, degraded). When present, the dashboard adds a review-queue and ops-signals section; when absent it renders trends only.",
+        ),
+      }),
+      execute: async (args: RenderArgs, ctx: ModelContext) => {
+        try {
+          const redact = args.redact === true;
+          const title = typeof args.title === "string" && args.title.trim()
+            ? args.title.trim()
+            : "Operator Briefing";
+
+          // Read the durable series (own scope). A missing series is not fatal —
+          // render an empty-state dashboard rather than throw.
+          let rows: DashboardRow[] = [];
+          try {
+            const existing = await ctx.readResource("metrics");
+            const raw = (existing as { rows?: unknown } | null)?.rows;
+            if (Array.isArray(raw)) {
+              rows = raw.filter(
+                (r): r is DashboardRow =>
+                  !!r && typeof r === "object" &&
+                  typeof (r as { date?: unknown }).date === "string",
+              );
+            }
+          } catch (err) {
+            ctx.logger.warn(
+              "render_dashboard: could not read series; rendering trends-empty dashboard: {error}",
+              { error: String(err) },
+            );
+          }
+
+          const report = args.report && typeof args.report === "object"
+            ? args.report as ReportLike
+            : null;
+
+          const html = renderDashboardHtml({
+            rows,
+            report,
+            redact,
+            title,
+            generatedAt: new Date().toISOString(),
+          });
+
+          const instance = redact ? "dashboard-redacted" : "dashboard";
+          const writer = ctx.createFileWriter("dashboard", instance, {
+            contentType: "text/html",
+          });
+          const handle = await writer.writeText(html);
+
+          ctx.logger.info(
+            "Rendered dashboard '{instance}' from {count} series rows (redact={redact})",
+            { instance, count: rows.length, redact },
+          );
+          return { dataHandles: [handle] };
+        } catch (err) {
+          try {
+            ctx.logger.error("render_dashboard failed unexpectedly: {error}", {
+              error: String(err),
+            });
+          } catch {
+            // Never rethrow.
           }
           return { dataHandles: [] };
         }
