@@ -1,3 +1,32 @@
+## 2026.07.13.4
+
+**Added a dashboard renderer to the metrics model — the metrics series (and,
+optionally, the daily briefing) becomes a self-contained HTML page. Observe
+once, render many.**
+
+- **New `render_dashboard` method (`@webframp/operator-briefing/metrics`).**
+  Reads the model's own append-only `series` (trend history) and takes an
+  optional `report` argument — the operator-briefing JSON contract (review
+  queue + ops signals), wired in by the workflow; it is never cross-read from
+  storage. Renders ONE self-contained HTML document — inline SVG sparklines,
+  stat tiles, tier counts, and an ops table, theme-aware, with no external
+  JS/CDN (CSP-safe; renders in a browser or a claude.ai Artifact). Reads only
+  its own data, never fetches, and degrades rather than throwing (empty series →
+  trends-empty page; a malformed or `null`-bearing report is filtered, not
+  fatal).
+- **New `dashboard` file resource** (`text/html`, lifetime `30d`,
+  `garbageCollection` 10). A regenerated downstream projection, so short
+  retention is right. Written via `createFileWriter().writeText()`.
+- **`redact: true` shareable mode.** Produces a variant that shows only
+  aggregate tier counts, ops severities/labels, and non-identifying numeric
+  trends — every reference, author, title, ops `detail`, and `degradedReason` is
+  stripped, so no internal URL, username, or account name reaches the page
+  (CLAUDE.md forbids exposing internal identifiers). The default
+  (`redact: false`) is the operator-local full-detail view.
+
+Additive: `append_metrics`, the `series` resource, and the existing reports and
+JSON contract are all unchanged.
+
 ## 2026.07.13.3
 
 **Added a durable time-series accumulator — the package's first model — so
