@@ -82,8 +82,11 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
     let emitted = false;
 
     if (isPending(data)) {
+      // When the fetch is degraded and returned no entries, the result was not
+      // actually observed — say "not checked" rather than claiming a real zero.
+      // A non-empty result IS real (some accounts were reached), so keep it.
       const detail = entries.length === 0
-        ? "no pending increases"
+        ? (degraded ? "not checked" : "no pending increases")
         : `${entries.length} pending increase(s)` +
           (first
             ? ` (${first.serviceCode} ${first.quotaName} in ${
@@ -104,8 +107,13 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
       emitted = true;
     } else if ("serviceCode" in data && "threshold" in data) {
       const svc = String(data.serviceCode);
+      // A degraded fetch with no entries never observed the quotas — say "not
+      // checked" rather than the dishonest "all quotas below threshold". A
+      // non-empty result IS real (some accounts were reached), so keep it.
       const detail = entries.length === 0
-        ? `${svc}: all quotas below threshold`
+        ? (degraded
+          ? `${svc}: not checked`
+          : `${svc}: all quotas below threshold`)
         : `${svc}: ${entries.length} quota(s) over threshold` +
           (first
             ? ` (${first.quotaName} ${first.utilizationPct}% in ${

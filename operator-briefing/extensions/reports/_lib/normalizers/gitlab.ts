@@ -91,7 +91,7 @@ function referenceFromTargetUrl(url?: string): string | undefined {
  * A dashboard resource carries the four cross-project arrays; other resources
  * for the same modelType (if any) are ignored.
  */
-function isDashboard(data: Record<string, unknown>): boolean {
+export function isDashboard(data: Record<string, unknown>): boolean {
   return "reviewing" in data || "assigned" in data || "authored" in data ||
     "todos" in data;
 }

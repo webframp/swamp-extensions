@@ -19,6 +19,7 @@
 
 import { registry } from "./_lib/normalizers/registry.ts";
 import { render } from "./_lib/render.ts";
+import { type DataRepository, readJson } from "./_lib/read.ts";
 import type {
   Contribution,
   OpsSignal,
@@ -43,75 +44,12 @@ interface StepExecution {
   dataHandles?: DataHandle[];
 }
 
-interface DataRepository {
-  getContent(
-    modelType: unknown,
-    modelId: string,
-    dataName: string,
-    version?: number,
-  ): Promise<Uint8Array | null>;
-}
-
 interface WorkflowReportContext {
   workflowName?: string;
   workflowStatus?: string;
   stepExecutions?: StepExecution[];
   dataRepository: DataRepository;
   logger?: { info?: (msg: string, props: Record<string, unknown>) => void };
-}
-
-/**
- * Outcome of reading one data handle. `data` is the parsed object, or `null`
- * when the resource is genuinely absent/empty (NOT an error). `parseError` is
- * true only for a real read failure (both `getContent` attempts threw) or a
- * `JSON.parse` failure — those are the only cases the caller counts.
- */
-interface ReadResult {
-  data: Record<string, unknown> | null;
-  parseError: boolean;
-}
-
-/**
- * Read a data handle's bytes and JSON-parse. Tries the string modelType first
- * (works with the test mock); ONLY if that first `getContent` call itself
- * throws does it retry with a type-like object. A `JSON.parse` failure never
- * re-fetches. A genuine `null`/empty body is reported as `{ data: null,
- * parseError: false }` so the caller does not miscount an absent resource as a
- * parse failure. Never throws (degrade contract).
- */
-async function readJson(
-  repo: DataRepository,
-  modelType: string,
-  modelId: string,
-  dataName: string,
-  version?: number,
-): Promise<ReadResult> {
-  let raw: Uint8Array | null;
-  try {
-    raw = await repo.getContent(modelType, modelId, dataName, version);
-  } catch {
-    // The first getContent call itself threw — retry the alternate modelType
-    // arg once. A parse failure below must NOT reach this path.
-    try {
-      const typeArg = {
-        raw: modelType,
-        toDirectoryPath: () => modelType,
-        toString: () => modelType,
-      };
-      raw = await repo.getContent(typeArg, modelId, dataName, version);
-    } catch {
-      return { data: null, parseError: true };
-    }
-  }
-  if (!raw) return { data: null, parseError: false };
-  try {
-    return {
-      data: JSON.parse(new TextDecoder().decode(raw)),
-      parseError: false,
-    };
-  } catch {
-    return { data: null, parseError: true };
-  }
 }
 
 /**

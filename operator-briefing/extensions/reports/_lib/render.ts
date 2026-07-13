@@ -19,6 +19,23 @@ import { TIER_LABELS } from "./shapes.ts";
 const esc = (s: unknown) =>
   String(s).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 
+/** Max visible length of a free-text markdown cell before it is truncated. */
+const MAX_CELL = 80;
+
+/**
+ * Cap free-text (a title or a todo body) to `MAX_CELL` visible characters with
+ * an ellipsis, so a long mention body cannot dump a wall of text into a table
+ * cell. Markdown-only — the full text is preserved in the JSON contract. Runs
+ * BEFORE `esc`, so the cap is on visible characters, not escaped ones.
+ */
+const truncate = (s: unknown, max = MAX_CELL): string => {
+  const str = String(s);
+  // Slice on code points, not UTF-16 units, so a cut never lands mid-surrogate
+  // and emits a lone "�" (MR titles routinely contain emoji, e.g. ♻️).
+  const cp = Array.from(str);
+  return cp.length > max ? cp.slice(0, max - 1).join("") + "…" : str;
+};
+
 /** Source-level failure counts, surfaced in the JSON contract. */
 export interface SourceErrors {
   /** Steps skipped: no normalizer, or a normalizer that threw. */
@@ -65,7 +82,7 @@ function renderQueueTable(items: QueueItem[]): string[] {
     const draftMark = i.draft ? " 🚧" : "";
     const effort = i.effort != null ? `${i.effort}/5` : "";
     lines.push(
-      `| ${esc(i.reference)} | ${esc(i.title)}${draftMark} | ${
+      `| ${esc(i.reference)} | ${esc(truncate(i.title))}${draftMark} | ${
         esc(i.who)
       } | ${i.ageDays}d${staleMark} | ${effort} | ${i.actionHint} |`,
     );
@@ -151,36 +168,26 @@ export function buildJson(
   };
 }
 
-/** Render the full briefing (markdown + JSON). */
-export function render(
-  queue: QueueItem[],
-  ops: OpsSignal[],
-  notes: string[],
-  generatedAt: string,
-  degraded = false,
-  sourceErrors: SourceErrors = { skippedSteps: 0, parseFailures: 0 },
-): BriefingResult {
-  const json = buildJson(
-    queue,
-    ops,
-    notes,
-    generatedAt,
-    degraded,
-    sourceErrors,
-  );
-
+/**
+ * Render the shared queue section: heading, generated stamp, the one-line lead
+ * summary, and the four tier tables. BOTH the workflow briefing and the
+ * method-scope fast path render their GitLab tiers through this one function,
+ * so the tiering can never diverge between the two reports.
+ */
+function renderQueueSection(json: BriefingJson, title: string): string[] {
   const tier1 = json.tiers.waitingOnYou;
   const tier2 = json.tiers.awaitingMerge;
   const tier3 = json.tiers.mentions;
   const tier4 = json.tiers.yourOpenMrs;
 
+  const queue = json.queue;
   const staleCount = queue.filter((q) => q.stale).length;
   const highEffort = queue.filter((q) => (q.effort ?? 0) >= 4).length;
 
   const lines: string[] = [];
-  lines.push("# Operator Briefing");
+  lines.push(`# ${title}`);
   lines.push("");
-  lines.push(`_Generated ${generatedAt}_`);
+  lines.push(`_Generated ${json.generatedAt}_`);
   lines.push("");
 
   // Lead line — one scannable summary before the tiers (design §3).
@@ -209,21 +216,79 @@ export function render(
     lines.push("");
   }
 
-  lines.push(...renderOps(ops));
+  return lines;
+}
 
+/** Render the shared Notes section and the degraded-run footer. */
+function renderNotesAndFooter(
+  json: BriefingJson,
+  notes: string[],
+  degradedFooter: string,
+): string[] {
+  const lines: string[] = [];
   if (notes.length > 0) {
     lines.push("## Notes");
     lines.push("");
     for (const n of notes) lines.push(`- ${n}`);
     lines.push("");
   }
-
   if (json.degraded) {
-    lines.push(
-      "> Some sources were degraded this run — see the ops table and notes.",
-    );
+    lines.push(`> ${degradedFooter}`);
     lines.push("");
   }
+  return lines;
+}
+
+/** Render the full briefing (markdown + JSON) — queue tiers plus ops. */
+export function render(
+  queue: QueueItem[],
+  ops: OpsSignal[],
+  notes: string[],
+  generatedAt: string,
+  degraded = false,
+  sourceErrors: SourceErrors = { skippedSteps: 0, parseFailures: 0 },
+): BriefingResult {
+  const json = buildJson(
+    queue,
+    ops,
+    notes,
+    generatedAt,
+    degraded,
+    sourceErrors,
+  );
+
+  const lines = renderQueueSection(json, "Operator Briefing");
+  lines.push(...renderOps(ops));
+  lines.push(...renderNotesAndFooter(
+    json,
+    notes,
+    "Some sources were degraded this run — see the ops table and notes.",
+  ));
+
+  return { markdown: lines.join("\n"), json };
+}
+
+/**
+ * Render the queue-only fast path (markdown + JSON) — the GitLab tiers with NO
+ * ops section. Used by the method-scope `review-queue` report so its GitLab
+ * output is identical in shape/format to the workflow briefing's GitLab
+ * section. The JSON is the same stable contract with `ops: []`.
+ */
+export function renderQueueOnly(
+  queue: QueueItem[],
+  notes: string[],
+  generatedAt: string,
+  degraded = false,
+  sourceErrors: SourceErrors = { skippedSteps: 0, parseFailures: 0 },
+): BriefingResult {
+  const json = buildJson(queue, [], notes, generatedAt, degraded, sourceErrors);
+
+  const lines = renderQueueSection(json, "GitLab Review Queue");
+  lines.push(...renderNotesAndFooter(
+    json,
+    notes,
+    "Some sources were degraded this run — see the notes.",
+  ));
 
   return { markdown: lines.join("\n"), json };
 }
