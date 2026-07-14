@@ -3,11 +3,11 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { EventBridgeClient } from "npm:@aws-sdk/client-eventbridge@3.821.0";
-import { SNSClient } from "npm:@aws-sdk/client-sns@3.821.0";
-import { SQSClient } from "npm:@aws-sdk/client-sqs@3.821.0";
-import { LambdaClient } from "npm:@aws-sdk/client-lambda@3.821.0";
-import { STSClient } from "npm:@aws-sdk/client-sts@3.821.0";
+import { EventBridgeClient } from "npm:@aws-sdk/client-eventbridge@3.1069.0";
+import { SNSClient } from "npm:@aws-sdk/client-sns@3.1069.0";
+import { SQSClient } from "npm:@aws-sdk/client-sqs@3.1069.0";
+import { LambdaClient } from "npm:@aws-sdk/client-lambda@3.1069.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1069.0";
 import { model } from "./event_topology.ts";
 
 // =============================================================================
@@ -89,13 +89,24 @@ function makeContext() {
   });
 }
 
-function baseMocks(): { sts: MockFn; eventbridge: MockFn; sns: MockFn; sqs: MockFn; lambda: MockFn } {
+function baseMocks(): {
+  sts: MockFn;
+  eventbridge: MockFn;
+  sns: MockFn;
+  sqs: MockFn;
+  lambda: MockFn;
+} {
   return {
     sts: () => ({ Account: "123456789012" }),
     eventbridge: (cmd: unknown) => {
       const name = (cmd as { constructor: { name: string } }).constructor.name;
       if (name === "ListEventBusesCommand") {
-        return { EventBuses: [{ Name: "default", Arn: "arn:aws:events:us-east-1:123456789012:event-bus/default" }] };
+        return {
+          EventBuses: [{
+            Name: "default",
+            Arn: "arn:aws:events:us-east-1:123456789012:event-bus/default",
+          }],
+        };
       }
       if (name === "ListRulesCommand") {
         return {
@@ -128,7 +139,8 @@ function baseMocks(): { sts: MockFn; eventbridge: MockFn; sns: MockFn; sqs: Mock
       if (name === "ListSubscriptionsByTopicCommand") {
         return {
           Subscriptions: [{
-            SubscriptionArn: "arn:aws:sns:us-east-1:123456789012:my-topic:sub-1",
+            SubscriptionArn:
+              "arn:aws:sns:us-east-1:123456789012:my-topic:sub-1",
             Protocol: "sqs",
             Endpoint: "arn:aws:sqs:us-east-1:123456789012:my-queue",
           }],
@@ -140,7 +152,9 @@ function baseMocks(): { sts: MockFn; eventbridge: MockFn; sns: MockFn; sqs: Mock
       const name = (cmd as { constructor: { name: string } }).constructor.name;
       if (name === "ListQueuesCommand") {
         return {
-          QueueUrls: ["https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"],
+          QueueUrls: [
+            "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
+          ],
         };
       }
       if (name === "GetQueueAttributesCommand") {
@@ -225,7 +239,12 @@ Deno.test("discover: skips empty target ARNs", async () => {
       return { Rules: [{ Name: "rule-1", State: "ENABLED" }] };
     }
     if (name === "ListTargetsByRuleCommand") {
-      return { Targets: [{ Id: "t1", Arn: "" }, { Id: "t2", Arn: "arn:aws:lambda:us-east-1:123456789012:function:real" }] };
+      return {
+        Targets: [{ Id: "t1", Arn: "" }, {
+          Id: "t2",
+          Arn: "arn:aws:lambda:us-east-1:123456789012:function:real",
+        }],
+      };
     }
     return {};
   };
@@ -240,7 +259,10 @@ Deno.test("discover: skips empty target ARNs", async () => {
     const resources = getWrittenResources();
     const graph = resources.find((r) => r.specName === "graph");
     assertExists(graph);
-    const data = graph.data as { nodes: Array<{ id: string }>; edges: Array<{ to: string }> };
+    const data = graph.data as {
+      nodes: Array<{ id: string }>;
+      edges: Array<{ to: string }>;
+    };
     // Empty ARN target should be skipped
     const emptyNode = data.nodes.find((n) => n.id === "");
     assertEquals(emptyNode, undefined);
@@ -254,7 +276,11 @@ Deno.test("discover: handles SQS redrive policy", async () => {
   mocks.sqs = (cmd: unknown) => {
     const name = (cmd as { constructor: { name: string } }).constructor.name;
     if (name === "ListQueuesCommand") {
-      return { QueueUrls: ["https://sqs.us-east-1.amazonaws.com/123456789012/source-queue"] };
+      return {
+        QueueUrls: [
+          "https://sqs.us-east-1.amazonaws.com/123456789012/source-queue",
+        ],
+      };
     }
     if (name === "GetQueueAttributesCommand") {
       return {
@@ -281,7 +307,16 @@ Deno.test("discover: handles SQS redrive policy", async () => {
     const resources = getWrittenResources();
     const graph = resources.find((r) => r.specName === "graph");
     assertExists(graph);
-    const data = graph.data as { edges: Array<{ from: string; to: string; type: string; attributes: Record<string, unknown> }> };
+    const data = graph.data as {
+      edges: Array<
+        {
+          from: string;
+          to: string;
+          type: string;
+          attributes: Record<string, unknown>;
+        }
+      >;
+    };
     const redriveEdge = data.edges.find((e) => e.type === "redrive");
     assertExists(redriveEdge);
     assertEquals(redriveEdge.to, "arn:aws:sqs:us-east-1:123456789012:dlq");
@@ -296,7 +331,11 @@ Deno.test("discover: handles SQS GetQueueAttributes failure gracefully", async (
   mocks.sqs = (cmd: unknown) => {
     const name = (cmd as { constructor: { name: string } }).constructor.name;
     if (name === "ListQueuesCommand") {
-      return { QueueUrls: ["https://sqs.us-east-1.amazonaws.com/123456789012/forbidden-queue"] };
+      return {
+        QueueUrls: [
+          "https://sqs.us-east-1.amazonaws.com/123456789012/forbidden-queue",
+        ],
+      };
     }
     if (name === "GetQueueAttributesCommand") {
       throw new Error("Access Denied");
@@ -334,7 +373,11 @@ Deno.test("discover: detects boundary nodes for cross-account ARNs", async () =>
     }
     if (name === "ListTargetsByRuleCommand") {
       return {
-        Targets: [{ Id: "t1", Arn: "arn:aws:lambda:us-east-1:999888777666:function:other-account-func" }],
+        Targets: [{
+          Id: "t1",
+          Arn:
+            "arn:aws:lambda:us-east-1:999888777666:function:other-account-func",
+        }],
       };
     }
     return {};
@@ -350,7 +393,9 @@ Deno.test("discover: detects boundary nodes for cross-account ARNs", async () =>
     const resources = getWrittenResources();
     const graph = resources.find((r) => r.specName === "graph");
     assertExists(graph);
-    const data = graph.data as { nodes: Array<{ id: string; isBoundary: boolean }> };
+    const data = graph.data as {
+      nodes: Array<{ id: string; isBoundary: boolean }>;
+    };
     const crossAccount = data.nodes.find((n) => n.id.includes("999888777666"));
     assertExists(crossAccount);
     assertEquals(crossAccount.isBoundary, true);
@@ -364,7 +409,9 @@ Deno.test("discover: external SNS endpoints classified as boundary", async () =>
   mocks.sns = (cmd: unknown) => {
     const name = (cmd as { constructor: { name: string } }).constructor.name;
     if (name === "ListTopicsCommand") {
-      return { Topics: [{ TopicArn: "arn:aws:sns:us-east-1:123456789012:alerts" }] };
+      return {
+        Topics: [{ TopicArn: "arn:aws:sns:us-east-1:123456789012:alerts" }],
+      };
     }
     if (name === "ListSubscriptionsByTopicCommand") {
       return {
@@ -388,8 +435,12 @@ Deno.test("discover: external SNS endpoints classified as boundary", async () =>
     const resources = getWrittenResources();
     const graph = resources.find((r) => r.specName === "graph");
     assertExists(graph);
-    const data = graph.data as { nodes: Array<{ id: string; type: string; isBoundary: boolean }> };
-    const emailNode = data.nodes.find((n) => n.id.startsWith("external:email:"));
+    const data = graph.data as {
+      nodes: Array<{ id: string; type: string; isBoundary: boolean }>;
+    };
+    const emailNode = data.nodes.find((n) =>
+      n.id.startsWith("external:email:")
+    );
     assertExists(emailNode);
     assertEquals(emailNode.type, "ExternalEndpoint");
     assertEquals(emailNode.isBoundary, true);
@@ -420,11 +471,19 @@ Deno.test("discover: Lambda ESM creates eventSource edges", async () => {
     const resources = getWrittenResources();
     const graph = resources.find((r) => r.specName === "graph");
     assertExists(graph);
-    const data = graph.data as { edges: Array<{ from: string; to: string; type: string }> };
+    const data = graph.data as {
+      edges: Array<{ from: string; to: string; type: string }>;
+    };
     const esmEdge = data.edges.find((e) => e.type === "eventSource");
     assertExists(esmEdge);
-    assertEquals(esmEdge.from, "arn:aws:sqs:us-east-1:123456789012:trigger-queue");
-    assertEquals(esmEdge.to, "arn:aws:lambda:us-east-1:123456789012:function:processor");
+    assertEquals(
+      esmEdge.from,
+      "arn:aws:sqs:us-east-1:123456789012:trigger-queue",
+    );
+    assertEquals(
+      esmEdge.to,
+      "arn:aws:lambda:us-east-1:123456789012:function:processor",
+    );
   } finally {
     restore();
   }
@@ -434,8 +493,18 @@ Deno.test("discover: skips ESM with empty source/function ARN", async () => {
   const mocks = baseMocks();
   mocks.lambda = () => ({
     EventSourceMappings: [
-      { UUID: "esm-empty", EventSourceArn: "", FunctionArn: "", State: "Enabled" },
-      { UUID: "esm-ok", EventSourceArn: "arn:aws:sqs:us-east-1:123456789012:q", FunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:f", State: "Enabled" },
+      {
+        UUID: "esm-empty",
+        EventSourceArn: "",
+        FunctionArn: "",
+        State: "Enabled",
+      },
+      {
+        UUID: "esm-ok",
+        EventSourceArn: "arn:aws:sqs:us-east-1:123456789012:q",
+        FunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:f",
+        State: "Enabled",
+      },
     ],
   });
   const restore = mockClients(mocks);
@@ -476,19 +545,84 @@ const sampleGraph = {
   accountId: "123456789012",
   region: "us-east-1",
   nodes: [
-    { id: "a", type: "SNSTopic", accountId: "123456789012", region: "us-east-1", name: "topic-a", isBoundary: false, metadata: {} },
-    { id: "b", type: "SQSQueue", accountId: "123456789012", region: "us-east-1", name: "queue-b", isBoundary: false, metadata: {} },
-    { id: "c", type: "Lambda", accountId: "123456789012", region: "us-east-1", name: "func-c", isBoundary: false, metadata: {} },
-    { id: "d", type: "ExternalEndpoint", accountId: "123456789012", region: "us-east-1", name: "ext-d", isBoundary: true, metadata: {} },
-    { id: "e", type: "SQSQueue", accountId: "123456789012", region: "us-east-1", name: "orphan-e", isBoundary: false, metadata: {} },
+    {
+      id: "a",
+      type: "SNSTopic",
+      accountId: "123456789012",
+      region: "us-east-1",
+      name: "topic-a",
+      isBoundary: false,
+      metadata: {},
+    },
+    {
+      id: "b",
+      type: "SQSQueue",
+      accountId: "123456789012",
+      region: "us-east-1",
+      name: "queue-b",
+      isBoundary: false,
+      metadata: {},
+    },
+    {
+      id: "c",
+      type: "Lambda",
+      accountId: "123456789012",
+      region: "us-east-1",
+      name: "func-c",
+      isBoundary: false,
+      metadata: {},
+    },
+    {
+      id: "d",
+      type: "ExternalEndpoint",
+      accountId: "123456789012",
+      region: "us-east-1",
+      name: "ext-d",
+      isBoundary: true,
+      metadata: {},
+    },
+    {
+      id: "e",
+      type: "SQSQueue",
+      accountId: "123456789012",
+      region: "us-east-1",
+      name: "orphan-e",
+      isBoundary: false,
+      metadata: {},
+    },
   ],
   edges: [
-    { from: "a", to: "b", type: "subscription", attributes: { protocol: "sqs" } },
-    { from: "a", to: "c", type: "subscription", attributes: { protocol: "lambda" } },
-    { from: "a", to: "d", type: "subscription", attributes: { protocol: "email" } },
+    {
+      from: "a",
+      to: "b",
+      type: "subscription",
+      attributes: { protocol: "sqs" },
+    },
+    {
+      from: "a",
+      to: "c",
+      type: "subscription",
+      attributes: { protocol: "lambda" },
+    },
+    {
+      from: "a",
+      to: "d",
+      type: "subscription",
+      attributes: { protocol: "email" },
+    },
     { from: "b", to: "c", type: "eventSource", attributes: {} },
   ],
-  stats: { totalNodes: 5, totalEdges: 4, nodesByType: {}, edgesByType: {}, maxInDegree: 2, maxOutDegree: 3, connectedComponents: 2, boundaryNodes: 1, isolatedNodes: 1 },
+  stats: {
+    totalNodes: 5,
+    totalEdges: 4,
+    nodesByType: {},
+    edgesByType: {},
+    maxInDegree: 2,
+    maxOutDegree: 3,
+    connectedComponents: 2,
+    boundaryNodes: 1,
+    isolatedNodes: 1,
+  },
 };
 
 Deno.test("analyze: returns error when no graph data exists", async () => {
@@ -528,7 +662,10 @@ Deno.test("analyze: hubs query finds nodes above threshold", async () => {
   const resources = getWrittenResources();
   const analysis = resources.find((r) => r.specName === "analysis");
   assertExists(analysis);
-  const data = analysis.data as { results: Array<{ id: string; outDegree: number }>; summary: { totalHubs: number } };
+  const data = analysis.data as {
+    results: Array<{ id: string; outDegree: number }>;
+    summary: { totalHubs: number };
+  };
   // Node "a" has outDegree 3, node "c" has inDegree 2
   assertEquals(data.summary.totalHubs, 2);
   assertEquals(data.results[0].id, "a");
@@ -545,7 +682,10 @@ Deno.test("analyze: orphans query finds disconnected nodes", async () => {
   const resources = getWrittenResources();
   const analysis = resources.find((r) => r.specName === "analysis");
   assertExists(analysis);
-  const data = analysis.data as { results: Array<{ id: string }>; summary: { totalOrphans: number } };
+  const data = analysis.data as {
+    results: Array<{ id: string }>;
+    summary: { totalOrphans: number };
+  };
   assertEquals(data.summary.totalOrphans, 1);
   assertEquals(data.results[0].id, "e");
 });
@@ -561,7 +701,9 @@ Deno.test("analyze: boundaries query categorizes boundary nodes", async () => {
   const resources = getWrittenResources();
   const analysis = resources.find((r) => r.specName === "analysis");
   assertExists(analysis);
-  const data = analysis.data as { summary: { totalBoundaryNodes: number; external: number } };
+  const data = analysis.data as {
+    summary: { totalBoundaryNodes: number; external: number };
+  };
   assertEquals(data.summary.totalBoundaryNodes, 1);
   assertEquals(data.summary.external, 1);
 });
@@ -577,7 +719,13 @@ Deno.test("analyze: components query groups connected nodes", async () => {
   const resources = getWrittenResources();
   const analysis = resources.find((r) => r.specName === "analysis");
   assertExists(analysis);
-  const data = analysis.data as { summary: { totalComponents: number; largestComponent: number; singletons: number } };
+  const data = analysis.data as {
+    summary: {
+      totalComponents: number;
+      largestComponent: number;
+      singletons: number;
+    };
+  };
   assertEquals(data.summary.totalComponents, 2);
   assertEquals(data.summary.largestComponent, 4);
   assertEquals(data.summary.singletons, 1);
@@ -594,7 +742,12 @@ Deno.test("analyze: path query returns inputs and outputs for a node", async () 
   const resources = getWrittenResources();
   const analysis = resources.find((r) => r.specName === "analysis");
   assertExists(analysis);
-  const data = analysis.data as { results: Array<{ node: { id: string }; inputs: unknown[]; outputs: unknown[] }>; summary: { inputCount: number; outputCount: number } };
+  const data = analysis.data as {
+    results: Array<
+      { node: { id: string }; inputs: unknown[]; outputs: unknown[] }
+    >;
+    summary: { inputCount: number; outputCount: number };
+  };
   assertEquals(data.summary.inputCount, 1);
   assertEquals(data.summary.outputCount, 1);
   assertEquals(data.results[0].node.id, "b");
