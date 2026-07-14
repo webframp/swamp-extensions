@@ -32,9 +32,11 @@ const GlobalArgsSchema = z.object({
     ),
   repoDir: z.string().default(".")
     .describe("Path to the swamp repo directory"),
-  gitUserName: z.string().default("Hermes Research Bot")
+  gitUserName: z.string().regex(/^[^\r\n]+$/, "must not contain a newline")
+    .default("Hermes Research Bot")
     .describe("Git commit user name"),
-  gitUserEmail: z.string().default("hermes@localhost")
+  gitUserEmail: z.string().regex(/^[^\r\n]+$/, "must not contain a newline")
+    .default("hermes@localhost")
     .describe("Git commit user email"),
   sources: z.array(z.enum(ALL_SOURCES))
     .default([...ALL_SOURCES])
@@ -75,13 +77,16 @@ async function runCommand(
       child.kill();
     } catch { /* empty */ }
   }, timeoutMs);
-  const output = await child.output();
-  clearTimeout(timer);
-  return {
-    stdout: new TextDecoder().decode(output.stdout).trim(),
-    stderr: new TextDecoder().decode(output.stderr).trim(),
-    success: output.success,
-  };
+  try {
+    const output = await child.output();
+    return {
+      stdout: new TextDecoder().decode(output.stdout).trim(),
+      stderr: new TextDecoder().decode(output.stderr).trim(),
+      success: output.success,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** YYYY-MM-DD dow — used as the org #+DATE and in the filename. */
@@ -107,6 +112,12 @@ function formatTimestamp(date: Date): string {
 function sanitizeTag(tag: string): string {
   return tag.toLowerCase().replace(/[^a-z0-9_-]/g, "-").replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/** Sanitize and add a tag, dropping empties so FILETAGS never gets a `::` pair. */
+function addTag(set: Set<string>, raw: string): void {
+  const t = sanitizeTag(raw);
+  if (t) set.add(t);
 }
 
 // =============================================================================
@@ -194,15 +205,15 @@ function buildDailyFile(
   // Collect tags from tagged sources
   for (const s of lobStories) {
     const t = s["tags"] as string[] | undefined;
-    if (t) { for (const tag of t) allTags.add(sanitizeTag(tag)); }
+    if (t) { for (const tag of t) addTag(allTags, tag); }
   }
   for (const t of ifinTopics) {
     const tags = t["tags"] as string[] | undefined;
-    if (tags) { for (const tag of tags) allTags.add(sanitizeTag(String(tag))); }
+    if (tags) { for (const tag of tags) addTag(allTags, String(tag)); }
   }
   for (const e of arxivEntries) {
     const cat = e["category"] as string | undefined;
-    if (cat) allTags.add(sanitizeTag(cat));
+    if (cat) addTag(allTags, cat);
   }
 
   // Collect source URLs for the SOURCES property
@@ -233,7 +244,11 @@ function buildDailyFile(
     if (l) allSources.push(l);
   }
 
-  const filetags = Array.from(allTags).sort().map((t) => `:${t}:`).join("");
+  // Org FILETAGS are colon-delimited: `:tag1:tag2:`. Build with a single join
+  // so adjacent tags don't produce a `::` (which org parses as an empty tag).
+  // allTags is always seeded with "research"/"journal", so it is never empty.
+  const sortedTags = Array.from(allTags).sort();
+  const filetags = `:${sortedTags.join(":")}:`;
 
   // Build the counts summary line
   const counts: string[] = [];
@@ -346,17 +361,36 @@ function buildDailyFile(
   return file;
 }
 
+/**
+ * Stage and commit a single file. Returns "committed" on success, "nothing" if
+ * the file had no changes to commit. Throws (with git's stderr) on a real
+ * failure — a caller that logs success unconditionally would otherwise hide a
+ * broken commit, which for a persistence model is the worst failure to mask.
+ */
 async function gitCommit(
   orgDir: string,
   filePath: string,
   userName: string,
   userEmail: string,
   message: string,
-): Promise<void> {
-  await runCommand(["git", "add", filePath], orgDir);
-  const status = await runCommand(["git", "status", "--porcelain"], orgDir);
-  if (!status.stdout) return;
-  await runCommand([
+): Promise<"committed" | "nothing"> {
+  const add = await runCommand(["git", "add", "--", filePath], orgDir);
+  if (!add.success) {
+    throw new Error(`git add failed: ${add.stderr || "unknown error"}`);
+  }
+  // Only this file's staged state decides whether there's anything to commit.
+  const status = await runCommand(
+    ["git", "status", "--porcelain", "--", filePath],
+    orgDir,
+  );
+  // A failed `git status` (e.g. a held .git/index.lock) exits non-zero with
+  // empty stdout — that is NOT "nothing to commit", so throw rather than let
+  // the caller record a false success.
+  if (!status.success) {
+    throw new Error(`git status failed: ${status.stderr || "unknown error"}`);
+  }
+  if (!status.stdout) return "nothing";
+  const commit = await runCommand([
     "git",
     "-c",
     `user.name=${userName}`,
@@ -365,7 +399,13 @@ async function gitCommit(
     "commit",
     "-m",
     message,
+    "--",
+    filePath,
   ], orgDir);
+  if (!commit.success) {
+    throw new Error(`git commit failed: ${commit.stderr || "unknown error"}`);
+  }
+  return "committed";
 }
 
 // =============================================================================
@@ -409,13 +449,12 @@ async function writeDailyEntry(
     );
   }
 
-  const enabledSources = new Set(cfg.sources as SourceName[]);
+  // `sources` defaults to all via the schema, but guard against an undefined
+  // value (e.g. a caller that skips schema validation): no list means all.
+  const enabledSources = new Set(
+    (cfg.sources ?? ALL_SOURCES) as SourceName[],
+  );
   const data = await readResearchData(cfg.swampBin, cfg.repoDir);
-  if (!data) {
-    ctx.logger.warn(
-      "No research data available — run research-brief workflow first",
-    );
-  }
 
   const fileSuffix = formatAsFileSuffix(now);
   const orgDate = formatAsOrgDate(now);
@@ -423,9 +462,8 @@ async function writeDailyEntry(
   const journalFile = `${journalDir}/${fileSuffix}.org`;
   const instanceKey = `daily-${fileSuffix}`;
 
-  await Deno.mkdir(journalDir, { recursive: true });
-
-  // Check for existing file — idempotent, don't overwrite
+  // Check for existing file — idempotent, don't overwrite. An entry already
+  // written for today wins even if this run has no fresh data.
   try {
     await Deno.stat(journalFile);
     ctx.logger.info("Entry for today already exists, skipping", {
@@ -438,41 +476,76 @@ async function writeDailyEntry(
       createdAt: formatTimestamp(now),
     });
     return { dataHandles: [handle] };
-  } catch {
-    // File doesn't exist — proceed
+  } catch (e) {
+    // Only "file doesn't exist" is expected here — proceed to write it.
+    // Any other stat failure (permission denied, I/O error) is real: rethrow
+    // it with context rather than masking it behind a later writeTextFile error.
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
   }
 
-  const fileContent = data
-    ? buildDailyFile(data, enabledSources, now)
-    : `#+TITLE: Research Journal ${orgDate}\n#+DATE: <${orgDate}>\n#+FILETAGS: :research:journal:\n:PROPERTIES:\n:UPDATED: ${
-      formatTimestamp(now)
-    }\n:END:\n\nNo research data available. Run \`swamp workflow run research-brief\` first.\n`;
+  // No research data yet (e.g. the collector hasn't run this morning): write
+  // and commit nothing, so a later run today can still create the real entry.
+  // Committing an empty placeholder would let the idempotency guard above lock
+  // it in for the day.
+  if (!data) {
+    ctx.logger.warn(
+      "No research data available — skipping (run the research-brief workflow first)",
+    );
+    const handle = await ctx.writeResource("journalEntry", instanceKey, {
+      date: orgDate,
+      file: journalFile,
+      status: "skipped-no-data",
+      createdAt: formatTimestamp(now),
+    });
+    return { dataHandles: [handle] };
+  }
 
+  await Deno.mkdir(journalDir, { recursive: true });
+  const fileContent = buildDailyFile(data, enabledSources, now);
   await Deno.writeTextFile(journalFile, fileContent);
 
+  // Stage/commit only this day's file, and let the recorded status reflect what
+  // actually reached the remote — logging "Pushed" when the push failed would
+  // mask the one failure this model exists to prevent.
+  const relFile = `${cfg.jrnlSubdir}/${fileSuffix}.org`;
+  let status = "written-not-committed";
   try {
-    await gitCommit(
+    const committed = await gitCommit(
       orgDir,
-      cfg.jrnlSubdir,
+      relFile,
       cfg.gitUserName,
       cfg.gitUserEmail,
       `journal: research entry for ${orgDate}`,
     );
-    ctx.logger.info(`Committed ${journalFile}`);
+    if (committed === "nothing") {
+      // The file on disk already matches what's committed — this run created no
+      // commit, so don't push (a push here would only advance the remote with
+      // some unrelated pre-existing commit and mislabel it as ours).
+      ctx.logger.info("Journal file unchanged — nothing to commit", {
+        file: journalFile,
+      });
+      status = "written-nothing-to-commit";
+    } else {
+      ctx.logger.info(`Committed ${journalFile}`);
+      const push = await runCommand(["git", "push"], orgDir, 30000);
+      if (push.success) {
+        ctx.logger.info("Pushed to remote");
+        status = "written";
+      } else {
+        ctx.logger.warn("Git push failed", {
+          error: push.stderr || "non-zero exit",
+        });
+        status = "committed-not-pushed";
+      }
+    }
   } catch (e) {
     ctx.logger.warn("Git commit failed", { error: String(e) });
-  }
-  try {
-    await runCommand(["git", "push"], orgDir, 30000);
-    ctx.logger.info("Pushed to remote");
-  } catch (e) {
-    ctx.logger.warn("Git push failed", { error: String(e) });
   }
 
   const handle = await ctx.writeResource("journalEntry", instanceKey, {
     date: orgDate,
     file: journalFile,
-    status: "written",
+    status,
     createdAt: formatTimestamp(now),
   });
   return { dataHandles: [handle] };
@@ -481,7 +554,7 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.07.08.1",
+  version: "2026.07.09.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     journalEntry: {
