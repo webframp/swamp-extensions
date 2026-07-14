@@ -86,6 +86,23 @@ const ErrorAnalysisSchema = z.object({
 // Helper Functions
 // =============================================================================
 
+/**
+ * Deterministic short hash (SHA-1, first 16 hex chars) for building stable,
+ * collision-resistant resource instance names from variable-length inputs such
+ * as a set of log group names plus a query string. Keeps re-runs of the same
+ * query idempotent instead of writing a fresh resource on every invocation.
+ */
+async function shortHash(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
+}
+
 function parseRelativeTime(timeStr: string): Date {
   const now = new Date();
 
@@ -376,9 +393,10 @@ export const model = {
             args.maxWaitSeconds * 1000,
           );
 
-          const instanceName = `query-${Date.now()}-${
-            args.logGroupNames[0]?.replace(/\//g, "-") || "unknown"
-          }`;
+          const groupsKey = args.logGroupNames.slice().sort().join(",");
+          const instanceName = `query-${await shortHash(
+            `${groupsKey}\n${args.queryString}`,
+          )}`;
 
           const handle = await context.writeResource(
             "query_results",
@@ -550,9 +568,9 @@ export const model = {
             .sort((a, b) => b.count - a.count)
             .slice(0, 20);
 
-          const instanceName = `errors-${
-            args.logGroupNames[0]?.replace(/\//g, "-") || "unknown"
-          }`;
+          const instanceName = `errors-${await shortHash(
+            args.logGroupNames.slice().sort().join(","),
+          )}`;
 
           const handle = await context.writeResource(
             "error_analysis",
