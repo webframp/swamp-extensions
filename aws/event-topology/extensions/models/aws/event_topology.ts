@@ -13,26 +13,32 @@ import {
   ListEventBusesCommand,
   ListRulesCommand,
   ListTargetsByRuleCommand,
-} from "npm:@aws-sdk/client-eventbridge@3.821.0";
+} from "npm:@aws-sdk/client-eventbridge@3.1069.0";
 import {
   ListSubscriptionsByTopicCommand,
   ListTopicsCommand,
   SNSClient,
-} from "npm:@aws-sdk/client-sns@3.821.0";
+} from "npm:@aws-sdk/client-sns@3.1069.0";
 import {
   GetQueueAttributesCommand,
   ListQueuesCommand,
   SQSClient,
-} from "npm:@aws-sdk/client-sqs@3.821.0";
+} from "npm:@aws-sdk/client-sqs@3.1069.0";
 import {
   LambdaClient,
   ListEventSourceMappingsCommand,
-} from "npm:@aws-sdk/client-lambda@3.821.0";
+} from "npm:@aws-sdk/client-lambda@3.1069.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.821.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.821.0";
+} from "npm:@aws-sdk/client-sts@3.1069.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1069.0";
+
+// Defensive pagination cap. The per-topic subscription and Lambda event-source
+// mapping listings have no caller-supplied bound (unlike rules/topics/queues),
+// so a pathological account could otherwise page indefinitely. 50 pages at up
+// to 100 items each is a practical ceiling; hitting it is logged as a warning.
+const MAX_PAGES = 50;
 
 // =============================================================================
 // Schemas
@@ -110,6 +116,9 @@ const GraphSchema = z.object({
   nodes: z.array(NodeSchema),
   edges: z.array(EdgeSchema),
   stats: GraphStatsSchema,
+  // Additive field with a default so previously-stored graphs (written before
+  // this field existed) still validate on read.
+  truncated: z.boolean().default(false),
 });
 
 const AnalysisResultSchema = z.object({
@@ -275,6 +284,9 @@ export const model = {
 
         const nodes = new Map<string, z.infer<typeof NodeSchema>>();
         const edges: z.infer<typeof EdgeSchema>[] = [];
+        // Set true if any pagination cap fires, so downstream consumers can tell
+        // an incomplete graph from a complete one.
+        let truncated = false;
 
         function addNode(
           id: string,
@@ -389,6 +401,7 @@ export const model = {
             addNode(topicArn, "SNSTopic", extractName(topicArn));
 
             let subToken: string | undefined;
+            let subPages = 0;
 
             while (true) {
               const resp = await snsClient.send(
@@ -439,6 +452,14 @@ export const model = {
 
               subToken = resp.NextToken;
               if (!subToken) break;
+              if (++subPages >= MAX_PAGES) {
+                truncated = true;
+                context.logger.warn(
+                  "Subscription pagination cap reached; results may be incomplete",
+                  { topicArn, maxPages: MAX_PAGES },
+                );
+                break;
+              }
             }
           }
         } finally {
@@ -513,6 +534,7 @@ export const model = {
         const lambdaClient = new LambdaClient(clientConfig(context));
         try {
           let marker: string | undefined;
+          let mappingPages = 0;
           while (true) {
             const resp = await lambdaClient.send(
               new ListEventSourceMappingsCommand({ Marker: marker }),
@@ -552,6 +574,14 @@ export const model = {
 
             marker = resp.NextMarker;
             if (!marker) break;
+            if (++mappingPages >= MAX_PAGES) {
+              truncated = true;
+              context.logger.warn(
+                "Event source mapping pagination cap reached; results may be incomplete",
+                { maxPages: MAX_PAGES },
+              );
+              break;
+            }
           }
         } finally {
           lambdaClient.destroy();
@@ -620,6 +650,7 @@ export const model = {
               [...nodes.values()].filter((n) => n.isBoundary).length,
             isolatedNodes,
           },
+          truncated,
         };
 
         const handle = await context.writeResource("graph", "topology", result);
