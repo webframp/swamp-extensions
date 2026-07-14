@@ -117,10 +117,67 @@ const MOCK_COST_BUCKETS = [
   },
 ];
 
+const MOCK_USER_USAGE = [
+  {
+    actor: { user_id: "user_1", email: "sescriva@jw.org", name: "Sean" },
+    product: "claude_code",
+    total_tokens: 5000000,
+    output_tokens: 800000,
+    uncached_input_tokens: 1200000,
+    cache_read_input_tokens: 3000000,
+    requests: 120,
+  },
+  {
+    actor: { user_id: "user_1", email: "sescriva@jw.org", name: "Sean" },
+    product: "chat",
+    total_tokens: 200000,
+    output_tokens: 40000,
+    uncached_input_tokens: 100000,
+    cache_read_input_tokens: 60000,
+    requests: 15,
+  },
+  {
+    actor: { user_id: "user_2", email: "b@example.com", name: "Bee" },
+    product: "claude_code",
+    total_tokens: 1000000,
+    output_tokens: 100000,
+    uncached_input_tokens: 400000,
+    cache_read_input_tokens: 500000,
+    requests: 30,
+  },
+];
+
+// amount/list_amount are USD minor units (cents): 41280 => $412.80.
+const MOCK_USER_COST = [
+  {
+    actor: { user_id: "user_1", email: "sescriva@jw.org", name: "Sean" },
+    product: "claude_code",
+    amount: "41280.000000",
+    list_amount: "51600.000000",
+    currency: "USD",
+  },
+  {
+    actor: { user_id: "user_1", email: "sescriva@jw.org", name: "Sean" },
+    product: "chat",
+    amount: "1000.000000",
+    list_amount: "1000.000000",
+    currency: "USD",
+  },
+  {
+    actor: { user_id: "user_2", email: "b@example.com", name: "Bee" },
+    product: "claude_code",
+    amount: "5000.000000",
+    list_amount: "6000.000000",
+    currency: "USD",
+  },
+];
+
 type MockOpts = {
   summaries?: unknown[];
   users?: unknown[];
   costBuckets?: unknown[];
+  userUsage?: unknown[];
+  userCost?: unknown[];
   failPath?: string; // substring of pathname to fail
   failStatus?: number;
   capture?: Record<string, Record<string, string>>;
@@ -160,6 +217,22 @@ function startMockServer(
         has_more: false,
         next_page: null,
         data_refreshed_at: "2026-07-02T12:00:00Z",
+      });
+    }
+    if (path.endsWith("/analytics/user_usage_report")) {
+      return Response.json({
+        data: opts?.userUsage ?? MOCK_USER_USAGE,
+        has_more: false,
+        next_page: null,
+        data_refreshed_at: "2026-07-14T12:00:00Z",
+      });
+    }
+    if (path.endsWith("/analytics/user_cost_report")) {
+      return Response.json({
+        data: opts?.userCost ?? MOCK_USER_COST,
+        has_more: false,
+        next_page: null,
+        data_refreshed_at: "2026-07-14T12:00:00Z",
       });
     }
     return new Response("Not found", { status: 404 });
@@ -608,6 +681,187 @@ Deno.test({
         Error,
         "403",
       );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// collect_user_usage
+// ---------------------------------------------------------------------------
+
+Deno.test("analytics model: has collect_user_usage method + userUsage resource", () => {
+  assertExists(model.methods.collect_user_usage);
+  assertExists(model.resources.userUsage);
+  const shape = model.methods.collect_user_usage.arguments.shape;
+  assertExists(shape.startDate);
+  assertExists(shape.endDate);
+  assertExists(shape.email);
+  assertExists(shape.products);
+});
+
+// deno-lint-ignore no-explicit-any
+type UserUsageData = any;
+
+Deno.test({
+  name:
+    "analytics: collect_user_usage aggregates usage + cost per user by product",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      const result = await model.methods.collect_user_usage.execute(
+        {},
+        context as unknown as ExecCtx,
+      );
+      assertEquals(result.dataHandles.length, 1);
+      const uu = getWrittenResources().find((r) => r.specName === "userUsage");
+      assertExists(uu);
+      assertEquals(uu.name, "all");
+      const d = uu.data as UserUsageData;
+      assertEquals(d.collected, true);
+      assertEquals(d.error, null);
+      assertEquals(d.count, 2);
+      // Sorted by total cost desc → sescriva (422.80) before Bee (50.00).
+      assertEquals(d.users[0].email, "sescriva@jw.org");
+      const cc = d.users[0].byProduct.find((p: UserUsageData) =>
+        p.product === "claude_code"
+      );
+      assertEquals(cc.totalTokens, 5000000);
+      assertEquals(cc.costUsd, 412.8); // 41280 cents -> USD
+      assertEquals(cc.requests, 120);
+      assertEquals(d.users[0].totalCostUsd, 422.8); // 412.80 + 10.00 (chat)
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "analytics: collect_user_usage email filter keeps only that user",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_user_usage.execute(
+        { email: "sescriva@jw.org" },
+        context as unknown as ExecCtx,
+      );
+      const uu = getWrittenResources().find((r) => r.specName === "userUsage");
+      assertExists(uu);
+      // A single filtered user is keyed by the unique userId (emails aren't
+      // injective through sanitize), not the sanitized email.
+      assertEquals(uu.name, "user-user_1");
+      const d = uu.data as UserUsageData;
+      assertEquals(d.filteredEmail, "sescriva@jw.org");
+      assertEquals(d.count, 1);
+      assertEquals(d.users[0].email, "sescriva@jw.org");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "analytics: collect_user_usage degrades (collected:false) when BOTH reports fail",
+  sanitizeResources: false,
+  fn: async () => {
+    // Both per-user endpoints share the "/analytics/user_" prefix, so this
+    // fails usage AND cost — the only case that yields collected:false.
+    const { url, server } = startMockServer({
+      failPath: "/analytics/user_",
+      failStatus: 403,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      const result = await model.methods.collect_user_usage.execute(
+        {},
+        context as unknown as ExecCtx,
+      );
+      assertEquals(result.dataHandles.length, 1);
+      const uu = getWrittenResources().find((r) => r.specName === "userUsage");
+      assertExists(uu);
+      const d = uu.data as UserUsageData;
+      assertEquals(d.collected, false);
+      assertExists(d.error);
+      assertEquals(d.users.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "analytics: collect_user_usage retains usage when only the cost report fails",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      failPath: "/analytics/user_cost_report",
+      failStatus: 403,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_user_usage.execute(
+        {},
+        context as unknown as ExecCtx,
+      );
+      const uu = getWrittenResources().find((r) => r.specName === "userUsage");
+      assertExists(uu);
+      const d = uu.data as UserUsageData;
+      // Usage succeeded → still collected, tokens retained; cost failed → cost
+      // null + error noted. (The HIGH the review caught: don't discard usage.)
+      assertEquals(d.collected, true);
+      assertExists(d.error);
+      assertEquals(d.count, 2);
+      const u = d.users.find((x: UserUsageData) =>
+        x.email === "sescriva@jw.org"
+      );
+      const cc = u.byProduct.find((p: UserUsageData) =>
+        p.product === "claude_code"
+      );
+      assertEquals(cc.totalTokens, 5000000);
+      assertEquals(cc.costUsd, null);
+      assertEquals(u.totalCostUsd, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "analytics: collect_user_usage email filter matching nobody writes empty collected result",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_user_usage.execute(
+        { email: "nobody@example.com" },
+        context as unknown as ExecCtx,
+      );
+      const uu = getWrittenResources().find((r) => r.specName === "userUsage");
+      assertExists(uu);
+      const d = uu.data as UserUsageData;
+      assertEquals(d.collected, true);
+      assertEquals(d.count, 0);
+      assertEquals(d.users.length, 0);
+      assertEquals(d.filteredEmail, "nobody@example.com");
     } finally {
       uninstall();
       await server.shutdown();
