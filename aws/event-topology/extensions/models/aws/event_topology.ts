@@ -116,6 +116,9 @@ const GraphSchema = z.object({
   nodes: z.array(NodeSchema),
   edges: z.array(EdgeSchema),
   stats: GraphStatsSchema,
+  // Additive field with a default so previously-stored graphs (written before
+  // this field existed) still validate on read.
+  truncated: z.boolean().default(false),
 });
 
 const AnalysisResultSchema = z.object({
@@ -281,6 +284,9 @@ export const model = {
 
         const nodes = new Map<string, z.infer<typeof NodeSchema>>();
         const edges: z.infer<typeof EdgeSchema>[] = [];
+        // Set true if any pagination cap fires, so downstream consumers can tell
+        // an incomplete graph from a complete one.
+        let truncated = false;
 
         function addNode(
           id: string,
@@ -447,6 +453,7 @@ export const model = {
               subToken = resp.NextToken;
               if (!subToken) break;
               if (++subPages >= MAX_PAGES) {
+                truncated = true;
                 context.logger.warn(
                   "Subscription pagination cap reached; results may be incomplete",
                   { topicArn, maxPages: MAX_PAGES },
@@ -568,6 +575,7 @@ export const model = {
             marker = resp.NextMarker;
             if (!marker) break;
             if (++mappingPages >= MAX_PAGES) {
+              truncated = true;
               context.logger.warn(
                 "Event source mapping pagination cap reached; results may be incomplete",
                 { maxPages: MAX_PAGES },
@@ -642,6 +650,7 @@ export const model = {
               [...nodes.values()].filter((n) => n.isBoundary).length,
             isolatedNodes,
           },
+          truncated,
         };
 
         const handle = await context.writeResource("graph", "topology", result);

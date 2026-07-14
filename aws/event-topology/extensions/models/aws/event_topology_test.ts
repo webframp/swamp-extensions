@@ -752,3 +752,45 @@ Deno.test("analyze: path query returns inputs and outputs for a node", async () 
   assertEquals(data.summary.outputCount, 1);
   assertEquals(data.results[0].node.id, "b");
 });
+
+Deno.test("discover: pagination cap sets truncated flag and terminates", async () => {
+  const mocks = baseMocks();
+  // Always return a NextToken so the per-topic subscription loop would page
+  // forever if it were unbounded — the MAX_PAGES cap must break it and mark the
+  // graph truncated. Test completion itself proves the loop terminated.
+  mocks.sns = (cmd: unknown) => {
+    const name = (cmd as { constructor: { name: string } }).constructor.name;
+    if (name === "ListTopicsCommand") {
+      return {
+        Topics: [{ TopicArn: "arn:aws:sns:us-east-1:123456789012:my-topic" }],
+      };
+    }
+    if (name === "ListSubscriptionsByTopicCommand") {
+      return {
+        Subscriptions: [{
+          SubscriptionArn: "arn:aws:sns:us-east-1:123456789012:my-topic:sub-1",
+          Protocol: "sqs",
+          Endpoint: "arn:aws:sqs:us-east-1:123456789012:my-queue",
+        }],
+        NextToken: "always-more",
+      };
+    }
+    return {};
+  };
+
+  const restore = mockClients(mocks);
+  try {
+    const { context, getWrittenResources } = makeContext();
+    await model.methods.discover.execute(
+      { maxRulesPerBus: 100, maxTopics: 200, maxQueues: 500 },
+      context as unknown as DiscoverContext,
+    );
+
+    const graph = getWrittenResources().find((r) => r.specName === "graph");
+    assertExists(graph);
+    const data = graph.data as { truncated: boolean };
+    assertEquals(data.truncated, true);
+  } finally {
+    restore();
+  }
+});

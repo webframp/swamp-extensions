@@ -9,3 +9,8 @@ mapping listing paginated with no upper bound. Both now stop after a defensive
 `MAX_PAGES` (50) ceiling and log a warning, preventing an unbounded discovery
 loop on pathological accounts. Rule/topic/queue listings were already bounded by
 their `max*` arguments and are unchanged.
+
+**Added:** A `truncated` boolean on the graph resource. It is set to `true`
+whenever either pagination cap fires, so downstream consumers can distinguish an
+incomplete graph from a complete one. The field defaults to `false`, so graphs
+stored before this release still validate on read.
