@@ -230,7 +230,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.07.08.1",
+  version: "2026.07.09.1",
 
   upgrades: [
     {
@@ -243,6 +243,12 @@ export const model = {
       toVersion: "2026.06.21.1",
       description:
         "Method additions (journal edit, file upload, relations) — no globalArguments changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.09.1",
+      description:
+        "Version bump to align model version with manifest (#194) — no globalArguments changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

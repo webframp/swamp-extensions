@@ -1,3 +1,69 @@
+## 2026.07.11.1
+
+**Added:** `list_todos(state?, maxTodos?)` — the authenticated user's todos across
+ALL pages, not the 20 the dashboard caps at. Paginates GraphQL `currentUser.todos`
+with a cursor up to a `maxTodos` safety cap (default 2000, `truncated` flag when
+hit). Each todo carries a hoisted `targetState` (`opened`/`closed`/`merged` for
+MR/issue targets, `null` otherwise) pulled via inline fragments, so classifying a
+large backlog as stale-vs-live is a flat CEL filter with no per-item fetch:
+`todos.filter(t, t.targetState in ["merged", "closed"])`. Writes a `todoList`
+resource.
+
+**Added:** `mark_todos_done(todoIds)` — bulk companion to `mark_todo_done`. Marks
+many todos done in one call, one sequential GraphQL request per todo (not parallel;
+accepts gids or numeric ids), guarding the null payload GitLab returns on
+permission-denied/not-found; per-todo failures land in `failed[]`
+rather than aborting the batch. Writes a `bulkTodoResult` resource. Together with
+`list_todos`, clearing a large stale backlog is: list → CEL-filter merged/closed →
+`mark_todos_done`.
+
+## 2026.07.10.4
+
+**Added:** `remove_mr_reviewers(project, iids, username?)` — remove a reviewer
+(default: the authenticated user) from multiple MRs in one fan-out, via GraphQL
+`mergeRequestSetReviewers` with `operationMode: REMOVE`. Other reviewers are
+preserved; it is idempotent; per-MR failures land in `failed[]` rather than
+aborting the batch. The reviewer-side sibling of `unassign_from_mrs`, for
+clearing yourself off MRs you've already reviewed (the "approved-but-still-listed"
+clutter). Writes a `reviewerRemovalResult` resource.
+
+## 2026.07.10.3
+
+**Added:** `list_mr_discussions(project, iid)` — resolvable discussion threads on
+an MR with per-thread `resolvable`/`resolved`/`resolvedBy` and a slim diff
+position (`file`/`line`) hoisted to the thread level, plus the thread notes.
+System-only threads are excluded. Unresolved threads (the `discussions_not_resolved`
+merge blocker) are a CEL filter away:
+`size(discussions.filter(d, d.resolvable && !d.resolved))`.
+
+**Added:** `resolve_mr_discussion(project, iid, discussionId, resolved)` — resolve
+or unresolve a thread (GraphQL `discussionToggleResolve`).
+
+**Changed:** `add_mr_note` takes an optional `discussionId` to reply into an
+existing thread rather than post top-level. Omitting it is unchanged behavior;
+`add_issue_note` is untouched.
+
+## 2026.07.10.2
+
+**Added:** A canonical, GitLab-flavored `reference` on every dashboard work item
+from `list_my_merge_requests` — `group/project!123` for MRs, `group/project#123`
+for issue todos — so items in a cross-project list are uniquely identifiable and
+autolink in GitLab markdown. MRs derive it from the project path + iid; todos
+parse it (and a new `iid`) from `targetUrl` (the todo's own `project` field is a
+display name, not a path). The `@webframp/review-dashboard` report now renders
+these references, unfenced, in the MR tables and the todos table (falling back
+to the project path / target type for data written before this release).
+
+## 2026.07.10.1
+
+**Added:** `unassign_from_mrs(project, iids, username?)` — remove an assignee
+(default: the authenticated user) from multiple MRs in a single fan-out call.
+Uses GraphQL `mergeRequestSetAssignees` with `operationMode: REMOVE`, so other
+assignees are preserved; it is idempotent, and per-MR failures are recorded in a
+`failed[]` list rather than aborting the batch. Complements `set_mr_assignees`
+(REPLACE, single MR) for the common "clear my review queue" case without a
+read-modify-write. Writes a new `unassignResult` resource.
+
 ## 2026.07.08.4
 
 **Added:** MR note management and assignee control.

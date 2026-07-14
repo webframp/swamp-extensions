@@ -1,17 +1,9 @@
-## 2026.07.04.1
+## 2026.07.10.1
 
-**Added:** `get_request_status` method — check the status of a previously
-submitted quota increase request using `GetRequestedServiceQuotaChange` API.
-Returns the current status, case ID, desired value, and timestamps.
-
-**Added:** `get_case_communications` method — retrieve support case
-correspondence for quota increase requests. Uses the AWS Support
-`DescribeCases` and `DescribeCommunications` APIs. Requires AWS Business or
-Enterprise support plan.
-
-**Added:** `caseCommunications` resource spec storing case metadata (subject,
-status, severity) and the communications array.
-
-**Upgrade note:** Two new IAM permissions required for `get_case_communications`:
-`support:DescribeCases` and `support:DescribeCommunications`. Existing methods
-are unaffected — the new permissions are only needed if you call the new method.
+**Changed:** Hardened `failedProfiles` error redaction. Persisted error text now
+also strips internal URLs and ANSI color codes, and collapses the common
+`granted`/AWS SSO credential-process failure to a short, actionable code
+(`sso-login-required`). Previously the raw error embedded the organization's SSO
+portal URL, which would surface in the briefing-facing snapshot. Real
+identifiers (ARNs, account ids) are still redacted as before. No API, schema, or
+method-signature changes.

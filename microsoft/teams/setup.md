@@ -1,7 +1,7 @@
 # @webframp/microsoft — Setup
 
 This extension uses the existing `appsvc_teams_data_client` public client app
-registration managed in `appsvc/azure-org/terraform/deliver/jwsite/oidc_applications/`.
+registration managed in `<your-group>/<your-project>/terraform/.../oidc_applications/`.
 
 No client secret is required. Authentication uses device code flow with tokens
 cached via the swamp vault.

@@ -6,11 +6,11 @@ description: |
   from a single Security Hub delegated admin model instance.
 
   Usage:
-    AWS_PROFILE="jw-cd-security-tooling/ReadOnlyPlus" \
+    AWS_PROFILE="my-account/ReadOnlyPlus" \
       swamp workflow run securityhub-triage --input modelName=sh-findings
 
     # Custom time window:
-    AWS_PROFILE="jw-cd-security-tooling/ReadOnlyPlus" \
+    AWS_PROFILE="my-account/ReadOnlyPlus" \
       swamp workflow run securityhub-triage --input modelName=sh-findings --input startTime=7d
 tags:
   security: "true"

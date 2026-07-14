@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        extension: [pricing, inventory, logs, metrics, alarms, alarm-investigation, traces, cost-estimate, cost-explorer, networking, guardduty, bedrock-usage, securityhub-findings]
+        extension: [pricing, inventory, logs, metrics, alarms, alarm-investigation, traces, cost-estimate, cost-explorer, networking, guardduty, bedrock-usage, securityhub-findings, service-quotas]
         task: [check, lint, fmt, test]
     defaults:
       run:
@@ -102,6 +102,33 @@ jobs:
             else
               echo "No tests found, skipping"
             fi
+          else
+            deno check extensions/reports/*.ts
+          fi
+
+  gitlab-report-check:
+    name: gitlab/report - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: gitlab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: "2.7.14"
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/reports/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/reports/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/reports/
           else
             deno check extensions/reports/*.ts
           fi

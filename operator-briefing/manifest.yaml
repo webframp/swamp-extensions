@@ -1,0 +1,91 @@
+manifestVersion: 1
+name: "@webframp/operator-briefing"
+version: "2026.07.13.5"
+description: |
+  Unified daily operator briefing report. A workflow-scope report over the
+  `daily-briefing` workflow that loops the run's step executions, dispatches
+  each step by `modelType` to a per-source normalizer, and flattens everything
+  into two projections: a prioritized four-tier review queue and a set of ops
+  signals. It renders a consistent markdown briefing plus a STABLE JSON
+  contract that downstream renderers (a live HTML view, executive R/vellum
+  reports) consume — observe once, render many.
+
+  ## Sources (today)
+
+  - `@webframp/gitlab` — cross-project review queue (MRs + todos), tiered per
+    the daily-briefing design: waiting on you / awaiting your merge / mentions /
+    your open MRs. Dedups on `reference`, folds assigned∩authored into your-MRs,
+    and drops items you have already approved.
+  - `@webframp/anthropic/analytics` — seats (DAU/WAU/MAU), adoption, cost window.
+    A `collected: false` fetch is rendered "unavailable", never as a zero.
+  - `@webframp/anthropic/compliance` — effective-settings count and recent
+    activity volume.
+  - `@webframp/aws/service-quotas` — per-service quota utilization over threshold
+    and pending increase requests, with `failedProfiles` degradation (including
+    the `sso-login-required` re-auth hint).
+
+  Adding a source is one workflow step plus one normalizer plus one registry
+  line; the render / tiering / freshness core does not change.
+
+  ## Accuracy
+
+  Freshness is judged from each source's own `fetchedAt` (stale > 24h for ops,
+  > 7d for queue items). Unknown modelType / missing normalizer / parse failure
+  are skipped and counted. The report degrades — it never throws.
+
+  ## Reports
+
+  - `@webframp/operator-briefing` (workflow scope) — the full daily briefing:
+    GitLab review queue plus ops signals, rendered after a `daily-briefing`
+    workflow run completes.
+  - `@webframp/operator-briefing/review-queue` (method scope) — a fast path that
+    renders just the four GitLab review tiers LIVE on every
+    `list_my_merge_requests` run, reusing the same normalizer and renderer so
+    its output matches the briefing's GitLab section (no ops section).
+
+  ## Models
+
+  - `@webframp/operator-briefing/metrics` — a durable append-only time-series
+    accumulator. Point-in-time briefing data is re-observable, but a time series
+    is not: once a versioned snapshot is GC'd that historical point is gone. Its
+    `append_metrics` method upserts one day's metrics (spend, DAU/WAU/MAU, seats,
+    AWS quota counts, …) by date into a single `series` resource whose latest
+    version holds the entire history, so trend charts survive garbage collection.
+    It merges fields for a shared date, never throws, and never overwrites a
+    longer history with a shorter one.
+
+  ## Usage
+
+  Require the workflow report on the `daily-briefing` workflow; it renders after
+  the run completes. Require the method report on the `@webframp/gitlab` model's
+  `list_my_merge_requests` method for a live queue between briefings. Read the
+  results with:
+
+  ```bash
+  swamp data get report-@webframp/operator-briefing --markdown
+  swamp data get report-@webframp/operator-briefing-json --json
+  swamp data get "report-@webframp/operator-briefing/review-queue" --markdown
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - metrics/metrics.ts
+reports:
+  - operator_briefing.ts
+  - review_queue.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - briefing
+  - operator
+  - gitlab
+  - ops
+  - analytics
+  - compliance
+  - aws
+  - dashboard

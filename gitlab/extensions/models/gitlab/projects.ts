@@ -18,7 +18,7 @@ import { z } from "npm:zod@4.4.3";
 
 const GlobalArgsSchema = z.object({
   host: z.string().min(1).describe(
-    "GitLab hostname (e.g. git.bethelservice.org)",
+    "GitLab hostname (e.g. git.example.org)",
   ),
   token: z.string().min(1).meta({ sensitive: true }).describe(
     "GitLab personal access token with api scope (use vault reference)",
@@ -132,6 +132,52 @@ const NoteListSchema = z.object({
   fetchedAt: z.string(),
 });
 
+// A single note inside a discussion thread. `file`/`line` are the slim diff
+// position (null for a general, non-diff comment).
+const DiscussionNoteSchema = z.object({
+  id: z.number(),
+  author: z.string().nullable(),
+  body: z.string(),
+  createdAt: z.string(),
+  file: z.string().nullable(),
+  line: z.number().nullable(),
+});
+
+// A discussion (thread). Resolution state, location, and opener are hoisted to
+// the top level so CEL can filter/count without reaching into `notes`, e.g.
+// size(discussions.filter(d, d.resolvable && !d.resolved)).
+const DiscussionSchema = z.object({
+  // GraphQL discussion gid — the exact id add_mr_note(discussionId) and
+  // resolve_mr_discussion consume.
+  id: z.string(),
+  resolvable: z.boolean(),
+  resolved: z.boolean(),
+  resolvedBy: z.string().nullable(),
+  // Location + opener, hoisted from the thread's root note.
+  file: z.string().nullable(),
+  line: z.number().nullable(),
+  author: z.string().nullable(),
+  createdAt: z.string(),
+  notes: z.array(DiscussionNoteSchema),
+});
+
+const DiscussionListSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  discussions: z.array(DiscussionSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const DiscussionResolutionSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  discussionId: z.string(),
+  resolved: z.boolean(),
+  resolvedBy: z.string().nullable(),
+  fetchedAt: z.string(),
+});
+
 const NoteDeletedSchema = z.object({
   project: z.string(),
   iid: z.number(),
@@ -145,6 +191,40 @@ const MrAssigneesSchema = z.object({
   iid: z.number(),
   // Resulting assignee usernames after the set (empty when unassigned).
   assignees: z.array(z.string()),
+  fetchedAt: z.string(),
+});
+
+const UnassignResultSchema = z.object({
+  project: z.string(),
+  // The user removed from each MR (the authenticated user unless overridden).
+  username: z.string(),
+  // Only confirmed removals land here (user absent from the resulting
+  // assignees). Anything unconfirmable — null payload, no mergeRequest, or the
+  // user still present after a REMOVE — goes to `failed` instead.
+  results: z.array(z.object({
+    iid: z.number(),
+    // Assignees remaining after removal — proof co-assignees are preserved.
+    remainingAssignees: z.array(z.string()),
+  })),
+  // Per-MR failures (permission denied, missing MR); one bad MR does not sink
+  // the batch.
+  failed: z.array(z.object({ iid: z.number(), error: z.string() })),
+  fetchedAt: z.string(),
+});
+
+const RemoveReviewerResultSchema = z.object({
+  project: z.string(),
+  // The reviewer removed from each MR (the authenticated user unless overridden).
+  username: z.string(),
+  // Only confirmed removals land here (user absent from the resulting
+  // reviewers). Unconfirmable results — null payload, no mergeRequest, or the
+  // user still present after a REMOVE — go to `failed` instead.
+  results: z.array(z.object({
+    iid: z.number(),
+    // Reviewers remaining after removal — proof co-reviewers are preserved.
+    remainingReviewers: z.array(z.string()),
+  })),
+  failed: z.array(z.object({ iid: z.number(), error: z.string() })),
   fetchedAt: z.string(),
 });
 
@@ -227,6 +307,10 @@ const BranchListSchema = z.object({
 const DashboardMRSchema = z.object({
   project: z.string(),
   iid: z.number(),
+  // GitLab-flavored, cross-project unique reference (e.g. group/project!123).
+  // Autolinks in GitLab markdown; unambiguous in cross-project lists. Optional
+  // for read-back parity with dashboards written before this field existed.
+  reference: z.string().optional(),
   title: z.string(),
   author: z.string(),
   updatedAt: z.string(),
@@ -247,6 +331,17 @@ const TodoSchema = z.object({
   targetType: z.string(),
   targetUrl: z.string(),
   project: z.string().nullable(),
+  // Work-item iid parsed from targetUrl (null for targets without one).
+  // Optional so dashboards written before this field existed still validate.
+  iid: z.number().nullable().optional(),
+  // GitLab-flavored, cross-project unique reference derived from targetUrl:
+  // group/project!123 for MRs, group/project#123 for issues (null otherwise).
+  reference: z.string().nullable().optional(),
+  // Target's lifecycle state (opened/closed/merged) for MR/issue targets, null
+  // otherwise. Hoisted so "is this todo stale" is a flat CEL filter. Only
+  // list_todos populates it; the capped dashboard leaves it null. Optional so
+  // dashboards written before this field existed still validate.
+  targetState: z.string().nullable().optional(),
   author: z.string(),
   createdAt: z.string(),
 });
@@ -259,6 +354,29 @@ const DashboardSchema = z.object({
   todos: z.array(TodoSchema),
   totalCount: z.number(),
   truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const TodoListSchema = z.object({
+  // All pending (or requested-state) todos for the authenticated user, fetched
+  // across every page — unlike the dashboard, which caps todos at 20. Each
+  // carries a hoisted `targetState`, so stale todos are a flat CEL filter:
+  // `todos.filter(t, t.targetState in ["merged", "closed"])`.
+  todos: z.array(TodoSchema),
+  count: z.number(),
+  // True when the safety cap (maxTodos) was hit before all pages were read.
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const BulkTodoResultSchema = z.object({
+  // Todos confirmed done — todoMarkDone returned a non-null payload with no
+  // errors. Anything unconfirmable (null payload, errors) goes to `failed`.
+  results: z.array(z.object({ id: z.string(), state: z.string() })),
+  // Per-todo failures; one bad id never sinks the batch.
+  failed: z.array(z.object({ id: z.string(), error: z.string() })),
+  // Total ids submitted (results.length + failed.length).
+  count: z.number(),
   fetchedAt: z.string(),
 });
 
@@ -386,8 +504,30 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
       pageInfo { hasNextPage }
     }
     todos(state: pending, first: 20) {
-      nodes { id action body targetType targetUrl createdAt author { username } project { nameWithNamespace } }
+      nodes { id action body targetType targetUrl createdAt author { username } project { fullPath nameWithNamespace } }
       pageInfo { hasNextPage }
+    }
+  }
+}`;
+
+// Paginated, state-aware todos. Unlike DASHBOARD_QUERY (first: 20, no target),
+// this pulls the target's lifecycle state via inline fragments so callers can
+// classify stale todos without a per-item MR/issue fetch.
+const LIST_TODOS_QUERY = `
+query listTodos($state: [TodoStateEnum!], $first: Int!, $after: String) {
+  currentUser {
+    username
+    todos(state: $state, first: $first, after: $after) {
+      nodes {
+        id action body targetType targetUrl createdAt
+        author { username } project { fullPath nameWithNamespace }
+        target {
+          __typename
+          ... on MergeRequest { state }
+          ... on Issue { state }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
     }
   }
 }`;
@@ -419,9 +559,16 @@ function mapDashboardMR(
   };
   const normalized = rawState?.toLowerCase() ?? null;
   const myReviewState = normalized ? (STATE_MAP[normalized] ?? null) : null;
+  const project = node.project?.fullPath ?? "";
+  const iid = typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid;
   return {
-    project: node.project?.fullPath ?? "",
-    iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
+    project,
+    iid,
+    // Omit rather than emit a malformed reference when the project path is
+    // absent or the iid isn't a valid integer (e.g. GraphQL returned null).
+    reference: project && Number.isInteger(iid)
+      ? `${project}!${iid}`
+      : undefined,
     title: node.title ?? "",
     author: node.author?.username ?? "",
     updatedAt: node.updatedAt ?? "",
@@ -434,7 +581,29 @@ function mapDashboardMR(
   };
 }
 
+// Parse the work-item iid from a GitLab MR/issue targetUrl. Only the
+// `/-/(merge_requests|issues)/<iid>` tail is matched, so this is robust to
+// subpath installs, nested subgroups, and trailing URL segments.
+function iidFromTargetUrl(url: string): number | null {
+  const m = url.match(/\/-\/(?:merge_requests|issues)\/(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 function mapTodo(node: any): z.infer<typeof TodoSchema> {
+  // Build the reference from the authoritative project path (GraphQL fullPath),
+  // the target type (MR → `!`, issue → `#`), and the iid parsed from the URL.
+  // The todo's own `project` display field is a name, not a path, so it is kept
+  // only for display and never used to form a reference.
+  const fullPath: string | null = node.project?.fullPath ?? null;
+  const iid = iidFromTargetUrl(node.targetUrl ?? "");
+  const sep = node.targetType === "MERGEREQUEST"
+    ? "!"
+    : node.targetType === "ISSUE"
+    ? "#"
+    : null;
+  const reference = fullPath && iid !== null && sep
+    ? `${fullPath}${sep}${iid}`
+    : null;
   return {
     id: node.id ?? "",
     action: node.action ?? "",
@@ -442,6 +611,13 @@ function mapTodo(node: any): z.infer<typeof TodoSchema> {
     targetType: node.targetType ?? "",
     targetUrl: node.targetUrl ?? "",
     project: node.project?.nameWithNamespace ?? null,
+    iid,
+    reference,
+    // node.target is only present in the list_todos query (MR/Issue inline
+    // fragments). The dashboard query omits it, so this is null there.
+    targetState: node.target?.state
+      ? String(node.target.state).toLowerCase()
+      : null,
     author: node.author?.username ?? "",
     createdAt: node.createdAt ?? "",
   };
@@ -641,6 +817,47 @@ mutation createNote($noteableId: NoteableID!, $body: String!) {
   }
 }`;
 
+// Reply into an existing thread. Separate from CREATE_NOTE_MUTATION so the
+// top-level path (also used by add_issue_note) is untouched.
+const REPLY_NOTE_MUTATION = `
+mutation replyNote($noteableId: NoteableID!, $discussionId: DiscussionID!, $body: String!) {
+  createNote(input: { noteableId: $noteableId, discussionId: $discussionId, body: $body }) {
+    note { id body createdAt author { username } }
+    errors
+  }
+}`;
+
+const RESOLVE_DISCUSSION_MUTATION = `
+mutation resolveDiscussion($id: DiscussionID!, $resolve: Boolean!) {
+  discussionToggleResolve(input: { id: $id, resolve: $resolve }) {
+    discussion { id resolved resolvedBy { username } }
+    errors
+  }
+}`;
+
+const MR_DISCUSSIONS_QUERY = `
+query mrDiscussions($fullPath: ID!, $iid: String!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    mergeRequest(iid: $iid) {
+      discussions(first: $first) {
+        nodes {
+          id
+          resolvable
+          resolved
+          resolvedBy { username }
+          notes(first: 100) {
+            nodes {
+              id system body createdAt author { username }
+              position { filePath oldLine newLine }
+            }
+          }
+        }
+        pageInfo { hasNextPage }
+      }
+    }
+  }
+}`;
+
 const UPDATE_NOTE_MUTATION = `
 mutation updateNote($id: NoteID!, $body: String!) {
   updateNote(input: { id: $id, body: $body }) {
@@ -666,6 +883,28 @@ mutation setAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) 
     errors
   }
 }`;
+
+// operationMode REMOVE drops the given usernames and leaves every other
+// assignee in place — atomic, no read-modify-write, so no race and no risk of
+// clobbering a co-assignee. Removing a user who isn't assigned is a no-op.
+const REMOVE_ASSIGNEES_MUTATION = `
+mutation removeAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  mergeRequestSetAssignees(input: { projectPath: $projectPath, iid: $iid, assigneeUsernames: $usernames, operationMode: REMOVE }) {
+    mergeRequest { iid assignees { nodes { username } } }
+    errors
+  }
+}`;
+
+const REMOVE_REVIEWERS_MUTATION = `
+mutation removeReviewers($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  mergeRequestSetReviewers(input: { projectPath: $projectPath, iid: $iid, reviewerUsernames: $usernames, operationMode: REMOVE }) {
+    mergeRequest { iid reviewers { nodes { username } } }
+    errors
+  }
+}`;
+
+const CURRENT_USER_QUERY = `
+query { currentUser { username } }`;
 
 const CREATE_MR_MUTATION = `
 mutation createMR($projectPath: ID!, $title: String!, $sourceBranch: String!, $targetBranch: String!, $description: String) {
@@ -918,7 +1157,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.08.4",
+  version: "2026.07.11.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -959,6 +1198,19 @@ export const model = {
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
+    discussions: {
+      description:
+        "Resolvable discussion threads on an MR, with per-thread resolution state and slim diff position",
+      schema: DiscussionListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    discussionResolution: {
+      description: "Outcome of resolving/unresolving an MR discussion",
+      schema: DiscussionResolutionSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
     mergeStatus: {
       description:
         "Mergeability of an MR — detailed_merge_status plus human-readable blockers",
@@ -994,6 +1246,20 @@ export const model = {
       description: "Record of a deleted MR note",
       schema: NoteDeletedSchema,
       lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    unassignResult: {
+      description:
+        "Result of a fan-out unassign across MRs (remaining assignees + failures)",
+      schema: UnassignResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    reviewerRemovalResult: {
+      description:
+        "Result of a fan-out reviewer removal across MRs (remaining reviewers + failures)",
+      schema: RemoveReviewerResultSchema,
+      lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     mrAssignees: {
@@ -1038,6 +1304,21 @@ export const model = {
       schema: DashboardSchema,
       lifetime: "30m" as const,
       garbageCollection: 3,
+    },
+    todoList: {
+      description:
+        "All todos for the authenticated user (paginated past the dashboard's " +
+        "20-cap), each with a hoisted target lifecycle state",
+      schema: TodoListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 5,
+    },
+    bulkTodoResult: {
+      description:
+        "Result of a bulk mark-todos-done (confirmed done + per-todo failures)",
+      schema: BulkTodoResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
     },
   },
 
@@ -1552,6 +1833,162 @@ export const model = {
       },
     },
 
+    list_todos: {
+      description:
+        "List the authenticated user's todos across ALL pages (the dashboard " +
+        "caps todos at 20), each with a hoisted targetState " +
+        "(opened/closed/merged for MR/issue targets, null otherwise) so stale " +
+        "todos are a flat CEL filter. Writes a todoList resource.",
+      arguments: z.object({
+        state: z.enum(["pending", "done", "all"]).default("pending").describe(
+          "Which todos to fetch (default pending)",
+        ),
+        maxTodos: z.number().int().positive().default(2000).describe(
+          "Safety cap on total todos fetched across pages",
+        ),
+      }),
+      execute: async (
+        args: { state: "pending" | "done" | "all"; maxTodos: number },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        // GraphQL `state` is a list; "all" means both pending and done.
+        const stateArg = args.state === "all"
+          ? ["pending", "done"]
+          : [args.state];
+        const PAGE = 100;
+        const todos: z.infer<typeof TodoSchema>[] = [];
+        let after: string | null = null;
+        let username = "";
+        let truncated = false;
+        let hasNext = true;
+        while (hasNext) {
+          const data = await graphqlRequest(host, token, LIST_TODOS_QUERY, {
+            state: stateArg,
+            first: PAGE,
+            after,
+          });
+          const user = data.currentUser;
+          if (!user) {
+            throw new Error(
+              "GitLab GraphQL: currentUser is null — verify the token has 'read_api' scope and is not expired",
+            );
+          }
+          username = user.username ?? username;
+          const conn = user.todos;
+          const nodes = conn?.nodes ?? [];
+          for (const node of nodes) {
+            if (todos.length >= args.maxTodos) {
+              // Unconsumed nodes remain on this page — genuinely capped.
+              truncated = true;
+              break;
+            }
+            todos.push(mapTodo(node));
+          }
+          if (truncated) break;
+          const morePages = !!conn?.pageInfo?.hasNextPage;
+          const nextCursor = conn?.pageInfo?.endCursor ?? null;
+          if (todos.length >= args.maxTodos) {
+            // Consumed the page and hit the cap exactly. Only truncated if
+            // GitLab says more pages remain — not when this was the last page.
+            truncated = morePages;
+            break;
+          }
+          // Advance. Stop when there are no more pages, no cursor came back, or
+          // the cursor didn't move (defensive against a spinning/empty page —
+          // the cap can't bound a loop whose nodes never accumulate).
+          hasNext = morePages && !!nextCursor && nextCursor !== after;
+          after = nextCursor;
+        }
+        const handle = await ctx.writeResource(
+          "todoList",
+          `todos-${username || "user"}`,
+          {
+            todos,
+            count: todos.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Fetched {count} todos for {user}{trunc}", {
+          count: todos.length,
+          user: username,
+          trunc: truncated ? ` (capped at ${args.maxTodos})` : "",
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    mark_todos_done: {
+      description:
+        "Mark MANY todos done in one call — one sequential GraphQL request per " +
+        "todo (not parallel). Bulk companion to mark_todo_done. Accepts todo " +
+        "gids or numeric ids; per-todo failures are recorded and never abort " +
+        "the batch. Writes a bulkTodoResult resource.",
+      arguments: z.object({
+        todoIds: z.array(z.string().min(1)).min(1).describe(
+          "Todo ids (gid://gitlab/Todo/NNN or numeric)",
+        ),
+      }),
+      execute: async (args: { todoIds: string[] }, ctx: ModelContext) => {
+        const { host, token } = ctx.globalArgs;
+        const results: z.infer<typeof BulkTodoResultSchema>["results"] = [];
+        const failed: z.infer<typeof BulkTodoResultSchema>["failed"] = [];
+        for (const raw of args.todoIds) {
+          const id = /^\d+$/.test(raw) ? `gid://gitlab/Todo/${raw}` : raw;
+          try {
+            const data = await graphqlRequest(
+              host,
+              token,
+              MARK_TODO_DONE_MUTATION,
+              { id },
+            );
+            const payload = data.todoMarkDone;
+            // GitLab returns a null payload on permission-denied / not-found as
+            // a routine path — guard before reading .errors.
+            if (!payload) {
+              throw new Error(
+                "todoMarkDone returned null (permission denied or todo not found)",
+              );
+            }
+            if (payload.errors?.length) {
+              throw new Error(payload.errors.join("; "));
+            }
+            // A null todo with empty errors is unconfirmable — don't fabricate
+            // a "done" success (mirrors the loud-failure pattern of the sibling
+            // assignee/reviewer removals, which never trust "no error" alone).
+            if (!payload.todo) {
+              throw new Error(
+                "todoMarkDone returned no todo — completion unconfirmed",
+              );
+            }
+            results.push({ id, state: payload.todo.state ?? "done" });
+          } catch (e) {
+            failed.push({
+              id,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+        const handle = await ctx.writeResource(
+          "bulkTodoResult",
+          "todos-marked-done",
+          {
+            results,
+            failed,
+            count: args.todoIds.length,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Marked {ok}/{total} todos done ({failed} failed)", {
+          ok: results.length,
+          total: args.todoIds.length,
+          failed: failed.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
     create_merge_request: {
       description: "Create a new merge request",
       arguments: z.object({
@@ -2035,14 +2472,24 @@ export const model = {
     },
 
     add_mr_note: {
-      description: "Add a comment to a merge request",
+      description:
+        "Add a comment to a merge request, or reply into an existing thread by passing discussionId (from list_mr_discussions)",
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number(),
         body: z.string().min(1),
+        discussionId: z
+          .string()
+          .optional()
+          .describe("Reply into this discussion thread instead of top-level"),
       }),
       execute: async (
-        args: { project: string; iid: number; body: string },
+        args: {
+          project: string;
+          iid: number;
+          body: string;
+          discussionId?: string;
+        },
         ctx: ModelContext,
       ) => {
         const { host, token } = ctx.globalArgs;
@@ -2055,10 +2502,17 @@ export const model = {
         if (!mrGid) {
           throw new Error(`MR !${args.iid} not found in ${args.project}`);
         }
-        const data = await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
-          noteableId: mrGid,
-          body: args.body,
-        });
+        // Reply into a thread when discussionId is given; else top-level note.
+        const data = args.discussionId
+          ? await graphqlRequest(host, token, REPLY_NOTE_MUTATION, {
+            noteableId: mrGid,
+            discussionId: args.discussionId,
+            body: args.body,
+          })
+          : await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
+            noteableId: mrGid,
+            body: args.body,
+          });
         const result = data.createNote;
         if (result.errors?.length) {
           throw new Error(`createNote failed: ${result.errors.join("; ")}`);
@@ -2253,6 +2707,374 @@ export const model = {
             : "Unassigned MR !{iid}",
           { iid: args.iid, who: assignees.join(", ") },
         );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    unassign_from_mrs: {
+      description:
+        "Remove an assignee (default: the authenticated user) from multiple MRs " +
+        "in a project, in one fan-out. Uses operationMode REMOVE, so other " +
+        "assignees are preserved. Idempotent: removing a user who isn't assigned " +
+        "is a no-op. Per-MR failures are recorded and never abort the batch.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iids: z.array(z.number()).min(1),
+        username: z.string().optional(),
+      }),
+      execute: async (
+        args: { project: string; iids: number[]; username?: string },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        let resolved = args.username;
+        if (!resolved) {
+          const who = await graphqlRequest(host, token, CURRENT_USER_QUERY, {});
+          resolved = who.currentUser?.username;
+        }
+        if (!resolved) {
+          throw new Error(
+            "unassign_from_mrs: could not resolve the authenticated user; pass `username` explicitly",
+          );
+        }
+        const username: string = resolved;
+
+        const results: z.infer<typeof UnassignResultSchema>["results"] = [];
+        const failed: z.infer<typeof UnassignResultSchema>["failed"] = [];
+        for (const iid of args.iids) {
+          try {
+            const data = await graphqlRequest(
+              host,
+              token,
+              REMOVE_ASSIGNEES_MUTATION,
+              {
+                projectPath: args.project,
+                iid: String(iid),
+                usernames: [username],
+              },
+            );
+            const result = data.mergeRequestSetAssignees;
+            // GitLab returns a null payload on permission-denied / missing MR
+            // as a routine path — guard before reading .errors.
+            if (!result) {
+              throw new Error(
+                "mergeRequestSetAssignees returned null (permission denied or MR not found)",
+              );
+            }
+            if (result.errors?.length) {
+              throw new Error(result.errors.join("; "));
+            }
+            // A null mergeRequest with empty errors is unconfirmable — do not
+            // read `assignees` off it and report a fabricated empty success.
+            if (!result.mergeRequest) {
+              throw new Error(
+                "mergeRequestSetAssignees returned no mergeRequest — removal unconfirmed",
+              );
+            }
+            const remainingAssignees: string[] =
+              (result.mergeRequest.assignees?.nodes ?? []).map((
+                n: any,
+              ) => n.username);
+            // "No error" is not "removed". If the user is still in the
+            // resulting set, treat it as a failure so a queue-clearing caller
+            // isn't told it succeeded (mirrors set_mr_assignees failing loudly).
+            const stillAssigned = remainingAssignees
+              .map((u) => u.toLowerCase())
+              .includes(username.toLowerCase());
+            if (stillAssigned) {
+              throw new Error(
+                "REMOVE reported success but the user is still assigned",
+              );
+            }
+            results.push({ iid, remainingAssignees });
+          } catch (e) {
+            failed.push({
+              iid,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        const handle = await ctx.writeResource(
+          "unassignResult",
+          `${sanitizeName(args.project)}-unassign-${username}`,
+          {
+            project: args.project,
+            username,
+            results,
+            failed,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(
+          "Unassigned {user} from {ok}/{total} MRs in {project} ({failed} failed)",
+          {
+            user: username,
+            ok: results.length,
+            total: args.iids.length,
+            project: args.project,
+            failed: failed.length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    remove_mr_reviewers: {
+      description:
+        "Remove a reviewer (default: the authenticated user) from multiple MRs " +
+        "in a project, in one fan-out. Uses operationMode REMOVE, so other " +
+        "reviewers are preserved. Idempotent: removing a user who isn't a " +
+        "reviewer is a no-op. Per-MR failures are recorded and never abort the batch. " +
+        "Useful to clear yourself off MRs you've already reviewed.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iids: z.array(z.number()).min(1),
+        username: z.string().optional(),
+      }),
+      execute: async (
+        args: { project: string; iids: number[]; username?: string },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        let resolved = args.username;
+        if (!resolved) {
+          const who = await graphqlRequest(host, token, CURRENT_USER_QUERY, {});
+          resolved = who.currentUser?.username;
+        }
+        if (!resolved) {
+          throw new Error(
+            "remove_mr_reviewers: could not resolve the authenticated user; pass `username` explicitly",
+          );
+        }
+        const username: string = resolved;
+
+        const results: z.infer<typeof RemoveReviewerResultSchema>["results"] =
+          [];
+        const failed: z.infer<typeof RemoveReviewerResultSchema>["failed"] = [];
+        for (const iid of args.iids) {
+          try {
+            const data = await graphqlRequest(
+              host,
+              token,
+              REMOVE_REVIEWERS_MUTATION,
+              {
+                projectPath: args.project,
+                iid: String(iid),
+                usernames: [username],
+              },
+            );
+            const result = data.mergeRequestSetReviewers;
+            // GitLab returns a null payload on permission-denied / missing MR
+            // as a routine path — guard before reading .errors.
+            if (!result) {
+              throw new Error(
+                "mergeRequestSetReviewers returned null (permission denied or MR not found)",
+              );
+            }
+            if (result.errors?.length) {
+              throw new Error(result.errors.join("; "));
+            }
+            if (!result.mergeRequest) {
+              throw new Error(
+                "mergeRequestSetReviewers returned no mergeRequest — removal unconfirmed",
+              );
+            }
+            const remainingReviewers: string[] =
+              (result.mergeRequest.reviewers?.nodes ?? []).map((
+                n: any,
+              ) => n.username);
+            // "No error" is not "removed": if the user is still a reviewer,
+            // treat it as a failure rather than report a false success.
+            const stillReviewer = remainingReviewers
+              .map((u) => u.toLowerCase())
+              .includes(username.toLowerCase());
+            if (stillReviewer) {
+              throw new Error(
+                "REMOVE reported success but the user is still a reviewer",
+              );
+            }
+            results.push({ iid, remainingReviewers });
+          } catch (e) {
+            failed.push({
+              iid,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        const handle = await ctx.writeResource(
+          "reviewerRemovalResult",
+          `${sanitizeName(args.project)}-reviewer-remove-${username}`,
+          {
+            project: args.project,
+            username,
+            results,
+            failed,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(
+          "Removed reviewer {user} from {ok}/{total} MRs in {project} ({failed} failed)",
+          {
+            user: username,
+            ok: results.length,
+            total: args.iids.length,
+            project: args.project,
+            failed: failed.length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_mr_discussions: {
+      description:
+        "List resolvable discussion threads on an MR with per-thread resolution state and slim diff position (file/line). System-only threads are excluded. Filter for blockers with CEL: size(discussions.filter(d, d.resolvable && !d.resolved)).",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        first: z.number().int().positive().max(100).default(50),
+      }),
+      execute: async (
+        args: { project: string; iid: number; first?: number },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        // `?? 50` is not redundant with the Zod default: the test harness (and
+        // any caller that skips schema validation) does not apply defaults.
+        const first = args.first ?? 50;
+        const data = await graphqlRequest(host, token, MR_DISCUSSIONS_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+          first,
+        });
+        const conn = data.project?.mergeRequest?.discussions;
+        if (!conn) {
+          throw new Error(`MR !${args.iid} not found in ${args.project}`);
+        }
+        const parseNoteId = (gid: unknown): number =>
+          parseInt(String(gid ?? "").split("/").pop() ?? "0", 10);
+        const slim = (
+          pos: any,
+        ): { file: string | null; line: number | null } => ({
+          file: pos?.filePath ?? null,
+          line: pos?.newLine ?? pos?.oldLine ?? null,
+        });
+        const discussions: z.infer<typeof DiscussionSchema>[] = [];
+        for (const d of conn.nodes ?? []) {
+          // Drop system-only threads (label/assignee events, not human threads).
+          const userNotes = (d.notes?.nodes ?? []).filter(
+            (n: any) => !n.system,
+          );
+          if (userNotes.length === 0) continue;
+          const root = userNotes[0];
+          const rootPos = slim(root.position);
+          discussions.push({
+            id: d.id ?? "",
+            resolvable: d.resolvable ?? false,
+            resolved: d.resolved ?? false,
+            resolvedBy: d.resolvedBy?.username ?? null,
+            file: rootPos.file,
+            line: rootPos.line,
+            author: root.author?.username ?? null,
+            createdAt: root.createdAt ?? "",
+            notes: userNotes.map((n: any) => {
+              const p = slim(n.position);
+              return {
+                id: parseNoteId(n.id),
+                author: n.author?.username ?? null,
+                body: n.body ?? "",
+                createdAt: n.createdAt ?? "",
+                file: p.file,
+                line: p.line,
+              };
+            }),
+          });
+        }
+        const handle = await ctx.writeResource(
+          "discussions",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            discussions,
+            truncated: !!conn.pageInfo?.hasNextPage,
+            fetchedAt: new Date().toISOString(),
+          } as unknown as Record<string, unknown>,
+        );
+        ctx.logger.info(
+          "Fetched {count} discussions for {project}!{iid} ({unresolved} unresolved)",
+          {
+            count: discussions.length,
+            project: args.project,
+            iid: args.iid,
+            unresolved:
+              discussions.filter((x) => x.resolvable && !x.resolved).length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    resolve_mr_discussion: {
+      description:
+        "Resolve (or unresolve) a merge request discussion thread by its discussionId (from list_mr_discussions). MUTATING.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        discussionId: z.string().min(1),
+        resolved: z.boolean().default(true),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          iid: number;
+          discussionId: string;
+          resolved?: boolean;
+        },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const resolve = args.resolved ?? true;
+        const data = await graphqlRequest(
+          host,
+          token,
+          RESOLVE_DISCUSSION_MUTATION,
+          { id: args.discussionId, resolve },
+        );
+        const result = data.discussionToggleResolve;
+        // GitLab returns null on permission-denied / missing discussion.
+        if (!result) {
+          throw new Error(
+            "discussionToggleResolve returned null (permission denied or discussion not found)",
+          );
+        }
+        if (result.errors?.length) {
+          throw new Error(
+            `discussionToggleResolve failed: ${result.errors.join("; ")}`,
+          );
+        }
+        const disc = result.discussion;
+        const handle = await ctx.writeResource(
+          "discussionResolution",
+          `${sanitizeName(args.project)}-mr-${args.iid}-disc-${
+            sanitizeName(args.discussionId)
+          }`,
+          {
+            project: args.project,
+            iid: args.iid,
+            discussionId: disc?.id ?? args.discussionId,
+            resolved: disc?.resolved ?? resolve,
+            resolvedBy: disc?.resolvedBy?.username ?? null,
+            fetchedAt: new Date().toISOString(),
+          } as unknown as Record<string, unknown>,
+        );
+        ctx.logger.info("{action} discussion on {project}!{iid}", {
+          action: (disc?.resolved ?? resolve) ? "Resolved" : "Unresolved",
+          project: args.project,
+          iid: args.iid,
+        });
         return { dataHandles: [handle] };
       },
     },

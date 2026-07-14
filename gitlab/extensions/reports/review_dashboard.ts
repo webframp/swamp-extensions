@@ -97,6 +97,9 @@ export const report = {
       reason: string;
       role: string;
       project: string;
+      // GitLab-flavored reference (group/project!iid). Falls back to the bare
+      // project path for data written before the model emitted `reference`.
+      reference: string;
       title: string;
       author: string;
       days: number;
@@ -111,6 +114,7 @@ export const report = {
         ...p,
         role: "review",
         project: mr.project,
+        reference: mr.reference ?? mr.project,
         title: mr.title,
         author: mr.author,
         days: age(mr.updatedAt),
@@ -123,6 +127,7 @@ export const report = {
         ...p,
         role: "assigned",
         project: mr.project,
+        reference: mr.reference ?? mr.project,
         title: mr.title,
         author: mr.author,
         days: age(mr.updatedAt),
@@ -135,6 +140,7 @@ export const report = {
         ...p,
         role: "my MR",
         project: mr.project,
+        reference: mr.reference ?? mr.project,
         title: mr.title,
         author: mr.author,
         days: age(mr.updatedAt),
@@ -180,7 +186,7 @@ export const report = {
       for (const i of overdue) {
         const draft = i.draft ? " 🚧" : "";
         lines.push(
-          `| ${i.level} | ${i.role} | ${esc(i.project)} | ${
+          `| ${i.level} | ${i.role} | ${esc(i.reference)} | ${
             esc(i.title)
           }${draft} | ${i.days}d | ${i.reason} |`,
         );
@@ -196,7 +202,7 @@ export const report = {
       for (const i of aging) {
         const draft = i.draft ? " 🚧" : "";
         lines.push(
-          `| ${i.level} | ${i.role} | ${esc(i.project)} | ${
+          `| ${i.level} | ${i.role} | ${esc(i.reference)} | ${
             esc(i.title)
           }${draft} | ${i.days}d | ${i.reason} |`,
         );
@@ -212,7 +218,7 @@ export const report = {
       for (const i of active) {
         const draft = i.draft ? " 🚧" : "";
         lines.push(
-          `| ${i.role} | ${esc(i.project)} | ${
+          `| ${i.role} | ${esc(i.reference)} | ${
             esc(i.title)
           }${draft} | ${i.days}d |`,
         );
@@ -230,14 +236,15 @@ export const report = {
     if (data.todos?.length) {
       lines.push(`## Todos (${data.todos.length})`);
       lines.push("");
-      lines.push("| Action | Target | Author | Age |");
-      lines.push("|--------|--------|--------|-----|");
+      lines.push("| Action | Item | Author | Age |");
+      lines.push("|--------|------|--------|-----|");
       for (const todo of data.todos) {
         const days = age(todo.createdAt);
+        // Prefer the unique reference (group/project!iid); fall back to the
+        // target type for older data or targets without a parseable reference.
+        const item = todo.reference ?? todo.targetType;
         lines.push(
-          `| ${todo.action} | ${todo.targetType} | ${
-            esc(todo.author)
-          } | ${days}d |`,
+          `| ${todo.action} | ${esc(item)} | ${esc(todo.author)} | ${days}d |`,
         );
       }
       lines.push("");
