@@ -76,6 +76,42 @@ const CostSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** One product's usage + cost for a single user over the window. */
+const UserProductUsageSchema = z.object({
+  product: z.string(),
+  totalTokens: z.number().nullable(),
+  outputTokens: z.number().nullable(),
+  uncachedInputTokens: z.number().nullable(),
+  cacheReadInputTokens: z.number().nullable(),
+  requests: z.number().nullable(),
+  costUsd: z.number().nullable(),
+  listCostUsd: z.number().nullable(),
+});
+
+/** Per-user usage + cost across products (Claude Code broken out by `product`). */
+const UserUsageRecordSchema = z.object({
+  userId: z.string(),
+  email: z.string().nullable(),
+  name: z.string().nullable(),
+  totalTokens: z.number(),
+  totalCostUsd: z.number(),
+  byProduct: z.array(UserProductUsageSchema),
+});
+
+const UserUsageSchema = z.object({
+  startingAt: z.string(),
+  endingAt: z.string(),
+  filteredEmail: z.string().nullable(),
+  users: z.array(UserUsageRecordSchema),
+  count: z.number(),
+  dataRefreshedAt: z.string().nullable(),
+  // false when the report fetch failed (not an Enterprise plan, or the key
+  // lacks read:analytics) — distinguishes error from a genuinely empty window.
+  collected: z.boolean(),
+  error: z.string().nullable(),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
 // API Client
 // =============================================================================
@@ -188,6 +224,12 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** A data-instance-safe token (no slashes/spaces) from an arbitrary string. */
+function sanitize(s: string): string {
+  return s.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "user";
+}
+
 /** True if any per-product metric block on a user record shows field > 0. */
 function usedAcrossProducts(user: any, field: string): boolean {
   const blocks = [
@@ -206,7 +248,7 @@ function usedAcrossProducts(user: any, field: string): boolean {
 /** Claude Enterprise Analytics — seat counts, adoption, DAU/WAU/MAU, and cost via the Analytics API. */
 export const model = {
   type: "@webframp/anthropic/analytics",
-  version: "2026.07.07.1",
+  version: "2026.07.14.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -237,6 +279,13 @@ export const model = {
       schema: CostSchema,
       lifetime: "6h" as const,
       garbageCollection: 5,
+    },
+    userUsage: {
+      description:
+        "Per-user token usage + cost across products (incl. claude_code) from /analytics/user_usage_report and /user_cost_report; optionally filtered to one email.",
+      schema: UserUsageSchema,
+      lifetime: "6h" as const,
+      garbageCollection: 10,
     },
   },
 
@@ -419,6 +468,230 @@ export const model = {
           { days: summaries.length, handles: handles.length },
         );
         return { dataHandles: handles };
+      },
+    },
+
+    collect_user_usage: {
+      description:
+        "Per-user token usage and cost from the Enterprise Analytics user_usage_report + user_cost_report endpoints, grouped by product (Claude Code broken out). Optionally filter to one user by email. Degrades (collected:false) rather than throwing when the reports are unavailable (e.g. seat-based plan or missing read:analytics scope).",
+      arguments: z.object({
+        startDate: z.string().optional().describe(
+          "Start (YYYY-MM-DD, UTC, no earlier than 2026-01-01). Defaults to 30 days ago. Window spans at most 31 days.",
+        ),
+        endDate: z.string().optional().describe(
+          "End (YYYY-MM-DD, UTC). Defaults to now.",
+        ),
+        email: z.string().optional().describe(
+          "If set, keep only the user whose actor.email matches (case-insensitive).",
+        ),
+        products: z.array(z.string()).optional().describe(
+          'Product filter, e.g. ["claude_code"]. Omit for all products; rows are grouped by product either way.',
+        ),
+      }),
+      execute: async (
+        args: {
+          startDate?: string;
+          endDate?: string;
+          email?: string;
+          products?: string[];
+        },
+        ctx: ModelContext,
+      ) => {
+        const key = ctx.globalArgs.analyticsKey;
+        const nowIso = new Date().toISOString();
+        const start = args.startDate ?? daysAgoYmd(30);
+        const startingAt = `${start}T00:00:00Z`;
+        const endingAt = args.endDate ? `${args.endDate}T00:00:00Z` : nowIso;
+        const emailFilter = args.email?.trim().toLowerCase() || null;
+        const products = args.products;
+        const instance = emailFilter ? sanitize(emailFilter) : "all";
+
+        const baseParams: QueryParams = {
+          starting_at: startingAt,
+          ending_at: endingAt,
+          "group_by[]": ["product"],
+          limit: "1000",
+          ...(products && products.length ? { "products[]": products } : {}),
+        };
+
+        type Prod = {
+          product: string;
+          totalTokens: number | null;
+          outputTokens: number | null;
+          uncachedInputTokens: number | null;
+          cacheReadInputTokens: number | null;
+          requests: number | null;
+          costUsd: number | null;
+          listCostUsd: number | null;
+        };
+        type Rec = {
+          userId: string;
+          email: string | null;
+          name: string | null;
+          byProduct: Map<string, Prod>;
+        };
+        const byUser = new Map<string, Rec>();
+        const rec = (a: any): Rec => {
+          const id = a?.user_id ?? "unknown";
+          let r = byUser.get(id);
+          if (!r) {
+            r = {
+              userId: id,
+              email: a?.email ?? null,
+              name: a?.name ?? null,
+              byProduct: new Map(),
+            };
+            byUser.set(id, r);
+          }
+          if (!r.email && a?.email) r.email = a.email;
+          if (!r.name && a?.name) r.name = a.name;
+          return r;
+        };
+        const prod = (r: Rec, product: string): Prod => {
+          let p = r.byProduct.get(product);
+          if (!p) {
+            p = {
+              product,
+              totalTokens: null,
+              outputTokens: null,
+              uncachedInputTokens: null,
+              cacheReadInputTokens: null,
+              requests: null,
+              costUsd: null,
+              listCostUsd: null,
+            };
+            r.byProduct.set(product, p);
+          }
+          return p;
+        };
+        const addNum = (cur: number | null, v: unknown): number | null => {
+          const n = num(v);
+          return n === null ? cur : (cur ?? 0) + n;
+        };
+
+        // The two reports fail INDEPENDENTLY: a seat-based plan commonly serves
+        // user_usage_report (tokens) while user_cost_report 403s. Collect each
+        // under its own try so a cost failure never discards the token data —
+        // mirrors collect_analytics's per-source best-effort.
+        let dataRefreshedAt: string | null = null;
+        let usageOk = false;
+        let costOk = false;
+        let errorMsg: string | null = null;
+
+        try {
+          // Usage report — tokens and requests, grouped by product.
+          const usage = await paginateAll(
+            key,
+            "/v1/organizations/analytics/user_usage_report",
+            { ...baseParams, order_by: "total_tokens", order: "desc" },
+          );
+          dataRefreshedAt = usage.dataRefreshedAt ?? dataRefreshedAt;
+          for (const row of usage.items) {
+            const p = prod(rec(row.actor), row.product ?? "unknown");
+            p.totalTokens = addNum(p.totalTokens, row.total_tokens);
+            p.outputTokens = addNum(p.outputTokens, row.output_tokens);
+            p.uncachedInputTokens = addNum(
+              p.uncachedInputTokens,
+              row.uncached_input_tokens,
+            );
+            p.cacheReadInputTokens = addNum(
+              p.cacheReadInputTokens,
+              row.cache_read_input_tokens,
+            );
+            p.requests = addNum(p.requests, row.requests);
+          }
+          usageOk = true;
+        } catch (err) {
+          errorMsg = `user_usage_report: ${String(err)}`;
+          (ctx.logger.warn ?? ctx.logger.info)(
+            "user usage report failed: {error}",
+            { error: String(err) },
+          );
+        }
+
+        try {
+          // Cost report — `amount`/`list_amount` are USD minor units (cents).
+          const cost = await paginateAll(
+            key,
+            "/v1/organizations/analytics/user_cost_report",
+            { ...baseParams },
+          );
+          dataRefreshedAt = cost.dataRefreshedAt ?? dataRefreshedAt;
+          for (const row of cost.items) {
+            const p = prod(rec(row.actor), row.product ?? "unknown");
+            const amt = num(row.amount);
+            if (amt !== null) p.costUsd = (p.costUsd ?? 0) + amt / 100;
+            const list = num(row.list_amount);
+            if (list !== null) {
+              p.listCostUsd = (p.listCostUsd ?? 0) + list / 100;
+            }
+          }
+          costOk = true;
+        } catch (err) {
+          const m = `user_cost_report: ${String(err)}`;
+          errorMsg = errorMsg ? `${errorMsg}; ${m}` : m;
+          (ctx.logger.warn ?? ctx.logger.info)(
+            "user cost report failed: {error}",
+            { error: String(err) },
+          );
+        }
+
+        // Collected if EITHER report returned; error carries any partial reason.
+        const collected = usageOk || costOk;
+        // Round per-row cent-division noise off the aggregated dollar totals.
+        const r2 = (n: number) => Math.round(n * 100) / 100;
+
+        let users = [...byUser.values()].map((r) => {
+          const byProduct = [...r.byProduct.values()].map((p) => ({
+            ...p,
+            costUsd: p.costUsd === null ? null : r2(p.costUsd),
+            listCostUsd: p.listCostUsd === null ? null : r2(p.listCostUsd),
+          }));
+          return {
+            userId: r.userId,
+            email: r.email,
+            name: r.name,
+            totalTokens: byProduct.reduce(
+              (t, p) => t + (p.totalTokens ?? 0),
+              0,
+            ),
+            totalCostUsd: r2(
+              byProduct.reduce((t, p) => t + (p.costUsd ?? 0), 0),
+            ),
+            byProduct,
+          };
+        });
+        if (emailFilter) {
+          users = users.filter((u) =>
+            (u.email ?? "").toLowerCase() === emailFilter
+          );
+        }
+        users.sort((a, b) =>
+          b.totalCostUsd - a.totalCostUsd || b.totalTokens - a.totalTokens
+        );
+
+        // Emails aren't injective through sanitize(); for a single filtered
+        // user key the instance by the unique userId so two users can't collide.
+        const outInstance = emailFilter && users.length === 1
+          ? `user-${sanitize(users[0].userId)}`
+          : instance;
+
+        const handle = await ctx.writeResource("userUsage", outInstance, {
+          startingAt,
+          endingAt,
+          filteredEmail: emailFilter,
+          users,
+          count: users.length,
+          dataRefreshedAt,
+          collected,
+          error: usageOk && costOk ? null : errorMsg,
+          fetchedAt: nowIso,
+        });
+        ctx.logger.info(
+          "Collected per-user usage: {count} user(s) over {start}..{end}",
+          { count: users.length, start: startingAt, end: endingAt },
+        );
+        return { dataHandles: [handle] };
       },
     },
   },
