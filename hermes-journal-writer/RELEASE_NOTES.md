@@ -1,3 +1,15 @@
+## 2026.07.09.1
+
+**Fixed:** `write_daily_entry` failed argument validation under swamp. Its method
+arguments schema was `z.object({}).strict()`, and `.strict()` rejects the extra
+keys swamp injects into a method call — so every invocation errored before the
+method body ran. The schema is now `z.object({})` (no `.strict()`), accepting the
+call as swamp makes it.
+
+No behavioral change to the journal output or git handling: every safeguard from
+2026.07.08.1 (single-colon FILETAGS, `skipped-no-data`, honest git status codes,
+single-file commit, stat rethrow, timeout cleanup) is unchanged.
+
 ## 2026.07.08.1
 
 **Changed:** One org file per day instead of a monthly rollup.
