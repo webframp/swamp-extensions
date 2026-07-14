@@ -158,6 +158,23 @@ const ErrorAnalysisSchema = z.object({
  * days before now) and ISO 8601 timestamps. Falls back to one hour ago when
  * the input cannot be parsed.
  */
+/**
+ * Deterministic short hash (SHA-1, first 16 hex chars) for building stable
+ * resource instance names from variable-length inputs such as filter
+ * expressions. Keeps re-runs of the same query idempotent instead of writing a
+ * fresh resource on every invocation.
+ */
+async function shortHash(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
+}
+
 function parseRelativeTime(timeStr: string): Date {
   const now = new Date();
 
@@ -482,8 +499,8 @@ export const model = {
           } while (nextToken && traces.length < args.limit);
 
           const instanceName = args.filterExpression
-            ? `traces-filtered-${Date.now()}`
-            : `traces-${Date.now()}`;
+            ? `traces-filtered-${await shortHash(args.filterExpression)}`
+            : "traces-all";
 
           const handle = await context.writeResource(
             "trace_summaries",
@@ -598,7 +615,7 @@ export const model = {
             nextToken = response.NextToken;
           } while (nextToken && traces.length < args.limit);
 
-          const instanceName = `errors-${args.errorType}-${Date.now()}`;
+          const instanceName = `errors-${args.errorType}`;
 
           const handle = await context.writeResource(
             "trace_summaries",
@@ -734,7 +751,7 @@ export const model = {
 
           const handle = await context.writeResource(
             "error_analysis",
-            `analysis-${Date.now()}`,
+            "error-analysis",
             {
               totalTraces,
               faultCount,
