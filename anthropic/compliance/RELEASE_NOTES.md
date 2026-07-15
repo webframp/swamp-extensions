@@ -1,3 +1,44 @@
+## 2026.07.15.1
+
+**Fixed:**
+
+- `sync_users`, `sync_roles`, `sync_groups`, `sync_effective_settings`, and
+  the `sync_directory` fan-out all wrote their resource using the
+  organization ID as the instance name. Since every one of those specs
+  shared the same instance name, each sync method's write landed as a new
+  *version* of the same data artifact rather than its own resource — running
+  `sync_roles` after `sync_effective_settings` silently pushed the effective
+  settings snapshot into history, and `swamp data get claude-compliance
+  <orgId>` would return whichever spec synced most recently, not a specific
+  one.
+
+**Changed:**
+
+- These methods now write to a fixed instance name equal to their own spec
+  name (`"users"`, `"roles"`, `"groups"`, `"effectiveSettings"`) instead of
+  the organization ID, matching the existing pattern used by
+  `collect_activities` (`"recent"`) and `sync_organizations` (`"all"`) — each
+  spec's instance name is exclusive to that spec, since swamp's storage key
+  is `(modelId, name)` and does not include `specName`. An earlier draft of
+  this fix used a single shared literal (`"current"`) for all four specs,
+  which reproduced the exact same collision under a different name; that
+  was caught in review before release.
+- `get_group_members` now writes to `member:<groupId>` instead of the bare
+  `groupId`. Since `groupId` is caller-supplied, an unnamespaced write could
+  collide with one of the new fixed literals above (e.g. a group ID of
+  `"users"` would have landed on the same data name as `sync_users`).
+
+**Upgrade note:** Data written under the old org-ID-keyed name by previous
+versions is orphaned by this change — it remains in history (subject to
+each resource's normal GC policy) but is no longer returned by `swamp data
+get claude-compliance <orgId>`. Re-run `sync_users`, `sync_roles`,
+`sync_groups`, and `sync_effective_settings` (or `sync_directory`) after
+upgrading, then read them back with `swamp data get claude-compliance
+users` / `roles` / `groups` / `effectiveSettings`. Group member data moves
+from `swamp data get claude-compliance <groupId>` to `swamp data get
+claude-compliance member:<groupId>` — update any CEL expressions or scripts
+referencing the old form.
+
 ## 2026.07.07.1
 
 **Fixed:**
