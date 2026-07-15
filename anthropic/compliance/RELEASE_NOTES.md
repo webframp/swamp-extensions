@@ -23,6 +23,10 @@
   this fix used a single shared literal (`"current"`) for all four specs,
   which reproduced the exact same collision under a different name; that
   was caught in review before release.
+- `get_group_members` now writes to `member:<groupId>` instead of the bare
+  `groupId`. Since `groupId` is caller-supplied, an unnamespaced write could
+  collide with one of the new fixed literals above (e.g. a group ID of
+  `"users"` would have landed on the same data name as `sync_users`).
 
 **Upgrade note:** Data written under the old org-ID-keyed name by previous
 versions is orphaned by this change — it remains in history (subject to
@@ -30,7 +34,10 @@ each resource's normal GC policy) but is no longer returned by `swamp data
 get claude-compliance <orgId>`. Re-run `sync_users`, `sync_roles`,
 `sync_groups`, and `sync_effective_settings` (or `sync_directory`) after
 upgrading, then read them back with `swamp data get claude-compliance
-users` / `roles` / `groups` / `effectiveSettings`.
+users` / `roles` / `groups` / `effectiveSettings`. Group member data moves
+from `swamp data get claude-compliance <groupId>` to `swamp data get
+claude-compliance member:<groupId>` — update any CEL expressions or scripts
+referencing the old form.
 
 ## 2026.07.07.1
 

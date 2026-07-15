@@ -169,7 +169,7 @@ function startMockServer(
     if (path.endsWith("/roles")) {
       return Response.json({ data: MOCK_ROLES, has_more: false });
     }
-    if (path.match(/\/groups\/grp_\w+\/members/)) {
+    if (path.match(/\/groups\/[^/]+\/members/)) {
       return Response.json({ data: MOCK_GROUP_MEMBERS, has_more: false });
     }
     if (path.endsWith("/groups")) {
@@ -408,7 +408,7 @@ Deno.test({
       assertEquals(result.dataHandles.length, 1);
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "groupMembers");
-      assertEquals(resources[0].name, "grp_1");
+      assertEquals(resources[0].name, "member:grp_1");
       const data = resources[0].data as {
         members: typeof MOCK_GROUP_MEMBERS;
         groupName: string;
@@ -417,6 +417,45 @@ Deno.test({
       assertEquals(data.members[0].source_type, "scim");
       assertEquals(data.members[1].source_type, "direct");
       assertEquals(data.groupName, "Engineering");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "compliance: get_group_members namespaces groupId so it can't collide with a fixed spec literal",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          complianceKey: "sk-ant-api01-test",
+          orgId: "org_abc123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-compliance",
+          version: 1,
+          tags: {},
+        },
+      });
+      // "users" is also the fixed instance name sync_users writes to. If a
+      // group happened to have this ID, get_group_members must not land on
+      // the same data name.
+      await model.methods.get_group_members.execute(
+        { groupId: "users" },
+        context as unknown as Parameters<
+          typeof model.methods.get_group_members.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "groupMembers");
+      assertEquals(resources[0].name, "member:users");
     } finally {
       uninstall();
       await server.shutdown();

@@ -538,9 +538,11 @@ export const model = {
           count: members.length,
           fetchedAt: new Date().toISOString(),
         };
+        // Namespaced so a groupId can never collide with another spec's
+        // fixed instance name (e.g. a group literally named "users").
         const handle = await ctx.writeResource(
           "groupMembers",
-          args.groupId,
+          `member:${args.groupId}`,
           result,
         );
         ctx.logger.info("Fetched {count} members for group {group}", {
