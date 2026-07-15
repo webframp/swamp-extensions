@@ -281,7 +281,7 @@ Deno.test({
       assertEquals(result.dataHandles.length, 1);
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "users");
-      assertEquals(resources[0].name, "org_abc123");
+      assertEquals(resources[0].name, "users");
       const data = resources[0].data as {
         users: typeof MOCK_USERS;
         count: number;
@@ -324,6 +324,7 @@ Deno.test({
       assertEquals(result.dataHandles.length, 1);
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "roles");
+      assertEquals(resources[0].name, "roles");
       const data = resources[0].data as {
         roles: typeof MOCK_ROLES;
         count: number;
@@ -365,6 +366,7 @@ Deno.test({
       assertEquals(result.dataHandles.length, 1);
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "groups");
+      assertEquals(resources[0].name, "groups");
       const data = resources[0].data as {
         groups: typeof MOCK_GROUPS;
         count: number;
@@ -450,6 +452,7 @@ Deno.test({
       assertEquals(result.dataHandles.length, 1);
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "effectiveSettings");
+      assertEquals(resources[0].name, "effectiveSettings");
       const data = resources[0].data as {
         settings: { name: string; value: unknown }[];
         count: number;
@@ -536,6 +539,12 @@ Deno.test({
       const resources = getWrittenResources();
       const specNames = resources.map((r) => r.specName).sort();
       assertEquals(specNames, ["groups", "roles", "users"]);
+      // Each spec must write to a distinct instance name — a shared name
+      // (e.g. orgId, or any other single literal reused across specs) causes
+      // sync methods to overwrite each other's data, since swamp's storage
+      // key is (modelId, name) and does not include specName.
+      const names = resources.map((r) => r.name).sort();
+      assertEquals(names, ["groups", "roles", "users"]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -571,7 +580,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "users");
-      assertEquals(resources[0].name, "a1b2c3d4-5678-9abc-def0-123456789abc");
+      assertEquals(resources[0].name, "users");
     } finally {
       uninstall();
       await server.shutdown();

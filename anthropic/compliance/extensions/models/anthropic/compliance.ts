@@ -253,7 +253,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.07.07.1",
+  version: "2026.07.15.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -418,7 +418,7 @@ export const model = {
           has_more: hasMore,
           fetchedAt: new Date().toISOString(),
         };
-        const handle = await ctx.writeResource("users", orgId, result);
+        const handle = await ctx.writeResource("users", "users", result);
         ctx.logger.info("Synced {count} users for org {orgId}", {
           count: result.count,
           orgId,
@@ -449,7 +449,7 @@ export const model = {
           has_more: data.has_more ?? false,
           fetchedAt: new Date().toISOString(),
         };
-        const handle = await ctx.writeResource("roles", orgId, result);
+        const handle = await ctx.writeResource("roles", "roles", result);
         ctx.logger.info("Synced {count} roles for org {orgId}", {
           count: result.count,
           orgId,
@@ -482,7 +482,7 @@ export const model = {
           has_more: data.has_more ?? false,
           fetchedAt: new Date().toISOString(),
         };
-        const handle = await ctx.writeResource("groups", orgId, result);
+        const handle = await ctx.writeResource("groups", "groups", result);
         ctx.logger.info("Synced {count} groups for org {orgId}", {
           count: result.count,
           orgId,
@@ -578,7 +578,7 @@ export const model = {
         };
         const handle = await ctx.writeResource(
           "effectiveSettings",
-          orgId,
+          "effectiveSettings",
           result,
         );
         ctx.logger.info(
@@ -612,7 +612,7 @@ export const model = {
           created_at: u.created_at ?? null,
         }));
         handles.push(
-          await ctx.writeResource("users", orgId, {
+          await ctx.writeResource("users", "users", {
             orgId,
             users,
             count: users.length,
@@ -631,7 +631,7 @@ export const model = {
           description: r.description ?? null,
         }));
         handles.push(
-          await ctx.writeResource("roles", orgId, {
+          await ctx.writeResource("roles", "roles", {
             orgId,
             roles,
             count: roles.length,
@@ -651,7 +651,7 @@ export const model = {
           member_count: g.member_count ?? null,
         }));
         handles.push(
-          await ctx.writeResource("groups", orgId, {
+          await ctx.writeResource("groups", "groups", {
             orgId,
             groups,
             count: groups.length,
