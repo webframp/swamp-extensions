@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/adopt"
-version: "2026.06.23.1"
+version: "2026.07.16.1"
 description: |
   Brownfield adoption of existing AWS infrastructure into swamp models.
   Discovers resources via native SDK calls, generates setup commands,
@@ -49,4 +49,4 @@ labels:
 dependencies:
   - "@swamp/aws/ec2@2026.04.03.2"
   - "@swamp/aws/rds@2026.04.23.2"
-  - "@swamp/aws/secretsmanager@2026.05.18.1"
+  - "@swamp/aws/secretsmanager@2026.06.15.1"
