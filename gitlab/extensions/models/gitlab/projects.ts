@@ -194,6 +194,14 @@ const MrAssigneesSchema = z.object({
   fetchedAt: z.string(),
 });
 
+const MrReviewersSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  // Resulting reviewer usernames after the set (empty when cleared).
+  reviewers: z.array(z.string()),
+  fetchedAt: z.string(),
+});
+
 const UnassignResultSchema = z.object({
   project: z.string(),
   // The user removed from each MR (the authenticated user unless overridden).
@@ -903,6 +911,14 @@ mutation removeReviewers($projectPath: ID!, $iid: String!, $usernames: [String!]
   }
 }`;
 
+const SET_REVIEWERS_MUTATION = `
+mutation setReviewers($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  mergeRequestSetReviewers(input: { projectPath: $projectPath, iid: $iid, reviewerUsernames: $usernames, operationMode: REPLACE }) {
+    mergeRequest { iid reviewers { nodes { username } } }
+    errors
+  }
+}`;
+
 const CURRENT_USER_QUERY = `
 query { currentUser { username } }`;
 
@@ -1157,7 +1173,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.11.1",
+  version: "2026.07.16.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/review-dashboard"],
 
@@ -1265,6 +1281,12 @@ export const model = {
     mrAssignees: {
       description: "Assignees of an MR after a set/unassign",
       schema: MrAssigneesSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    mrReviewers: {
+      description: "Reviewers of an MR after a set/clear",
+      schema: MrReviewersSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -2922,6 +2944,72 @@ export const model = {
             total: args.iids.length,
             project: args.project,
             failed: failed.length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    set_mr_reviewers: {
+      description:
+        "Set (replace) an MR's reviewers by username; pass an empty list to clear. " +
+        "GitLab EE/Premium supports multiple reviewers.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        usernames: z.array(z.string()).default([]),
+      }),
+      execute: async (
+        args: { project: string; iid: number; usernames: string[] },
+        ctx: ModelContext,
+      ) => {
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, SET_REVIEWERS_MUTATION, {
+          projectPath: args.project,
+          iid: String(args.iid),
+          usernames: args.usernames,
+        });
+        const result = data.mergeRequestSetReviewers;
+        if (result.errors?.length) {
+          throw new Error(
+            `mergeRequestSetReviewers failed: ${result.errors.join("; ")}`,
+          );
+        }
+        const reviewers: string[] =
+          (result.mergeRequest?.reviewers?.nodes ?? []).map((n: any) =>
+            n.username
+          );
+        if (args.usernames.length > 0) {
+          const got = new Set(reviewers.map((u) => u.toLowerCase()));
+          const missing = args.usernames.filter((u) =>
+            !got.has(u.toLowerCase())
+          );
+          if (missing.length) {
+            throw new Error(
+              `set_mr_reviewers: GitLab did not set ${
+                missing.join(", ")
+              } as reviewer(s) (unknown user or permission issue)`,
+            );
+          }
+        }
+        const handle = await ctx.writeResource(
+          "mrReviewers",
+          `${sanitizeName(args.project)}-mr-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            reviewers,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info(
+          reviewers.length
+            ? "Set MR !{iid} reviewers: {who}"
+            : "Cleared MR !{iid} reviewers",
+          {
+            iid: args.iid,
+            who: reviewers.join(", "),
+            project: args.project,
           },
         );
         return { dataHandles: [handle] };
