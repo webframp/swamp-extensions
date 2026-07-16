@@ -998,11 +998,16 @@ Deno.test({
 Deno.test({
   name: "get_drift_velocity: computes correct rates by resource type",
   fn: async () => {
+    const now = new Date().toISOString();
+    const oneHourAgo = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+      .toISOString();
+
     const { context, getWrittenResources } = createDriftContext(
       {},
       {
         latest: {
-          computedAt: "2026-06-27T10:00:00Z",
+          computedAt: now,
           summary: {},
           resources: [
             {
@@ -1011,8 +1016,8 @@ Deno.test({
               driftStatus: "drifted",
               changedAttributes: [],
               detectionSource: "adopt",
-              firstDriftDetected: "2026-06-27T09:00:00Z",
-              lastChecked: "2026-06-27T10:00:00Z",
+              firstDriftDetected: oneHourAgo,
+              lastChecked: now,
             },
             {
               canonicalId: "b",
@@ -1021,7 +1026,7 @@ Deno.test({
               changedAttributes: [],
               detectionSource: "adopt",
               firstDriftDetected: null,
-              lastChecked: "2026-06-27T10:00:00Z",
+              lastChecked: now,
             },
             {
               canonicalId: "c",
@@ -1029,8 +1034,8 @@ Deno.test({
               driftStatus: "drifted",
               changedAttributes: [],
               detectionSource: "adopt",
-              firstDriftDetected: "2026-06-22T00:00:00Z",
-              lastChecked: "2026-06-27T10:00:00Z",
+              firstDriftDetected: fiveDaysAgo,
+              lastChecked: now,
             },
           ],
         },
