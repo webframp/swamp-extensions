@@ -1,6 +1,6 @@
-## 2026.07.16.1
+## 2026.07.16.2
 
-**Changed:** Added a `fmt:check` task to the bundled `worker/deno.json` (PR
-#183). This is the first version bump since that change, so it's the first
-release where the worker package ships with that task available. No behavior
-change to the model itself.
+**Fixed:** `2026.07.16.1` published successfully but the registry's
+`latestVersion` never advanced to it (filed as swamp Lab #1195) —
+`swamp extension pull` was still resolving `2026.06.23.1`. This bump re-triggers
+the publish. No content change beyond the previous release.
