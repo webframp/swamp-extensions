@@ -128,31 +128,29 @@ export const report = {
       }
     };
 
-    if (settingsData) {
-      const settings = [...(settingsData.settings as SettingEntry[] ?? [])]
-        .sort(byName);
+    if (settingsData && Array.isArray(settingsData.settings)) {
+      const settings = [...(settingsData.settings as SettingEntry[])].sort(
+        byName,
+      );
       json.effectiveSettings = { settings };
       markNoteTimestamp(settingsData);
     }
 
-    if (rolesData) {
-      const roles = [...(rolesData.roles as RoleEntry[] ?? [])].sort(byName);
+    if (rolesData && Array.isArray(rolesData.roles)) {
+      const roles = [...(rolesData.roles as RoleEntry[])].sort(byName);
       json.roles = roles;
       markNoteTimestamp(rolesData);
     }
 
-    if (groupsData) {
-      const groups = [...(groupsData.groups as GroupEntry[] ?? [])].sort(
-        byName,
-      );
+    if (groupsData && Array.isArray(groupsData.groups)) {
+      const groups = [...(groupsData.groups as GroupEntry[])].sort(byName);
       json.groups = groups;
       markNoteTimestamp(groupsData);
     }
 
-    if (orgsData) {
-      const organizations = [
-        ...(orgsData.organizations as OrganizationEntry[] ?? []),
-      ].sort(byName);
+    if (orgsData && Array.isArray(orgsData.organizations)) {
+      const organizations = [...(orgsData.organizations as OrganizationEntry[])]
+        .sort(byName);
       json.organizations = organizations;
       markNoteTimestamp(orgsData);
     }

@@ -192,6 +192,39 @@ Deno.test("never includes the raw users array, only the count", async () => {
   });
   const asString = JSON.stringify(result.json);
   assertEquals(asString.includes("alice@example.com"), false);
+  assertEquals(result.markdown.includes("alice@example.com"), false);
+  assertEquals(result.markdown.includes("Alice"), false);
+});
+
+// ============================================================
+// Resilience: malformed spec data doesn't crash the whole report
+// ============================================================
+
+Deno.test("omits a spec whose array field is malformed instead of throwing", async () => {
+  const context = createContext([
+    artifact("effectiveSettings", {
+      orgId: "org-123",
+      settings: [{ name: "sso_enabled", value: true }],
+      count: 1,
+      fetchedAt: "2026-07-10T00:00:00.000Z",
+    }),
+    // Malformed: "roles" should be an array, but isn't.
+    artifact("roles", {
+      orgId: "org-123",
+      roles: "not-an-array",
+      count: 0,
+      has_more: false,
+      fetchedAt: "2026-07-12T00:00:00.000Z",
+    }),
+  ]);
+
+  // deno-lint-ignore no-explicit-any
+  const result = await report.execute(context as any);
+
+  assertEquals(result.json.roles, undefined);
+  assertEquals(result.json.effectiveSettings, {
+    settings: [{ name: "sso_enabled", value: true }],
+  });
 });
 
 // ============================================================
