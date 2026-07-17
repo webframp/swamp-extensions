@@ -6,17 +6,17 @@ Observe a Claude Enterprise account via the Compliance API.
 
 Captures versioned snapshots of:
 
-- **Activity feed** — 6-year audit trail with filtering by activity type,
-  actor, and time range (1-minute latency, 600 req/min shared budget)
-- **Directory** — users, roles, groups with SCIM source attribution
-  (`direct` vs `scim`)
+- **Activity feed** — 6-year audit trail with filtering by activity type, actor,
+  and time range (1-minute latency, 600 req/min shared budget)
+- **Directory** — users, roles, groups with SCIM source attribution (`direct` vs
+  `scim`)
 - **Effective settings** — runtime configuration: data retention, content
   redaction, IP allowlist, SSO provisioning mode, code execution egress
 
 ## Authentication
 
-Requires a **Compliance Access Key** (`sk-ant-api01-...`) created by the
-primary owner in claude.ai → Org settings → API access.
+Requires a **Compliance Access Key** (`sk-ant-api01-...`) created by the primary
+owner in claude.ai → Org settings → API access.
 
 ## Quick start
 
