@@ -16,7 +16,7 @@ import {
   DescribeAlarmHistoryCommand,
   DescribeAlarmsCommand,
   type MetricAlarm,
-} from "npm:@aws-sdk/client-cloudwatch@3.1069.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1090.0";
 
 const MAX_PAGES = 10;
 

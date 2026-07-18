@@ -1,3 +1,9 @@
+## 2026.07.18.1
+
+**Changed:** Pinned the `zod` import specifier in the `metrics` model to
+`npm:zod@4.4.3` (was `npm:zod@^4.3.6`) for hermetic dependency resolution. No
+runtime behavior change.
+
 ## 2026.07.13.5
 
 **Fixed:** The daily briefing falsely reported `degraded: true` whenever the

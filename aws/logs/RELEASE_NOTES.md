@@ -1,3 +1,8 @@
+## 2026.07.18.1
+
+**Changed:** Bumped `@aws-sdk/client-cloudwatch-logs` from `3.1069.0` to
+`3.1090.0` for dependency freshness. No behavior change.
+
 ## 2026.07.13.1
 
 **Fixed:** The `query` method wrote its `query_results` resource under an

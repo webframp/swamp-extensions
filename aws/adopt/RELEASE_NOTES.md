@@ -1,3 +1,11 @@
+## 2026.07.18.1
+
+**Added:** `@module`-level JSDoc documentation to `adopt.ts`.
+
+**Changed:** Bumped `@aws-sdk/client-cloudformation`, `@aws-sdk/client-ec2`,
+`@aws-sdk/client-rds`, and `@aws-sdk/client-secrets-manager` from `3.1069.0`
+to `3.1090.0` for dependency freshness. No behavior change.
+
 ## 2026.07.16.1
 
 **Fixed:** The pinned dependency on `@swamp/aws/secretsmanager@2026.05.18.1` no

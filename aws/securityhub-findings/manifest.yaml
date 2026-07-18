@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/securityhub-findings"
-version: "2026.07.10.1"
+version: "2026.07.18.1"
 description: |
   Query and manage AWS Security Hub findings from a delegated administrator
   account. Leverages cross-region aggregation to cover the entire AWS

@@ -13,26 +13,26 @@ import {
   ListEventBusesCommand,
   ListRulesCommand,
   ListTargetsByRuleCommand,
-} from "npm:@aws-sdk/client-eventbridge@3.1069.0";
+} from "npm:@aws-sdk/client-eventbridge@3.1090.0";
 import {
   ListSubscriptionsByTopicCommand,
   ListTopicsCommand,
   SNSClient,
-} from "npm:@aws-sdk/client-sns@3.1069.0";
+} from "npm:@aws-sdk/client-sns@3.1090.0";
 import {
   GetQueueAttributesCommand,
   ListQueuesCommand,
   SQSClient,
-} from "npm:@aws-sdk/client-sqs@3.1069.0";
+} from "npm:@aws-sdk/client-sqs@3.1090.0";
 import {
   LambdaClient,
   ListEventSourceMappingsCommand,
-} from "npm:@aws-sdk/client-lambda@3.1069.0";
+} from "npm:@aws-sdk/client-lambda@3.1090.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1069.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1069.0";
+} from "npm:@aws-sdk/client-sts@3.1090.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1090.0";
 
 // Defensive pagination cap. The per-topic subscription and Lambda event-source
 // mapping listings have no caller-supplied bound (unlike rules/topics/queues),

@@ -19,7 +19,7 @@ import {
   ListFindingsCommand,
   ListMembersCommand,
   type Member,
-} from "npm:@aws-sdk/client-guardduty@3.1069.0";
+} from "npm:@aws-sdk/client-guardduty@3.1090.0";
 
 // =============================================================================
 // Schemas

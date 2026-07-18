@@ -18,7 +18,7 @@ import {
   GetMetricDataCommand,
   GetMetricStatisticsCommand,
   ListMetricsCommand,
-} from "npm:@aws-sdk/client-cloudwatch@3.1069.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1090.0";
 
 /** Local type for SDK dimension responses where Name and Value are optional in list responses. */
 interface AwsDimension {

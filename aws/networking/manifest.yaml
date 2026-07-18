@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/networking"
-version: "2026.06.21.1"
+version: "2026.07.18.1"
 description: |
   Inspect VPC networking resources that commonly generate hidden costs:
   NAT Gateways, Load Balancers, and Elastic IPs.

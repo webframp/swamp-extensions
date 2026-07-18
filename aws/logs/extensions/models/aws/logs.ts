@@ -17,7 +17,7 @@ import {
   FilterLogEventsCommand,
   GetQueryResultsCommand,
   StartQueryCommand,
-} from "npm:@aws-sdk/client-cloudwatch-logs@3.1069.0";
+} from "npm:@aws-sdk/client-cloudwatch-logs@3.1090.0";
 
 // =============================================================================
 // Schemas

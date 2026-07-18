@@ -14,7 +14,7 @@ import {
   GetServiceGraphCommand,
   GetTraceSummariesCommand,
   XRayClient,
-} from "npm:@aws-sdk/client-xray@3.1069.0";
+} from "npm:@aws-sdk/client-xray@3.1090.0";
 
 // =============================================================================
 // Schemas

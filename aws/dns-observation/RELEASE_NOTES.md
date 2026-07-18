@@ -1,3 +1,8 @@
+## 2026.07.18.1
+
+**Changed:** Bumped `@aws-sdk/client-route-53` and `@aws-sdk/client-sts` from
+`3.1069.0` to `3.1090.0` for dependency freshness. No behavior change.
+
 # @webframp/aws/dns-observation v2026.07.03.1
 
 **Changed:** Added JSDoc documentation to the model export for improved

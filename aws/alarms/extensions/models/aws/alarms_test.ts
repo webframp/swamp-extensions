@@ -3,7 +3,7 @@
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1069.0";
+import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1090.0";
 import { model } from "./alarms.ts";
 
 // =============================================================================

@@ -3,7 +3,7 @@
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { PricingClient } from "npm:@aws-sdk/client-pricing@3.1069.0";
+import { PricingClient } from "npm:@aws-sdk/client-pricing@3.1090.0";
 import { model } from "./pricing.ts";
 
 // =============================================================================

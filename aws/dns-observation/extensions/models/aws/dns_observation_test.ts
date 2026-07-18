@@ -3,8 +3,8 @@
 
 import { assertEquals, assertExists, assertMatch } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { Route53Client } from "npm:@aws-sdk/client-route-53@3.1069.0";
-import { STSClient } from "npm:@aws-sdk/client-sts@3.1069.0";
+import { Route53Client } from "npm:@aws-sdk/client-route-53@3.1090.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1090.0";
 import { model } from "./dns_observation.ts";
 
 // =============================================================================

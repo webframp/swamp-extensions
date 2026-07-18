@@ -3,11 +3,11 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { EventBridgeClient } from "npm:@aws-sdk/client-eventbridge@3.1069.0";
-import { SNSClient } from "npm:@aws-sdk/client-sns@3.1069.0";
-import { SQSClient } from "npm:@aws-sdk/client-sqs@3.1069.0";
-import { LambdaClient } from "npm:@aws-sdk/client-lambda@3.1069.0";
-import { STSClient } from "npm:@aws-sdk/client-sts@3.1069.0";
+import { EventBridgeClient } from "npm:@aws-sdk/client-eventbridge@3.1090.0";
+import { SNSClient } from "npm:@aws-sdk/client-sns@3.1090.0";
+import { SQSClient } from "npm:@aws-sdk/client-sqs@3.1090.0";
+import { LambdaClient } from "npm:@aws-sdk/client-lambda@3.1090.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1090.0";
 import { model } from "./event_topology.ts";
 
 // =============================================================================
