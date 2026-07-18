@@ -1,3 +1,7 @@
+## 2026.07.18.1
+
+**Changed:** Version bump only, no code changes.
+
 ## 2026.06.26.1
 
 **Added:** Unit test coverage (`cost_report_test.ts`) with 17 tests covering skip

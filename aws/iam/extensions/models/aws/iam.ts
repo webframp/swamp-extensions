@@ -313,8 +313,15 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.06.25.5",
+  version: "2026.07.18.2",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     roles: {

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/operator-briefing"
-version: "2026.07.18.1"
+version: "2026.07.18.2"
 description: |
   Unified daily operator briefing report. A workflow-scope report over the
   `daily-briefing` workflow that loops the run's step executions, dispatches

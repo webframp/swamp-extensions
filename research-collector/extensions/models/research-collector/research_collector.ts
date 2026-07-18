@@ -385,7 +385,14 @@ async function gatherAll(
 /** Research data collector model. */
 export const model = {
   type: "@webframp/research-collector" as const,
-  version: "2026.06.22.1",
+  version: "2026.07.18.1",
+  upgrades: [
+    {
+      toVersion: "2026.07.18.1",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   globalArguments: GlobalArgsSchema,
   resources: {
     research: {

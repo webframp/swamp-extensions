@@ -1,3 +1,7 @@
+## 2026.07.18.1
+
+**Added:** An `upgrades` array entry (no-op) to `projects.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
+
 ## 2026.07.11.1
 
 **Added:** `list_todos(state?, maxTodos?)` — the authenticated user's todos across

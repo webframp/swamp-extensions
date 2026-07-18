@@ -87,8 +87,16 @@ const SecurityEventsSchema = z.object({
 /** Cloudflare WAF model definition with methods for firewall rules, WAF packages, and security events. */
 export const model = {
   type: "@webframp/cloudflare/waf",
-  version: "2026.06.27.1",
+  version: "2026.07.18.2",
   globalArguments: GlobalArgsSchema,
+
+  upgrades: [
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "rules": {

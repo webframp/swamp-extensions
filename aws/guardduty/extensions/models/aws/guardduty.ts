@@ -192,8 +192,15 @@ function mapMember(m: Member): z.infer<typeof MemberSchema> {
  */
 export const model = {
   type: "@webframp/aws/guardduty",
-  version: "2026.06.21.1",
+  version: "2026.07.18.2",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     finding_list: {

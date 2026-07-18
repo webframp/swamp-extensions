@@ -108,8 +108,16 @@ async function fetchCacheSettings(
 /** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
-  version: "2026.06.27.1",
+  version: "2026.07.18.2",
   globalArguments: GlobalArgsSchema,
+
+  upgrades: [
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "purge": {

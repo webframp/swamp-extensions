@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/service-quotas"
-version: "2026.07.18.1"
+version: "2026.07.18.2"
 description: |
   Query and monitor AWS Service Quotas across accounts. Fan-out utilization
   checks identify quotas approaching their limits before they cause failures.

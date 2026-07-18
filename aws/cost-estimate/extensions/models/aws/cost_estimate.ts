@@ -205,9 +205,17 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.06.21.1",
+  version: "2026.07.18.2",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
+
+  upgrades: [
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     estimate: {

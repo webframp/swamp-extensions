@@ -253,8 +253,15 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.07.17.1",
+  version: "2026.07.18.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.18.1",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   reports: ["@webframp/compliance-config-snapshot"],
 
   resources: {

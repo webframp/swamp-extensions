@@ -155,8 +155,15 @@ function mapTopic(raw: Record<string, unknown>): z.infer<typeof TopicSchema> {
 /** Discourse forum model — query categories, topics, and posts via REST API. */
 export const model = {
   type: "@webframp/discourse",
-  version: "2026.06.22.1",
+  version: "2026.07.18.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.18.1",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     categories: {
       description: "Forum category listing",

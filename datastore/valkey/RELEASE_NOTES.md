@@ -1,3 +1,7 @@
+## 2026.07.18.2
+
+**Changed:** Version bump only, no code changes.
+
 ## 2026.07.18.1
 
 ### Changed

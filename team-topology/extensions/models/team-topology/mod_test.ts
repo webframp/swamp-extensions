@@ -307,7 +307,12 @@ Deno.test("discover_topology writes topology resource with correct data", async 
 
   const result = await model.methods.discover_topology.execute(
     {
-      teams: [SAMPLE_TEAM, { name: "Platform", type: "platform" as const, domains: ["infra"], systems: [] }],
+      teams: [SAMPLE_TEAM, {
+        name: "Platform",
+        type: "platform" as const,
+        domains: ["infra"],
+        systems: [],
+      }],
       interactions: [SAMPLE_INTERACTION],
       systemDependencies: [SAMPLE_SYSTEM_DEP],
       notes: "First pass",
@@ -345,7 +350,10 @@ Deno.test("discover_topology logs team and interaction counts", async () => {
   await model.methods.discover_topology.execute(
     {
       teams: [SAMPLE_TEAM],
-      interactions: [SAMPLE_INTERACTION, { ...SAMPLE_INTERACTION, target: "DevEx" }],
+      interactions: [SAMPLE_INTERACTION, {
+        ...SAMPLE_INTERACTION,
+        target: "DevEx",
+      }],
       systemDependencies: [],
     },
     // deno-lint-ignore no-explicit-any
@@ -462,7 +470,13 @@ Deno.test("map_flow logs stream and step counts", async () => {
   const { context, getLogsByLevel } = createTopologyContext();
 
   await model.methods.map_flow.execute(
-    { streams: [SAMPLE_STREAM, { ...SAMPLE_STREAM, name: "Second", steps: [{ name: "S1", ownerTeam: "T" }] }] },
+    {
+      streams: [SAMPLE_STREAM, {
+        ...SAMPLE_STREAM,
+        name: "Second",
+        steps: [{ name: "S1", ownerTeam: "T" }],
+      }],
+    },
     // deno-lint-ignore no-explicit-any
     context as any,
   );
@@ -579,7 +593,12 @@ Deno.test("record_assessment writes assessment resource with correct data", asyn
 
   const result = await model.methods.record_assessment.execute(
     {
-      findings: [SAMPLE_FINDING, { ...SAMPLE_FINDING, id: "IF-01", category: "interaction-friction" as const, severity: "warning" as const }],
+      findings: [SAMPLE_FINDING, {
+        ...SAMPLE_FINDING,
+        id: "IF-01",
+        category: "interaction-friction" as const,
+        severity: "warning" as const,
+      }],
       summary: "Two findings: one critical, one warning",
     },
     // deno-lint-ignore no-explicit-any

@@ -165,8 +165,16 @@ interface MethodContext {
 /** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.06.23.1",
+  version: "2026.07.18.1",
   globalArguments: GlobalArgsSchema,
+
+  upgrades: [
+    {
+      toVersion: "2026.07.18.1",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     modqueue: {

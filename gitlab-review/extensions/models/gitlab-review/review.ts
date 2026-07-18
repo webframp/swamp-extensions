@@ -258,8 +258,15 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.07.08.1",
+  version: "2026.07.18.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.18.1",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     mrDiff: {
       description: "MR diff content for review",

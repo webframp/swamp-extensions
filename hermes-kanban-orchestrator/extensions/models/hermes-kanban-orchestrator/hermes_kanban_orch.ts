@@ -302,8 +302,15 @@ async function listRecent(
 /** Kanban orchestrator model. Creates kanban tasks via `hermes kanban create` and records each as swamp data. */
 export const model = {
   type: "@webframp/hermes-kanban-orchestrator" as const,
-  version: "2026.06.21.1",
+  version: "2026.07.18.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.18.1",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     kanbanTask: {
       description:

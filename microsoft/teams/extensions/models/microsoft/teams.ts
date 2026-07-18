@@ -269,8 +269,15 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.06.30.1",
+  version: "2026.07.18.2",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     teams: {

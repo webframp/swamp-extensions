@@ -173,8 +173,16 @@ async function queryTokenMetrics(
 /** GCP Vertex AI token usage monitoring model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.07.10.1",
+  version: "2026.07.18.1",
   globalArguments: GlobalArgsSchema,
+
+  upgrades: [
+    {
+      toVersion: "2026.07.18.1",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     scan_results: {

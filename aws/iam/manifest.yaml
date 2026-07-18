@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/iam"
-version: "2026.07.18.1"
+version: "2026.07.18.2"
 description: |
   Cross-account IAM observation model for role, user, and policy inventory.
   Factory-pattern discovery fans out across AWS profiles to capture trust

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/team-topology"
-version: "2026.06.29.1"
+version: "2026.07.18.1"
 description: |
   Agent-guided team topology and value stream mapping model.
   Captures teams (type, cognitive load, domains), interactions (modes,

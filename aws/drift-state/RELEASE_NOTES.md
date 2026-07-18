@@ -1,3 +1,8 @@
+## 2026.07.18.1
+
+**Added:** An `upgrades` array entry (no-op) to `drift_state.ts` for proper
+`typeVersion` tracking on existing instances. No schema or behavior changes.
+
 ## 2026.06.27.3
 
 **Added:** `@webframp/aws/dns-observation` as 5th upstream source. Orphaned DNS

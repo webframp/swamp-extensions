@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/alarm-investigation"
-version: "2026.07.18.1"
+version: "2026.07.18.2"
 description: |
   CloudWatch alarm investigation and triage model.
 
