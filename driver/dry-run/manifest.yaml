@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/dry-run"
-version: "2026.04.22.1"
+version: "2026.07.18.1"
 description: "Dry-run execution driver that captures method requests without executing them. Useful for debugging, auditing, and validating workflows."
 repository: "https://github.com/webframp/swamp-extensions"
 drivers:

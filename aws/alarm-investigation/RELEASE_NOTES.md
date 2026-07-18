@@ -1,3 +1,7 @@
+## 2026.07.18.2
+
+**Added:** An `upgrades` array entry (no-op) to `alarm_investigation.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
+
 ## 2026.07.18.1
 
 **Added:** `@module`-level JSDoc documentation to `alarm_investigation.ts`.

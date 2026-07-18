@@ -1,3 +1,8 @@
+## 2026.07.18.2
+
+**Added:** An `upgrades` array entry (no-op) to `dns_observation.ts` for proper
+`typeVersion` tracking on existing instances. No schema or behavior changes.
+
 ## 2026.07.18.1
 
 **Changed:** Bumped `@aws-sdk/client-route-53` and `@aws-sdk/client-sts` from

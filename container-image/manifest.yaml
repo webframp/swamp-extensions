@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/container-image"
-version: "2026.07.13.1"
+version: "2026.07.18.1"
 description: "Build, push, and inspect OCI container images. Registry-agnostic — works with ECR, GHCR, DockerHub, or any OCI-compliant registry. Supports docker, podman, nerdctl, and buildah. Produces typed, versioned build metadata."
 repository: "https://github.com/webframp/swamp-extensions"
 models:

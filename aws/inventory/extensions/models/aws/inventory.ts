@@ -568,7 +568,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.06.27.1",
+  version: "2026.07.18.2",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -585,6 +585,11 @@ export const model = {
         const { region, ...rest } = old;
         return { ...rest, regions: [region ?? "us-east-1"] };
       },
+    },
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
   globalArguments: GlobalArgsSchema,

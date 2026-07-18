@@ -1,3 +1,7 @@
+## 2026.07.18.1
+
+**Changed:** Version bump only, no code changes.
+
 ## 2026.06.26.1
 
 **Changed:** Audit reports now include cache hit-rate and security event findings that were

@@ -253,8 +253,16 @@ function findAnomalies(
  */
 export const model = {
   type: "@webframp/aws/metrics",
-  version: "2026.06.21.1",
+  version: "2026.07.18.2",
   globalArguments: GlobalArgsSchema,
+
+  upgrades: [
+    {
+      toVersion: "2026.07.18.2",
+      description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     metric_list: {

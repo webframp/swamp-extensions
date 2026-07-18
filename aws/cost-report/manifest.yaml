@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-report"
-version: "2026.06.26.1"
+version: "2026.07.18.1"
 description: |
   Format AWS cost estimates into readable reports with breakdowns and recommendations.
 

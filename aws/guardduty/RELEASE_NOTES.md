@@ -1,3 +1,8 @@
+## 2026.07.18.2
+
+**Added:** An `upgrades` array entry (no-op) to `guardduty.ts` for proper
+`typeVersion` tracking on existing instances. No schema or behavior changes.
+
 ## 2026.07.18.1
 
 **Changed:** Bumped `@aws-sdk/client-guardduty` from `3.1069.0` to

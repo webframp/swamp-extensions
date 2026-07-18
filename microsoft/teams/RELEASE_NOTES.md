@@ -1,3 +1,7 @@
+## 2026.07.18.2
+
+**Added:** An `upgrades` array entry (no-op) to `teams.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
+
 ## 2026.07.18.1
 
 **Changed:** Pinned the `zod` import specifier to `npm:zod@4.4.3` (was

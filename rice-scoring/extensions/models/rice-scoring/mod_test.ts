@@ -1,7 +1,12 @@
 // RICE Scoring Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertMatch, assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1";
+import {
+  assertEquals,
+  assertExists,
+  assertMatch,
+  assertRejects,
+} from "jsr:@std/assert@1";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./mod.ts";
 

@@ -1,3 +1,7 @@
+## 2026.07.18.1
+
+**Added:** An `upgrades` array entry (no-op) to `hermes_jrnl_writer.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
+
 ## 2026.07.09.1
 
 **Fixed:** `write_daily_entry` failed argument validation under swamp. Its method
