@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4";
+import { z } from "npm:zod@4.4.3";
 import {
   initiateDeviceCode,
   pollDeviceCode,

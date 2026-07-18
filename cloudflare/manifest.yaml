@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare"
-version: "2026.07.13.1"
+version: "2026.07.18.1"
 description: "Cloudflare management - zones, DNS records, WAF/firewall rules, Workers, and cache/CDN"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -17,7 +17,7 @@ platforms:
 additionalFiles:
   - README.md
   - LICENSE.md
-tags:
+labels:
   - cloudflare
   - dns
   - cdn

@@ -14,7 +14,7 @@ import { z } from "npm:zod@4.4.3";
 import {
   GetProductsCommand,
   PricingClient,
-} from "npm:@aws-sdk/client-pricing@3.1069.0";
+} from "npm:@aws-sdk/client-pricing@3.1090.0";
 
 // =============================================================================
 // Schemas

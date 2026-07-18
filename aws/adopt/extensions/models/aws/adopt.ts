@@ -1,10 +1,18 @@
+/**
+ * AWS Adopt Model.
+ *
+ * Discovers existing AWS resources (VPCs, subnets, security groups, route
+ * tables, internet gateways) and adopts them into swamp-managed state.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
 import {
   CloudFormationClient,
   ListStackResourcesCommand,
-} from "npm:@aws-sdk/client-cloudformation@3.1069.0";
+} from "npm:@aws-sdk/client-cloudformation@3.1090.0";
 import {
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
@@ -12,17 +20,17 @@ import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
-} from "npm:@aws-sdk/client-ec2@3.1069.0";
+} from "npm:@aws-sdk/client-ec2@3.1090.0";
 import {
   DescribeDBClustersCommand,
   DescribeDBInstancesCommand,
   DescribeDBSubnetGroupsCommand,
   RDSClient,
-} from "npm:@aws-sdk/client-rds@3.1069.0";
+} from "npm:@aws-sdk/client-rds@3.1090.0";
 import {
   ListSecretsCommand,
   SecretsManagerClient,
-} from "npm:@aws-sdk/client-secrets-manager@3.1069.0";
+} from "npm:@aws-sdk/client-secrets-manager@3.1090.0";
 
 // =============================================================================
 // Schemas

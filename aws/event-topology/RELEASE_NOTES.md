@@ -1,3 +1,10 @@
+## 2026.07.18.1
+
+**Changed:** Bumped `@aws-sdk/client-eventbridge`, `@aws-sdk/client-lambda`,
+`@aws-sdk/client-sns`, `@aws-sdk/client-sqs`, `@aws-sdk/client-sts`, and
+`@aws-sdk/credential-providers` from `3.1069.0` to `3.1090.0` for dependency
+freshness. No behavior change.
+
 ## 2026.07.13.1
 
 **Changed:** Upgraded the AWS SDK v3 client pins from `3.821.0` to `3.1069.0`

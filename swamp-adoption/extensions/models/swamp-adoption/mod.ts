@@ -1,5 +1,10 @@
-// Swamp Adoption Guidance Model
-// Guides new users through mapping their domain onto swamp primitives.
+/**
+ * Swamp Adoption Guidance Model.
+ *
+ * Guides new users through mapping their domain onto swamp primitives.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";

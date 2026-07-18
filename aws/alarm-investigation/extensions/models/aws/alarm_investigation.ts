@@ -1,4 +1,11 @@
-// AWS CloudWatch Alarm Investigation Model
+/**
+ * AWS CloudWatch Alarm Investigation Model.
+ *
+ * Investigates CloudWatch alarms by correlating alarm history, metric
+ * statistics, and SNS subscriptions.
+ *
+ * @module
+ */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
@@ -8,11 +15,11 @@ import {
   DescribeAlarmsCommand,
   GetMetricStatisticsCommand,
   type MetricAlarm,
-} from "npm:@aws-sdk/client-cloudwatch@3.1069.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1090.0";
 import {
   ListSubscriptionsByTopicCommand,
   SNSClient,
-} from "npm:@aws-sdk/client-sns@3.1069.0";
+} from "npm:@aws-sdk/client-sns@3.1090.0";
 
 const MAX_PAGES = 10;
 

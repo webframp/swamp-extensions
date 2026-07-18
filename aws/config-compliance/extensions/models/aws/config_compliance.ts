@@ -15,11 +15,11 @@ import {
   DescribeComplianceByConfigRuleCommand,
   DescribeConfigRulesCommand,
   GetComplianceDetailsByConfigRuleCommand,
-} from "npm:@aws-sdk/client-config-service@3.1069.0";
+} from "npm:@aws-sdk/client-config-service@3.1090.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1069.0";
+} from "npm:@aws-sdk/client-sts@3.1090.0";
 
 const MAX_PAGES = 20;
 

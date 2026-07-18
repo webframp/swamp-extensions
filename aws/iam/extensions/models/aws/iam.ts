@@ -22,12 +22,12 @@ import {
   ListRolesCommand,
   ListUserPoliciesCommand,
   ListUsersCommand,
-} from "npm:@aws-sdk/client-iam@3.1069.0";
+} from "npm:@aws-sdk/client-iam@3.1090.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1069.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1069.0";
+} from "npm:@aws-sdk/client-sts@3.1090.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1090.0";
 
 // =============================================================================
 // Schemas

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/microsoft/teams"
-version: "2026.07.13.1"
+version: "2026.07.18.1"
 description: "Microsoft Teams read-only integration — channels, chats, mentions via Graph API (public client, device code flow)"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

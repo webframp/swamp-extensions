@@ -18,7 +18,7 @@ import {
   GetAttributeValuesCommand,
   GetProductsCommand,
   PricingClient,
-} from "npm:@aws-sdk/client-pricing@3.1069.0";
+} from "npm:@aws-sdk/client-pricing@3.1090.0";
 
 const MAX_PAGES = 10;
 
