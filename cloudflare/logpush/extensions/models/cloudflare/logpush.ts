@@ -1002,7 +1002,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -1041,7 +1041,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const pathParams = new Set(["dataset_id", "zone_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1099,7 +1099,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const pathParams = new Set(["zone_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1160,7 +1160,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1200,7 +1200,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const pathParams = new Set(["zone_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1270,7 +1270,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1310,7 +1310,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -1358,7 +1358,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
@@ -1398,7 +1398,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
@@ -1429,7 +1429,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1471,7 +1471,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1512,7 +1512,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1553,7 +1553,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1594,7 +1594,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",

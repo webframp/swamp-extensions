@@ -8,138 +8,185 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiToken: z.string().meta({ sensitive: true }).describe("Cloudflare API token"),
+  apiToken: z.string().meta({ sensitive: true }).describe(
+    "Cloudflare API token",
+  ),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
 const CloudflareImagesUploadAnImageViaUrlSchema = z.object({
-    creator: z.unknown().optional(),
-    filename: z.unknown().optional(),
-    id: z.unknown().optional(),
-    meta: z.unknown().optional(),
-    requireSignedURLs: z.unknown().optional(),
-    uploaded: z.unknown().optional(),
-    variants: z.unknown().optional(),
-  });
+  creator: z.unknown().optional(),
+  filename: z.unknown().optional(),
+  id: z.unknown().optional(),
+  meta: z.unknown().optional(),
+  requireSignedURLs: z.unknown().optional(),
+  uploaded: z.unknown().optional(),
+  variants: z.unknown().optional(),
+});
 
 const ListSigningKeysSchema = z.object({
-    keys: z.array(z.unknown()).optional(),
-  });
+  keys: z.array(z.unknown()).optional(),
+});
 
 const UpdateCloudflareImagesKeysAddSigningKeySchema = z.object({
-    keys: z.array(z.unknown()).optional(),
-  });
+  keys: z.array(z.unknown()).optional(),
+});
 
 const GetCloudflareImagesImagesUsageStatisticsSchema = z.object({
-    count: z.unknown().optional(),
-  });
+  count: z.unknown().optional(),
+});
 
 const ListVariantsSchema = z.object({
-    variants: z.unknown().optional(),
-  });
+  variants: z.unknown().optional(),
+});
 
 const CreateAVariantSchema = z.object({
-    variant: z.unknown().optional(),
-  });
+  variant: z.unknown().optional(),
+});
 
 const GetCloudflareImagesVariantsVariantDetailsSchema = z.object({
-    variant: z.unknown().optional(),
-  });
+  variant: z.unknown().optional(),
+});
 
 const GetCloudflareImagesVariantsVariantDetailsFlatSchema = z.object({
-    id: z.unknown(),
-    neverRequireSignedURLs: z.unknown().optional(),
-    options: z.unknown(),
-  });
+  id: z.unknown(),
+  neverRequireSignedURLs: z.unknown().optional(),
+  options: z.unknown(),
+});
 
 const GetCloudflareImagesImageDetailsSchema = z.object({
-    creator: z.unknown().optional(),
-    filename: z.unknown().optional(),
-    id: z.unknown().optional(),
-    meta: z.unknown().optional(),
-    requireSignedURLs: z.unknown().optional(),
-    uploaded: z.unknown().optional(),
-    variants: z.unknown().optional(),
-  });
+  creator: z.unknown().optional(),
+  filename: z.unknown().optional(),
+  id: z.unknown().optional(),
+  meta: z.unknown().optional(),
+  requireSignedURLs: z.unknown().optional(),
+  uploaded: z.unknown().optional(),
+  variants: z.unknown().optional(),
+});
 
 const UpdateImageSchema = z.object({
-    creator: z.unknown().optional(),
-    filename: z.unknown().optional(),
-    id: z.unknown().optional(),
-    meta: z.unknown().optional(),
-    requireSignedURLs: z.unknown().optional(),
-    uploaded: z.unknown().optional(),
-    variants: z.unknown().optional(),
-  });
+  creator: z.unknown().optional(),
+  filename: z.unknown().optional(),
+  id: z.unknown().optional(),
+  meta: z.unknown().optional(),
+  requireSignedURLs: z.unknown().optional(),
+  uploaded: z.unknown().optional(),
+  variants: z.unknown().optional(),
+});
 
 const ListImagesV2Schema = z.object({
-    images: z.array(z.unknown()).optional(),
-  });
+  images: z.array(z.unknown()).optional(),
+});
 
 const CreateAuthenticatedDirectUploadUrlV2Schema = z.object({
-    id: z.string().max(32).optional().describe("Image unique identifier."),
-    uploadURL: z.string().optional().describe("The URL the unauthenticated upload can be performed to using a single HTTP POST (multipart/form-d..."),
-  });
+  id: z.string().max(32).optional().describe("Image unique identifier."),
+  uploadURL: z.string().optional().describe(
+    "The URL the unauthenticated upload can be performed to using a single HTTP POST (multipart/form-d...",
+  ),
+});
 
 const ListMigrationsSchema = z.object({
-    migrations: z.array(z.unknown()).optional(),
-  });
+  migrations: z.array(z.unknown()).optional(),
+});
 
 const CreateMigrationSchema = z.object({
-    id: z.string().optional().describe("The identifier of the created migration."),
-  });
+  id: z.string().optional().describe(
+    "The identifier of the created migration.",
+  ),
+});
 
 const GetMigrationProgressSchema = z.object({
-    endedAt: z.string().nullable().optional(),
-    importErrorsCount: z.number().int().optional().describe("Objects that failed to import."),
-    importSuccessCount: z.number().int().optional().describe("Objects successfully imported."),
-    isAccurate: z.boolean().optional().describe("Whether the counts are accurate or estimated."),
-    scannedCount: z.number().int().optional().describe("Total number of objects scanned in the source."),
-    skippedConflictCount: z.number().int().optional().describe("Objects skipped due to existing images at destination."),
-    skippedExcludedContentTypeCount: z.number().int().optional().describe("Objects skipped because their content type was excluded."),
-    skippedInvalidMediaCount: z.number().int().optional().describe("Objects skipped because the media could not be decoded."),
-    skippedInvalidNameCount: z.number().int().optional().describe("Objects skipped because their name is not valid."),
-    skippedOversizeCount: z.number().int().optional().describe("Objects skipped because they exceed the size limit."),
-    skippedStorageClassCount: z.number().int().optional().describe("Objects skipped due to unsupported storage class."),
-    skippedUnsupportedContentTypeCount: z.number().int().optional().describe("Objects skipped because their content type is not supported."),
-    startedAt: z.string().nullable().optional(),
-    status: z.unknown().optional(),
-  });
+  endedAt: z.string().nullable().optional(),
+  importErrorsCount: z.number().int().optional().describe(
+    "Objects that failed to import.",
+  ),
+  importSuccessCount: z.number().int().optional().describe(
+    "Objects successfully imported.",
+  ),
+  isAccurate: z.boolean().optional().describe(
+    "Whether the counts are accurate or estimated.",
+  ),
+  scannedCount: z.number().int().optional().describe(
+    "Total number of objects scanned in the source.",
+  ),
+  skippedConflictCount: z.number().int().optional().describe(
+    "Objects skipped due to existing images at destination.",
+  ),
+  skippedExcludedContentTypeCount: z.number().int().optional().describe(
+    "Objects skipped because their content type was excluded.",
+  ),
+  skippedInvalidMediaCount: z.number().int().optional().describe(
+    "Objects skipped because the media could not be decoded.",
+  ),
+  skippedInvalidNameCount: z.number().int().optional().describe(
+    "Objects skipped because their name is not valid.",
+  ),
+  skippedOversizeCount: z.number().int().optional().describe(
+    "Objects skipped because they exceed the size limit.",
+  ),
+  skippedStorageClassCount: z.number().int().optional().describe(
+    "Objects skipped due to unsupported storage class.",
+  ),
+  skippedUnsupportedContentTypeCount: z.number().int().optional().describe(
+    "Objects skipped because their content type is not supported.",
+  ),
+  startedAt: z.string().nullable().optional(),
+  status: z.unknown().optional(),
+});
 
-const UpdateCloudflareImagesSourcingkitAbortMigrationSchema = z.union([z.object({}), z.string()]);
+const UpdateCloudflareImagesSourcingkitAbortMigrationSchema = z.union([
+  z.object({}),
+  z.string(),
+]);
 
-const UpdateCloudflareImagesSourcingkitStartMigrationSchema = z.union([z.object({}), z.string()]);
+const UpdateCloudflareImagesSourcingkitStartMigrationSchema = z.union([
+  z.object({}),
+  z.string(),
+]);
 
 const ListMigrationLogsSchema = z.object({
-    logs: z.array(z.unknown()).optional(),
-  });
+  logs: z.array(z.unknown()).optional(),
+});
 
 const ListSourcesSchema = z.object({
-    sources: z.array(z.unknown()).optional(),
-  });
+  sources: z.array(z.unknown()).optional(),
+});
 
 const CreateSourceSchema = z.object({
-    id: z.string().optional().describe("The identifier of the created source."),
-  });
+  id: z.string().optional().describe("The identifier of the created source."),
+});
 
-const CreateCloudflareImagesSourcingkitPrecheckSourceConnectivitySchema = z.object({
-    code: z.string().nullable().optional().describe("Machine-readable error code if connectivity failed."),
-    connectivityStatus: z.enum(["ok", "error"]).optional().describe("Whether the connectivity check succeeded."),
-    reason: z.string().nullable().optional().describe("Human-readable error description if connectivity failed."),
+const CreateCloudflareImagesSourcingkitPrecheckSourceConnectivitySchema = z
+  .object({
+    code: z.string().nullable().optional().describe(
+      "Machine-readable error code if connectivity failed.",
+    ),
+    connectivityStatus: z.enum(["ok", "error"]).optional().describe(
+      "Whether the connectivity check succeeded.",
+    ),
+    reason: z.string().nullable().optional().describe(
+      "Human-readable error description if connectivity failed.",
+    ),
   });
 
 const GetSourceConnectivitySchema = z.object({
-    code: z.string().nullable().optional().describe("Machine-readable error code if connectivity failed."),
-    connectivityStatus: z.enum(["ok", "error"]).optional().describe("Whether the connectivity check succeeded."),
-    reason: z.string().nullable().optional().describe("Human-readable error description if connectivity failed."),
-  });
+  code: z.string().nullable().optional().describe(
+    "Machine-readable error code if connectivity failed.",
+  ),
+  connectivityStatus: z.enum(["ok", "error"]).optional().describe(
+    "Whether the connectivity check succeeded.",
+  ),
+  reason: z.string().nullable().optional().describe(
+    "Human-readable error description if connectivity failed.",
+  ),
+});
 
 // =============================================================================
 // Model Definition
@@ -298,31 +345,68 @@ export const model = {
     cloudflare_images_upload_an_image_via_url: {
       description: "Upload an image",
       arguments: z.object({}),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/images/v1`,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_upload_an_image_via_url", "latest", result);
-        context.logger.info("Executed cloudflare_images_upload_an_image_via_url", {});
+
+        const handle = await context.writeResource(
+          "cloudflare_images_upload_an_image_via_url",
+          "latest",
+          result,
+        );
+        context.logger.info(
+          "Executed cloudflare_images_upload_an_image_via_url",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     list_signing_keys: {
       description: "List Signing Keys",
       arguments: z.object({}),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v1/keys`,
         );
-    
-        const handle = await context.writeResource("list_signing_keys", "latest", result);
+
+        const handle = await context.writeResource(
+          "list_signing_keys",
+          "latest",
+          result,
+        );
         context.logger.info("Fetched list_signing_keys", {});
         return { dataHandles: [handle] };
       },
@@ -330,9 +414,22 @@ export const model = {
     update_cloudflare_images_keys_add_signing_key: {
       description: "Create a new Signing Key",
       arguments: z.object({
-  signing_key_name: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        signing_key_name: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -340,57 +437,116 @@ export const model = {
           `/accounts/${accountId}/images/v1/keys/${args.signing_key_name}`,
           args,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_keys_add_signing_key", String(args.signing_key_name), result);
-        context.logger.info("Updated cloudflare_images_keys_add_signing_key", {});
+
+        const handle = await context.writeResource(
+          "cloudflare_images_keys_add_signing_key",
+          String(args.signing_key_name),
+          result,
+        );
+        context.logger.info(
+          "Updated cloudflare_images_keys_add_signing_key",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     delete_signing_key: {
       description: "Delete Signing Key",
       arguments: z.object({
-  signing_key_name: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        signing_key_name: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
           `/accounts/${accountId}/images/v1/keys/${args.signing_key_name}`,
         );
-    
-        context.logger.info("Deleted resource {id}", { id: args.signing_key_name });
+
+        context.logger.info("Deleted resource {id}", {
+          id: args.signing_key_name,
+        });
         return { dataHandles: [] };
       },
     },
     get_cloudflare_images_images_usage_statistics: {
       description: "Images usage statistics",
       arguments: z.object({}),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v1/stats`,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_images_usage_statistics", "latest", result);
-        context.logger.info("Fetched cloudflare_images_images_usage_statistics", {});
+
+        const handle = await context.writeResource(
+          "cloudflare_images_images_usage_statistics",
+          "latest",
+          result,
+        );
+        context.logger.info(
+          "Fetched cloudflare_images_images_usage_statistics",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     list_variants: {
       description: "List variants",
       arguments: z.object({}),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v1/variants`,
         );
-    
-        const handle = await context.writeResource("list_variants", "latest", result);
+
+        const handle = await context.writeResource(
+          "list_variants",
+          "latest",
+          result,
+        );
         context.logger.info("Fetched list_variants", {});
         return { dataHandles: [handle] };
       },
@@ -398,10 +554,23 @@ export const model = {
     create_a_variant: {
       description: "Create a variant",
       arguments: z.object({
-  neverRequireSignedURLs: z.unknown().optional(),
-  options: z.unknown(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        neverRequireSignedURLs: z.unknown().optional(),
+        options: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -409,7 +578,7 @@ export const model = {
           `/accounts/${accountId}/images/v1/variants`,
           args,
         );
-    
+
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("a_variant", id, result);
         context.logger.info("Created a_variant {id}", { id });
@@ -419,29 +588,62 @@ export const model = {
     get_cloudflare_images_variants_variant_details: {
       description: "Variant details",
       arguments: z.object({
-  variant_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        variant_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_variants_variant_details", String(args.variant_id), result);
-        context.logger.info("Fetched cloudflare_images_variants_variant_details", {});
+
+        const handle = await context.writeResource(
+          "cloudflare_images_variants_variant_details",
+          String(args.variant_id),
+          result,
+        );
+        context.logger.info(
+          "Fetched cloudflare_images_variants_variant_details",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     update_a_variant: {
       description: "Update a variant",
       arguments: z.object({
-  variant_id: z.string(),
-  neverRequireSignedURLs: z.unknown().optional(),
-  options: z.unknown(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        variant_id: z.string(),
+        neverRequireSignedURLs: z.unknown().optional(),
+        options: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -449,8 +651,12 @@ export const model = {
           `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
           args,
         );
-    
-        const handle = await context.writeResource("a_variant", String(args.variant_id), result);
+
+        const handle = await context.writeResource(
+          "a_variant",
+          String(args.variant_id),
+          result,
+        );
         context.logger.info("Updated a_variant", {});
         return { dataHandles: [handle] };
       },
@@ -458,16 +664,29 @@ export const model = {
     delete_a_variant: {
       description: "Delete a variant",
       arguments: z.object({
-  variant_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        variant_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
           `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
         );
-    
+
         context.logger.info("Deleted resource {id}", { id: args.variant_id });
         return { dataHandles: [] };
       },
@@ -475,35 +694,72 @@ export const model = {
     get_cloudflare_images_variants_variant_details_flat: {
       description: "Variant details (flat)",
       arguments: z.object({
-  variant_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        variant_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v1/variants/${args.variant_id}/flat`,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_variants_variant_details_flat", String(args.variant_id), result);
-        context.logger.info("Fetched cloudflare_images_variants_variant_details_flat", {});
+
+        const handle = await context.writeResource(
+          "cloudflare_images_variants_variant_details_flat",
+          String(args.variant_id),
+          result,
+        );
+        context.logger.info(
+          "Fetched cloudflare_images_variants_variant_details_flat",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     get_cloudflare_images_image_details: {
       description: "Image details",
       arguments: z.object({
-  image_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        image_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v1/${args.image_id}`,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_image_details", String(args.image_id), result);
+
+        const handle = await context.writeResource(
+          "cloudflare_images_image_details",
+          String(args.image_id),
+          result,
+        );
         context.logger.info("Fetched cloudflare_images_image_details", {});
         return { dataHandles: [handle] };
       },
@@ -511,12 +767,31 @@ export const model = {
     update_image: {
       description: "Update image",
       arguments: z.object({
-  image_id: z.string(),
-  creator: z.string().optional().describe("Can set the creator field with an internal user ID."),
-  metadata: z.object({}).optional().describe("User modifiable key-value store. Can be used for keeping references to anothe..."),
-  requireSignedURLs: z.boolean().optional().describe("Indicates whether the image can be accessed using only its UID. If set to `tr..."),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        image_id: z.string(),
+        creator: z.string().optional().describe(
+          "Can set the creator field with an internal user ID.",
+        ),
+        metadata: z.object({}).optional().describe(
+          "User modifiable key-value store. Can be used for keeping references to anothe...",
+        ),
+        requireSignedURLs: z.boolean().optional().describe(
+          "Indicates whether the image can be accessed using only its UID. If set to `tr...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -524,8 +799,12 @@ export const model = {
           `/accounts/${accountId}/images/v1/${args.image_id}`,
           args,
         );
-    
-        const handle = await context.writeResource("image", String(args.image_id), result);
+
+        const handle = await context.writeResource(
+          "image",
+          String(args.image_id),
+          result,
+        );
         context.logger.info("Updated image", {});
         return { dataHandles: [handle] };
       },
@@ -533,16 +812,29 @@ export const model = {
     delete_image: {
       description: "Delete image",
       arguments: z.object({
-  image_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        image_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
           `/accounts/${accountId}/images/v1/${args.image_id}`,
         );
-    
+
         context.logger.info("Deleted resource {id}", { id: args.image_id });
         return { dataHandles: [] };
       },
@@ -550,17 +842,34 @@ export const model = {
     get_cloudflare_images_base_image: {
       description: "Download image",
       arguments: z.object({
-  image_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        image_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v1/${args.image_id}/blob`,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_base_image", String(args.image_id), result);
+
+        const handle = await context.writeResource(
+          "cloudflare_images_base_image",
+          String(args.image_id),
+          result,
+        );
         context.logger.info("Fetched cloudflare_images_base_image", {});
         return { dataHandles: [handle] };
       },
@@ -568,21 +877,40 @@ export const model = {
     list_images_v2: {
       description: "List images V2",
       arguments: z.object({
-  continuation_token: z.string().optional(),
-  per_page: z.number().optional(),
-  sort_order: z.enum(["asc", "desc"]).optional(),
-  creator: z.string().optional(),
-  meta.<field>[<operator>]: z.string().optional().describe("Optional metadata filter(s). Multiple filters can be combined with AND logic.  **Operators:** - `eq`, `eq:string`, `eq:number`, `eq:boolean` - Exact match - `gt`, `gt:number` - Greater than (number only) - `gte`, `gte:number` - Greater than or equal (number only) - `lt`, `lt:number` - Less than (number only) - `lte`, `lte:number` - Less than or equal (number only) - `in`, `in:string`, `in:number` - Match any value in pipe-separated list  **Examples:** - `meta.status[eq]=active` - `meta.priority[eq:number]=5` - `meta.enabled[eq:boolean]=true` - `meta.priority[gte:number]=1` - `meta.score[lt:number]=100` - `meta.region[in]=us-east|us-west|eu-west`  **Note:** Filter consistency is not validated. Contradictory filters (e.g., `meta.priority[eq:number]=5&meta.priority[lte:number]=3`) will return zero results. "),
-    }),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        continuation_token: z.string().optional(),
+        per_page: z.number().optional(),
+        sort_order: z.enum(["asc", "desc"]).optional(),
+        creator: z.string().optional(),
+        meta_field_operator: z.string().optional().describe(
+          "Optional metadata filter(s). Multiple filters can be combined with AND logic.  **Operators:** - `eq`, `eq:string`, `eq:number`, `eq:boolean` - Exact match - `gt`, `gt:number` - Greater than (number only) - `gte`, `gte:number` - Greater than or equal (number only) - `lt`, `lt:number` - Less than (number only) - `lte`, `lte:number` - Less than or equal (number only) - `in`, `in:string`, `in:number` - Match any value in pipe-separated list  **Examples:** - `meta.status[eq]=active` - `meta.priority[eq:number]=5` - `meta.enabled[eq:boolean]=true` - `meta.priority[gte:number]=1` - `meta.score[lt:number]=100` - `meta.region[in]=us-east|us-west|eu-west`  **Note:** Filter consistency is not validated. Contradictory filters (e.g., `meta.priority[eq:number]=5&meta.priority[lte:number]=3`) will return zero results. ",
+        ),
+      }),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2`,
         );
-    
-        const handle = await context.writeResource("list_images_v2", "latest", result);
+
+        const handle = await context.writeResource(
+          "list_images_v2",
+          "latest",
+          result,
+        );
         context.logger.info("Fetched list_images_v2", {});
         return { dataHandles: [handle] };
       },
@@ -590,34 +918,71 @@ export const model = {
     create_authenticated_direct_upload_url_v_2: {
       description: "Create authenticated direct upload URL V2",
       arguments: z.object({}),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/images/v2/direct_upload`,
         );
-    
-        const handle = await context.writeResource("create_authenticated_direct_upload_url_v_2", "latest", result);
-        context.logger.info("Executed create_authenticated_direct_upload_url_v_2", {});
+
+        const handle = await context.writeResource(
+          "create_authenticated_direct_upload_url_v_2",
+          "latest",
+          result,
+        );
+        context.logger.info(
+          "Executed create_authenticated_direct_upload_url_v_2",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     list_migrations: {
       description: "List sourcing kit migrations",
       arguments: z.object({
-  offset: z.number().optional(),
-  limit: z.number().optional(),
-    }),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        offset: z.number().optional(),
+        limit: z.number().optional(),
+      }),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
         );
-    
-        const handle = await context.writeResource("list_migrations", "latest", result);
+
+        const handle = await context.writeResource(
+          "list_migrations",
+          "latest",
+          result,
+        );
         context.logger.info("Fetched list_migrations", {});
         return { dataHandles: [handle] };
       },
@@ -625,13 +990,34 @@ export const model = {
     create_migration: {
       description: "Create a sourcing kit migration",
       arguments: z.object({
-  conflictBehaviour: z.unknown().optional(),
-  excludedContentTypes: z.array(z.unknown()).optional().describe("Content types to skip during migration."),
-  pathPrefix: z.string().min(1).max(128).optional().describe("Prefix to prepend to image custom IDs."),
-  rootDirectory: z.string().min(1).max(128).optional().describe("Only import objects under this prefix in the source bucket."),
-  sourceId: z.string().describe("The identifier of the source to migrate from."),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        conflictBehaviour: z.unknown().optional(),
+        excludedContentTypes: z.array(z.unknown()).optional().describe(
+          "Content types to skip during migration.",
+        ),
+        pathPrefix: z.string().min(1).max(128).optional().describe(
+          "Prefix to prepend to image custom IDs.",
+        ),
+        rootDirectory: z.string().min(1).max(128).optional().describe(
+          "Only import objects under this prefix in the source bucket.",
+        ),
+        sourceId: z.string().describe(
+          "The identifier of the source to migrate from.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -639,7 +1025,7 @@ export const model = {
           `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
           args,
         );
-    
+
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("migration", id, result);
         context.logger.info("Created migration {id}", { id });
@@ -649,17 +1035,34 @@ export const model = {
     get_migration: {
       description: "Get sourcing kit migration",
       arguments: z.object({
-  migration_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        migration_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}`,
         );
-    
-        const handle = await context.writeResource("migration", String(args.migration_id), result);
+
+        const handle = await context.writeResource(
+          "migration",
+          String(args.migration_id),
+          result,
+        );
         context.logger.info("Fetched migration", {});
         return { dataHandles: [handle] };
       },
@@ -667,16 +1070,29 @@ export const model = {
     delete_migration: {
       description: "Delete a sourcing kit migration",
       arguments: z.object({
-  migration_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        migration_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}`,
         );
-    
+
         context.logger.info("Deleted resource {id}", { id: args.migration_id });
         return { dataHandles: [] };
       },
@@ -684,17 +1100,34 @@ export const model = {
     get_migration_progress: {
       description: "Get migration progress",
       arguments: z.object({
-  migration_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        migration_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle`,
         );
-    
-        const handle = await context.writeResource("migration_progress", String(args.migration_id), result);
+
+        const handle = await context.writeResource(
+          "migration_progress",
+          String(args.migration_id),
+          result,
+        );
         context.logger.info("Fetched migration_progress", {});
         return { dataHandles: [handle] };
       },
@@ -702,9 +1135,22 @@ export const model = {
     update_cloudflare_images_sourcingkit_abort_migration: {
       description: "Abort a migration",
       arguments: z.object({
-  migration_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        migration_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -712,18 +1158,38 @@ export const model = {
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/abort`,
           args,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_sourcingkit_abort_migration", String(args.migration_id), result);
-        context.logger.info("Updated cloudflare_images_sourcingkit_abort_migration", {});
+
+        const handle = await context.writeResource(
+          "cloudflare_images_sourcingkit_abort_migration",
+          String(args.migration_id),
+          result,
+        );
+        context.logger.info(
+          "Updated cloudflare_images_sourcingkit_abort_migration",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     update_cloudflare_images_sourcingkit_start_migration: {
       description: "Start a migration",
       arguments: z.object({
-  migration_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        migration_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -731,28 +1197,52 @@ export const model = {
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/start`,
           args,
         );
-    
-        const handle = await context.writeResource("cloudflare_images_sourcingkit_start_migration", String(args.migration_id), result);
-        context.logger.info("Updated cloudflare_images_sourcingkit_start_migration", {});
+
+        const handle = await context.writeResource(
+          "cloudflare_images_sourcingkit_start_migration",
+          String(args.migration_id),
+          result,
+        );
+        context.logger.info(
+          "Updated cloudflare_images_sourcingkit_start_migration",
+          {},
+        );
         return { dataHandles: [handle] };
       },
     },
     list_migration_logs: {
       description: "List migration logs",
       arguments: z.object({
-  migration_id: z.string(),
-  offset: z.number().optional(),
-  limit: z.number().optional(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        migration_id: z.string(),
+        offset: z.number().optional(),
+        limit: z.number().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/logs`,
         );
-    
-        const handle = await context.writeResource("list_migration_logs", String(args.migration_id), result);
+
+        const handle = await context.writeResource(
+          "list_migration_logs",
+          String(args.migration_id),
+          result,
+        );
         context.logger.info("Fetched list_migration_logs", {});
         return { dataHandles: [handle] };
       },
@@ -760,19 +1250,36 @@ export const model = {
     list_sources: {
       description: "List sourcing kit sources",
       arguments: z.object({
-  offset: z.number().optional(),
-  limit: z.number().optional(),
-  name: z.string().optional(),
-    }),
-      execute: async (_args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        offset: z.number().optional(),
+        limit: z.number().optional(),
+        name: z.string().optional(),
+      }),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2/sourcingkit/sources`,
         );
-    
-        const handle = await context.writeResource("list_sources", "latest", result);
+
+        const handle = await context.writeResource(
+          "list_sources",
+          "latest",
+          result,
+        );
         context.logger.info("Fetched list_sources", {});
         return { dataHandles: [handle] };
       },
@@ -780,13 +1287,34 @@ export const model = {
     create_source: {
       description: "Create a sourcing kit source",
       arguments: z.object({
-  account: z.string().optional().describe("Account identifier for the bucket (required for R2 vendor)."),
-  bucket: z.string().min(1).max(128).describe("The name of the storage bucket."),
-  name: z.string().min(1).max(128).describe("A human-readable name for the source."),
-  secret: z.object({}).describe("Storage credentials for accessing the bucket. Shape depends on vendor."),
-  vendor: z.unknown(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        account: z.string().optional().describe(
+          "Account identifier for the bucket (required for R2 vendor).",
+        ),
+        bucket: z.string().min(1).max(128).describe(
+          "The name of the storage bucket.",
+        ),
+        name: z.string().min(1).max(128).describe(
+          "A human-readable name for the source.",
+        ),
+        secret: z.object({}).describe(
+          "Storage credentials for accessing the bucket. Shape depends on vendor.",
+        ),
+        vendor: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -794,7 +1322,7 @@ export const model = {
           `/accounts/${accountId}/images/v2/sourcingkit/sources`,
           args,
         );
-    
+
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("source", id, result);
         context.logger.info("Created source {id}", { id });
@@ -804,13 +1332,34 @@ export const model = {
     create_cloudflare_images_sourcingkit_precheck_source_connectivity: {
       description: "Precheck source connectivity",
       arguments: z.object({
-  account: z.string().optional().describe("Account identifier for the bucket (required for R2 vendor)."),
-  bucket: z.string().min(1).max(128).describe("The name of the storage bucket."),
-  region: z.string().nullable().optional().describe("The region hint for the bucket (S3 only)."),
-  secret: z.object({}).describe("Storage credentials for accessing the bucket."),
-  vendor: z.unknown(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        account: z.string().optional().describe(
+          "Account identifier for the bucket (required for R2 vendor).",
+        ),
+        bucket: z.string().min(1).max(128).describe(
+          "The name of the storage bucket.",
+        ),
+        region: z.string().nullable().optional().describe(
+          "The region hint for the bucket (S3 only).",
+        ),
+        secret: z.object({}).describe(
+          "Storage credentials for accessing the bucket.",
+        ),
+        vendor: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -818,27 +1367,51 @@ export const model = {
           `/accounts/${accountId}/images/v2/sourcingkit/sources/connectivity-precheck`,
           args,
         );
-    
+
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("cloudflare_images_sourcingkit_precheck_source_connectivity", id, result);
-        context.logger.info("Created cloudflare_images_sourcingkit_precheck_source_connectivity {id}", { id });
+        const handle = await context.writeResource(
+          "cloudflare_images_sourcingkit_precheck_source_connectivity",
+          id,
+          result,
+        );
+        context.logger.info(
+          "Created cloudflare_images_sourcingkit_precheck_source_connectivity {id}",
+          { id },
+        );
         return { dataHandles: [handle] };
       },
     },
     get_source: {
       description: "Get sourcing kit source",
       arguments: z.object({
-  source_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        source_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
         );
-    
-        const handle = await context.writeResource("source", String(args.source_id), result);
+
+        const handle = await context.writeResource(
+          "source",
+          String(args.source_id),
+          result,
+        );
         context.logger.info("Fetched source", {});
         return { dataHandles: [handle] };
       },
@@ -846,10 +1419,25 @@ export const model = {
     update_source: {
       description: "Update a sourcing kit source",
       arguments: z.object({
-  source_id: z.string(),
-  name: z.string().min(1).max(128).describe("Updated name for the source."),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        source_id: z.string(),
+        name: z.string().min(1).max(128).describe(
+          "Updated name for the source.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -857,8 +1445,12 @@ export const model = {
           `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
           args,
         );
-    
-        const handle = await context.writeResource("source", String(args.source_id), result);
+
+        const handle = await context.writeResource(
+          "source",
+          String(args.source_id),
+          result,
+        );
         context.logger.info("Updated source", {});
         return { dataHandles: [handle] };
       },
@@ -866,16 +1458,29 @@ export const model = {
     delete_source: {
       description: "Delete a sourcing kit source",
       arguments: z.object({
-  source_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        source_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
           `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
         );
-    
+
         context.logger.info("Deleted resource {id}", { id: args.source_id });
         return { dataHandles: [] };
       },
@@ -883,17 +1488,34 @@ export const model = {
     get_source_connectivity: {
       description: "Get source connectivity status",
       arguments: z.object({
-  source_id: z.string(),
-    }),
-      execute: async (args: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {
+        source_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
           `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}/connectivity`,
         );
-    
-        const handle = await context.writeResource("source_connectivity", String(args.source_id), result);
+
+        const handle = await context.writeResource(
+          "source_connectivity",
+          String(args.source_id),
+          result,
+        );
         context.logger.info("Fetched source_connectivity", {});
         return { dataHandles: [handle] };
       },

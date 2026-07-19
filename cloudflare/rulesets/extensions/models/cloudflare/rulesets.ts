@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -768,7 +768,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -803,7 +803,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -839,7 +839,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -875,7 +875,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
@@ -912,7 +912,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -949,7 +949,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -985,7 +985,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -1021,7 +1021,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
@@ -1058,7 +1058,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
@@ -1089,7 +1089,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1126,7 +1126,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
@@ -1164,7 +1164,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
@@ -1195,7 +1195,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -1232,7 +1232,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -1269,7 +1269,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",
@@ -1302,7 +1302,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, accountId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",

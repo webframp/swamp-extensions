@@ -439,7 +439,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, zoneId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined) params[k] = String(v);
@@ -494,7 +494,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, zoneId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -527,7 +527,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, zoneId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
@@ -562,7 +562,7 @@ export const model = {
           };
         },
       ) => {
-        const { apiToken, zoneId } = context.globalArgs;
+        const { apiToken } = context.globalArgs;
         await cfApi(
           apiToken,
           "DELETE",

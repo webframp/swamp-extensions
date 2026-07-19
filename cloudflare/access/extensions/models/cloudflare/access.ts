@@ -4546,9 +4546,6 @@ export const model = {
         devices: z.boolean().optional().describe(
           "When set to `true`, all devices associated with the user will be revoked.",
         ),
-        devices: z.boolean().optional().describe(
-          "When set to `true`, all devices associated with the user will be revoked.",
-        ),
         email: z.string().describe("The email of the user to revoke."),
         user_uid: z.string().optional().describe(
           "The uuid of the user to revoke.",

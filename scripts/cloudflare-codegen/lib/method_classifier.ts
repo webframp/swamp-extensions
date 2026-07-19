@@ -184,7 +184,18 @@ export function generateModelSource(
   );
   lines.push(``);
   lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
-  lines.push(`import { cfApi, cfApiPaginated } from "./_lib/api.ts";`);
+
+  // Only import the API helpers that are actually used
+  const usesCfApi = methods.some((m) => m.type !== "list");
+  const usesCfApiPaginated = methods.some((m) => m.type === "list");
+  const apiImports: string[] = [];
+  if (usesCfApi) apiImports.push("cfApi");
+  if (usesCfApiPaginated) apiImports.push("cfApiPaginated");
+  if (apiImports.length > 0) {
+    lines.push(
+      `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
+    );
+  }
   lines.push(``);
 
   // Schemas section
@@ -401,12 +412,22 @@ function generateMethod(
   );
 
   const scopeId = config.scope === "account" ? "accountId" : "zoneId";
-  lines.push(
-    `${indent}    const { apiToken, ${scopeId} } = context.globalArgs;`,
-  );
 
   // Build the API path with parameter substitution
   const apiPath = buildApiPath(operation.path, config.scope);
+
+  // Only destructure the scope var if the path actually uses it
+  const scopeParam = config.scope === "account" ? "account_id" : "zone_id";
+  const pathUsesScopeVar = operation.path.includes(`{${scopeParam}}`);
+  if (pathUsesScopeVar) {
+    lines.push(
+      `${indent}    const { apiToken, ${scopeId} } = context.globalArgs;`,
+    );
+  } else {
+    lines.push(
+      `${indent}    const { apiToken } = context.globalArgs;`,
+    );
+  }
 
   if (type === "list") {
     lines.push(generateListBody(method, apiPath, indent));
@@ -431,17 +452,24 @@ function generateMethod(
 /** Generate the arguments schema for a method */
 function generateArgsSchema(op: GroupedOperation): string {
   const fields: string[] = [];
+  const seenFields = new Set<string>();
 
   // Path params (minus scope)
   for (const p of op.pathParams) {
+    const fieldName = sanitizeFieldName(p.name);
+    if (seenFields.has(fieldName)) continue;
+    seenFields.add(fieldName);
     const desc = p.description
       ? `.describe("${escapeStr(p.description)}")`
       : "";
-    fields.push(`  ${sanitizeFieldName(p.name)}: z.string()${desc},`);
+    fields.push(`  ${fieldName}: z.string()${desc},`);
   }
 
   // Query params (for list/get methods)
   for (const p of op.queryParams) {
+    const fieldName = sanitizeFieldName(p.name);
+    if (seenFields.has(fieldName)) continue;
+    seenFields.add(fieldName);
     const desc = p.description
       ? `.describe("${escapeStr(p.description)}")`
       : "";
@@ -457,7 +485,7 @@ function generateArgsSchema(op: GroupedOperation): string {
       zodType = `z.enum([${vals.join(", ")}])`;
     }
     fields.push(
-      `  ${sanitizeFieldName(p.name)}: ${zodType}.optional()${desc},`,
+      `  ${fieldName}: ${zodType}.optional()${desc},`,
     );
   }
 
@@ -467,13 +495,16 @@ function generateArgsSchema(op: GroupedOperation): string {
     for (const [name, prop] of Object.entries(op.requestBody.properties)) {
       // Skip id fields in request bodies
       if (name === "id") continue;
+      const fieldName = sanitizeFieldName(name);
+      if (seenFields.has(fieldName)) continue;
+      seenFields.add(fieldName);
       const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
       const optSuffix = required.has(name) ? "" : ".optional()";
       const desc = prop.description
         ? `.describe("${escapeStr(truncateStr(prop.description))}")`
         : "";
       fields.push(
-        `  ${sanitizeFieldName(name)}: ${fieldZod}${optSuffix}${desc},`,
+        `  ${fieldName}: ${fieldZod}${optSuffix}${desc},`,
       );
     }
   }
@@ -671,7 +702,12 @@ function buildApiPath(path: string, scope: string): string {
 }
 
 function sanitizeFieldName(name: string): string {
-  return name.replace(/-/g, "_");
+  // Replace special characters with underscores, collapse multiples
+  return name
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .replace(/^\d/, "_$&"); // prefix leading digit with underscore
 }
 
 function toPascalCase(name: string): string {
