@@ -169,8 +169,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -431,11 +432,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["app_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/spectrum/apps/${args.app_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(

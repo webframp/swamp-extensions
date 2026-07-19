@@ -9,7 +9,7 @@
  * @module
  */
 
-import { calver, OUTPUT_BASE, SERVICES } from "./config.ts";
+import { OUTPUT_BASE, SERVICES } from "./config.ts";
 import { fetchSchema } from "./lib/schema_fetcher.ts";
 import { groupOperations } from "./lib/service_grouper.ts";
 import {
@@ -62,10 +62,39 @@ function parseArgs(): GenerateOptions {
   return opts;
 }
 
+/** Get next CalVer, incrementing N if today already has a version */
+async function getNextVersion(outputBase: string): Promise<string> {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const datePrefix = `${y}.${m}.${d}`;
+
+  let maxN = 0;
+  for (const service of SERVICES) {
+    const manifestPath = join(outputBase, service.name, "manifest.yaml");
+    try {
+      const content = await Deno.readTextFile(manifestPath);
+      const match = content.match(/version:\s*"(\d{4}\.\d{2}\.\d{2}\.\d+)"/);
+      if (match) {
+        const existingVersion = match[1];
+        if (existingVersion.startsWith(datePrefix)) {
+          const n = parseInt(existingVersion.split(".")[3]);
+          if (n >= maxN) maxN = n;
+        }
+      }
+    } catch {
+      // File doesn't exist yet
+    }
+  }
+
+  return `${datePrefix}.${maxN + 1}`;
+}
+
 async function main() {
   const opts = parseArgs();
-  const version = opts.version ?? calver();
   const outputBase = opts.outputBase ?? OUTPUT_BASE;
+  const version = opts.version ?? await getNextVersion(outputBase);
 
   console.log(`\n🔧 Cloudflare Extension Code Generator`);
   console.log(`   Version: ${version}`);

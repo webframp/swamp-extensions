@@ -507,11 +507,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/api_gateway/configuration`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -583,8 +586,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -637,11 +641,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/api_gateway/discovery/operations`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -672,8 +679,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -728,11 +736,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/api_gateway/discovery/operations/${args.discovery_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -767,11 +778,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/api_gateway/expression-template/fallthrough`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -806,8 +820,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -890,11 +905,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/api_gateway/labels/managed/${args.name}/resources/operation`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1025,11 +1043,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1062,11 +1083,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1126,11 +1150,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/api_gateway/labels/user/${args.name}/resources/operation`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1168,8 +1195,9 @@ export const model = {
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
           const params: Record<string, string> = {};
+          const excludeKeys = new Set(["page", "per_page"]);
           for (const [k, v] of Object.entries(args)) {
-            if (v !== undefined) params[k] = String(v);
+            if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
           }
 
           const { results, truncated } = await cfApiPaginated<
@@ -1291,11 +1319,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/api_gateway/operations/item`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1338,11 +1369,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/api_gateway/operations/labels`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1385,11 +1419,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/api_gateway/operations/labels`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1528,11 +1565,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1573,11 +1613,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(

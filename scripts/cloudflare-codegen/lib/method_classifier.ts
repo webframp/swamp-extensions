@@ -523,21 +523,15 @@ function generateListBody(
   indent: string,
 ): string {
   const resourceName = method.name.replace(/^list_/, "");
-  // Build a set of path param names to exclude from query params
+  // Exclude path params AND pagination params (page/per_page are managed by cfApiPaginated)
   const pathParamNames = method.operation.pathParams
     .map((p) => sanitizeFieldName(p.name));
-  const exclusionCheck = pathParamNames.length > 0
-    ? `\n${indent}    const pathParams = new Set(${
-      JSON.stringify(pathParamNames)
-    });`
-    : "";
-  const filterCondition = pathParamNames.length > 0
-    ? " && !pathParams.has(k)"
-    : "";
+  const excludeNames = [...pathParamNames, "page", "per_page"];
 
-  return `${indent}    const params: Record<string, string> = {};${exclusionCheck}
+  return `${indent}    const params: Record<string, string> = {};
+${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined${filterCondition}) params[k] = String(v);
+${indent}      if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
 ${indent}    }
 ${indent}
 ${indent}    const { results, truncated } = await cfApiPaginated<Record<string, unknown>>(
@@ -592,11 +586,24 @@ function generateCreateBody(
   indent: string,
 ): string {
   const resourceName = method.name.replace(/^create_/, "");
-  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const bodyFilter = pathParamNames.length > 0
+    ? `\n${indent}    const body: Record<string, unknown> = {};
+${indent}    const pathKeys = new Set(${JSON.stringify(pathParamNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!pathKeys.has(k)) body[k] = v;
+${indent}    }`
+    : `\n${indent}    const body = args;`;
+
+  return `${bodyFilter}
+${indent}
+${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "POST",
 ${indent}      \`${apiPath}\`,
-${indent}      args,
+${indent}      body,
 ${indent}    );
 ${indent}
 ${indent}    const id = (result as { id?: string }).id ?? "created";
@@ -619,12 +626,24 @@ function generateUpdateBody(
   const instanceExpr = idParam
     ? `String(args.${sanitizeFieldName(idParam.name)})`
     : '"updated"';
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const bodyFilter = pathParamNames.length > 0
+    ? `\n${indent}    const body: Record<string, unknown> = {};
+${indent}    const pathKeys = new Set(${JSON.stringify(pathParamNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!pathKeys.has(k)) body[k] = v;
+${indent}    }`
+    : `\n${indent}    const body = args;`;
 
-  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+  return `${bodyFilter}
+${indent}
+${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}\`,
-${indent}      args,
+${indent}      body,
 ${indent}    );
 ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
@@ -664,11 +683,27 @@ function generateActionBody(
   const resourceName = method.name.replace(/^action_/, "");
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const hasBody = method.operation.requestBody !== undefined;
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
 
-  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+  let bodySetup = "";
+  let bodyArg = "";
+  if (hasBody && pathParamNames.length > 0) {
+    bodySetup = `\n${indent}    const body: Record<string, unknown> = {};
+${indent}    const pathKeys = new Set(${JSON.stringify(pathParamNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!pathKeys.has(k)) body[k] = v;
+${indent}    }\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody) {
+    bodyArg = `\n${indent}      args,`;
+  }
+
+  return `${bodySetup}${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "${httpMethod}",
-${indent}      \`${apiPath}\`,${hasBody ? "\n" + indent + "      args," : ""}
+${indent}      \`${apiPath}\`,${bodyArg}
 ${indent}    );
 ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", "latest", result);

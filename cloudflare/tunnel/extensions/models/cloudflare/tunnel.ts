@@ -216,8 +216,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -273,11 +274,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/cfd_tunnel`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -347,11 +351,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["tunnel_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/cfd_tunnel/${args.tunnel_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -449,11 +460,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["tunnel_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/cfd_tunnel/${args.tunnel_id}/configurations`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -486,9 +504,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["tunnel_id"]);
+        const excludeKeys = new Set(["tunnel_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -610,11 +628,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["tunnel_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/cfd_tunnel/${args.tunnel_id}/management`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -697,8 +722,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<

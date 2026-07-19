@@ -1535,8 +1535,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -1609,11 +1610,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/ai-controls/mcp/portals`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1703,11 +1707,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1772,8 +1783,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -1843,11 +1855,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/ai-controls/mcp/servers`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1932,11 +1947,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -2039,8 +2061,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -2132,8 +2155,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -2222,11 +2246,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["app_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/apps/${args.app_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -2390,9 +2421,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["app_id"]);
+        const excludeKeys = new Set(["app_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -2452,11 +2483,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["app_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -2532,11 +2570,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["app_id", "policy_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -2600,11 +2645,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["app_id", "policy_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}/make_reusable`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -2676,11 +2728,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["app_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/apps/${args.app_id}/settings`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -2749,8 +2808,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -2799,8 +2859,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -2856,11 +2917,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/certificates`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -2895,8 +2959,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -2951,11 +3016,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/certificates/settings`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -3024,11 +3092,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["certificate_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -3093,8 +3168,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -3150,11 +3226,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/custom_pages`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -3225,11 +3304,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["custom_page_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -3292,8 +3378,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -3408,8 +3495,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -3463,11 +3551,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/groups`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -3540,11 +3631,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["group_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/groups/${args.group_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -3608,8 +3706,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -3735,11 +3834,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["identity_provider_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -3846,9 +3952,13 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["identity_provider_id"]);
+        const excludeKeys = new Set([
+          "identity_provider_id",
+          "page",
+          "per_page",
+        ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -3909,9 +4019,13 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["identity_provider_id"]);
+        const excludeKeys = new Set([
+          "identity_provider_id",
+          "page",
+          "per_page",
+        ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -3967,11 +4081,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/idp_federation_grants`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -4098,11 +4215,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/keys`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -4222,8 +4342,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -4290,8 +4411,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -4392,11 +4514,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/organizations`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -4446,11 +4571,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/organizations`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -4521,11 +4649,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/organizations/doh`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -4569,11 +4700,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/organizations/revoke_user`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -4610,8 +4744,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -4669,11 +4804,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/policies`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -4746,11 +4884,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["policy_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/policies/${args.policy_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -4812,11 +4957,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/policy-tests`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -4889,9 +5037,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["policy_test_id"]);
+        const excludeKeys = new Set(["policy_test_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -4950,8 +5098,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -5113,11 +5262,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/access/seats`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -5151,8 +5303,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -5205,11 +5358,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/service_tokens`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -5281,11 +5437,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["service_token_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -5390,11 +5553,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["service_token_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/rotate`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -5431,8 +5601,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -5480,11 +5651,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/tags`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -5551,11 +5725,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["tag_name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/tags/${args.tag_name}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -5620,8 +5801,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -5672,11 +5854,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/access/users`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -5742,11 +5927,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["user_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/access/users/${args.user_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -5809,9 +6001,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["user_id"]);
+        const excludeKeys = new Set(["user_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -5902,9 +6094,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["user_id"]);
+        const excludeKeys = new Set(["user_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<

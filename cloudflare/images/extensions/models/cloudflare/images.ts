@@ -431,11 +431,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["signing_key_name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/images/v1/keys/${args.signing_key_name}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -572,11 +579,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/images/v1/variants`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -645,11 +655,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["variant_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -793,11 +810,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["image_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/images/v1/${args.image_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1019,11 +1043,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1152,11 +1179,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["migration_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/abort`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1191,11 +1225,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["migration_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/start`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1316,11 +1357,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/images/v2/sourcingkit/sources`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1361,11 +1405,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/images/v2/sourcingkit/sources/connectivity-precheck`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1439,11 +1486,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["source_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(

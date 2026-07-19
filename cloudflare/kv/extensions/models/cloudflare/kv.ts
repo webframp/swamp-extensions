@@ -190,8 +190,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -241,11 +242,14 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/storage/kv/namespaces`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -310,11 +314,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["namespace_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -379,11 +390,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["namespace_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/bulk`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -418,11 +436,17 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["namespace_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/bulk/delete`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -463,11 +487,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["namespace_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/bulk/get`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -506,9 +537,9 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["namespace_id"]);
+        const excludeKeys = new Set(["namespace_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -643,11 +674,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["key_name", "namespace_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/values/${args.key_name}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(

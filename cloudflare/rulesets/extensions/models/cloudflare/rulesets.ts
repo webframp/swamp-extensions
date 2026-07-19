@@ -317,11 +317,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["ruleset_phase"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/rulesets/phases/${args.ruleset_phase}/entrypoint`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -459,11 +466,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["ruleset_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/accounts/${accountId}/rulesets/${args.ruleset_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -561,11 +575,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["rule_id", "ruleset_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/accounts/${accountId}/rulesets/${args.ruleset_id}/rules/${args.rule_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -876,11 +897,18 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["ruleset_phase", "zone_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${args.zone_id}/rulesets/phases/${args.ruleset_phase}/entrypoint`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1022,11 +1050,18 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["ruleset_id", "zone_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${args.zone_id}/rulesets/${args.ruleset_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1127,11 +1162,18 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["rule_id", "ruleset_id", "zone_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${args.zone_id}/rulesets/${args.ruleset_id}/rules/${args.rule_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(

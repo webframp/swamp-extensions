@@ -192,6 +192,11 @@ export async function cfApi<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(\`Cloudflare API HTTP \${response.status} \${response.statusText}: \${text.slice(0, 500)}\`);
+  }
+
   const data = (await response.json()) as CloudflareResponse<T>;
 
   if (!data.success) {
@@ -222,9 +227,9 @@ export async function cfApiPaginated<T>(
 
   while (page <= MAX_PAGES) {
     const queryParams = new URLSearchParams({
+      ...params,
       page: String(page),
       per_page: String(perPage),
-      ...params,
     });
 
     const url = \`\${CF_API_BASE}\${path}?\${queryParams}\`;
@@ -234,6 +239,11 @@ export async function cfApiPaginated<T>(
         "Content-Type": "application/json",
       },
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(\`Cloudflare API HTTP \${response.status} \${response.statusText}: \${text.slice(0, 500)}\`);
+    }
 
     const data = (await response.json()) as CloudflareResponse<T[]>;
 
@@ -245,6 +255,10 @@ export async function cfApiPaginated<T>(
     allResults.push(...data.result);
 
     if (!data.result_info || page >= data.result_info.total_pages) {
+      // If we hit MAX_PAGES and result_info is absent, we can't confirm completeness
+      if (page >= MAX_PAGES && !data.result_info) {
+        truncated = true;
+      }
       break;
     }
     page++;

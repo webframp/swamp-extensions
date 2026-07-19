@@ -455,8 +455,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -526,11 +527,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/waiting_rooms`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -559,11 +563,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/waiting_rooms/preview`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -631,11 +638,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/waiting_rooms/settings`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -667,11 +677,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/waiting_rooms/settings`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -759,11 +772,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -816,11 +836,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -885,9 +912,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["waiting_room_id"]);
+        const excludeKeys = new Set(["waiting_room_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -950,11 +977,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}/events`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1035,11 +1069,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["event_id", "waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}/events/${args.event_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1087,11 +1128,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["event_id", "waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}/events/${args.event_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1196,9 +1244,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const pathParams = new Set(["waiting_room_id"]);
+        const excludeKeys = new Set(["waiting_room_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathParams.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -1256,11 +1304,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}/rules`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -1293,11 +1348,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}/rules`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1338,11 +1400,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["rule_id", "waiting_room_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/waiting_rooms/${args.waiting_room_id}/rules/${args.rule_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(

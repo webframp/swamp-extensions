@@ -441,8 +441,9 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -495,11 +496,14 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/certificates`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -605,8 +609,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -667,11 +672,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/custom_certificates`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -707,11 +715,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/zones/${zoneId}/custom_certificates/prioritize`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -791,11 +802,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["custom_certificate_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/custom_certificates/${args.custom_certificate_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -863,11 +881,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/ssl/analyze`,
-          args,
+          body,
         );
 
         const id = (result as { id?: string }).id ?? "created";
@@ -907,8 +928,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -968,11 +990,14 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
+
+          const body = args;
+
           const result = await cfApi<Record<string, unknown>>(
             apiToken,
             "POST",
             `/zones/${zoneId}/ssl/certificate_packs/order`,
-            args,
+            body,
           );
 
           const id = (result as { id?: string }).id ?? "created";
@@ -1079,11 +1104,18 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
+
+          const body: Record<string, unknown> = {};
+          const pathKeys = new Set(["certificate_pack_id"]);
+          for (const [k, v] of Object.entries(args)) {
+            if (!pathKeys.has(k)) body[k] = v;
+          }
+
           const result = await cfApi<Record<string, unknown>>(
             apiToken,
             "PATCH",
             `/zones/${zoneId}/ssl/certificate_packs/${args.certificate_pack_id}`,
-            args,
+            body,
           );
 
           const handle = await context.writeResource(
@@ -1186,11 +1218,14 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/ssl/universal/settings`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -1226,8 +1261,9 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
         const { results, truncated } = await cfApiPaginated<
@@ -1283,11 +1319,18 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const pathKeys = new Set(["certificate_pack_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!pathKeys.has(k)) body[k] = v;
+        }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/zones/${zoneId}/ssl/verification/${args.certificate_pack_id}`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(

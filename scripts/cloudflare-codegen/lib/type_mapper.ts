@@ -97,10 +97,8 @@ function schemaToZodInner(
 function stringToZod(schema: SchemaObject): string {
   let s = "z.string()";
   if (schema.format === "date-time") {
-    s += ".datetime({ offset: true }).optional()";
-    // Remove the .optional() we're about to add — datetime fields from CF
-    // are usually present but we want the format validation
-    s = "z.string()";
+    // Keep as plain string — CF datetime fields vary in format precision
+    // and .datetime() is overly strict for observational data
   }
   if (schema.minLength !== undefined) {
     s += `.min(${schema.minLength})`;
