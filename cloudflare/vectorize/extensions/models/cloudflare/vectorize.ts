@@ -544,7 +544,7 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_insert_vector",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed vectorize_insert_vector", {});
         return { dataHandles: [handle] };
@@ -817,7 +817,7 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_upsert_vector",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed vectorize_upsert_vector", {});
         return { dataHandles: [handle] };

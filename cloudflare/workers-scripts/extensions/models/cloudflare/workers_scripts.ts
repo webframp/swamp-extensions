@@ -1679,7 +1679,7 @@ export const model = {
         const handle = await context.writeResource(
           "worker_tail_logs_start_tail",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed worker_tail_logs_start_tail", {});
         return { dataHandles: [handle] };
@@ -1877,7 +1877,7 @@ export const model = {
         const handle = await context.writeResource(
           "worker_versions_upload_version",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed worker_versions_upload_version", {});
         return { dataHandles: [handle] };

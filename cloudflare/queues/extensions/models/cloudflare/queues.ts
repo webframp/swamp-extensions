@@ -613,7 +613,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_consumer",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_consumer", {});
         return { dataHandles: [handle] };

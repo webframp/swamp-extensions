@@ -710,7 +710,7 @@ export const model = {
         const handle = await context.writeResource(
           "disable_catalog",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed disable_catalog", {});
         return { dataHandles: [handle] };
@@ -748,7 +748,7 @@ export const model = {
         const handle = await context.writeResource(
           "enable_catalog",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed enable_catalog", {});
         return { dataHandles: [handle] };

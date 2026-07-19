@@ -1699,7 +1699,7 @@ export const model = {
         const handle = await context.writeResource(
           "email_sending_subdomains_fix_sending_subdomain_dns",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed email_sending_subdomains_fix_sending_subdomain_dns",

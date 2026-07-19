@@ -236,7 +236,6 @@ export async function cfApiPaginated<T>(
     const response = await fetch(url, {
       headers: {
         "Authorization": \`Bearer \${apiToken}\`,
-        "Content-Type": "application/json",
       },
     });
 
@@ -279,12 +278,11 @@ export async function cfApiPaginated<T>(
 
 /** The Apache 2.0 license text for generated extensions */
 export function generateLicense(): string {
-  const year = new Date().getFullYear();
   return `Apache License
 Version 2.0, January 2004
 http://www.apache.org/licenses/
 
-Copyright ${year} Sean Carolan
+Copyright 2026 Sean Carolan
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

@@ -755,7 +755,7 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "latest", result);
+${indent}    const handle = await context.writeResource("${resourceName}", "latest", result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }

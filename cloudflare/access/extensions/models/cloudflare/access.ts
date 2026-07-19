@@ -2030,7 +2030,7 @@ export const model = {
         const handle = await context.writeResource(
           "mcp_portals_api_sync_server",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed mcp_portals_api_sync_server", {});
         return { dataHandles: [handle] };
@@ -2127,7 +2127,7 @@ export const model = {
         const handle = await context.writeResource(
           "access_applications_add_an_application",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed access_applications_add_an_application",
@@ -2366,7 +2366,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_a_short_lived_certificate_ca",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_a_short_lived_certificate_ca", {});
         return { dataHandles: [handle] };
@@ -2701,7 +2701,7 @@ export const model = {
         const handle = await context.writeResource(
           "access_applications_revoke_service_tokens",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed access_applications_revoke_service_tokens",
@@ -3440,7 +3440,7 @@ export const model = {
         const handle = await context.writeResource(
           "access_gateway_ca_add_an_ssh_ca",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed access_gateway_ca_add_an_ssh_ca", {});
         return { dataHandles: [handle] };
@@ -3776,7 +3776,7 @@ export const model = {
         const handle = await context.writeResource(
           "access_identity_providers_add_an_access_identity_provider",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed access_identity_providers_add_an_access_identity_provider",
@@ -3925,7 +3925,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_saml_certificate_for_identity_provider",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed create_saml_certificate_for_identity_provider",
@@ -4269,7 +4269,7 @@ export const model = {
         const handle = await context.writeResource(
           "access_key_configuration_rotate_access_keys",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed access_key_configuration_rotate_access_keys",
@@ -5256,7 +5256,7 @@ export const model = {
         const handle = await context.writeResource(
           "access_saml_certificates_rotate_certificate",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed access_saml_certificates_rotate_certificate",
@@ -5543,7 +5543,7 @@ export const model = {
         const handle = await context.writeResource(
           "access_service_tokens_refresh_a_service_token",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed access_service_tokens_refresh_a_service_token",

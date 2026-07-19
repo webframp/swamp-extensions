@@ -453,7 +453,7 @@ export const model = {
         const handle = await context.writeResource(
           "delete_multiple_key_value_pairs",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed delete_multiple_key_value_pairs", {});
         return { dataHandles: [handle] };

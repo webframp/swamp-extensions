@@ -12,4 +12,4 @@
 .claude/scheduled_tasks.lock
 .claude/scheduled_tasks.json
 # END swamp managed section
-cloudflare/.cache/
+.cache/

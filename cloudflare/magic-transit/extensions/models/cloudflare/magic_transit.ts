@@ -2851,7 +2851,7 @@ export const model = {
         const handle = await context.writeResource(
           "bulkcreateprefixes",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed bulkcreateprefixes", {});
         return { dataHandles: [handle] };
@@ -4704,7 +4704,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_cf1_sites",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_cf1_sites", {});
         return { dataHandles: [handle] };
@@ -4915,7 +4915,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_cf1_site_ramps",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_cf1_site_ramps", {});
         return { dataHandles: [handle] };
@@ -5423,7 +5423,7 @@ export const model = {
         const handle = await context.writeResource(
           "catalog_syncs_refresh",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed catalog_syncs_refresh", {});
         return { dataHandles: [handle] };
@@ -5531,7 +5531,7 @@ export const model = {
         const handle = await context.writeResource(
           "onramps_apply",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed onramps_apply", {});
         return { dataHandles: [handle] };
@@ -5567,7 +5567,7 @@ export const model = {
         const handle = await context.writeResource(
           "onramps_export",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed onramps_export", {});
         return { dataHandles: [handle] };
@@ -5603,7 +5603,7 @@ export const model = {
         const handle = await context.writeResource(
           "onramps_plan",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed onramps_plan", {});
         return { dataHandles: [handle] };
@@ -5637,7 +5637,7 @@ export const model = {
         const handle = await context.writeResource(
           "providers_discover_all",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed providers_discover_all", {});
         return { dataHandles: [handle] };
@@ -5718,7 +5718,7 @@ export const model = {
         const handle = await context.writeResource(
           "providers_discover",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed providers_discover", {});
         return { dataHandles: [handle] };
@@ -6538,7 +6538,7 @@ export const model = {
         const handle = await context.writeResource(
           "magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels",

@@ -542,7 +542,7 @@ export const model = {
         const handle = await context.writeResource(
           "d1_import_database",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed d1_import_database", {});
         return { dataHandles: [handle] };
@@ -585,7 +585,7 @@ export const model = {
         const handle = await context.writeResource(
           "d1_query_database",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed d1_query_database", {});
         return { dataHandles: [handle] };
@@ -628,7 +628,7 @@ export const model = {
         const handle = await context.writeResource(
           "d1_raw_database_query",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed d1_raw_database_query", {});
         return { dataHandles: [handle] };
@@ -716,7 +716,7 @@ export const model = {
         const handle = await context.writeResource(
           "d1_time_travel_restore",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed d1_time_travel_restore", {});
         return { dataHandles: [handle] };

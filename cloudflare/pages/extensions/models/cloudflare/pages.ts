@@ -960,7 +960,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_deployment",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_deployment", {});
         return { dataHandles: [handle] };
@@ -1101,7 +1101,7 @@ export const model = {
         const handle = await context.writeResource(
           "pages_deployment_retry_deployment",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed pages_deployment_retry_deployment", {});
         return { dataHandles: [handle] };
@@ -1138,7 +1138,7 @@ export const model = {
         const handle = await context.writeResource(
           "pages_deployment_rollback_deployment",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed pages_deployment_rollback_deployment",
@@ -1462,7 +1462,7 @@ export const model = {
         const handle = await context.writeResource(
           "pages_purge_build_cache",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed pages_purge_build_cache", {});
         return { dataHandles: [handle] };

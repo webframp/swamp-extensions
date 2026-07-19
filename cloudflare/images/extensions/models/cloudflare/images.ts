@@ -370,7 +370,7 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_upload_an_image_via_url",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed cloudflare_images_upload_an_image_via_url",
@@ -968,7 +968,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_authenticated_direct_upload_url_v_2",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed create_authenticated_direct_upload_url_v_2",

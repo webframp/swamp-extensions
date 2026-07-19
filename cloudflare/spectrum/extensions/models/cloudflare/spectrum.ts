@@ -368,7 +368,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_spectrum_application_using_a_name_for_the_origin",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed create_spectrum_application_using_a_name_for_the_origin",

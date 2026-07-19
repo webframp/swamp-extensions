@@ -83,7 +83,6 @@ export async function cfApiPaginated<T>(
     const response = await fetch(url, {
       headers: {
         "Authorization": `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
       },
     });
 

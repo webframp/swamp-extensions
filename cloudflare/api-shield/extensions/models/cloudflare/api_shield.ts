@@ -968,7 +968,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_user_labels",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_user_labels", {});
         return { dataHandles: [handle] };
@@ -1274,7 +1274,7 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_endpoint_management_add_operations_to_a_zone",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed api_shield_endpoint_management_add_operations_to_a_zone",

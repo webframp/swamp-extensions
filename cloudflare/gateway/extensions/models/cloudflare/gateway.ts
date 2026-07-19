@@ -995,7 +995,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_zero_trust_account",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_zero_trust_account", {});
         return { dataHandles: [handle] };
@@ -1223,7 +1223,7 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_rotate_ssh_account_seed",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed zero_trust_rotate_ssh_account_seed", {});
         return { dataHandles: [handle] };
@@ -1477,7 +1477,7 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_certificates_activate_zero_trust_certificate",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed zero_trust_certificates_activate_zero_trust_certificate",
@@ -1516,7 +1516,7 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_certificates_deactivate_zero_trust_certificate",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed zero_trust_certificates_deactivate_zero_trust_certificate",
@@ -1862,7 +1862,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_from_csv",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed list_from_csv", {});
         return { dataHandles: [handle] };
@@ -3069,7 +3069,7 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule",

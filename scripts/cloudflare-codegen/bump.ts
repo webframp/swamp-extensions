@@ -66,8 +66,8 @@ async function getNextVersion(outputBase: string): Promise<string> {
       if (match) {
         const existingVersion = match[1];
         if (existingVersion.startsWith(datePrefix)) {
-          const n = parseInt(existingVersion.split(".")[3]);
-          if (n >= maxN) maxN = n;
+          const n = parseInt(existingVersion.split(".")[3], 10);
+          if (Number.isFinite(n) && n >= maxN) maxN = n;
         }
       }
     } catch {

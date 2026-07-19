@@ -937,7 +937,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_initiate_video_uploads_using_tus",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_videos_initiate_video_uploads_using_tus",
@@ -1195,7 +1195,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_signing_keys",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_signing_keys", {});
         return { dataHandles: [handle] };
@@ -1456,7 +1456,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_disable_a_live_input",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_live_inputs_disable_a_live_input",
@@ -1495,7 +1495,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_enable_a_live_input",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_live_inputs_enable_a_live_input",
@@ -1727,7 +1727,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_rotate_keys_for_a_live_input",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_live_inputs_rotate_keys_for_a_live_input",
@@ -2193,7 +2193,7 @@ export const model = {
         const handle = await context.writeResource(
           "update_video_details",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed update_video_details", {});
         return { dataHandles: [handle] };
@@ -2594,7 +2594,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_subtitles_captions_generate_caption_or_subtitle_for_language",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_subtitles_captions_generate_caption_or_subtitle_for_language",
@@ -2704,7 +2704,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_downloads",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_downloads", {});
         return { dataHandles: [handle] };
@@ -2771,7 +2771,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_type_specific_downloads",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed create_type_specific_downloads", {});
         return { dataHandles: [handle] };

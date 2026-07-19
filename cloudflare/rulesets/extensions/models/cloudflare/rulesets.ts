@@ -257,7 +257,7 @@ export const model = {
         const handle = await context.writeResource(
           "createaccountruleset",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed createaccountruleset", {});
         return { dataHandles: [handle] };
@@ -550,7 +550,7 @@ export const model = {
         const handle = await context.writeResource(
           "createaccountrulesetrule",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed createaccountrulesetrule", {});
         return { dataHandles: [handle] };
@@ -837,7 +837,7 @@ export const model = {
         const handle = await context.writeResource(
           "createzoneruleset",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed createzoneruleset", {});
         return { dataHandles: [handle] };
@@ -1138,7 +1138,7 @@ export const model = {
         const handle = await context.writeResource(
           "createzonerulesetrule",
           "latest",
-          result,
+          result ?? {},
         );
         context.logger.info("Executed createzonerulesetrule", {});
         return { dataHandles: [handle] };
