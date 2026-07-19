@@ -106,7 +106,6 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 | `update_ai_search_namespace_instance_sync_item`                                 | Sync Item.                                                                         |
 | `delete_item`                                                                   | Delete Item.                                                                       |
 | `list_item_chunks`                                                              | List Item Chunks.                                                                  |
-| `get_item_content`                                                              | Download Item Content.                                                             |
 | `list_ai_search_namespace_instance_logs_item`                                   | Item Logs.                                                                         |
 | `update_ai_search_namespace_instance_change_job_status`                         | Cancel an indexing job.                                                            |
 | `create_ai_search_namespace_instance_search`                                    | Search                                                                             |

@@ -33,7 +33,6 @@ swamp model create @webframp/cloudflare/images cf-images \
 | `get_cloudflare_images_image_details`                               | Image details                             |
 | `update_image`                                                      | Update image                              |
 | `delete_image`                                                      | Delete image                              |
-| `get_cloudflare_images_base_image`                                  | Download image                            |
 | `list_images_v2`                                                    | List images V2                            |
 | `create_authenticated_direct_upload_url_v_2`                        | Create authenticated direct upload URL V2 |
 | `list_migrations`                                                   | List sourcing kit migrations              |

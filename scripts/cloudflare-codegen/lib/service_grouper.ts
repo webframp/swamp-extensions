@@ -37,6 +37,8 @@ export interface GroupedOperation {
   responseSchema?: SchemaObject;
   /** Whether the response is a collection (array) or single item */
   isCollection: boolean;
+  /** Whether this endpoint uses cursor-based pagination (not page-based) */
+  usesCursorPagination: boolean;
   /** Whether this endpoint is deprecated */
   deprecated: boolean;
   /** Tags from the OpenAPI spec */
@@ -153,6 +155,10 @@ function extractOperation(
   // Skip deprecated by default (can be made configurable)
   if (operation.deprecated) return null;
 
+  // Skip endpoints whose success response is non-JSON (binary, streaming, raw text).
+  // These require hand-written implementations that handle raw bytes.
+  if (hasNonJsonSuccessResponse(operation)) return null;
+
   const allParams = [
     ...pathLevelParams,
     ...(operation.parameters ?? []),
@@ -193,6 +199,7 @@ function extractOperation(
     requestBody,
     responseSchema,
     isCollection,
+    usesCursorPagination: queryParams.some((p) => p.name === "cursor"),
     deprecated: operation.deprecated ?? false,
     tags: operation.tags ?? [],
   };
@@ -251,4 +258,30 @@ function extractResponseSchema(
   }
 
   return { responseSchema, isCollection };
+}
+
+/**
+ * Detect if an operation's success response uses a non-JSON content type.
+ * These endpoints return raw bytes (octet-stream, images, PDFs, etc.)
+ * or streaming responses (text/event-stream) that don't fit the standard
+ * Cloudflare JSON envelope pattern and require hand-written implementations.
+ */
+function hasNonJsonSuccessResponse(operation: OperationObject): boolean {
+  if (!operation.responses) return false;
+
+  for (const code of ["200", "201"]) {
+    const resp = operation.responses[code] as
+      | { content?: Record<string, unknown> }
+      | undefined;
+    if (!resp?.content) continue;
+
+    const contentTypes = Object.keys(resp.content);
+    // If the ONLY success content type is non-JSON, skip this endpoint.
+    // If it has both JSON and non-JSON (e.g., Workers AI with json + event-stream),
+    // keep it — the JSON path is the standard one.
+    const hasJson = contentTypes.some((t) => t.includes("json"));
+    if (!hasJson) return true;
+  }
+
+  return false;
 }

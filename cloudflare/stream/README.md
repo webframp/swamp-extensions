@@ -60,13 +60,11 @@ swamp model create @webframp/cloudflare/stream cf-stream \
 | `update_stream_subtitles_captions_upload_captions_or_subtitles`       | Upload captions or subtitles                                  |
 | `delete_captions_or_subtitles`                                        | Delete captions or subtitles                                  |
 | `stream_subtitles_captions_generate_caption_or_subtitle_for_language` | Generate captions or subtitles for a provided language via AI |
-| `get_vtt_caption_or_subtitle`                                         | Return WebVTT captions for a provided language                |
 | `list_downloads`                                                      | List downloads                                                |
 | `create_downloads`                                                    | Create downloads                                              |
 | `delete_downloads`                                                    | Delete downloads                                              |
 | `create_type_specific_downloads`                                      | Create download                                               |
 | `delete_type_specific_downloads`                                      | Delete download                                               |
-| `get_stream_videos_retreieve_embed_code_html`                         | Retrieve embed Code HTML                                      |
 | `create_signed_url_tokens_for_videos`                                 | Create signed URL tokens for videos                           |
 
 ## Development

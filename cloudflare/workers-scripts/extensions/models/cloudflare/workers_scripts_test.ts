@@ -30,12 +30,10 @@ Deno.test("workers-scripts model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.list_workers);
   assertExists(model.methods.list_worker_script_search_workers);
-  assertExists(model.methods.get_worker_script_download_worker);
   assertExists(model.methods.update_worker_script_upload_worker_module);
   assertExists(model.methods.delete_worker);
   assertExists(model.methods.create_assets_upload_session);
   assertExists(model.methods.put_content);
-  assertExists(model.methods.get_content);
   assertExists(model.methods.list_deployments);
   assertExists(model.methods.create_deployment);
   assertExists(model.methods.get_deployment);
@@ -60,7 +58,6 @@ Deno.test("workers-scripts model: has expected methods", () => {
   assertExists(model.methods.list_versions);
   assertExists(model.methods.worker_versions_upload_version);
   assertExists(model.methods.get_version_detail);
-  assertExists(model.methods.get_script_content);
   assertExists(model.methods.put_script_content);
 });
 
@@ -68,11 +65,9 @@ Deno.test("workers-scripts model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["workers"]);
   assertExists(model.resources["worker_script_search_workers"]);
-  assertExists(model.resources["worker_script_download_worker"]);
   assertExists(model.resources["worker_script_upload_worker_module"]);
   assertExists(model.resources["assets_upload_session"]);
   assertExists(model.resources["put_content"]);
-  assertExists(model.resources["content"]);
   assertExists(model.resources["list_deployments"]);
   assertExists(model.resources["deployment"]);
   assertExists(model.resources["cron_triggers"]);
@@ -91,7 +86,6 @@ Deno.test("workers-scripts model: has expected resources", () => {
   assertExists(model.resources["list_versions"]);
   assertExists(model.resources["worker_versions_upload_version"]);
   assertExists(model.resources["version_detail"]);
-  assertExists(model.resources["script_content"]);
   assertExists(model.resources["put_script_content"]);
 });
 
@@ -209,50 +203,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).list_workers.execute({}, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name:
-    "workers-scripts model: get_worker_script_download_worker fetches and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = { "id": "fixture-123" };
-    const { url, server } = startMockCfServer({
-      "/workers/scripts/test-id-123": { result: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
-        definition: {
-          id: "test-id",
-          name: "test-workers-scripts",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).get_worker_script_download_worker.execute({
-        "script_name": "test-id-123",
-      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -440,6 +390,47 @@ Deno.test({
         "buckets": [["test-value"]],
         "jwt": "test-value",
       }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "workers-scripts model: list_deployments fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "deployments": [null] };
+    const { url, server } = startMockCfServer({
+      "/workers/scripts/test-id-123/deployments": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-scripts",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_deployments.execute({ "script_name": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

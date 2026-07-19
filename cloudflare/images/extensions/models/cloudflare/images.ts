@@ -261,12 +261,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "cloudflare_images_base_image": {
-      description: "Download image",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "list_images_v2": {
       description: "List images V2",
       schema: ListImagesV2Schema,
@@ -862,41 +856,6 @@ export const model = {
 
         context.logger.info("Deleted resource {id}", { id: args.image_id });
         return { dataHandles: [] };
-      },
-    },
-    get_cloudflare_images_base_image: {
-      description: "Download image",
-      arguments: z.object({
-        image_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/images/v1/${args.image_id}/blob`,
-        );
-
-        const handle = await context.writeResource(
-          "cloudflare_images_base_image",
-          String(args.image_id),
-          result,
-        );
-        context.logger.info("Fetched cloudflare_images_base_image", {});
-        return { dataHandles: [handle] };
       },
     },
     list_images_v2: {

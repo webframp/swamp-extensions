@@ -186,8 +186,12 @@ export function generateModelSource(
   lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
 
   // Only import the API helpers that are actually used
-  const usesCfApi = methods.some((m) => m.type !== "list");
-  const usesCfApiPaginated = methods.some((m) => m.type === "list");
+  const usesCfApi = methods.some((m) =>
+    m.type !== "list" || m.operation.usesCursorPagination
+  );
+  const usesCfApiPaginated = methods.some((m) =>
+    m.type === "list" && !m.operation.usesCursorPagination
+  );
   const apiImports: string[] = [];
   if (usesCfApi) apiImports.push("cfApi");
   if (usesCfApiPaginated) apiImports.push("cfApiPaginated");
@@ -523,9 +527,34 @@ function generateListBody(
   indent: string,
 ): string {
   const resourceName = method.name.replace(/^list_/, "");
-  // Exclude path params AND pagination params (page/per_page are managed by cfApiPaginated)
   const pathParamNames = method.operation.pathParams
     .map((p) => sanitizeFieldName(p.name));
+
+  // Cursor-based endpoints: single fetch, pass all query params directly
+  if (method.operation.usesCursorPagination) {
+    const excludeNames = [...pathParamNames];
+    return `${indent}    const params: Record<string, string> = {};
+${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+${indent}    }
+${indent}    const qs = new URLSearchParams(params).toString();
+${indent}    const url = qs ? \`${apiPath}?\${qs}\` : \`${apiPath}\`;
+${indent}
+${indent}    const result = await cfApi<Record<string, unknown>>(apiToken, "GET", url);
+${indent}    const items = (result as { result?: unknown[] })?.result ?? (Array.isArray(result) ? result : [result]);
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}      items,
+${indent}      truncated: false,
+${indent}      fetchedAt: new Date().toISOString(),
+${indent}    });
+${indent}
+${indent}    context.logger.info("Found {count} ${resourceName}", { count: (items as unknown[]).length });
+${indent}    return { dataHandles: [handle] };`;
+  }
+
+  // Page-based: use cfApiPaginated, exclude path params and pagination params
   const excludeNames = [...pathParamNames, "page", "per_page"];
 
   return `${indent}    const params: Record<string, string> = {};

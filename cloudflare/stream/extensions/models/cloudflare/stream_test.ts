@@ -83,13 +83,11 @@ Deno.test("stream model: has expected methods", () => {
     model.methods
       .stream_subtitles_captions_generate_caption_or_subtitle_for_language,
   );
-  assertExists(model.methods.get_vtt_caption_or_subtitle);
   assertExists(model.methods.list_downloads);
   assertExists(model.methods.create_downloads);
   assertExists(model.methods.delete_downloads);
   assertExists(model.methods.create_type_specific_downloads);
   assertExists(model.methods.delete_type_specific_downloads);
-  assertExists(model.methods.get_stream_videos_retreieve_embed_code_html);
   assertExists(model.methods.create_signed_url_tokens_for_videos);
 });
 
@@ -148,11 +146,9 @@ Deno.test("stream model: has expected resources", () => {
         "stream_subtitles_captions_generate_caption_or_subtitle_for_language"
       ],
   );
-  assertExists(model.resources["vtt_caption_or_subtitle"]);
   assertExists(model.resources["list_downloads"]);
   assertExists(model.resources["downloads"]);
   assertExists(model.resources["type_specific_downloads"]);
-  assertExists(model.resources["stream_videos_retreieve_embed_code_html"]);
   assertExists(model.resources["signed_url_tokens_for_videos"]);
 });
 

@@ -63,7 +63,6 @@ Deno.test("r2 model: has expected methods", () => {
   assertExists(model.methods.put_bucket_lock_configuration);
   assertExists(model.methods.list_objects);
   assertExists(model.methods.delete_objects);
-  assertExists(model.methods.get_object);
   assertExists(model.methods.put_object);
   assertExists(model.methods.delete_object);
   assertExists(model.methods.get_bucket_sippy_config);
@@ -103,7 +102,6 @@ Deno.test("r2 model: has expected resources", () => {
   assertExists(model.resources["bucket_lock_configuration"]);
   assertExists(model.resources["put_bucket_lock_configuration"]);
   assertExists(model.resources["objects"]);
-  assertExists(model.resources["object"]);
   assertExists(model.resources["put_object"]);
   assertExists(model.resources["bucket_sippy_config"]);
   assertExists(model.resources["put_bucket_sippy_config"]);

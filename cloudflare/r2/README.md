@@ -55,7 +55,6 @@ swamp model create @webframp/cloudflare/r2 cf-r2 \
 | `put_bucket_lock_configuration`          | Put Bucket Lock Rules                    |
 | `list_objects`                           | List Objects                             |
 | `delete_objects`                         | Delete Objects                           |
-| `get_object`                             | Get Object                               |
 | `put_object`                             | Upload Object                            |
 | `delete_object`                          | Delete Object                            |
 | `get_bucket_sippy_config`                | Get Sippy Configuration                  |

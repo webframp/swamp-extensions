@@ -783,12 +783,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "vtt_caption_or_subtitle": {
-      description: "Return WebVTT captions for a provided language",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "list_downloads": {
       description: "List downloads",
       schema: ListDownloadsSchema,
@@ -804,12 +798,6 @@ export const model = {
     "type_specific_downloads": {
       description: "Create download",
       schema: CreateTypeSpecificDownloadsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "stream_videos_retreieve_embed_code_html": {
-      description: "Retrieve embed Code HTML",
-      schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -2603,42 +2591,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_vtt_caption_or_subtitle: {
-      description: "Return WebVTT captions for a provided language",
-      arguments: z.object({
-        language: z.string(),
-        identifier: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/stream/${args.identifier}/captions/${args.language}/vtt`,
-        );
-
-        const handle = await context.writeResource(
-          "vtt_caption_or_subtitle",
-          String(args.identifier),
-          result,
-        );
-        context.logger.info("Fetched vtt_caption_or_subtitle", {});
-        return { dataHandles: [handle] };
-      },
-    },
     list_downloads: {
       description: "List downloads",
       arguments: z.object({
@@ -2808,44 +2760,6 @@ export const model = {
           id: args.download_type,
         });
         return { dataHandles: [] };
-      },
-    },
-    get_stream_videos_retreieve_embed_code_html: {
-      description: "Retrieve embed Code HTML",
-      arguments: z.object({
-        identifier: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/stream/${args.identifier}/embed`,
-        );
-
-        const handle = await context.writeResource(
-          "stream_videos_retreieve_embed_code_html",
-          String(args.identifier),
-          result,
-        );
-        context.logger.info(
-          "Fetched stream_videos_retreieve_embed_code_html",
-          {},
-        );
-        return { dataHandles: [handle] };
       },
     },
     create_signed_url_tokens_for_videos: {

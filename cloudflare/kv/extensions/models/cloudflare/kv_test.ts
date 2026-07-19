@@ -42,7 +42,6 @@ Deno.test("kv model: has expected methods", () => {
   assertExists(
     model.methods.get_workers_kv_namespace_read_the_metadata_for_a_key,
   );
-  assertExists(model.methods.get_workers_kv_namespace_read_key_value_pair);
   assertExists(
     model.methods
       .update_workers_kv_namespace_write_key_value_pair_with_metadata,
@@ -64,7 +63,6 @@ Deno.test("kv model: has expected resources", () => {
   assertExists(
     model.resources["workers_kv_namespace_read_the_metadata_for_a_key"],
   );
-  assertExists(model.resources["workers_kv_namespace_read_key_value_pair"]);
   assertExists(
     model.resources["workers_kv_namespace_write_key_value_pair_with_metadata"],
   );

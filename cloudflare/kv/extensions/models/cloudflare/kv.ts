@@ -151,12 +151,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "workers_kv_namespace_read_key_value_pair": {
-      description: "Read key-value pair",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "workers_kv_namespace_write_key_value_pair_with_metadata": {
       description: "Write key-value pair with optional metadata",
       schema: UpdateWorkersKvNamespaceWriteKeyValuePairWithMetadataSchema,
@@ -538,38 +532,35 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["namespace_id", "page", "per_page"]);
+        const excludeKeys = new Set(["namespace_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
+        const qs = new URLSearchParams(params).toString();
+        const url = qs
+          ? `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/keys?${qs}`
+          : `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/keys`;
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
+        const result = await cfApi<Record<string, unknown>>(
           apiToken,
-          `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/keys`,
-          params,
+          "GET",
+          url,
         );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
+        const items = (result as { result?: unknown[] })?.result ??
+          (Array.isArray(result) ? result : [result]);
 
         const handle = await context.writeResource(
           "a_namespace_s_keys",
           "main",
           {
-            items: results,
-            truncated,
+            items,
+            truncated: false,
             fetchedAt: new Date().toISOString(),
           },
         );
 
         context.logger.info("Found {count} a_namespace_s_keys", {
-          count: results.length,
+          count: (items as unknown[]).length,
         });
         return { dataHandles: [handle] };
       },
@@ -608,45 +599,6 @@ export const model = {
         );
         context.logger.info(
           "Fetched workers_kv_namespace_read_the_metadata_for_a_key",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    get_workers_kv_namespace_read_key_value_pair: {
-      description: "Read key-value pair",
-      arguments: z.object({
-        key_name: z.string(),
-        namespace_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/values/${args.key_name}`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_kv_namespace_read_key_value_pair",
-          String(args.namespace_id),
-          result,
-        );
-        context.logger.info(
-          "Fetched workers_kv_namespace_read_key_value_pair",
           {},
         );
         return { dataHandles: [handle] };

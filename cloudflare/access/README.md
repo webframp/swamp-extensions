@@ -102,7 +102,6 @@ swamp model create @webframp/cloudflare/access cf-access \
 | `get_a_user_page`                                                    | Get an Access policy test users page                      |
 | `list_certificate_sets`                                              | List SAML certificate sets                                |
 | `get_certificate_set`                                                | Get SAML certificate set                                  |
-| `get_pem`                                                            | Download current certificate in PEM format                |
 | `access_saml_certificates_rotate_certificate`                        | Rotate SAML certificate                                   |
 | `update_a_user_seat`                                                 | Update a user seat                                        |
 | `list_service_tokens`                                                | List service tokens                                       |

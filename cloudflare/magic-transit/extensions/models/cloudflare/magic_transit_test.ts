@@ -108,13 +108,11 @@ Deno.test("magic-transit model: has expected methods", () => {
   assertExists(model.methods.get_onramps_mwan_addr_space_read);
   assertExists(model.methods.get_onramps_read);
   assertExists(model.methods.onramps_apply);
-  assertExists(model.methods.onramps_export);
   assertExists(model.methods.onramps_plan);
   assertExists(model.methods.providers_discover_all);
   assertExists(model.methods.get_providers_read);
   assertExists(model.methods.providers_discover);
   assertExists(model.methods.get_providers_initial_setup);
-  assertExists(model.methods.get_resources_catalog_export);
   assertExists(model.methods.create_resources_catalog_policy_preview);
   assertExists(model.methods.get_resources_catalog_read);
   assertExists(model.methods.get);
@@ -244,13 +242,11 @@ Deno.test("magic-transit model: has expected resources", () => {
   assertExists(model.resources["onramps_mwan_addr_space_read"]);
   assertExists(model.resources["onramps_read"]);
   assertExists(model.resources["onramps_apply"]);
-  assertExists(model.resources["onramps_export"]);
   assertExists(model.resources["onramps_plan"]);
   assertExists(model.resources["providers_discover_all"]);
   assertExists(model.resources["providers_read"]);
   assertExists(model.resources["providers_discover"]);
   assertExists(model.resources["providers_initial_setup"]);
-  assertExists(model.resources["resources_catalog_export"]);
   assertExists(model.resources["resources_catalog_policy_preview"]);
   assertExists(model.resources["resources_catalog_read"]);
   assertExists(model.resources["get"]);

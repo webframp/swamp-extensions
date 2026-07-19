@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -523,12 +523,6 @@ export const model = {
       schema: ListObjectsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "object": {
-      description: "Get Object",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "put_object": {
       description: "Upload Object",
@@ -1921,33 +1915,32 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["bucket_name", "page", "per_page"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
+        const qs = new URLSearchParams(params).toString();
+        const url = qs
+          ? `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects?${qs}`
+          : `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects`;
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
+        const result = await cfApi<Record<string, unknown>>(
           apiToken,
-          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects`,
-          params,
+          "GET",
+          url,
         );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
+        const items = (result as { result?: unknown[] })?.result ??
+          (Array.isArray(result) ? result : [result]);
 
         const handle = await context.writeResource("objects", "main", {
-          items: results,
-          truncated,
+          items,
+          truncated: false,
           fetchedAt: new Date().toISOString(),
         });
 
-        context.logger.info("Found {count} objects", { count: results.length });
+        context.logger.info("Found {count} objects", {
+          count: (items as unknown[]).length,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -1980,42 +1973,6 @@ export const model = {
 
         context.logger.info("Deleted resource {id}", { id: args.bucket_name });
         return { dataHandles: [] };
-      },
-    },
-    get_object: {
-      description: "Get Object",
-      arguments: z.object({
-        bucket_name: z.string(),
-        object_key: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects/${args.object_key}`,
-        );
-
-        const handle = await context.writeResource(
-          "object",
-          String(args.object_key),
-          result,
-        );
-        context.logger.info("Fetched object", {});
-        return { dataHandles: [handle] };
       },
     },
     put_object: {

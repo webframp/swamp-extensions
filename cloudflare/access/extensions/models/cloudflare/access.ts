@@ -1413,12 +1413,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "pem": {
-      description: "Download current certificate in PEM format",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "access_saml_certificates_rotate_certificate": {
       description: "Rotate SAML certificate",
       schema: AccessSamlCertificatesRotateCertificateSchema,
@@ -5184,43 +5178,6 @@ export const model = {
           result,
         );
         context.logger.info("Fetched certificate_set", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_pem: {
-      description: "Download current certificate in PEM format",
-      arguments: z.object({
-        saml_cert_set_id: z.string().describe(
-          "UID of the SAML certificate set.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}/pem`,
-        );
-
-        const handle = await context.writeResource(
-          "pem",
-          String(args.saml_cert_set_id),
-          result,
-        );
-        context.logger.info("Fetched pem", {});
         return { dataHandles: [handle] };
       },
     },

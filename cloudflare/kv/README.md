@@ -29,7 +29,6 @@ swamp model create @webframp/cloudflare/kv cf-kv \
 | `get_multiple_key_value_pairs`                                   | Get multiple key-value pairs                |
 | `list_a_namespace_s_keys`                                        | List a Namespace's Keys                     |
 | `get_workers_kv_namespace_read_the_metadata_for_a_key`           | Read the metadata for a key                 |
-| `get_workers_kv_namespace_read_key_value_pair`                   | Read key-value pair                         |
 | `update_workers_kv_namespace_write_key_value_pair_with_metadata` | Write key-value pair with optional metadata |
 | `delete_key_value_pair`                                          | Delete key-value pair                       |
 

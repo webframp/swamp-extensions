@@ -117,7 +117,6 @@ Deno.test("access model: has expected methods", () => {
   assertExists(model.methods.get_a_user_page);
   assertExists(model.methods.list_certificate_sets);
   assertExists(model.methods.get_certificate_set);
-  assertExists(model.methods.get_pem);
   assertExists(model.methods.access_saml_certificates_rotate_certificate);
   assertExists(model.methods.update_a_user_seat);
   assertExists(model.methods.list_service_tokens);
@@ -206,7 +205,6 @@ Deno.test("access model: has expected resources", () => {
   assertExists(model.resources["get_a_user_page"]);
   assertExists(model.resources["certificate_sets"]);
   assertExists(model.resources["certificate_set"]);
-  assertExists(model.resources["pem"]);
   assertExists(model.resources["access_saml_certificates_rotate_certificate"]);
   assertExists(model.resources["a_user_seat"]);
   assertExists(model.resources["service_tokens"]);

@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -153,33 +153,32 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id", "page", "per_page"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
+        const qs = new URLSearchParams(params).toString();
+        const url = qs
+          ? `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects?${qs}`
+          : `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects`;
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
+        const result = await cfApi<Record<string, unknown>>(
           apiToken,
-          `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects`,
-          params,
+          "GET",
+          url,
         );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
+        const items = (result as { result?: unknown[] })?.result ??
+          (Array.isArray(result) ? result : [result]);
 
         const handle = await context.writeResource("objects", "main", {
-          items: results,
-          truncated,
+          items,
+          truncated: false,
           fetchedAt: new Date().toISOString(),
         });
 
-        context.logger.info("Found {count} objects", { count: results.length });
+        context.logger.info("Found {count} objects", {
+          count: (items as unknown[]).length,
+        });
         return { dataHandles: [handle] };
       },
     },

@@ -200,7 +200,7 @@ export async function cfApi<T>(
   const data = (await response.json()) as CloudflareResponse<T>;
 
   if (!data.success) {
-    const errorMsg = data.errors.map((e) => e.message).join("; ");
+    const errorMsg = (data.errors ?? []).map((e) => e.message).join("; ") || "Unknown error";
     throw new Error(\`Cloudflare API error: \${errorMsg}\`);
   }
 
@@ -247,7 +247,7 @@ export async function cfApiPaginated<T>(
     const data = (await response.json()) as CloudflareResponse<T[]>;
 
     if (!data.success) {
-      const errorMsg = data.errors.map((e) => e.message).join("; ");
+      const errorMsg = (data.errors ?? []).map((e) => e.message).join("; ") || "Unknown error";
       throw new Error(\`Cloudflare API error: \${errorMsg}\`);
     }
 

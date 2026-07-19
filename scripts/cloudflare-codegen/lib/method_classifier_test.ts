@@ -21,6 +21,7 @@ function makeOp(overrides: Partial<GroupedOperation>): GroupedOperation {
     pathParams: [],
     queryParams: [],
     isCollection: false,
+    usesCursorPagination: false,
     deprecated: false,
     tags: ["R2"],
     ...overrides,

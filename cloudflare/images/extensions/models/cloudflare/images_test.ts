@@ -44,7 +44,6 @@ Deno.test("images model: has expected methods", () => {
   assertExists(model.methods.get_cloudflare_images_image_details);
   assertExists(model.methods.update_image);
   assertExists(model.methods.delete_image);
-  assertExists(model.methods.get_cloudflare_images_base_image);
   assertExists(model.methods.list_images_v2);
   assertExists(model.methods.create_authenticated_direct_upload_url_v_2);
   assertExists(model.methods.list_migrations);
@@ -85,7 +84,6 @@ Deno.test("images model: has expected resources", () => {
   );
   assertExists(model.resources["cloudflare_images_image_details"]);
   assertExists(model.resources["image"]);
-  assertExists(model.resources["cloudflare_images_base_image"]);
   assertExists(model.resources["list_images_v2"]);
   assertExists(model.resources["authenticated_direct_upload_url_v_2"]);
   assertExists(model.resources["list_migrations"]);

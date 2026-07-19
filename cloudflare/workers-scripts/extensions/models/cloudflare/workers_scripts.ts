@@ -439,12 +439,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
-    "worker_script_download_worker": {
-      description: "Download Worker",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "worker_script_upload_worker_module": {
       description: "Upload Worker Module",
       schema: UpdateWorkerScriptUploadWorkerModuleSchema,
@@ -460,12 +454,6 @@ export const model = {
     "put_content": {
       description: "Put script content",
       schema: PutContentSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "content": {
-      description: "Get script content",
-      schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -574,12 +562,6 @@ export const model = {
     "version_detail": {
       description: "Get Version Detail",
       schema: GetVersionDetailSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "script_content": {
-      description: "Get script content",
-      schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -703,41 +685,6 @@ export const model = {
         context.logger.info("Found {count} worker_script_search_workers", {
           count: results.length,
         });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_worker_script_download_worker: {
-      description: "Download Worker",
-      arguments: z.object({
-        script_name: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/workers/scripts/${args.script_name}`,
-        );
-
-        const handle = await context.writeResource(
-          "worker_script_download_worker",
-          String(args.script_name),
-          result,
-        );
-        context.logger.info("Fetched worker_script_download_worker", {});
         return { dataHandles: [handle] };
       },
     },
@@ -915,41 +862,6 @@ export const model = {
           result,
         );
         context.logger.info("Updated put_content", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_content: {
-      description: "Get script content",
-      arguments: z.object({
-        script_name: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/workers/scripts/${args.script_name}/content/v2`,
-        );
-
-        const handle = await context.writeResource(
-          "content",
-          String(args.script_name),
-          result,
-        );
-        context.logger.info("Fetched content", {});
         return { dataHandles: [handle] };
       },
     },
@@ -1916,42 +1828,6 @@ export const model = {
           result,
         );
         context.logger.info("Fetched version_detail", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_script_content: {
-      description: "Get script content",
-      arguments: z.object({
-        service_name: z.string(),
-        environment_name: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/workers/services/${args.service_name}/environments/${args.environment_name}/content`,
-        );
-
-        const handle = await context.writeResource(
-          "script_content",
-          String(args.environment_name),
-          result,
-        );
-        context.logger.info("Fetched script_content", {});
         return { dataHandles: [handle] };
       },
     },

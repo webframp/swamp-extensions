@@ -3544,12 +3544,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
-    "item_content": {
-      description: "Download Item Content.",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "ai_search_namespace_instance_logs_item": {
       description: "Item Logs.",
       schema: ListAiSearchNamespaceInstanceLogsItemSchema,
@@ -9451,45 +9445,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    get_item_content: {
-      description: "Download Item Content.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        item_id: z.string(),
-        name: z.string().describe("Namespace name"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/download`,
-        );
-
-        const handle = await context.writeResource(
-          "item_content",
-          String(args.name),
-          result,
-        );
-        context.logger.info("Fetched item_content", {});
-        return { dataHandles: [handle] };
-      },
-    },
     list_ai_search_namespace_instance_logs_item: {
       description: "Item Logs.",
       arguments: z.object({
@@ -9517,45 +9472,36 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set([
-          "id",
-          "item_id",
-          "name",
-          "page",
-          "per_page",
-        ]);
+        const excludeKeys = new Set(["id", "item_id", "name"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
+        const qs = new URLSearchParams(params).toString();
+        const url = qs
+          ? `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/logs?${qs}`
+          : `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/logs`;
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
+        const result = await cfApi<Record<string, unknown>>(
           apiToken,
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/logs`,
-          params,
+          "GET",
+          url,
         );
-
-        if (truncated) {
-          context.logger.info(
-            "WARNING: results truncated at {count} (pagination cap)",
-            { count: results.length },
-          );
-        }
+        const items = (result as { result?: unknown[] })?.result ??
+          (Array.isArray(result) ? result : [result]);
 
         const handle = await context.writeResource(
           "ai_search_namespace_instance_logs_item",
           "main",
           {
-            items: results,
-            truncated,
+            items,
+            truncated: false,
             fetchedAt: new Date().toISOString(),
           },
         );
 
         context.logger.info(
           "Found {count} ai_search_namespace_instance_logs_item",
-          { count: results.length },
+          { count: (items as unknown[]).length },
         );
         return { dataHandles: [handle] };
       },

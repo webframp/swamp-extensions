@@ -123,7 +123,6 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.update_ai_search_namespace_instance_sync_item);
   assertExists(model.methods.delete_item);
   assertExists(model.methods.list_item_chunks);
-  assertExists(model.methods.get_item_content);
   assertExists(model.methods.list_ai_search_namespace_instance_logs_item);
   assertExists(
     model.methods.update_ai_search_namespace_instance_change_job_status,
@@ -507,7 +506,6 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["item"]);
   assertExists(model.resources["ai_search_namespace_instance_sync_item"]);
   assertExists(model.resources["item_chunks"]);
-  assertExists(model.resources["item_content"]);
   assertExists(model.resources["ai_search_namespace_instance_logs_item"]);
   assertExists(
     model.resources["ai_search_namespace_instance_change_job_status"],

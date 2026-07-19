@@ -1826,12 +1826,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "onramps_export": {
-      description: "Export as Terraform",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "onramps_plan": {
       description: "Plan On-ramp",
       schema: z.object({}),
@@ -1859,12 +1853,6 @@ export const model = {
     "providers_initial_setup": {
       description: "Get Cloud Integration Setup Config",
       schema: GetProvidersInitialSetupSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "resources_catalog_export": {
-      description: "Export Resources",
-      schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -5537,42 +5525,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    onramps_export: {
-      description: "Export as Terraform",
-      arguments: z.object({
-        onramp_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/magic/cloud/onramps/${args.onramp_id}/export`,
-        );
-
-        const handle = await context.writeResource(
-          "onramps_export",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info("Executed onramps_export", {});
-        return { dataHandles: [handle] };
-      },
-    },
     onramps_plan: {
       description: "Plan On-ramp",
       arguments: z.object({
@@ -5756,51 +5708,6 @@ export const model = {
           result,
         );
         context.logger.info("Fetched providers_initial_setup", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_resources_catalog_export: {
-      description: "Export Resources",
-      arguments: z.object({
-        provider_id: z.string().optional(),
-        resource_type: z.string().optional(),
-        resource_id: z.string().optional(),
-        region: z.string().optional(),
-        resource_group: z.string().optional(),
-        search: z.string().optional(),
-        order_by: z.string().optional().describe(
-          'One of ["id", "resource_type", "region"].',
-        ),
-        desc: z.boolean().optional(),
-        v2: z.boolean().optional(),
-      }),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/magic/cloud/resources/export`,
-        );
-
-        const handle = await context.writeResource(
-          "resources_catalog_export",
-          "latest",
-          result,
-        );
-        context.logger.info("Fetched resources_catalog_export", {});
         return { dataHandles: [handle] };
       },
     },

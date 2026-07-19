@@ -99,13 +99,11 @@ swamp model create @webframp/cloudflare/magic-transit cf-magic-transit \
 | `get_onramps_mwan_addr_space_read`                                  | Read Magic WAN Address Space                    |
 | `get_onramps_read`                                                  | Read On-ramp                                    |
 | `onramps_apply`                                                     | Apply On-ramp                                   |
-| `onramps_export`                                                    | Export as Terraform                             |
 | `onramps_plan`                                                      | Plan On-ramp                                    |
 | `providers_discover_all`                                            | Run Discovery for All Integrations              |
 | `get_providers_read`                                                | Read Cloud Integration                          |
 | `providers_discover`                                                | Run Discovery                                   |
 | `get_providers_initial_setup`                                       | Get Cloud Integration Setup Config              |
-| `get_resources_catalog_export`                                      | Export Resources                                |
 | `create_resources_catalog_policy_preview`                           | Preview Rego Query                              |
 | `get_resources_catalog_read`                                        | Read Resource                                   |
 | `get`                                                               | Get Connector                                   |
