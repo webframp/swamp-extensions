@@ -1,6 +1,8 @@
 ## 2026.07.18.2
 
-**Added:** An `upgrades` array entry (no-op) to `cache.ts`, `dns.ts`, `waf.ts`, `worker.ts`, `zone.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
+**Added:** An `upgrades` array entry (no-op) to `cache.ts`, `dns.ts`, `waf.ts`,
+`worker.ts`, `zone.ts` for proper `typeVersion` tracking on existing instances.
+No schema or behavior changes.
 
 ## 2026.07.18.1
 

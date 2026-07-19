@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/cloudflare/images"
+version: "2026.07.19.1"
+description: "Cloudflare Images — upload, transform, deliver, and manage image pipelines"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - cloudflare/images.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - cloudflare
+  - images
+  - cdn
+  - media

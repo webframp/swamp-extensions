@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/cloudflare/ssl-certificates"
+version: "2026.07.19.1"
+description: "Cloudflare SSL/TLS — certificate packs, custom certificates, certificate authority"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - cloudflare/ssl_certificates.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - cloudflare
+  - ssl
+  - tls
+  - certificates
