@@ -1,0 +1,691 @@
+/**
+ * Method classifier — determines the swamp method type for each operation
+ * and generates the model source code.
+ *
+ * Classifies operations as:
+ * - list: GET returning a collection
+ * - get: GET returning a single item (path ends with {id})
+ * - create: POST that creates a resource
+ * - update: PUT/PATCH that modifies a resource
+ * - delete: DELETE
+ * - action: POST that performs an action (not a standard CRUD create)
+ */
+
+import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
+import type { SchemaObject } from "./schema_fetcher.ts";
+import { schemaToZod } from "./type_mapper.ts";
+import { MAX_PAGES, ZOD_VERSION } from "../config.ts";
+import type { ServiceConfig } from "../config.ts";
+
+export type MethodType =
+  | "list"
+  | "get"
+  | "create"
+  | "update"
+  | "delete"
+  | "action";
+
+export interface ClassifiedMethod {
+  /** swamp method name (e.g., list_buckets, get_bucket, create_bucket) */
+  name: string;
+  /** The classification */
+  type: MethodType;
+  /** Description for the method */
+  description: string;
+  /** The original operation */
+  operation: GroupedOperation;
+}
+
+/**
+ * Classify an operation into a swamp method type.
+ */
+export function classifyOperation(op: GroupedOperation): MethodType {
+  const { httpMethod, path, isCollection } = op;
+
+  switch (httpMethod) {
+    case "get":
+      if (isCollection) return "list";
+      return "get";
+    case "post": {
+      // Heuristic: if path ends without {id} param and has a request body
+      // with properties matching a resource shape, it's a create.
+      // Otherwise it's an action.
+      const lastSegment = path.split("/").pop() ?? "";
+      if (lastSegment.startsWith("{")) return "action";
+      if (op.requestBody?.properties) return "create";
+      return "action";
+    }
+    case "put":
+    case "patch":
+      return "update";
+    case "delete":
+      return "delete";
+    default:
+      return "action";
+  }
+}
+
+/**
+ * Generate a method name from the operation.
+ * Uses the operationId if available, otherwise constructs from path + method.
+ */
+export function generateMethodName(
+  op: GroupedOperation,
+  type: MethodType,
+): string {
+  // Try to extract a clean name from operationId
+  if (op.operationId) {
+    // CF operationIds are like "r2-list-buckets" or "workers-kv-list-namespaces"
+    // Remove the service prefix: everything up to and including the first verb
+    let name = op.operationId.replace(/-/g, "_");
+
+    // Strip known service prefixes (e.g., "r2_", "workers_kv_", "d1_")
+    // Strategy: remove everything before the first recognized verb
+    const verbPrefixes = [
+      "list",
+      "get",
+      "create",
+      "update",
+      "delete",
+      "put",
+      "patch",
+    ];
+    for (const verb of verbPrefixes) {
+      const idx = name.indexOf(`${verb}_`);
+      if (idx > 0) {
+        name = name.slice(idx);
+        break;
+      }
+      // Also check if name ends with or equals the verb (no trailing resource)
+      if (name.endsWith(`_${verb}`) || name === verb) {
+        name = name.slice(name.lastIndexOf(`_${verb}`) + 1);
+        break;
+      }
+    }
+
+    // If no verb was found in the name, prefix with the type
+    const hasVerb = verbPrefixes.some((v) => name.startsWith(v));
+    if (!hasVerb && type !== "action") {
+      name = `${type}_${name}`;
+    }
+
+    return sanitizeMethodName(name);
+  }
+
+  // Fallback: construct from path
+  const segments = op.path.split("/").filter((s) => s && !s.startsWith("{"));
+  const lastSegments = segments.slice(-2);
+  const resource = lastSegments.join("_");
+  return sanitizeMethodName(`${type}_${resource}`);
+}
+
+/** Sanitize a method name to valid TypeScript identifier */
+function sanitizeMethodName(name: string): string {
+  return name
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .toLowerCase();
+}
+
+/**
+ * Classify all operations in a service group into methods.
+ * De-duplicates by method name (first wins).
+ */
+export function classifyServiceMethods(
+  group: ServiceGroup,
+): ClassifiedMethod[] {
+  const methods: ClassifiedMethod[] = [];
+  const seen = new Set<string>();
+
+  for (const op of group.operations) {
+    const type = classifyOperation(op);
+    const name = generateMethodName(op, type);
+
+    if (seen.has(name)) continue;
+    seen.add(name);
+
+    methods.push({
+      name,
+      type,
+      description: op.summary || op.description || `${type} operation`,
+      operation: op,
+    });
+  }
+
+  return methods;
+}
+
+/**
+ * Generate the complete model TypeScript source file for a service.
+ */
+export function generateModelSource(
+  group: ServiceGroup,
+  methods: ClassifiedMethod[],
+  version: string,
+): string {
+  const { config } = group;
+  const modelType = `@webframp/cloudflare/${config.name}`;
+
+  const lines: string[] = [];
+
+  // Header
+  lines.push(`/**`);
+  lines.push(` * ${config.description}`);
+  lines.push(` *`);
+  lines.push(
+    ` * Auto-generated by scripts/cloudflare-codegen — do not edit manually.`,
+  );
+  lines.push(` *`);
+  lines.push(` * @module`);
+  lines.push(` */`);
+  lines.push(
+    `// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception`,
+  );
+  lines.push(``);
+  lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
+  lines.push(`import { cfApi, cfApiPaginated } from "./_lib/api.ts";`);
+  lines.push(``);
+
+  // Schemas section
+  lines.push(
+    `// =============================================================================`,
+  );
+  lines.push(`// Schemas`);
+  lines.push(
+    `// =============================================================================`,
+  );
+  lines.push(``);
+
+  // GlobalArgs
+  lines.push(generateGlobalArgsSchema(config));
+  lines.push(``);
+
+  // Generate response schemas for each unique response shape
+  const schemaNames = generateResponseSchemas(methods, lines);
+
+  // Model definition
+  lines.push(
+    `// =============================================================================`,
+  );
+  lines.push(`// Model Definition`);
+  lines.push(
+    `// =============================================================================`,
+  );
+  lines.push(``);
+  lines.push(`/** ${config.description} */`);
+  lines.push(`export const model = {`);
+  lines.push(`  type: "${modelType}",`);
+  lines.push(`  version: "${version}",`);
+  lines.push(`  globalArguments: GlobalArgsSchema,`);
+  lines.push(``);
+  lines.push(`  upgrades: [],`);
+  lines.push(``);
+
+  // Resources
+  lines.push(`  resources: {`);
+  const seenResources = new Set<string>();
+  for (const method of methods) {
+    if (method.type === "delete") continue;
+    const resourceName = method.type === "list"
+      ? method.name.replace(/^list_/, "")
+      : method.name.replace(/^(get|create|update|action)_/, "");
+    if (seenResources.has(resourceName)) continue;
+    seenResources.add(resourceName);
+    lines.push(
+      `    "${resourceName}": {`,
+    );
+    lines.push(`      description: "${escapeStr(method.description)}",`);
+    lines.push(
+      `      schema: ${schemaNames.get(method.name) ?? "z.object({})"},`,
+    );
+    lines.push(`      lifetime: "infinite" as const,`);
+    lines.push(
+      `      garbageCollection: ${method.type === "list" ? 10 : 20},`,
+    );
+    lines.push(`    },`);
+  }
+  lines.push(`  },`);
+  lines.push(``);
+
+  // Methods
+  lines.push(`  methods: {`);
+  for (const method of methods) {
+    lines.push(generateMethod(method, config, schemaNames));
+  }
+  lines.push(`  },`);
+  lines.push(`};`);
+  lines.push(``);
+
+  return lines.join("\n");
+}
+
+/** Generate GlobalArgsSchema based on service scope */
+function generateGlobalArgsSchema(config: ServiceConfig): string {
+  const lines = [`const GlobalArgsSchema = z.object({`];
+  lines.push(
+    `  apiToken: z.string().meta({ sensitive: true }).describe("Cloudflare API token"),`,
+  );
+
+  if (config.scope === "account") {
+    lines.push(
+      `  accountId: z.string().describe("Cloudflare account ID"),`,
+    );
+  } else if (config.scope === "zone") {
+    lines.push(
+      `  zoneId: z.string().describe("Cloudflare zone ID"),`,
+    );
+  }
+
+  lines.push(`});`);
+  return lines.join("\n");
+}
+
+/** Generate Zod schemas for all unique response shapes */
+function generateResponseSchemas(
+  methods: ClassifiedMethod[],
+  lines: string[],
+): Map<string, string> {
+  const schemaNames = new Map<string, string>();
+
+  // First pass: determine which methods will actually produce resources
+  // (dedup by resource name, matching the resources section logic)
+  const seenResources = new Set<string>();
+  const methodsWithResources: ClassifiedMethod[] = [];
+
+  for (const method of methods) {
+    if (method.type === "delete") continue;
+    const resourceName = method.type === "list"
+      ? method.name.replace(/^list_/, "")
+      : method.name.replace(/^(get|create|update|action)_/, "");
+    if (!seenResources.has(resourceName)) {
+      seenResources.add(resourceName);
+      methodsWithResources.push(method);
+    }
+  }
+
+  for (const method of methodsWithResources) {
+    const schema = method.operation.responseSchema;
+    if (!schema) {
+      schemaNames.set(method.name, "z.object({})");
+      continue;
+    }
+
+    const varName = toPascalCase(method.name) + "Schema";
+    schemaNames.set(method.name, varName);
+
+    if (method.type === "list") {
+      // For list methods, generate both item schema and list wrapper
+      const itemVarName = toPascalCase(method.name.replace(/^list_/, "")) +
+        "ItemSchema";
+      const itemZod = schemaToZod(schema, { indent: 2 }, 1);
+      lines.push(`const ${itemVarName} = ${itemZod};`);
+      lines.push(``);
+      lines.push(`const ${varName} = z.object({`);
+      lines.push(`  items: z.array(${itemVarName}),`);
+      lines.push(`  truncated: z.boolean(),`);
+      lines.push(`  fetchedAt: z.string(),`);
+      lines.push(`});`);
+    } else {
+      const zodStr = schemaToZod(schema, { indent: 2 }, 1);
+      lines.push(`const ${varName} = ${zodStr};`);
+    }
+    lines.push(``);
+  }
+
+  // For methods that share a resource name but aren't the "primary" one,
+  // map them to the same schema variable
+  for (const method of methods) {
+    if (method.type === "delete") continue;
+    if (schemaNames.has(method.name)) continue;
+    const resourceName = method.type === "list"
+      ? method.name.replace(/^list_/, "")
+      : method.name.replace(/^(get|create|update|action)_/, "");
+    // Find the primary method for this resource
+    const primary = methodsWithResources.find((m) => {
+      const primaryResource = m.type === "list"
+        ? m.name.replace(/^list_/, "")
+        : m.name.replace(/^(get|create|update|action)_/, "");
+      return primaryResource === resourceName;
+    });
+    if (primary) {
+      schemaNames.set(
+        method.name,
+        schemaNames.get(primary.name) ?? "z.object({})",
+      );
+    } else {
+      schemaNames.set(method.name, "z.object({})");
+    }
+  }
+
+  return schemaNames;
+}
+
+/** Determine if a method's execute body references `args` */
+function methodUsesArgs(method: ClassifiedMethod): boolean {
+  const { type, operation } = method;
+  // List methods always use args (as query params)
+  if (type === "list") return true;
+  // Any method with path params uses args for URL construction
+  if (operation.pathParams.length > 0) return true;
+  // Create/update methods use args as the request body
+  if (type === "create" || type === "update") return true;
+  // Action methods with request body use args
+  if (type === "action" && operation.requestBody) return true;
+  return false;
+}
+
+/** Generate a single method definition */
+function generateMethod(
+  method: ClassifiedMethod,
+  config: ServiceConfig,
+  _schemaNames: Map<string, string>,
+): string {
+  const { operation, type } = method;
+  const lines: string[] = [];
+  const indent = "    ";
+
+  lines.push(`${indent}${method.name}: {`);
+  lines.push(
+    `${indent}  description: "${escapeStr(method.description)}",`,
+  );
+
+  // Arguments schema
+  lines.push(`${indent}  arguments: ${generateArgsSchema(operation)},`);
+
+  // Execute function
+  const argsUsed = methodUsesArgs(method);
+  const argsParam = argsUsed ? "args" : "_args";
+  lines.push(
+    `${indent}  execute: async (${argsParam}: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {`,
+  );
+
+  const scopeId = config.scope === "account" ? "accountId" : "zoneId";
+  lines.push(
+    `${indent}    const { apiToken, ${scopeId} } = context.globalArgs;`,
+  );
+
+  // Build the API path with parameter substitution
+  const apiPath = buildApiPath(operation.path, config.scope);
+
+  if (type === "list") {
+    lines.push(generateListBody(method, apiPath, indent));
+  } else if (type === "get") {
+    lines.push(generateGetBody(method, apiPath, indent));
+  } else if (type === "create") {
+    lines.push(generateCreateBody(method, apiPath, indent));
+  } else if (type === "update") {
+    lines.push(generateUpdateBody(method, apiPath, indent));
+  } else if (type === "delete") {
+    lines.push(generateDeleteBody(method, apiPath, indent));
+  } else {
+    lines.push(generateActionBody(method, apiPath, indent));
+  }
+
+  lines.push(`${indent}  },`);
+  lines.push(`${indent}},`);
+
+  return lines.join("\n");
+}
+
+/** Generate the arguments schema for a method */
+function generateArgsSchema(op: GroupedOperation): string {
+  const fields: string[] = [];
+
+  // Path params (minus scope)
+  for (const p of op.pathParams) {
+    const desc = p.description
+      ? `.describe("${escapeStr(p.description)}")`
+      : "";
+    fields.push(`  ${sanitizeFieldName(p.name)}: z.string()${desc},`);
+  }
+
+  // Query params (for list/get methods)
+  for (const p of op.queryParams) {
+    const desc = p.description
+      ? `.describe("${escapeStr(p.description)}")`
+      : "";
+    let zodType = "z.string()";
+    if (p.schema?.type === "integer" || p.schema?.type === "number") {
+      zodType = "z.number()";
+    } else if (p.schema?.type === "boolean") {
+      zodType = "z.boolean()";
+    } else if (p.schema?.enum) {
+      const vals = (p.schema.enum as string[]).map((v) =>
+        `"${escapeStr(String(v))}"`
+      );
+      zodType = `z.enum([${vals.join(", ")}])`;
+    }
+    fields.push(
+      `  ${sanitizeFieldName(p.name)}: ${zodType}.optional()${desc},`,
+    );
+  }
+
+  // Request body fields (for create/update)
+  if (op.requestBody?.properties) {
+    const required = new Set(op.requestBody.required ?? []);
+    for (const [name, prop] of Object.entries(op.requestBody.properties)) {
+      // Skip id fields in request bodies
+      if (name === "id") continue;
+      const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
+      const optSuffix = required.has(name) ? "" : ".optional()";
+      const desc = prop.description
+        ? `.describe("${escapeStr(truncateStr(prop.description))}")`
+        : "";
+      fields.push(
+        `  ${sanitizeFieldName(name)}: ${fieldZod}${optSuffix}${desc},`,
+      );
+    }
+  }
+
+  if (fields.length === 0) {
+    return "z.object({})";
+  }
+
+  return `z.object({\n${fields.join("\n")}\n    })`;
+}
+
+/** Generate list method body */
+function generateListBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const resourceName = method.name.replace(/^list_/, "");
+  // Build a set of path param names to exclude from query params
+  const pathParamNames = method.operation.pathParams
+    .map((p) => sanitizeFieldName(p.name));
+  const exclusionCheck = pathParamNames.length > 0
+    ? `\n${indent}    const pathParams = new Set(${
+      JSON.stringify(pathParamNames)
+    });`
+    : "";
+  const filterCondition = pathParamNames.length > 0
+    ? " && !pathParams.has(k)"
+    : "";
+
+  return `${indent}    const params: Record<string, string> = {};${exclusionCheck}
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined${filterCondition}) params[k] = String(v);
+${indent}    }
+${indent}
+${indent}    const { results, truncated } = await cfApiPaginated<Record<string, unknown>>(
+${indent}      apiToken,
+${indent}      \`${apiPath}\`,
+${indent}      params,
+${indent}    );
+${indent}
+${indent}    if (truncated) {
+${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
+${indent}    }
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}      items: results,
+${indent}      truncated,
+${indent}      fetchedAt: new Date().toISOString(),
+${indent}    });
+${indent}
+${indent}    context.logger.info("Found {count} ${resourceName}", { count: results.length });
+${indent}    return { dataHandles: [handle] };`;
+}
+
+/** Generate get method body */
+function generateGetBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const resourceName = method.name.replace(/^get_/, "");
+  const idParam = method.operation.pathParams[
+    method.operation.pathParams.length - 1
+  ];
+  const instanceExpr = idParam
+    ? `String(args.${sanitizeFieldName(idParam.name)})`
+    : '"latest"';
+
+  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+${indent}      apiToken,
+${indent}      "GET",
+${indent}      \`${apiPath}\`,
+${indent}    );
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${indent}    context.logger.info("Fetched ${resourceName}", {});
+${indent}    return { dataHandles: [handle] };`;
+}
+
+/** Generate create method body */
+function generateCreateBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const resourceName = method.name.replace(/^create_/, "");
+  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+${indent}      apiToken,
+${indent}      "POST",
+${indent}      \`${apiPath}\`,
+${indent}      args,
+${indent}    );
+${indent}
+${indent}    const id = (result as { id?: string }).id ?? "created";
+${indent}    const handle = await context.writeResource("${resourceName}", id, result);
+${indent}    context.logger.info("Created ${resourceName} {id}", { id });
+${indent}    return { dataHandles: [handle] };`;
+}
+
+/** Generate update method body */
+function generateUpdateBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const resourceName = method.name.replace(/^update_/, "");
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const idParam = method.operation.pathParams[
+    method.operation.pathParams.length - 1
+  ];
+  const instanceExpr = idParam
+    ? `String(args.${sanitizeFieldName(idParam.name)})`
+    : '"updated"';
+
+  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+${indent}      apiToken,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}\`,
+${indent}      args,
+${indent}    );
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${indent}    context.logger.info("Updated ${resourceName}", {});
+${indent}    return { dataHandles: [handle] };`;
+}
+
+/** Generate delete method body */
+function generateDeleteBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const idParam = method.operation.pathParams[
+    method.operation.pathParams.length - 1
+  ];
+  const idRef = idParam
+    ? `args.${sanitizeFieldName(idParam.name)}`
+    : '"unknown"';
+
+  return `${indent}    await cfApi(
+${indent}      apiToken,
+${indent}      "DELETE",
+${indent}      \`${apiPath}\`,
+${indent}    );
+${indent}
+${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
+${indent}    return { dataHandles: [] };`;
+}
+
+/** Generate action method body */
+function generateActionBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const resourceName = method.name.replace(/^action_/, "");
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const hasBody = method.operation.requestBody !== undefined;
+
+  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+${indent}      apiToken,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}\`,${hasBody ? "\n" + indent + "      args," : ""}
+${indent}    );
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", "latest", result);
+${indent}    context.logger.info("Executed ${method.name}", {});
+${indent}    return { dataHandles: [handle] };`;
+}
+
+/** Build the API path with template literal substitution */
+function buildApiPath(path: string, scope: string): string {
+  // Single-pass replacement: scope params → globalArgs vars, others → args refs.
+  // Handle BOTH account_id and zone_id in case a service spans both scopes —
+  // the primary scope determines which is in globalArgs, the other becomes a
+  // method arg if present.
+  const primaryParam = scope === "account" ? "account_id" : "zone_id";
+  const primaryVar = scope === "account" ? "accountId" : "zoneId";
+
+  return path.replace(/\{([^}]+)\}/g, (_, name) => {
+    if (name === primaryParam) {
+      return `\${${primaryVar}}`;
+    }
+    // Secondary scope param (e.g., zone_id in an account-scoped service)
+    // becomes an args reference — the method's globalArgs won't have it
+    if (name === "account_id") {
+      return `\${args.account_id}`;
+    }
+    if (name === "zone_id") {
+      return `\${args.zone_id}`;
+    }
+    return `\${args.${sanitizeFieldName(name)}}`;
+  });
+}
+
+function sanitizeFieldName(name: string): string {
+  return name.replace(/-/g, "_");
+}
+
+function toPascalCase(name: string): string {
+  return name
+    .split("_")
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join("");
+}
+
+function escapeStr(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ");
+}
+
+function truncateStr(s: string): string {
+  const oneLine = s.replace(/\s+/g, " ").trim();
+  return oneLine.length <= 80 ? oneLine : oneLine.slice(0, 77) + "...";
+}
