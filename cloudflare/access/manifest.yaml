@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/cloudflare/access"
+version: "2026.07.19.1"
+description: "Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - cloudflare/access.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - cloudflare
+  - access
+  - zero-trust
+  - identity
