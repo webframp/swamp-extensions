@@ -401,9 +401,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["index_name"]);
+        const excludeKeys = new Set(["index_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -448,9 +448,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["index_name"]);
+        const excludeKeys = new Set(["index_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -526,10 +526,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["unparsable_behavior"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/vectorize/v2/indexes/${args.index_name}/insert`,
+          `/accounts/${accountId}/vectorize/v2/indexes/${args.index_name}/insert${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -606,9 +615,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["index_name"]);
+        const excludeKeys = new Set(["index_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -653,9 +662,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["index_name"]);
+        const excludeKeys = new Set(["index_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -747,9 +756,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["index_name"]);
+        const excludeKeys = new Set(["index_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -790,10 +799,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["unparsable_behavior"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/vectorize/v2/indexes/${args.index_name}/upsert`,
+          `/accounts/${accountId}/vectorize/v2/indexes/${args.index_name}/upsert${qs}`,
         );
 
         const handle = await context.writeResource(

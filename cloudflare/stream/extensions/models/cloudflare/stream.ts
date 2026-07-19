@@ -919,10 +919,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["direct_user"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/stream`,
+          `/accounts/${accountId}/stream${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -1176,6 +1185,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1363,9 +1373,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["live_input_identifier"]);
+        const excludeKeys = new Set(["live_input_identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1436,6 +1446,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1474,6 +1485,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1579,9 +1591,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["live_input_identifier"]);
+        const excludeKeys = new Set(["live_input_identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1628,12 +1640,12 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set([
+        const excludeKeys = new Set([
           "output_identifier",
           "live_input_identifier",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1705,6 +1717,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -2165,10 +2178,11 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["identifier"]);
+        const excludeKeys = new Set(["identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -2276,9 +2290,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["identifier"]);
+        const excludeKeys = new Set(["identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2323,9 +2337,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["identifier", "audio_identifier"]);
+        const excludeKeys = new Set(["identifier", "audio_identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2493,9 +2507,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["language", "identifier"]);
+        const excludeKeys = new Set(["language", "identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2570,6 +2584,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -2679,6 +2694,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -2745,6 +2761,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -2871,9 +2888,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["identifier"]);
+        const excludeKeys = new Set(["identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(

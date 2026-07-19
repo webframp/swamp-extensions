@@ -525,9 +525,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["domain_name"]);
+        const excludeKeys = new Set(["domain_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(

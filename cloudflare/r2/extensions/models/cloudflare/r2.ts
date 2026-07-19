@@ -656,9 +656,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -700,6 +700,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -737,6 +738,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -811,9 +813,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1041,9 +1043,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name", "namespace", "table_name"]);
+        const excludeKeys = new Set(["bucket_name", "namespace", "table_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1200,9 +1202,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1309,9 +1311,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1428,9 +1430,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1518,9 +1520,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name", "domain"]);
+        const excludeKeys = new Set(["bucket_name", "domain"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1630,9 +1632,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1709,9 +1711,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1790,9 +1792,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1872,9 +1874,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2039,9 +2041,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name", "object_key"]);
+        const excludeKeys = new Set(["bucket_name", "object_key"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2148,9 +2150,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(

@@ -355,9 +355,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["database_id"]);
+        const excludeKeys = new Set(["database_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -399,9 +399,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["database_id"]);
+        const excludeKeys = new Set(["database_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -483,9 +483,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["database_id"]);
+        const excludeKeys = new Set(["database_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -527,10 +527,11 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["database_id"]);
+        const excludeKeys = new Set(["database_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -569,10 +570,11 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["database_id"]);
+        const excludeKeys = new Set(["database_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -611,10 +613,11 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["database_id"]);
+        const excludeKeys = new Set(["database_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -695,10 +698,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["bookmark", "timestamp"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/restore`,
+          `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/restore${qs}`,
         );
 
         const handle = await context.writeResource(

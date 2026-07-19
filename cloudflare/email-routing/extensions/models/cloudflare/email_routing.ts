@@ -1134,9 +1134,9 @@ export const model = {
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["rule_identifier"]);
+        const excludeKeys = new Set(["rule_identifier"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1561,9 +1561,9 @@ export const model = {
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["subdomain_id"]);
+        const excludeKeys = new Set(["subdomain_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1689,6 +1689,7 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",

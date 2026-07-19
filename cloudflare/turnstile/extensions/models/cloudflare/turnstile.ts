@@ -251,12 +251,36 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set([
+          "page",
+          "per_page",
+          "order",
+          "direction",
+          "filter",
+        ]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set([
+          "page",
+          "per_page",
+          "order",
+          "direction",
+          "filter",
+        ]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/challenges/widgets`,
+          `/accounts/${accountId}/challenges/widgets${qs}`,
           body,
         );
 
@@ -331,9 +355,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["sitekey"]);
+        const excludeKeys = new Set(["sitekey"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -405,9 +429,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["sitekey"]);
+        const excludeKeys = new Set(["sitekey"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(

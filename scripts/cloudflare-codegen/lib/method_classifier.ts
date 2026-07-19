@@ -589,20 +589,37 @@ function generateCreateBody(
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
-  const bodyFilter = pathParamNames.length > 0
-    ? `\n${indent}    const body: Record<string, unknown> = {};
-${indent}    const pathKeys = new Set(${JSON.stringify(pathParamNames)});
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+
+  // Build query string from query params if any exist
+  const hasQueryParams = queryParamNames.length > 0;
+  const queryBuild = hasQueryParams
+    ? `\n${indent}    const queryParts: string[] = [];
+${indent}    const queryKeys = new Set(${JSON.stringify(queryParamNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (!pathKeys.has(k)) body[k] = v;
+${indent}      if (v !== undefined && queryKeys.has(k)) queryParts.push(\`\${k}=\${encodeURIComponent(String(v))}\`);
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";`
+    : "";
+  const pathSuffix = hasQueryParams ? "${qs}" : "";
+
+  const bodyFilter = excludeNames.length > 0
+    ? `\n${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
 ${indent}    }`
     : `\n${indent}    const body = args;`;
 
-  return `${bodyFilter}
+  return `${bodyFilter}${queryBuild}
 ${indent}
 ${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "POST",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      body,
 ${indent}    );
 ${indent}
@@ -629,20 +646,36 @@ function generateUpdateBody(
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
-  const bodyFilter = pathParamNames.length > 0
-    ? `\n${indent}    const body: Record<string, unknown> = {};
-${indent}    const pathKeys = new Set(${JSON.stringify(pathParamNames)});
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+
+  const hasQueryParams = queryParamNames.length > 0;
+  const queryBuild = hasQueryParams
+    ? `\n${indent}    const queryParts: string[] = [];
+${indent}    const queryKeys = new Set(${JSON.stringify(queryParamNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (!pathKeys.has(k)) body[k] = v;
+${indent}      if (v !== undefined && queryKeys.has(k)) queryParts.push(\`\${k}=\${encodeURIComponent(String(v))}\`);
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";`
+    : "";
+  const pathSuffix = hasQueryParams ? "${qs}" : "";
+
+  const bodyFilter = excludeNames.length > 0
+    ? `\n${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
 ${indent}    }`
     : `\n${indent}    const body = args;`;
 
-  return `${bodyFilter}
+  return `${bodyFilter}${queryBuild}
 ${indent}
 ${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "${httpMethod}",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      body,
 ${indent}    );
 ${indent}
@@ -686,24 +719,40 @@ function generateActionBody(
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+
+  const hasQueryParams = queryParamNames.length > 0;
+  const queryBuild = hasQueryParams
+    ? `\n${indent}    const queryParts: string[] = [];
+${indent}    const queryKeys = new Set(${JSON.stringify(queryParamNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && queryKeys.has(k)) queryParts.push(\`\${k}=\${encodeURIComponent(String(v))}\`);
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";`
+    : "";
+  const pathSuffix = hasQueryParams ? "${qs}" : "";
 
   let bodySetup = "";
   let bodyArg = "";
-  if (hasBody && pathParamNames.length > 0) {
+  if (hasBody && excludeNames.length > 0) {
     bodySetup = `\n${indent}    const body: Record<string, unknown> = {};
-${indent}    const pathKeys = new Set(${JSON.stringify(pathParamNames)});
+${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (!pathKeys.has(k)) body[k] = v;
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
 ${indent}    }\n`;
     bodyArg = `\n${indent}      body,`;
   } else if (hasBody) {
     bodyArg = `\n${indent}      args,`;
   }
 
-  return `${bodySetup}${indent}    const result = await cfApi<Record<string, unknown>>(
+  return `${bodySetup}${queryBuild}
+${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "${httpMethod}",
-${indent}      \`${apiPath}\`,${bodyArg}
+${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", "latest", result);

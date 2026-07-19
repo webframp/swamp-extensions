@@ -508,12 +508,24 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["normalize"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["normalize"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "PUT",
-          `/zones/${zoneId}/api_gateway/configuration`,
+          `/zones/${zoneId}/api_gateway/configuration${qs}`,
           body,
         );
 
@@ -945,6 +957,7 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -1250,6 +1263,7 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",

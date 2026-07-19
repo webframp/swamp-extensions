@@ -252,14 +252,18 @@ export async function cfApiPaginated<T>(
       throw new Error(\`Cloudflare API error: \${errorMsg}\`);
     }
 
-    allResults.push(...data.result);
+    allResults.push(...(data.result ?? []));
 
-    if (!data.result_info || page >= data.result_info.total_pages) {
-      // If we hit MAX_PAGES and result_info is absent, we can't confirm completeness
-      if (page >= MAX_PAGES && !data.result_info) {
+    if (data.result_info) {
+      if (page >= data.result_info.total_pages) break;
+    } else {
+      // No result_info: use result count as page-completeness heuristic
+      if ((data.result ?? []).length < perPage) break;
+      // If we're at MAX_PAGES without result_info, mark truncated
+      if (page >= MAX_PAGES) {
         truncated = true;
+        break;
       }
-      break;
     }
     page++;
   }

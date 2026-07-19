@@ -357,6 +357,7 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -434,9 +435,9 @@ export const model = {
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["app_id"]);
+        const excludeKeys = new Set(["app_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(

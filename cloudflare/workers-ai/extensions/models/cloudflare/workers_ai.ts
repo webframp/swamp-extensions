@@ -5144,9 +5144,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -5264,9 +5264,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -5584,9 +5584,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id"]);
+        const excludeKeys = new Set(["gateway_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -5682,9 +5682,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id", "id"]);
+        const excludeKeys = new Set(["gateway_id", "id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -5817,9 +5817,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id"]);
+        const excludeKeys = new Set(["gateway_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6101,9 +6101,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id", "gateway_id"]);
+        const excludeKeys = new Set(["id", "gateway_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6278,9 +6278,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id"]);
+        const excludeKeys = new Set(["gateway_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6320,9 +6320,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id", "id"]);
+        const excludeKeys = new Set(["gateway_id", "id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6514,9 +6514,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id"]);
+        const excludeKeys = new Set(["gateway_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6599,9 +6599,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id", "id"]);
+        const excludeKeys = new Set(["gateway_id", "id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6714,9 +6714,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id", "id"]);
+        const excludeKeys = new Set(["gateway_id", "id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6880,9 +6880,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["gateway_id", "id"]);
+        const excludeKeys = new Set(["gateway_id", "id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -7156,9 +7156,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -7799,9 +7799,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -8000,9 +8000,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -8104,9 +8104,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -8186,9 +8186,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id", "job_id"]);
+        const excludeKeys = new Set(["id", "job_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -8385,9 +8385,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -8600,9 +8600,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["name"]);
+        const excludeKeys = new Set(["name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -8800,9 +8800,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["name"]);
+        const excludeKeys = new Set(["name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -8887,9 +8887,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["name", "id"]);
+        const excludeKeys = new Set(["name", "id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -9059,9 +9059,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id", "name"]);
+        const excludeKeys = new Set(["id", "name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -9187,6 +9187,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -9237,9 +9238,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id", "name"]);
+        const excludeKeys = new Set(["id", "name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -9327,9 +9328,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id", "item_id", "name"]);
+        const excludeKeys = new Set(["id", "item_id", "name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -9586,9 +9587,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id", "job_id", "name"]);
+        const excludeKeys = new Set(["id", "job_id", "name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -9731,9 +9732,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id", "name"]);
+        const excludeKeys = new Set(["id", "name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -9913,9 +9914,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["name"]);
+        const excludeKeys = new Set(["name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -10093,9 +10094,9 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -10346,6 +10347,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -10559,12 +10561,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/ai4bharat/indictrans2-en-indic-1B`,
+          `/accounts/${accountId}/ai/run/@cf/ai4bharat/indictrans2-en-indic-1B${qs}`,
           body,
         );
 
@@ -10643,12 +10657,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/ai4bharat/nonomni-indictrans2-en-indic-1b`,
+          `/accounts/${accountId}/ai/run/@cf/ai4bharat/nonomni-indictrans2-en-indic-1b${qs}`,
           body,
         );
 
@@ -10686,11 +10712,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/aisingapore/gemma-sea-lion-v4-27b-it`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/aisingapore/gemma-sea-lion-v4-27b-it${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -10726,11 +10767,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-base-en-v1.5`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/bge-base-en-v1.5${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -10766,11 +10822,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-large-en-v1.5`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/bge-large-en-v1.5${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -10806,11 +10877,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-m3`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/bge-m3${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -10855,12 +10941,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-reranker-base`,
+          `/accounts/${accountId}/ai/run/@cf/baai/bge-reranker-base${qs}`,
           body,
         );
 
@@ -10898,11 +10996,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/bge-small-en-v1.5`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/bge-small-en-v1.5${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -10938,11 +11051,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-base-en-v1.5`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-base-en-v1.5${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -10978,11 +11106,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-large-en-v1.5`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-large-en-v1.5${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -11018,11 +11161,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-m3`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-m3${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -11058,11 +11216,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-small-en-v1.5`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/baai/nonomni-bge-small-en-v1.5${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -11105,12 +11278,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
+          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell${qs}`,
           body,
         );
 
@@ -11153,12 +11338,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-dev`,
+          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-dev${qs}`,
           body,
         );
 
@@ -11201,12 +11398,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-klein-4b`,
+          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-klein-4b${qs}`,
           body,
         );
 
@@ -11249,12 +11458,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-klein-9b`,
+          `/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-2-klein-9b${qs}`,
           body,
         );
 
@@ -11326,12 +11547,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning`,
+          `/accounts/${accountId}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning${qs}`,
           body,
         );
 
@@ -11475,12 +11708,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-1`,
+          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-1${qs}`,
           body,
         );
 
@@ -11692,12 +11937,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-en`,
+          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-en${qs}`,
           body,
         );
 
@@ -11843,12 +12100,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-es`,
+          `/accounts/${accountId}/ai/run/@cf/deepgram/aura-2-es${qs}`,
           body,
         );
 
@@ -11947,12 +12216,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/flux`,
+          `/accounts/${accountId}/ai/run/@cf/deepgram/flux${qs}`,
           body,
         );
 
@@ -12145,12 +12426,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepgram/nova-3`,
+          `/accounts/${accountId}/ai/run/@cf/deepgram/nova-3${qs}`,
           body,
         );
 
@@ -12262,11 +12555,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepseek-ai/deepseek-math-7b-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/deepseek-ai/deepseek-math-7b-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12303,11 +12611,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12343,11 +12666,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/defog/sqlcoder-7b-2`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/defog/sqlcoder-7b-2${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12390,12 +12728,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/facebook/bart-large-cnn`,
+          `/accounts/${accountId}/ai/run/@cf/facebook/bart-large-cnn${qs}`,
           body,
         );
 
@@ -12440,12 +12790,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/facebook/nonomni-bart-large-cnn`,
+          `/accounts/${accountId}/ai/run/@cf/facebook/nonomni-bart-large-cnn${qs}`,
           body,
         );
 
@@ -12483,10 +12845,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/facebook/nonomni-detr-resnet-50`,
+          `/accounts/${accountId}/ai/run/@cf/facebook/nonomni-detr-resnet-50${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -12522,11 +12893,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/fblgit/una-cybertron-7b-v2-bf16`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/fblgit/una-cybertron-7b-v2-bf16${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12564,12 +12950,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/embeddinggemma-300m`,
+          `/accounts/${accountId}/ai/run/@cf/google/embeddinggemma-300m${qs}`,
           body,
         );
 
@@ -12607,11 +13005,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-2b-it-lora`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/google/gemma-2b-it-lora${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12647,11 +13060,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-3-12b-it`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/google/gemma-3-12b-it${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12687,11 +13115,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-4-26b-a4b-it`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/google/gemma-4-26b-a4b-it${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12727,11 +13170,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/gemma-7b-it-lora`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/google/gemma-7b-it-lora${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12771,12 +13229,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/google/nonomni-embeddinggemma-300m`,
+          `/accounts/${accountId}/ai/run/@cf/google/nonomni-embeddinggemma-300m${qs}`,
           body,
         );
 
@@ -12816,12 +13286,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/huggingface/distilbert-sst-2-int8`,
+          `/accounts/${accountId}/ai/run/@cf/huggingface/distilbert-sst-2-int8${qs}`,
           body,
         );
 
@@ -12862,12 +13344,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/huggingface/nonomni-distilbert-sst-2-int8`,
+          `/accounts/${accountId}/ai/run/@cf/huggingface/nonomni-distilbert-sst-2-int8${qs}`,
           body,
         );
 
@@ -12905,11 +13399,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/ibm-granite/granite-4.0-h-micro`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/ibm-granite/granite-4.0-h-micro${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -12967,12 +13476,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/leonardo/lucid-origin`,
+          `/accounts/${accountId}/ai/run/@cf/leonardo/lucid-origin${qs}`,
           body,
         );
 
@@ -13032,12 +13553,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/leonardo/phoenix-1.0`,
+          `/accounts/${accountId}/ai/run/@cf/leonardo/phoenix-1.0${qs}`,
           body,
         );
 
@@ -13109,12 +13642,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/lykon/dreamshaper-8-lcm`,
+          `/accounts/${accountId}/ai/run/@cf/lykon/dreamshaper-8-lcm${qs}`,
           body,
         );
 
@@ -13152,11 +13697,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta-llama/llama-2-7b-chat-hf-lora`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta-llama/llama-2-7b-chat-hf-lora${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13192,11 +13752,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-2-7b-chat-fp16`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-2-7b-chat-fp16${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13232,11 +13807,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-2-7b-chat-int8`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-2-7b-chat-int8${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13272,11 +13862,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3-8b-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3-8b-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13312,11 +13917,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3-8b-instruct-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3-8b-instruct-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13352,11 +13972,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-70b-instruct-fp8-fast`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-70b-instruct-fp8-fast${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13392,11 +14027,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13432,11 +14082,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13472,11 +14137,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct-fp8-fast${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13512,11 +14192,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13552,11 +14247,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-1b-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-1b-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13592,11 +14302,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-3b-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.2-3b-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13632,11 +14357,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13672,11 +14412,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-4-scout-17b-16e-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-4-scout-17b-16e-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13730,12 +14485,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/llama-guard-3-8b`,
+          `/accounts/${accountId}/ai/run/@cf/meta/llama-guard-3-8b${qs}`,
           body,
         );
 
@@ -13773,11 +14540,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/meta/m2m100-1.2b`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/meta/m2m100-1.2b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13813,10 +14595,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/microsoft/nonomni-resnet-50`,
+          `/accounts/${accountId}/ai/run/@cf/microsoft/nonomni-resnet-50${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -13852,11 +14643,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/microsoft/phi-2`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/microsoft/phi-2${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13892,10 +14698,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/microsoft/resnet-50`,
+          `/accounts/${accountId}/ai/run/@cf/microsoft/resnet-50${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -13931,11 +14746,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/mistral/mistral-7b-instruct-v0.1`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/mistral/mistral-7b-instruct-v0.1${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -13971,11 +14801,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/mistral/mistral-7b-instruct-v0.2-lora`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/mistral/mistral-7b-instruct-v0.2-lora${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14012,11 +14857,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/mistralai/mistral-small-3.1-24b-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/mistralai/mistral-small-3.1-24b-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14052,11 +14912,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.5`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.5${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14092,11 +14967,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.6`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.6${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14132,11 +15022,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.7-code`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/moonshotai/kimi-k2.7-code${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14179,12 +15084,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/myshell-ai/melotts`,
+          `/accounts/${accountId}/ai/run/@cf/myshell-ai/melotts${qs}`,
           body,
         );
 
@@ -14222,11 +15139,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/nvidia/nemotron-3-120b-a12b`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/nvidia/nemotron-3-120b-a12b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14301,11 +15233,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/nvidia/nemotron-speech-streaming-en-0.6b`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/nvidia/nemotron-speech-streaming-en-0.6b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14341,11 +15288,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/gpt-oss-120b`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/openai/gpt-oss-120b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14381,11 +15343,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/gpt-oss-20b`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/openai/gpt-oss-20b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14421,10 +15398,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/whisper`,
+          `/accounts/${accountId}/ai/run/@cf/openai/whisper${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -14501,12 +15487,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/whisper-large-v3-turbo`,
+          `/accounts/${accountId}/ai/run/@cf/openai/whisper-large-v3-turbo${qs}`,
           body,
         );
 
@@ -14544,10 +15542,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/whisper-tiny-en`,
+          `/accounts/${accountId}/ai/run/@cf/openai/whisper-tiny-en${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -14583,11 +15590,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/openchat/openchat-3.5-0106`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/openchat/openchat-3.5-0106${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14627,12 +15649,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/pfnet/plamo-embedding-1b`,
+          `/accounts/${accountId}/ai/run/@cf/pfnet/plamo-embedding-1b${qs}`,
           body,
         );
 
@@ -14744,11 +15778,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-0.5b-chat`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-0.5b-chat${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14784,11 +15833,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-1.8b-chat`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-1.8b-chat${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14824,11 +15888,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-14b-chat-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-14b-chat-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14864,11 +15943,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-7b-chat-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwen1.5-7b-chat-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14904,11 +15998,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen2.5-coder-32b-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwen2.5-coder-32b-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14944,11 +16053,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen3-30b-a3b-fp8`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwen3-30b-a3b-fp8${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -14994,12 +16118,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwen3-embedding-0.6b`,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwen3-embedding-0.6b${qs}`,
           body,
         );
 
@@ -15037,11 +16173,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/qwen/qwq-32b`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/qwen/qwq-32b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15108,12 +16259,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/runwayml/stable-diffusion-v1-5-img2img`,
+          `/accounts/${accountId}/ai/run/@cf/runwayml/stable-diffusion-v1-5-img2img${qs}`,
           body,
         );
 
@@ -15186,12 +16349,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/runwayml/stable-diffusion-v1-5-inpainting`,
+          `/accounts/${accountId}/ai/run/@cf/runwayml/stable-diffusion-v1-5-inpainting${qs}`,
           body,
         );
 
@@ -15264,12 +16439,24 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0`,
+          `/accounts/${accountId}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0${qs}`,
           body,
         );
 
@@ -15381,11 +16568,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/thebloke/discolm-german-7b-v1-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/thebloke/discolm-german-7b-v1-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15421,11 +16623,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/tiiuae/falcon-7b-instruct`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/tiiuae/falcon-7b-instruct${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15461,11 +16678,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/tinyllama/tinyllama-1.1b-chat-v1.0`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/tinyllama/tinyllama-1.1b-chat-v1.0${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15501,11 +16733,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/zai-org/glm-4.7-flash`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/zai-org/glm-4.7-flash${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15541,11 +16788,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@cf/zai-org/glm-5.2`,
-          args,
+          `/accounts/${accountId}/ai/run/@cf/zai-org/glm-5.2${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15581,11 +16843,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/google/gemma-7b-it`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/google/gemma-7b-it${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15621,11 +16898,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/mistral/mistral-7b-instruct-v0.2`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/mistral/mistral-7b-instruct-v0.2${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15661,11 +16953,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/nexusflow/starling-lm-7b-beta`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/nexusflow/starling-lm-7b-beta${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15701,11 +17008,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/nousresearch/hermes-2-pro-mistral-7b`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/nousresearch/hermes-2-pro-mistral-7b${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15741,11 +17063,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/deepseek-coder-6.7b-base-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/thebloke/deepseek-coder-6.7b-base-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15782,11 +17119,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/deepseek-coder-6.7b-instruct-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/thebloke/deepseek-coder-6.7b-instruct-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15822,11 +17174,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/llama-2-13b-chat-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/thebloke/llama-2-13b-chat-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15862,11 +17229,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/mistral-7b-instruct-v0.1-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/thebloke/mistral-7b-instruct-v0.1-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15902,11 +17284,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/neural-chat-7b-v3-1-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/thebloke/neural-chat-7b-v3-1-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15942,11 +17339,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/openhermes-2.5-mistral-7b-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/thebloke/openhermes-2.5-mistral-7b-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -15982,11 +17394,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["queueRequest", "tags"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/accounts/${accountId}/ai/run/@hf/thebloke/zephyr-7b-beta-awq`,
-          args,
+          `/accounts/${accountId}/ai/run/@hf/thebloke/zephyr-7b-beta-awq${qs}`,
+          body,
         );
 
         const handle = await context.writeResource(
@@ -16023,10 +17450,11 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["model_name"]);
+        const excludeKeys = new Set(["model_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
@@ -16116,6 +17544,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",

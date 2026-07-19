@@ -804,9 +804,9 @@ export const model = {
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["custom_certificate_id"]);
+        const excludeKeys = new Set(["custom_certificate_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1106,9 +1106,9 @@ export const model = {
           const { apiToken, zoneId } = context.globalArgs;
 
           const body: Record<string, unknown> = {};
-          const pathKeys = new Set(["certificate_pack_id"]);
+          const excludeKeys = new Set(["certificate_pack_id"]);
           for (const [k, v] of Object.entries(args)) {
-            if (!pathKeys.has(k)) body[k] = v;
+            if (!excludeKeys.has(k)) body[k] = v;
           }
 
           const result = await cfApi<Record<string, unknown>>(
@@ -1321,9 +1321,9 @@ export const model = {
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
-        const pathKeys = new Set(["certificate_pack_id"]);
+        const excludeKeys = new Set(["certificate_pack_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!pathKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
 
         const result = await cfApi<Record<string, unknown>>(
