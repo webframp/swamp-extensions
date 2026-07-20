@@ -1,7 +1,11 @@
 // Pass (passwordstore.org) Vault Provider Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from "jsr:@std/assert@1.0.19";
 import {
   assertVaultConformance,
   assertVaultExportConformance,

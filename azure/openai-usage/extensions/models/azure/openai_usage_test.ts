@@ -1,7 +1,11 @@
 // Azure OpenAI Usage Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists, assertMatch } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertExists,
+  assertMatch,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./openai_usage.ts";
 

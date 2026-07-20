@@ -1,7 +1,11 @@
 // ABOUTME: Tests for macOS Keychain vault provider
 // ABOUTME: Uses Deno.Command stubbing to mock the security CLI
 
-import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from "jsr:@std/assert@1.0.19";
 import { assertVaultExportConformance } from "@systeminit/swamp-testing";
 import { vault } from "./keychain.ts";
 

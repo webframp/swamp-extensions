@@ -3,7 +3,11 @@
  *
  * @module
  */
-import { assertEquals, assertMatch, assertRejects } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { SecurityHubClient } from "npm:@aws-sdk/client-securityhub@3.1090.0";
 import { model } from "./securityhub_findings.ts";
 

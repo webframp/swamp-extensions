@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { assertEquals, assertExists, assertRejects } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./projects.ts";
 
