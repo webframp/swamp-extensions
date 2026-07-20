@@ -103,6 +103,7 @@ function installFetchMock(mockUrl: string): () => void {
 Deno.test({
   name:
     "security-suppressions model: list_security_monitoring_suppressions fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -180,6 +181,7 @@ Deno.test({
 Deno.test({
   name:
     "security-suppressions model: create_security_monitoring_suppression creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -258,6 +260,7 @@ Deno.test({
 Deno.test({
   name:
     "security-suppressions model: get_security_monitoring_suppression fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -336,6 +339,7 @@ Deno.test({
 Deno.test({
   name:
     "security-suppressions model: update_security_monitoring_suppression executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -415,6 +419,7 @@ Deno.test({
 Deno.test({
   name:
     "security-suppressions model: delete_security_monitoring_suppression executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

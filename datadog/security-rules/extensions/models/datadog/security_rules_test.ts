@@ -116,6 +116,7 @@ function installFetchMock(mockUrl: string): () => void {
 Deno.test({
   name:
     "security-rules model: list_security_monitoring_rules fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -163,6 +164,7 @@ Deno.test({
 Deno.test({
   name:
     "security-rules model: create_security_monitoring_rule creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -211,6 +213,7 @@ Deno.test({
 Deno.test({
   name:
     "security-rules model: bulk_delete_security_monitoring_rules executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -253,6 +256,7 @@ Deno.test({
 Deno.test({
   name:
     "security-rules model: get_security_monitoring_rule fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -301,6 +305,7 @@ Deno.test({
 Deno.test({
   name:
     "security-rules model: update_security_monitoring_rule executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

@@ -95,6 +95,7 @@ function installFetchMock(mockUrl: string): () => void {
 
 Deno.test({
   name: "slos model: create_slo_report_job creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -134,6 +135,7 @@ Deno.test({
 
 Deno.test({
   name: "slos model: get_slo_report fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

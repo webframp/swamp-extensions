@@ -68,7 +68,7 @@ const TestExistingSecurityMonitoringRuleSchema = z.object({
 /** Datadog Security Rules — detection rule CRUD and management */
 export const model = {
   type: "@webframp/datadog/security-rules",
-  version: "2026.07.20.2",
+  version: "2026.07.20.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

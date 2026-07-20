@@ -96,6 +96,7 @@ function installFetchMock(mockUrl: string): () => void {
 
 Deno.test({
   name: "downtimes model: list_downtimes fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -164,6 +165,7 @@ Deno.test({
 
 Deno.test({
   name: "downtimes model: create_downtime creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -231,6 +233,7 @@ Deno.test({
 
 Deno.test({
   name: "downtimes model: get_downtime fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -298,6 +301,7 @@ Deno.test({
 
 Deno.test({
   name: "downtimes model: update_downtime executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -368,6 +372,7 @@ Deno.test({
 
 Deno.test({
   name: "downtimes model: cancel_downtime executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

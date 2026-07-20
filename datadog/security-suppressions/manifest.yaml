@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/security-suppressions"
-version: "2026.07.20.2"
+version: "2026.07.20.3"
 description: "Datadog Security Suppressions — suppression rule management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

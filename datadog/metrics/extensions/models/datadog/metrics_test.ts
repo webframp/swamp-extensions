@@ -113,6 +113,7 @@ function installFetchMock(mockUrl: string): () => void {
 
 Deno.test({
   name: "metrics model: list_tag_configurations fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -158,6 +159,7 @@ Deno.test({
 Deno.test({
   name:
     "metrics model: list_active_metric_configurations fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -218,6 +220,7 @@ Deno.test({
 
 Deno.test({
   name: "metrics model: create_tag_configuration creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -285,6 +288,7 @@ Deno.test({
 
 Deno.test({
   name: "metrics model: update_tag_configuration executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -352,6 +356,7 @@ Deno.test({
 
 Deno.test({
   name: "metrics model: delete_tag_configuration executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

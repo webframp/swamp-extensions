@@ -49,6 +49,8 @@ export interface GroupedOperation {
   requestBodyIsJsonApi: boolean;
   /** The JSON:API type value for request bodies (e.g., "team", "downtime") */
   requestBodyType?: string;
+  /** Whether the request body is a raw array (e.g., POST /v2/logs) */
+  requestBodyIsArray: boolean;
   /** Resolved success response schema */
   responseSchema?: SchemaObject;
   /** Whether the response is a collection (array in data) */
@@ -229,6 +231,7 @@ function extractOperation(
   // Extract request body schema — unwrap JSON:API envelope if present
   let requestBody: SchemaObject | undefined;
   let requestBodyIsJsonApi = false;
+  let requestBodyIsArray = false;
   let requestBodyType: string | undefined;
   if (operation.requestBody?.content) {
     const jsonContent = operation.requestBody.content["application/json"];
@@ -267,6 +270,11 @@ function extractOperation(
         // oneOf — take the first variant's properties
         const first = resolveSchema(spec, fullBody.oneOf[0]);
         requestBody = first;
+      } else if (fullBody.type === "array") {
+        // Array body (e.g., POST /v2/logs accepts [{message, ddsource}])
+        // Expose as a schema with a single "items" field of array type
+        requestBody = fullBody;
+        requestBodyIsArray = true;
       }
     }
   }
@@ -290,6 +298,7 @@ function extractOperation(
     queryParams,
     requestBody,
     requestBodyIsJsonApi,
+    requestBodyIsArray,
     requestBodyType,
     responseSchema,
     isCollection,

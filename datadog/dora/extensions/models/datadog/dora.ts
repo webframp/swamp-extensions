@@ -104,7 +104,7 @@ const ListDoraFailuresSchema = z.object({
 /** Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate */
 export const model = {
   type: "@webframp/datadog/dora",
-  version: "2026.07.20.2",
+  version: "2026.07.20.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -278,14 +278,11 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const attrs: Record<string, unknown> = {};
+        const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) attrs[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
-        const body = {
-          data: { type: "dora_deployments_list_request", attributes: attrs },
-        };
 
         const result = await ddApi(
           apiKey,
@@ -296,13 +293,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "list_dora_deployments",
           id,
-          result,
+          result ?? {},
         );
-        context.logger.info("Created list_dora_deployments {id}", { id });
+        context.logger.info("Executed list_dora_deployments", {});
         return { dataHandles: [handle] };
       },
     },
@@ -529,14 +526,11 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const attrs: Record<string, unknown> = {};
+        const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) attrs[k] = v;
+          if (!excludeKeys.has(k)) body[k] = v;
         }
-        const body = {
-          data: { type: "dora_failures_list_request", attributes: attrs },
-        };
 
         const result = await ddApi(
           apiKey,
@@ -547,13 +541,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "list_dora_failures",
           id,
-          result,
+          result ?? {},
         );
-        context.logger.info("Created list_dora_failures {id}", { id });
+        context.logger.info("Executed list_dora_failures", {});
         return { dataHandles: [handle] };
       },
     },

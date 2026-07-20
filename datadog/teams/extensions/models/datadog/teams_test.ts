@@ -135,6 +135,7 @@ function installFetchMock(mockUrl: string): () => void {
 
 Deno.test({
   name: "teams model: list_teams fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -199,6 +200,7 @@ Deno.test({
 
 Deno.test({
   name: "teams model: create_team creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -262,6 +264,7 @@ Deno.test({
 
 Deno.test({
   name: "teams model: get_team_hierarchy_link fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -317,6 +320,7 @@ Deno.test({
 
 Deno.test({
   name: "teams model: remove_team_hierarchy_link executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -356,6 +360,7 @@ Deno.test({
 
 Deno.test({
   name: "teams model: create_team_connections executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -411,6 +416,7 @@ Deno.test({
 
 Deno.test({
   name: "teams model: update_team executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

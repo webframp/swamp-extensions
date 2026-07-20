@@ -101,6 +101,7 @@ function installFetchMock(mockUrl: string): () => void {
 
 Deno.test({
   name: "dora model: create_dora_deployment creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -140,6 +141,7 @@ Deno.test({
 
 Deno.test({
   name: "dora model: delete_dora_deployment executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -178,7 +180,65 @@ Deno.test({
 });
 
 Deno.test({
+  name: "dora model: list_dora_deployments executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockDdServer({
+      "/dora/deployments": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "custom_tags": ["language:java", "department:engineering"],
+              "env": "production",
+              "finished_at": "2023-08-31T14:26:24Z",
+              "git": { "commit_sha": null, "repository_id": null },
+              "service": "shopist",
+              "started_at": "2023-08-31T14:26:14Z",
+              "team": "backend",
+              "version": "v1.12.07",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-dora", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_dora_deployments.execute({ "name": "test-resource" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "dora model: get_dora_deployment fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -238,6 +298,7 @@ Deno.test({
 
 Deno.test({
   name: "dora model: patch_dora_deployment executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

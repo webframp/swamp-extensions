@@ -207,6 +207,7 @@ function generateExecutionTest(
       : "{}";
     return `Deno.test({
   name: "${config.name} model: ${method.name} fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -239,6 +240,7 @@ function generateExecutionTest(
       : fixture;
     return `Deno.test({
   name: "${config.name} model: ${method.name} fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -274,6 +276,7 @@ function generateExecutionTest(
     const createArgs = { ...testArgs, name: "test-resource" };
     return `Deno.test({
   name: "${config.name} model: ${method.name} creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -305,6 +308,7 @@ function generateExecutionTest(
   if (method.type === "delete") {
     return `Deno.test({
   name: "${config.name} model: ${method.name} executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -335,6 +339,7 @@ function generateExecutionTest(
   const actionArgs = { ...testArgs, name: "test-resource" };
   return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

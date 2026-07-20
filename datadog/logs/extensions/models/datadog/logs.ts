@@ -94,7 +94,7 @@ const ListLogsSchema = z.object({
 /** Datadog Logs — log search, aggregation, and analytics */
 export const model = {
   type: "@webframp/datadog/logs",
-  version: "2026.07.20.2",
+  version: "2026.07.20.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -133,6 +133,9 @@ export const model = {
         ddtags: z.string().optional().describe(
           "Log tags can be passed as query parameters with `text/plain` content type.",
         ),
+        entries: z.array(z.record(z.string(), z.unknown())).describe(
+          "Array of items to submit",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -150,31 +153,26 @@ export const model = {
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
-        const pathKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathKeys.has(k)) {
+          if (v !== undefined && ["ddtags"].includes(k)) {
             queryParts.push(
               `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
           `/api/v2/logs${qs}`,
+          args.entries,
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
-        const handle = await context.writeResource(
-          "submit_log",
-          id,
-          result ?? {},
-        );
-        context.logger.info("Executed submit_log", {});
+        const id = (result as { id?: string }).id ?? "created";
+        const handle = await context.writeResource("submit_log", id, result);
+        context.logger.info("Created submit_log {id}", { id });
         return { dataHandles: [handle] };
       },
     },
@@ -344,9 +342,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("list_logs", id, result);
-        context.logger.info("Created list_logs {id}", { id });
+        const id = (result as { id?: string }).id ?? "latest";
+        const handle = await context.writeResource(
+          "list_logs",
+          id,
+          result ?? {},
+        );
+        context.logger.info("Executed list_logs", {});
         return { dataHandles: [handle] };
       },
     },

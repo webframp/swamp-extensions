@@ -151,6 +151,7 @@ function installFetchMock(mockUrl: string): () => void {
 Deno.test({
   name:
     "synthetics model: get_api_multistep_subtests fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -208,6 +209,7 @@ Deno.test({
 Deno.test({
   name:
     "synthetics model: create_synthetics_downtime creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -287,6 +289,7 @@ Deno.test({
 
 Deno.test({
   name: "synthetics model: get_synthetics_downtime fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -367,6 +370,7 @@ Deno.test({
 Deno.test({
   name:
     "synthetics model: update_synthetics_downtime executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -446,6 +450,7 @@ Deno.test({
 
 Deno.test({
   name: "synthetics model: delete_synthetics_downtime executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -491,6 +496,7 @@ Deno.test({
 Deno.test({
   name:
     "synthetics model: delete_synthetics_suites executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

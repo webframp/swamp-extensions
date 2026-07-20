@@ -102,6 +102,7 @@ function installFetchMock(mockUrl: string): () => void {
 Deno.test({
   name:
     "monitors model: get_monitor_notification_rules fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -167,6 +168,7 @@ Deno.test({
 Deno.test({
   name:
     "monitors model: create_monitor_notification_rule creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -234,6 +236,7 @@ Deno.test({
 Deno.test({
   name:
     "monitors model: get_monitor_notification_rule fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -301,6 +304,7 @@ Deno.test({
 Deno.test({
   name:
     "monitors model: update_monitor_notification_rule executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -368,6 +372,7 @@ Deno.test({
 Deno.test({
   name:
     "monitors model: delete_monitor_notification_rule executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

@@ -1,4 +1,4 @@
-## 2026.07.20.2
+## 2026.07.20.3
 
 **Added:** Initial code-generated release of @webframp/datadog/slos with 4
 methods covering the Datadog slos API surface.

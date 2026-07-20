@@ -94,11 +94,12 @@ function installFetchMock(mockUrl: string): () => void {
 }
 
 Deno.test({
-  name: "logs model: submit_log executes and writes resource",
+  name: "logs model: submit_log creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
-      "/logs": { body: { "id": "fixture-123" } },
+      "/logs": { body: { "id": "new-123" } },
     });
     const uninstall = installFetchMock(url);
 
@@ -133,7 +134,48 @@ Deno.test({
 });
 
 Deno.test({
+  name: "logs model: aggregate_logs executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockDdServer({
+      "/analytics/aggregate": { body: { "id": "fixture-123", "buckets": [] } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-logs", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).aggregate_logs.execute({ "name": "test-resource" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "logs model: list_logs_get fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -177,61 +219,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).list_logs_get.execute({}, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name: "logs model: list_logs creates and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server } = startMockDdServer({
-      "/events/search": {
-        body: {
-          "data": {
-            "id": "new-123",
-            "type": "resource",
-            "attributes": {
-              "attributes": { "customAttribute": 123, "duration": 2345 },
-              "host": "i-0123",
-              "message": "Host connected to remote",
-              "service": "agent",
-              "status": "INFO",
-              "tags": ["team:A"],
-              "timestamp": "2019-01-02T09:42:36.320Z",
-            },
-          },
-        },
-      },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: {
-          "apiKey": "test-api-key",
-          "appKey": "test-app-key",
-          "site": "us1",
-        },
-        definition: { id: "test-id", name: "test-logs", version: 1, tags: {} },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).list_logs.execute({ "name": "test-resource" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

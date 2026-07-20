@@ -114,6 +114,7 @@ function installFetchMock(mockUrl: string): () => void {
 Deno.test({
   name:
     "security-signals model: list_security_monitoring_signals fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -184,6 +185,7 @@ Deno.test({
 Deno.test({
   name:
     "security-signals model: bulk_edit_security_monitoring_signals_assignee executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -238,6 +240,7 @@ Deno.test({
 Deno.test({
   name:
     "security-signals model: search_security_monitoring_signals executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -309,6 +312,7 @@ Deno.test({
 Deno.test({
   name:
     "security-signals model: get_security_monitoring_signal fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

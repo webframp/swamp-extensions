@@ -94,6 +94,7 @@ function installFetchMock(mockUrl: string): () => void {
 
 Deno.test({
   name: "events model: list_events fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -172,6 +173,7 @@ Deno.test({
 
 Deno.test({
   name: "events model: create_event creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -218,6 +220,7 @@ Deno.test({
 
 Deno.test({
   name: "events model: search_events executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -295,6 +298,7 @@ Deno.test({
 
 Deno.test({
   name: "events model: get_event fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

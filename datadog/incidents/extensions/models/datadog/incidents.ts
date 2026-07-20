@@ -100,7 +100,7 @@ const CreateIncidentImpactSchema = z.object({
 /** Datadog Incidents — incident lifecycle, timelines, teams, and attachments */
 export const model = {
   type: "@webframp/datadog/incidents",
-  version: "2026.07.20.2",
+  version: "2026.07.20.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

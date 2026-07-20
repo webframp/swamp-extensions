@@ -119,6 +119,7 @@ function installFetchMock(mockUrl: string): () => void {
 Deno.test({
   name:
     "on-call model: create_on_call_escalation_policy creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -181,6 +182,7 @@ Deno.test({
 Deno.test({
   name:
     "on-call model: get_on_call_escalation_policy fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -243,6 +245,7 @@ Deno.test({
 Deno.test({
   name:
     "on-call model: update_on_call_escalation_policy executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -304,6 +307,7 @@ Deno.test({
 
 Deno.test({
   name: "on-call model: delete_on_call_escalation_policy executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
@@ -348,6 +352,7 @@ Deno.test({
 Deno.test({
   name:
     "on-call model: list_user_notification_channels fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({

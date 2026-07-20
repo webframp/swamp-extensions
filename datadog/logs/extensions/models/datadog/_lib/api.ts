@@ -432,8 +432,8 @@ function extractItems(json: unknown): Record<string, unknown>[] {
     return [data];
   }
 
-  // Fallback: return the whole response as a single item
-  return [obj];
+  // Fallback: no known list field found — return empty
+  return [];
 }
 
 /**

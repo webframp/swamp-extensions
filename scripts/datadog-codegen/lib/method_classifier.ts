@@ -51,7 +51,8 @@ export function classifyOperation(op: GroupedOperation): MethodType {
       if (lastSegment.startsWith("{")) return "action";
       // POST endpoints with "Delete" in operationId are bulk deletes
       if (op.operationId.toLowerCase().includes("delete")) return "action";
-      // Check if it's a search/query action (common in DD)
+      // POST endpoints with "List" or "Search" in operationId are queries
+      if (op.operationId.toLowerCase().includes("list")) return "action";
       if (
         op.operationId.toLowerCase().includes("search") ||
         op.operationId.toLowerCase().includes("aggregate")
@@ -59,6 +60,8 @@ export function classifyOperation(op: GroupedOperation): MethodType {
         return "action";
       }
       if (op.requestBody?.properties) return "create";
+      // Array bodies (e.g., submit logs) are creates
+      if (op.requestBodyIsArray) return "create";
       return "action";
     }
     case "put":
@@ -427,7 +430,15 @@ function generateArgsSchema(op: GroupedOperation): string {
   }
 
   // Request body fields (for create/update)
-  if (op.requestBody?.properties) {
+  if (op.requestBodyIsArray) {
+    // Array body (e.g., POST /v2/logs accepts [{message, ddsource}])
+    if (!seenFields.has("entries")) {
+      seenFields.add("entries");
+      fields.push(
+        `  entries: z.array(z.record(z.string(), z.unknown())).describe("Array of items to submit"),`,
+      );
+    }
+  } else if (op.requestBody?.properties) {
     const required = new Set(op.requestBody.required ?? []);
     for (const [name, prop] of Object.entries(op.requestBody.properties)) {
       if (name === "id" || name === "data") continue;
@@ -592,6 +603,22 @@ ${indent}    }
 ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
 `;
     urlSuffix = "${qs}";
+  }
+
+  if (method.operation.requestBodyIsArray) {
+    return `${querySetup}${indent}    const result = await ddApi(
+${indent}      apiKey,
+${indent}      appKey,
+${indent}      site,
+${indent}      "POST",
+${indent}      \`${apiPath}${urlSuffix}\`,
+${indent}      args.entries,
+${indent}    );
+${indent}
+${indent}    const id = (result as { id?: string }).id ?? "created";
+${indent}    const handle = await context.writeResource("${resourceName}", id, result);
+${indent}    context.logger.info("Created ${resourceName} {id}", { id });
+${indent}    return { dataHandles: [handle] };`;
   }
 
   if (isJsonApi) {
