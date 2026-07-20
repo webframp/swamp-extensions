@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/datadog/slos"
+version: "2026.07.19.6"
+description: "Datadog SLOs — service level objective definitions, status, and history"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - datadog/slos.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - datadog
+  - slo
+  - reliability
+  - observability

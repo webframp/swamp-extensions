@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/datadog/synthetics"
+version: "2026.07.19.6"
+description: "Datadog Synthetics — synthetic monitoring tests, results, and locations"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - datadog/synthetics.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - datadog
+  - synthetics
+  - monitoring
+  - testing
