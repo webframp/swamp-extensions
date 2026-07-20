@@ -104,7 +104,7 @@ const ListDoraFailuresSchema = z.object({
 /** Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate */
 export const model = {
   type: "@webframp/datadog/dora",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -145,7 +145,26 @@ export const model = {
   methods: {
     create_dora_deployment: {
       description: "Send a deployment event",
-      arguments: z.object({}),
+      arguments: z.object({
+        custom_tags: z.unknown().optional(),
+        env: z.string().optional().describe(
+          "Environment name to where the service was deployed.",
+        ),
+        finished_at: z.number().int().describe(
+          "Unix timestamp when the deployment finished. It must be in nanoseconds, milli...",
+        ),
+        git: z.unknown().optional(),
+        service: z.string().describe("Service name."),
+        started_at: z.number().int().describe(
+          "Unix timestamp when the deployment started. It must be in nanoseconds, millis...",
+        ),
+        team: z.string().optional().describe(
+          "Name of the team owning the deployed service. If not provided, this is automa...",
+        ),
+        version: z.string().optional().describe(
+          "Version to correlate with [APM Deployment Tracking](https://docs.datadoghq.co...",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -161,11 +180,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -213,7 +233,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/dora/deployment/${args.deployment_id}`,
+          `/api/v2/dora/deployment/${
+            encodeURIComponent(String(args.deployment_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", {
@@ -224,7 +246,23 @@ export const model = {
     },
     list_dora_deployments: {
       description: "Get a list of deployment events",
-      arguments: z.object({}),
+      arguments: z.object({
+        from: z.string().optional().describe(
+          "Minimum timestamp for requested events.",
+        ),
+        limit: z.number().int().max(1000).optional().describe(
+          "Maximum number of events in the response.",
+        ),
+        query: z.string().optional().describe(
+          "Search query with event platform syntax.",
+        ),
+        sort: z.string().optional().describe(
+          "Sort order (prefixed with `-` for descending).",
+        ),
+        to: z.string().optional().describe(
+          "Maximum timestamp for requested events.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -240,11 +278,14 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "dora_deployments_list_request", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
@@ -290,7 +331,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/dora/deployments/${args.deployment_id}`,
+          `/api/v2/dora/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -306,6 +349,10 @@ export const model = {
       description: "Patch a deployment event",
       arguments: z.object({
         deployment_id: z.string().describe("The ID of the deployment event."),
+        change_failure: z.boolean().optional().describe(
+          "Indicates whether the deployment resulted in a change failure.",
+        ),
+        remediation: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -322,18 +369,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["deployment_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "dora_deployment_patch_request", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/dora/deployments/${args.deployment_id}`,
+          `/api/v2/dora/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }`,
           body,
         );
 
@@ -348,7 +400,30 @@ export const model = {
     },
     create_dora_failure: {
       description: "Send an incident event",
-      arguments: z.object({}),
+      arguments: z.object({
+        custom_tags: z.unknown().optional(),
+        env: z.string().optional().describe(
+          "Environment name that was impacted by the incident.",
+        ),
+        finished_at: z.number().int().optional().describe(
+          "Unix timestamp when the incident finished. It must be in nanoseconds, millise...",
+        ),
+        git: z.unknown().optional(),
+        name: z.string().optional().describe("Incident name."),
+        services: z.array(z.string()).optional().describe(
+          "Service names impacted by the incident. If possible, use names registered in ...",
+        ),
+        severity: z.string().optional().describe("Incident severity."),
+        started_at: z.number().int().describe(
+          "Unix timestamp when the incident started. It must be in nanoseconds, millisec...",
+        ),
+        team: z.string().optional().describe(
+          "Name of the team owning the services impacted. If possible, use team handles ...",
+        ),
+        version: z.string().optional().describe(
+          "Version to correlate with [APM Deployment Tracking](https://docs.datadoghq.co...",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -364,11 +439,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -412,7 +488,7 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/dora/failure/${args.failure_id}`,
+          `/api/v2/dora/failure/${encodeURIComponent(String(args.failure_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.failure_id });
@@ -421,7 +497,23 @@ export const model = {
     },
     list_dora_failures: {
       description: "Get a list of incident events",
-      arguments: z.object({}),
+      arguments: z.object({
+        from: z.string().optional().describe(
+          "Minimum timestamp for requested events.",
+        ),
+        limit: z.number().int().max(1000).optional().describe(
+          "Maximum number of events in the response.",
+        ),
+        query: z.string().optional().describe(
+          "Search query with event platform syntax.",
+        ),
+        sort: z.string().optional().describe(
+          "Sort order (prefixed with `-` for descending).",
+        ),
+        to: z.string().optional().describe(
+          "Maximum timestamp for requested events.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -437,11 +529,14 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "dora_failures_list_request", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
@@ -487,7 +582,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/dora/failures/${args.failure_id}`,
+          `/api/v2/dora/failures/${
+            encodeURIComponent(String(args.failure_id))
+          }`,
         );
 
         const handle = await context.writeResource(

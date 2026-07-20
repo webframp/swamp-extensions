@@ -158,11 +158,11 @@ Deno.test({
 
 Deno.test({
   name:
-    "security-rules model: create_security_monitoring_rule executes and writes resource",
+    "security-rules model: create_security_monitoring_rule creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
-      "/security_monitoring/rules": { body: { "id": "fixture-123" } },
+      "/security_monitoring/rules": { body: { "id": "new-123" } },
     });
     const uninstall = installFetchMock(url);
 
@@ -239,53 +239,6 @@ Deno.test({
         }
       >).bulk_delete_security_monitoring_rules.execute({}, context);
       assertEquals(result.dataHandles.length, 0);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name:
-    "security-rules model: bulk_export_security_monitoring_rules creates and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server } = startMockDdServer({
-      "/rules/bulk_export": { body: { "id": "new-123" } },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: {
-          "apiKey": "test-api-key",
-          "appKey": "test-app-key",
-          "site": "us1",
-        },
-        definition: {
-          id: "test-id",
-          name: "test-security-rules",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).bulk_export_security_monitoring_rules.execute({
-        "name": "test-resource",
-      }, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
     } finally {
       uninstall();
       await server.shutdown();

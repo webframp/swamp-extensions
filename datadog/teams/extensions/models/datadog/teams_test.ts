@@ -351,6 +351,61 @@ Deno.test({
 });
 
 Deno.test({
+  name: "teams model: create_team_connections executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockDdServer({
+      "/team/connections": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "managed_by": "github_sync",
+              "source": "github",
+              "connected_team_id": "test-value",
+              "team_id": "test-value",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-teams", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_team_connections.execute(
+        { "name": "test-resource" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "teams model: update_team executes and writes resource",
   sanitizeResources: false,
   fn: async () => {

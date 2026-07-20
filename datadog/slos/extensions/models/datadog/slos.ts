@@ -71,7 +71,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -106,7 +106,21 @@ export const model = {
   methods: {
     create_slo_report_job: {
       description: "Create a new SLO report",
-      arguments: z.object({}),
+      arguments: z.object({
+        from_ts: z.number().int().describe(
+          "The `from` timestamp for the report in epoch seconds.",
+        ),
+        interval: z.unknown().optional(),
+        query: z.string().describe(
+          "The query string used to filter SLO results. Some examples of queries include...",
+        ),
+        timezone: z.string().optional().describe(
+          "The timezone used to determine the start and end of each interval. For exampl...",
+        ),
+        to_ts: z.number().int().describe(
+          "The `to` timestamp for the report in epoch seconds.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -122,11 +136,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -172,7 +187,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/slo/report/${args.report_id}/download`,
+          `/api/v2/slo/report/${
+            encodeURIComponent(String(args.report_id))
+          }/download`,
         );
 
         const handle = await context.writeResource(
@@ -209,7 +226,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/slo/report/${args.report_id}/status`,
+          `/api/v2/slo/report/${
+            encodeURIComponent(String(args.report_id))
+          }/status`,
         );
 
         const handle = await context.writeResource(
@@ -266,7 +285,7 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/slo/${args.slo_id}/status${qs}`,
+          `/api/v2/slo/${encodeURIComponent(String(args.slo_id))}/status${qs}`,
         );
 
         const handle = await context.writeResource(

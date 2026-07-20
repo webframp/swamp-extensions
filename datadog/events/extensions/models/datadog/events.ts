@@ -105,7 +105,7 @@ const SearchEventsSchema = z.object({
 /** Datadog Events — event search and submission */
 export const model = {
   type: "@webframp/datadog/events",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -201,7 +201,29 @@ export const model = {
     },
     create_event: {
       description: "Post an event",
-      arguments: z.object({}),
+      arguments: z.object({
+        aggregation_key: z.string().min(1).max(100).optional().describe(
+          "A string used for aggregation when [correlating](https://docs.datadoghq.com/s...",
+        ),
+        attributes: z.unknown(),
+        category: z.unknown(),
+        host: z.string().min(1).max(255).optional().describe(
+          "Host name to associate with the event. Any tags associated with the host are ...",
+        ),
+        integration_id: z.unknown().optional(),
+        message: z.string().min(1).max(4000).optional().describe(
+          "Free formed text associated with the event. It's suggested to use `data.attri...",
+        ),
+        tags: z.array(z.string().min(1).max(200)).optional().describe(
+          "A list of tags associated with the event. Maximum of 100 tags allowed. Refer ...",
+        ),
+        timestamp: z.string().optional().describe(
+          "Timestamp when the event occurred. Must follow [ISO 8601](https://www.iso.org...",
+        ),
+        title: z.string().min(1).max(500).describe(
+          "The title of the event. Limited to 500 characters.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -217,11 +239,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "event", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -276,9 +299,10 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "search_events",
-          "latest",
+          id,
           result ?? {},
         );
         context.logger.info("Executed search_events", {});
@@ -310,7 +334,7 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/events/${args.event_id}`,
+          `/api/v2/events/${encodeURIComponent(String(args.event_id))}`,
         );
 
         const handle = await context.writeResource(

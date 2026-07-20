@@ -189,7 +189,7 @@ const SubmitMetricsSchema = z.object({
 /** Datadog Metrics — metric queries, submissions, tag configurations, and metadata */
 export const model = {
   type: "@webframp/datadog/metrics",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -408,7 +408,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/metrics/${args.metric_name}/active-configurations${qs}`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/active-configurations${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -465,7 +467,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/metrics/${args.metric_name}/all-tags`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/all-tags`,
           {
             "style": "offset",
             "limitParam": "page[limit]",
@@ -523,7 +527,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/metrics/${args.metric_name}/assets`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/assets`,
         );
 
         const handle = await context.writeResource(
@@ -586,7 +592,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/metrics/${args.metric_name}/estimate${qs}`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/estimate${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -628,7 +636,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/metrics/${args.metric_name}/tag-cardinalities`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/tag-cardinalities`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -681,7 +691,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/metrics/${args.metric_name}/tags`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/tags`,
         );
 
         const handle = await context.writeResource(
@@ -697,6 +709,17 @@ export const model = {
       description: "Create a tag configuration",
       arguments: z.object({
         metric_name: z.string().describe("The name of the metric."),
+        aggregations: z.unknown().optional(),
+        exclude_tags_mode: z.boolean().optional().describe(
+          "When set to true, the configuration will exclude the configured tags and incl...",
+        ),
+        include_percentiles: z.boolean().optional().describe(
+          "Toggle to include/exclude percentiles for a distribution metric. Defaults to ...",
+        ),
+        metric_type: z.unknown(),
+        tags: z.array(z.string()).describe(
+          "A list of tag keys that will be queryable for your metric.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -713,18 +736,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "manage_tags", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/metrics/${args.metric_name}/tags`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/tags`,
           body,
         );
 
@@ -742,6 +768,16 @@ export const model = {
       description: "Update a tag configuration",
       arguments: z.object({
         metric_name: z.string().describe("The name of the metric."),
+        aggregations: z.unknown().optional(),
+        exclude_tags_mode: z.boolean().optional().describe(
+          "When set to true, the configuration will exclude the configured tags and incl...",
+        ),
+        include_percentiles: z.boolean().optional().describe(
+          "Toggle to include/exclude percentiles for a distribution metric. Defaults to ...",
+        ),
+        tags: z.array(z.string()).optional().describe(
+          "A list of tag keys that will be queryable for your metric.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -758,18 +794,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "manage_tags", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/metrics/${args.metric_name}/tags`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/tags`,
           body,
         );
 
@@ -807,7 +846,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/metrics/${args.metric_name}/tags`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/tags`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.metric_name });
@@ -853,7 +894,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/metrics/${args.metric_name}/volumes${qs}`,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/volumes${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -867,7 +910,18 @@ export const model = {
     },
     query_scalar_data: {
       description: "Query scalar data across multiple products",
-      arguments: z.object({}),
+      arguments: z.object({
+        formulas: z.array(z.unknown()).optional().describe(
+          "List of formulas to be calculated and returned as responses.",
+        ),
+        from: z.number().int().describe(
+          "Start date (inclusive) of the query in milliseconds since the Unix epoch.",
+        ),
+        queries: z.unknown(),
+        to: z.number().int().describe(
+          "End date (exclusive) of the query in milliseconds since the Unix epoch.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -883,11 +937,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "scalar_request", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -910,7 +965,21 @@ export const model = {
     },
     query_timeseries_data: {
       description: "Query timeseries data across multiple products",
-      arguments: z.object({}),
+      arguments: z.object({
+        formulas: z.array(z.unknown()).optional().describe(
+          "List of formulas to be calculated and returned as responses.",
+        ),
+        from: z.number().int().describe(
+          "Start date (inclusive) of the query in milliseconds since the Unix epoch.",
+        ),
+        interval: z.number().int().optional().describe(
+          "A time interval in milliseconds. May be overridden by a larger interval if th...",
+        ),
+        queries: z.unknown(),
+        to: z.number().int().describe(
+          "End date (exclusive) of the query in milliseconds since the Unix epoch.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -926,11 +995,14 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "timeseries_request", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,

@@ -363,7 +363,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
 /** Datadog Security Signals — signal search, triage, and archiving */
 export const model = {
   type: "@webframp/datadog/security-signals",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -537,11 +537,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -582,11 +583,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -627,11 +629,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -691,9 +694,10 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "search_security_monitoring_signals",
-          "latest",
+          id,
           result ?? {},
         );
         context.logger.info("Executed search_security_monitoring_signals", {});
@@ -725,7 +729,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/security_monitoring/signals/${args.signal_id}`,
+          `/api/v2/security_monitoring/signals/${
+            encodeURIComponent(String(args.signal_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -741,6 +747,8 @@ export const model = {
       description: "Modify the triage assignee of a security signal",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
+        assignee: z.unknown(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -757,18 +765,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/security_monitoring/signals/${args.signal_id}/assignee`,
+          `/api/v2/security_monitoring/signals/${
+            encodeURIComponent(String(args.signal_id))
+          }/assignee`,
           body,
         );
 
@@ -788,6 +799,8 @@ export const model = {
       description: "Change the related incidents of a security signal",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
+        incident_ids: z.unknown(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -804,18 +817,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/security_monitoring/signals/${args.signal_id}/incidents`,
+          `/api/v2/security_monitoring/signals/${
+            encodeURIComponent(String(args.signal_id))
+          }/incidents`,
           body,
         );
 
@@ -861,7 +877,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/security_monitoring/signals/${args.signal_id}/investigation_queries`,
+          `/api/v2/security_monitoring/signals/${
+            encodeURIComponent(String(args.signal_id))
+          }/investigation_queries`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -894,6 +912,10 @@ export const model = {
       description: "Change the triage state of a security signal",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
+        archive_comment: z.unknown().optional(),
+        archive_reason: z.unknown().optional(),
+        state: z.unknown(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -910,18 +932,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "signal_metadata", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/security_monitoring/signals/${args.signal_id}/state`,
+          `/api/v2/security_monitoring/signals/${
+            encodeURIComponent(String(args.signal_id))
+          }/state`,
           body,
         );
 
@@ -967,7 +992,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/security_monitoring/signals/${args.signal_id}/suggested_actions`,
+          `/api/v2/security_monitoring/signals/${
+            encodeURIComponent(String(args.signal_id))
+          }/suggested_actions`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -999,6 +1026,11 @@ export const model = {
       description: "Update security signal triage state or assignee",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
+        archive_comment: z.unknown().optional(),
+        archive_reason: z.unknown().optional(),
+        assignee: z.unknown().optional(),
+        state: z.unknown().optional(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1015,18 +1047,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "signal_metadata", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/security_monitoring/signals/${args.signal_id}/update`,
+          `/api/v2/security_monitoring/signals/${
+            encodeURIComponent(String(args.signal_id))
+          }/update`,
           body,
         );
 

@@ -981,7 +981,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1190,7 +1190,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/synthetics/api-multistep/subtests/${args.public_id}`,
+          `/api/v2/synthetics/api-multistep/subtests/${
+            encodeURIComponent(String(args.public_id))
+          }`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -1248,7 +1250,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/synthetics/api-multistep/subtests/${args.public_id}/parents`,
+          `/api/v2/synthetics/api-multistep/subtests/${
+            encodeURIComponent(String(args.public_id))
+          }/parents`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -1341,7 +1345,16 @@ export const model = {
     },
     create_synthetics_downtime: {
       description: "Create a Synthetics downtime",
-      arguments: z.object({}),
+      arguments: z.object({
+        description: z.string().optional().describe(
+          "An optional description of the downtime.",
+        ),
+        isEnabled: z.boolean().describe("Whether the downtime is enabled."),
+        name: z.string().describe("The name of the downtime."),
+        tags: z.unknown().optional(),
+        testIds: z.unknown(),
+        timeSlots: z.unknown(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -1357,11 +1370,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "downtime", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -1407,7 +1421,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/synthetics/downtimes/${args.downtime_id}`,
+          `/api/v2/synthetics/downtimes/${
+            encodeURIComponent(String(args.downtime_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -1423,6 +1439,14 @@ export const model = {
       description: "Update a Synthetics downtime",
       arguments: z.object({
         downtime_id: z.string().describe("The ID of the downtime to update."),
+        description: z.string().optional().describe(
+          "An optional description of the downtime.",
+        ),
+        isEnabled: z.boolean().describe("Whether the downtime is enabled."),
+        name: z.string().describe("The name of the downtime."),
+        tags: z.unknown().optional(),
+        testIds: z.unknown(),
+        timeSlots: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1439,18 +1463,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["downtime_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "downtime", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/synthetics/downtimes/${args.downtime_id}`,
+          `/api/v2/synthetics/downtimes/${
+            encodeURIComponent(String(args.downtime_id))
+          }`,
           body,
         );
 
@@ -1488,7 +1515,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/synthetics/downtimes/${args.downtime_id}`,
+          `/api/v2/synthetics/downtimes/${
+            encodeURIComponent(String(args.downtime_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.downtime_id });
@@ -1529,7 +1558,9 @@ export const model = {
           appKey,
           site,
           "PUT",
-          `/api/v2/synthetics/downtimes/${args.downtime_id}/tests/${args.test_id}`,
+          `/api/v2/synthetics/downtimes/${
+            encodeURIComponent(String(args.downtime_id))
+          }/tests/${encodeURIComponent(String(args.test_id))}`,
           body,
         );
 
@@ -1570,7 +1601,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/synthetics/downtimes/${args.downtime_id}/tests/${args.test_id}`,
+          `/api/v2/synthetics/downtimes/${
+            encodeURIComponent(String(args.downtime_id))
+          }/tests/${encodeURIComponent(String(args.test_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.test_id });
@@ -1663,7 +1696,26 @@ export const model = {
     },
     create_synthetics_suite: {
       description: "Create a test suite",
-      arguments: z.object({}),
+      arguments: z.object({
+        message: z.string().optional().describe(
+          "Notification message associated with the suite.",
+        ),
+        monitor_id: z.number().int().optional().describe(
+          "The associated monitor ID.",
+        ),
+        name: z.string().describe("Name of the suite."),
+        options: z.unknown(),
+        public_id: z.string().optional().describe(
+          "The public ID for the test.",
+        ),
+        tags: z.array(z.string()).optional().describe(
+          "Array of tags attached to the suite.",
+        ),
+        tests: z.array(z.unknown()).describe(
+          "Array of Synthetic tests included in the suite.",
+        ),
+        type: z.unknown(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -1679,11 +1731,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "suites", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -1706,7 +1759,14 @@ export const model = {
     },
     delete_synthetics_suites: {
       description: "Bulk delete suites",
-      arguments: z.object({}),
+      arguments: z.object({
+        force_delete_dependencies: z.boolean().optional().describe(
+          "Whether to force deletion of suites that have dependent resources.",
+        ),
+        public_ids: z.array(z.string()).describe(
+          "List of public IDs of the Synthetic test suites to delete.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -1737,9 +1797,10 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "synthetics_suites",
-          "latest",
+          id,
           result ?? {},
         );
         context.logger.info("Executed delete_synthetics_suites", {});
@@ -1833,7 +1894,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/synthetics/suites/${args.public_id}`,
+          `/api/v2/synthetics/suites/${
+            encodeURIComponent(String(args.public_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -1849,6 +1912,21 @@ export const model = {
       description: "Edit a test suite",
       arguments: z.object({
         public_id: z.string().describe("The public ID of the suite to edit."),
+        message: z.string().optional().describe(
+          "Notification message associated with the suite.",
+        ),
+        monitor_id: z.number().int().optional().describe(
+          "The associated monitor ID.",
+        ),
+        name: z.string().describe("Name of the suite."),
+        options: z.unknown(),
+        tags: z.array(z.string()).optional().describe(
+          "Array of tags attached to the suite.",
+        ),
+        tests: z.array(z.unknown()).describe(
+          "Array of Synthetic tests included in the suite.",
+        ),
+        type: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1865,18 +1943,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "suites", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/synthetics/suites/${args.public_id}`,
+          `/api/v2/synthetics/suites/${
+            encodeURIComponent(String(args.public_id))
+          }`,
           body,
         );
 
@@ -1895,6 +1976,9 @@ export const model = {
         public_id: z.string().describe(
           "The public ID of the Synthetic test suite to patch.",
         ),
+        json_patch: z.array(z.unknown()).optional().describe(
+          "JSON Patch operations following RFC 6902.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1911,18 +1995,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "suites_json_patch", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/synthetics/suites/${args.public_id}/jsonpatch`,
+          `/api/v2/synthetics/suites/${
+            encodeURIComponent(String(args.public_id))
+          }/jsonpatch`,
           body,
         );
 
@@ -1981,7 +2068,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/synthetics/tests/browser/${args.public_id}/results`,
+          `/api/v2/synthetics/tests/browser/${
+            encodeURIComponent(String(args.public_id))
+          }/results`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -2055,7 +2144,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/synthetics/tests/browser/${args.public_id}/results/${args.result_id}${qs}`,
+          `/api/v2/synthetics/tests/browser/${
+            encodeURIComponent(String(args.public_id))
+          }/results/${encodeURIComponent(String(args.result_id))}${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -2069,7 +2160,14 @@ export const model = {
     },
     delete_synthetics_tests: {
       description: "Bulk delete tests",
-      arguments: z.object({}),
+      arguments: z.object({
+        force_delete_dependencies: z.boolean().optional().describe(
+          "Whether to force deletion of tests that have dependent resources.",
+        ),
+        public_ids: z.array(z.string()).describe(
+          "List of public IDs of the Synthetic tests to delete.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -2100,9 +2198,10 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "synthetics_tests",
-          "latest",
+          id,
           result ?? {},
         );
         context.logger.info("Executed delete_synthetics_tests", {});
@@ -2136,7 +2235,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/synthetics/tests/fast/${args.id}`,
+          `/api/v2/synthetics/tests/fast/${
+            encodeURIComponent(String(args.id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -2150,7 +2251,29 @@ export const model = {
     },
     create_synthetics_network_test: {
       description: "Create a Network Path test",
-      arguments: z.object({}),
+      arguments: z.object({
+        config: z.unknown(),
+        locations: z.array(z.string()).describe(
+          "Array of locations used to run the test. Network Path tests can be run from m...",
+        ),
+        message: z.string().describe(
+          "Notification message associated with the test.",
+        ),
+        monitor_id: z.number().int().optional().describe(
+          "The associated monitor ID.",
+        ),
+        name: z.string().describe("Name of the test."),
+        options: z.unknown(),
+        public_id: z.string().optional().describe(
+          "The public ID for the test.",
+        ),
+        status: z.unknown().optional(),
+        subtype: z.unknown().optional(),
+        tags: z.array(z.string()).optional().describe(
+          "Array of tags attached to the test.",
+        ),
+        type: z.unknown(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -2166,11 +2289,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "network", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -2218,7 +2342,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/synthetics/tests/network/${args.public_id}`,
+          `/api/v2/synthetics/tests/network/${
+            encodeURIComponent(String(args.public_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -2236,6 +2362,24 @@ export const model = {
         public_id: z.string().describe(
           "The public ID of the Network Path test to edit.",
         ),
+        config: z.unknown(),
+        locations: z.array(z.string()).describe(
+          "Array of locations used to run the test. Network Path tests can be run from m...",
+        ),
+        message: z.string().describe(
+          "Notification message associated with the test.",
+        ),
+        monitor_id: z.number().int().optional().describe(
+          "The associated monitor ID.",
+        ),
+        name: z.string().describe("Name of the test."),
+        options: z.unknown(),
+        status: z.unknown().optional(),
+        subtype: z.unknown().optional(),
+        tags: z.array(z.string()).optional().describe(
+          "Array of tags attached to the test.",
+        ),
+        type: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2252,18 +2396,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "network", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/synthetics/tests/network/${args.public_id}`,
+          `/api/v2/synthetics/tests/network/${
+            encodeURIComponent(String(args.public_id))
+          }`,
           body,
         );
 
@@ -2370,7 +2517,9 @@ export const model = {
           appKey,
           site,
           "POST",
-          `/api/v2/synthetics/tests/${args.public_id}/files/download`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/files/download`,
           body,
         );
 
@@ -2419,7 +2568,9 @@ export const model = {
           appKey,
           site,
           "POST",
-          `/api/v2/synthetics/tests/${args.public_id}/files/multipart-presigned-urls`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/files/multipart-presigned-urls`,
           body,
         );
 
@@ -2473,7 +2624,9 @@ export const model = {
           appKey,
           site,
           "POST",
-          `/api/v2/synthetics/tests/${args.public_id}/files/multipart-upload-abort`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/files/multipart-upload-abort`,
           body,
         );
 
@@ -2529,7 +2682,9 @@ export const model = {
           appKey,
           site,
           "POST",
-          `/api/v2/synthetics/tests/${args.public_id}/files/multipart-upload-complete`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/files/multipart-upload-complete`,
           body,
         );
 
@@ -2576,7 +2731,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/synthetics/tests/${args.public_id}/parent-suites`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/parent-suites`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -2650,7 +2807,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/synthetics/tests/${args.public_id}/results`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/results`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -2723,7 +2882,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/synthetics/tests/${args.public_id}/results/${args.result_id}${qs}`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/results/${encodeURIComponent(String(args.result_id))}${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -2768,7 +2929,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/synthetics/tests/${args.public_id}/version_history`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/version_history`,
           {
             "style": "offset",
             "limitParam": "limit",
@@ -2844,7 +3007,11 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/synthetics/tests/${args.public_id}/version_history/${args.version_number}${qs}`,
+          `/api/v2/synthetics/tests/${
+            encodeURIComponent(String(args.public_id))
+          }/version_history/${
+            encodeURIComponent(String(args.version_number))
+          }${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -2860,6 +3027,9 @@ export const model = {
       description: "Patch a global variable",
       arguments: z.object({
         variable_id: z.string().describe("The ID of the global variable."),
+        json_patch: z.array(z.unknown()).optional().describe(
+          "JSON Patch operations following RFC 6902.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2876,18 +3046,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["variable_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "global_variables_json_patch", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/synthetics/variables/${args.variable_id}/jsonpatch`,
+          `/api/v2/synthetics/variables/${
+            encodeURIComponent(String(args.variable_id))
+          }/jsonpatch`,
           body,
         );
 

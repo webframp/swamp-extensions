@@ -94,7 +94,7 @@ const ListLogsSchema = z.object({
 /** Datadog Logs — log search, aggregation, and analytics */
 export const model = {
   type: "@webframp/datadog/logs",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -149,24 +149,29 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>(["ddtags"]);
+        const queryParts: string[] = [];
+        const pathKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !pathKeys.has(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
         }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/logs`,
-          body,
+          `/api/v2/logs${qs}`,
         );
 
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "submit_log",
-          "latest",
+          id,
           result ?? {},
         );
         context.logger.info("Executed submit_log", {});
@@ -216,9 +221,10 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "aggregate_logs",
-          "latest",
+          id,
           result ?? {},
         );
         context.logger.info("Executed aggregate_logs", {});

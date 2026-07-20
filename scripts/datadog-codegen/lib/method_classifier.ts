@@ -573,8 +573,53 @@ function generateCreateBody(
     sanitizeFieldName(p.name)
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
+  const isJsonApi = method.operation.requestBodyIsJsonApi;
+  const bodyType = method.operation.requestBodyType
+    ? `"${method.operation.requestBodyType}"`
+    : '"resource"';
 
-  return `${indent}    const body: Record<string, unknown> = {};
+  // Handle query params on POST (finding #3)
+  const hasQueryParams = queryParamNames.length > 0;
+  let querySetup = "";
+  let urlSuffix = "";
+  if (hasQueryParams) {
+    querySetup = `${indent}    const queryParts: string[] = [];
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && ${
+      JSON.stringify(queryParamNames)
+    }.includes(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
+`;
+    urlSuffix = "${qs}";
+  }
+
+  if (isJsonApi) {
+    return `${querySetup}${indent}    const attrs: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
+${indent}    }
+${indent}    const body = { data: { type: ${bodyType}, attributes: attrs } };
+${indent}
+${indent}    const result = await ddApi(
+${indent}      apiKey,
+${indent}      appKey,
+${indent}      site,
+${indent}      "POST",
+${indent}      \`${apiPath}${urlSuffix}\`,
+${indent}      body,
+${indent}    );
+${indent}
+${indent}    const id = (result as { id?: string }).id ?? "created";
+${indent}    const handle = await context.writeResource("${resourceName}", id, result);
+${indent}    context.logger.info("Created ${resourceName} {id}", { id });
+${indent}    return { dataHandles: [handle] };`;
+  }
+
+  return `${querySetup}${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
     JSON.stringify(excludeNames)
   });
@@ -587,7 +632,7 @@ ${indent}      apiKey,
 ${indent}      appKey,
 ${indent}      site,
 ${indent}      "POST",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${urlSuffix}\`,
 ${indent}      body,
 ${indent}    );
 ${indent}
@@ -618,6 +663,34 @@ function generateUpdateBody(
     sanitizeFieldName(p.name)
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
+  const isJsonApi = method.operation.requestBodyIsJsonApi;
+  const bodyType = method.operation.requestBodyType
+    ? `"${method.operation.requestBodyType}"`
+    : '"resource"';
+
+  if (isJsonApi) {
+    return `${indent}    const attrs: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
+${indent}    }
+${indent}    const body = { data: { type: ${bodyType}, attributes: attrs } };
+${indent}
+${indent}    const result = await ddApi(
+${indent}      apiKey,
+${indent}      appKey,
+${indent}      site,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}\`,
+${indent}      body,
+${indent}    );
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${indent}    context.logger.info("Updated ${resourceName}", {});
+${indent}    return { dataHandles: [handle] };`;
+  }
 
   return `${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
@@ -747,15 +820,16 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "latest", result ?? {});
+${indent}    const id = (result as { id?: string }).id ?? "latest";
+${indent}    const handle = await context.writeResource("${resourceName}", id, result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
 
-/** Build the API path with template literal substitution */
+/** Build the API path with template literal substitution (URL-encoded) */
 function buildApiPath(path: string): string {
   return path.replace(/\{([^}]+)\}/g, (_, name) => {
-    return `\${args.${sanitizeFieldName(name)}}`;
+    return `\${encodeURIComponent(String(args.${sanitizeFieldName(name)}))}`;
   });
 }
 

@@ -417,7 +417,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -601,7 +601,25 @@ export const model = {
     },
     create_team: {
       description: "Create a team",
-      arguments: z.object({}),
+      arguments: z.object({
+        avatar: z.string().nullable().optional().describe(
+          "Unicode representation of the avatar for the team, limited to a single grapheme",
+        ),
+        banner: z.number().int().nullable().optional().describe(
+          "Banner selection for the team",
+        ),
+        description: z.string().optional().describe(
+          "Free-form markdown description/content for the team's homepage",
+        ),
+        handle: z.string().max(195).describe("The team's identifier"),
+        hidden_modules: z.array(z.string()).optional().describe(
+          "Collection of hidden modules for the team",
+        ),
+        name: z.string().max(200).describe("The name of the team"),
+        visible_modules: z.array(z.string()).optional().describe(
+          "Collection of visible modules for the team",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -617,11 +635,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "team", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -708,7 +727,10 @@ export const model = {
     },
     add_team_hierarchy_link: {
       description: "Create a team hierarchy link",
-      arguments: z.object({}),
+      arguments: z.object({
+        relationships: z.unknown(),
+        type: z.unknown(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -724,11 +746,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "resource", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -774,7 +797,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/team-hierarchy-links/${args.link_id}`,
+          `/api/v2/team-hierarchy-links/${
+            encodeURIComponent(String(args.link_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -811,7 +836,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/team-hierarchy-links/${args.link_id}`,
+          `/api/v2/team-hierarchy-links/${
+            encodeURIComponent(String(args.link_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.link_id });
@@ -921,13 +948,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = (result as { id?: string }).id ?? "latest";
         const handle = await context.writeResource(
           "team_connections",
           id,
-          result,
+          result ?? {},
         );
-        context.logger.info("Created team_connections {id}", { id });
+        context.logger.info("Executed create_team_connections", {});
         return { dataHandles: [handle] };
       },
     },
@@ -1019,7 +1046,13 @@ export const model = {
     },
     sync_teams: {
       description: "Link Teams with GitHub Teams",
-      arguments: z.object({}),
+      arguments: z.object({
+        frequency: z.unknown().optional(),
+        selection_state: z.unknown().optional(),
+        source: z.unknown(),
+        sync_membership: z.unknown().optional(),
+        type: z.unknown(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -1035,11 +1068,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "team_sync_bulk", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -1081,7 +1115,7 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/team/${args.team_id}`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}`,
         );
 
         const handle = await context.writeResource(
@@ -1097,6 +1131,23 @@ export const model = {
       description: "Update a team",
       arguments: z.object({
         team_id: z.string().describe("None"),
+        avatar: z.string().nullable().optional().describe(
+          "Unicode representation of the avatar for the team, limited to a single grapheme",
+        ),
+        banner: z.number().int().nullable().optional().describe(
+          "Banner selection for the team",
+        ),
+        description: z.string().optional().describe(
+          "Free-form markdown description/content for the team's homepage",
+        ),
+        handle: z.string().max(195).describe("The team's identifier"),
+        hidden_modules: z.array(z.string()).optional().describe(
+          "Collection of hidden modules for the team",
+        ),
+        name: z.string().max(200).describe("The name of the team"),
+        visible_modules: z.array(z.string()).optional().describe(
+          "Collection of visible modules for the team",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1113,18 +1164,19 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "team", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/team/${args.team_id}`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}`,
           body,
         );
 
@@ -1162,7 +1214,7 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/team/${args.team_id}`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.team_id });
@@ -1199,7 +1251,7 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/team/${args.team_id}/links`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}/links`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -1227,6 +1279,11 @@ export const model = {
       description: "Create a team link",
       arguments: z.object({
         team_id: z.string().describe("None"),
+        label: z.string().max(256).describe("The link's label"),
+        position: z.number().int().max(2147483647).optional().describe(
+          "The link's position, used to sort links for the team",
+        ),
+        url: z.string().describe("The URL for the link"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1243,18 +1300,19 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "team_links", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/team/${args.team_id}/links`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}/links`,
           body,
         );
 
@@ -1290,7 +1348,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/team/${args.team_id}/links/${args.link_id}`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}/links/${
+            encodeURIComponent(String(args.link_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -1307,6 +1367,11 @@ export const model = {
       arguments: z.object({
         team_id: z.string().describe("None"),
         link_id: z.string().describe("None"),
+        label: z.string().max(256).describe("The link's label"),
+        position: z.number().int().max(2147483647).optional().describe(
+          "The link's position, used to sort links for the team",
+        ),
+        url: z.string().describe("The URL for the link"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1323,18 +1388,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "link_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "team_links", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/team/${args.team_id}/links/${args.link_id}`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}/links/${
+            encodeURIComponent(String(args.link_id))
+          }`,
           body,
         );
 
@@ -1373,7 +1441,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/team/${args.team_id}/links/${args.link_id}`,
+          `/api/v2/team/${encodeURIComponent(String(args.team_id))}/links/${
+            encodeURIComponent(String(args.link_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.link_id });
@@ -1416,7 +1486,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/team/${args.team_id}/memberships`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/memberships`,
           {
             "style": "page_number",
             "limitParam": "page[size]",
@@ -1449,6 +1521,13 @@ export const model = {
       description: "Add a user to a team",
       arguments: z.object({
         team_id: z.string().describe("None"),
+        provisioned_by: z.string().nullable().optional().describe(
+          "The mechanism responsible for provisioning the team relationship. Possible va...",
+        ),
+        provisioned_by_id: z.string().nullable().optional().describe(
+          "UUID of the User or Service Account who provisioned this team membership, or ...",
+        ),
+        role: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1465,18 +1544,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "team_memberships", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/team/${args.team_id}/memberships`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/memberships`,
           body,
         );
 
@@ -1495,6 +1577,13 @@ export const model = {
       arguments: z.object({
         team_id: z.string().describe("None"),
         user_id: z.string().describe("None"),
+        provisioned_by: z.string().nullable().optional().describe(
+          "The mechanism responsible for provisioning the team relationship. Possible va...",
+        ),
+        provisioned_by_id: z.string().nullable().optional().describe(
+          "UUID of the User or Service Account who provisioned this team membership, or ...",
+        ),
+        role: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1511,18 +1600,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "user_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "team_memberships", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/team/${args.team_id}/memberships/${args.user_id}`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/memberships/${encodeURIComponent(String(args.user_id))}`,
           body,
         );
 
@@ -1561,7 +1653,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/team/${args.team_id}/memberships/${args.user_id}`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/memberships/${encodeURIComponent(String(args.user_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.user_id });
@@ -1598,7 +1692,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/team/${args.team_id}/notification-rules`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/notification-rules`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -1630,6 +1726,10 @@ export const model = {
       description: "Create team notification rule",
       arguments: z.object({
         team_id: z.string().describe("None"),
+        email: z.unknown().optional(),
+        ms_teams: z.unknown().optional(),
+        pagerduty: z.unknown().optional(),
+        slack: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1646,18 +1746,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "team_notification_rules", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/team/${args.team_id}/notification-rules`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/notification-rules`,
           body,
         );
 
@@ -1697,7 +1802,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/team/${args.team_id}/notification-rules/${args.rule_id}`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/notification-rules/${encodeURIComponent(String(args.rule_id))}`,
         );
 
         const handle = await context.writeResource(
@@ -1714,6 +1821,10 @@ export const model = {
       arguments: z.object({
         team_id: z.string().describe("None"),
         rule_id: z.string().describe("None"),
+        email: z.unknown().optional(),
+        ms_teams: z.unknown().optional(),
+        pagerduty: z.unknown().optional(),
+        slack: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1730,18 +1841,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "rule_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "team_notification_rules", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/team/${args.team_id}/notification-rules/${args.rule_id}`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/notification-rules/${encodeURIComponent(String(args.rule_id))}`,
           body,
         );
 
@@ -1780,7 +1896,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/team/${args.team_id}/notification-rules/${args.rule_id}`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/notification-rules/${encodeURIComponent(String(args.rule_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.rule_id });
@@ -1817,7 +1935,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/team/${args.team_id}/permission-settings`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/permission-settings`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -1850,6 +1970,7 @@ export const model = {
       arguments: z.object({
         team_id: z.string().describe("None"),
         action: z.string().describe("None"),
+        value: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1866,18 +1987,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "action"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "team_permission_settings", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/team/${args.team_id}/permission-settings/${args.action}`,
+          `/api/v2/team/${
+            encodeURIComponent(String(args.team_id))
+          }/permission-settings/${encodeURIComponent(String(args.action))}`,
           body,
         );
 
@@ -1920,7 +2046,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/users/${args.user_uuid}/memberships`,
+          `/api/v2/users/${
+            encodeURIComponent(String(args.user_uuid))
+          }/memberships`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );

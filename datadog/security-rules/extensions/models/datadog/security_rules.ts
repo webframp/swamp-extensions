@@ -68,7 +68,7 @@ const TestExistingSecurityMonitoringRuleSchema = z.object({
 /** Datadog Security Rules — detection rule CRUD and management */
 export const model = {
   type: "@webframp/datadog/security-rules",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -201,7 +201,39 @@ export const model = {
     },
     create_security_monitoring_rule: {
       description: "Create a detection rule",
-      arguments: z.object({}),
+      arguments: z.object({
+        calculatedFields: z.array(z.unknown()).optional().describe(
+          "Calculated fields. Only allowed for scheduled rules - in other words, when sc...",
+        ),
+        cases: z.array(z.unknown()).describe("Cases for generating signals."),
+        filters: z.array(z.unknown()).optional().describe(
+          "Additional queries to filter matched events before they are processed. This f...",
+        ),
+        groupSignalsBy: z.array(z.string()).optional().describe(
+          "Additional grouping to perform on top of the existing groups in the query sec...",
+        ),
+        hasExtendedTitle: z.boolean().optional().describe(
+          "Whether the notifications include the triggering group-by values in their title.",
+        ),
+        isEnabled: z.boolean().describe("Whether the rule is enabled."),
+        message: z.string().describe("Message for generated signals."),
+        name: z.string().describe("The name of the rule."),
+        options: z.unknown(),
+        queries: z.array(z.unknown()).describe(
+          "Queries for selecting logs which are part of the rule.",
+        ),
+        referenceTables: z.array(z.unknown()).optional().describe(
+          "Reference tables for the rule.",
+        ),
+        schedulingOptions: z.unknown().optional(),
+        tags: z.array(z.string()).optional().describe(
+          "Tags for generated signals.",
+        ),
+        thirdPartyCases: z.array(z.unknown()).optional().describe(
+          "Cases for generating signals from third-party rules. Only available for third...",
+        ),
+        type: z.unknown().optional(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -232,18 +264,21 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
           "security_monitoring_rule",
-          "latest",
-          result ?? {},
+          id,
+          result,
         );
-        context.logger.info("Executed create_security_monitoring_rule", {});
+        context.logger.info("Created security_monitoring_rule {id}", { id });
         return { dataHandles: [handle] };
       },
     },
     bulk_delete_security_monitoring_rules: {
       description: "Bulk delete security monitoring rules",
-      arguments: z.object({}),
+      arguments: z.object({
+        ruleIds: z.array(z.string()).describe("List of rule IDs to delete."),
+      }),
       execute: async (
         _args: Record<string, unknown>,
         context: {
@@ -273,7 +308,11 @@ export const model = {
     },
     bulk_export_security_monitoring_rules: {
       description: "Bulk export security monitoring rules",
-      arguments: z.object({}),
+      arguments: z.object({
+        ruleIds: z.array(z.string()).describe(
+          "List of rule IDs to export. Each rule will be included in the resulting ZIP f...",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -289,11 +328,17 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: {
+            type: "security_monitoring_rules_bulk_export",
+            attributes: attrs,
+          },
+        };
 
         const result = await ddApi(
           apiKey,
@@ -319,7 +364,45 @@ export const model = {
     },
     convert_security_monitoring_rule_from_json_to_terraform: {
       description: "Convert a rule from JSON to Terraform",
-      arguments: z.object({}),
+      arguments: z.object({
+        calculatedFields: z.array(z.unknown()).optional().describe(
+          "Calculated fields. Only allowed for scheduled rules - in other words, when sc...",
+        ),
+        cases: z.array(z.unknown()).describe("Cases for generating signals."),
+        customMessage: z.string().optional().describe(
+          "Custom/Overridden message for generated signals (used in case of Default rule...",
+        ),
+        customName: z.string().optional().describe(
+          "Custom/Overridden name of the rule (used in case of Default rule update).",
+        ),
+        filters: z.array(z.unknown()).optional().describe(
+          "Additional queries to filter matched events before they are processed. This f...",
+        ),
+        groupSignalsBy: z.array(z.string()).optional().describe(
+          "Additional grouping to perform on top of the existing groups in the query sec...",
+        ),
+        hasExtendedTitle: z.boolean().optional().describe(
+          "Whether the notifications include the triggering group-by values in their title.",
+        ),
+        isEnabled: z.boolean().describe("Whether the rule is enabled."),
+        message: z.string().describe("Message for generated signals."),
+        name: z.string().describe("The name of the rule."),
+        options: z.unknown(),
+        queries: z.array(z.unknown()).describe(
+          "Queries for selecting logs which are part of the rule.",
+        ),
+        referenceTables: z.array(z.unknown()).optional().describe(
+          "Reference tables for the rule.",
+        ),
+        schedulingOptions: z.unknown().optional(),
+        tags: z.array(z.string()).optional().describe(
+          "Tags for generated signals.",
+        ),
+        thirdPartyCases: z.array(z.unknown()).optional().describe(
+          "Cases for generating signals from third-party rules. Only available for third...",
+        ),
+        type: z.unknown().optional(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -350,21 +433,26 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
           "convert_security_monitoring_rule_from_json_to_terraform",
-          "latest",
-          result ?? {},
+          id,
+          result,
         );
         context.logger.info(
-          "Executed convert_security_monitoring_rule_from_json_to_terraform",
-          {},
+          "Created convert_security_monitoring_rule_from_json_to_terraform {id}",
+          { id },
         );
         return { dataHandles: [handle] };
       },
     },
     bulk_convert_existing_security_monitoring_rules: {
       description: "Bulk convert rules to Terraform",
-      arguments: z.object({}),
+      arguments: z.object({
+        ruleIds: z.array(z.string()).describe(
+          "List of rule IDs to convert. Each rule will be included in the resulting ZIP ...",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -380,11 +468,17 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: {
+            type: "security_monitoring_rules_convert_bulk",
+            attributes: attrs,
+          },
+        };
 
         const result = await ddApi(
           apiKey,
@@ -460,7 +554,45 @@ export const model = {
     },
     validate_security_monitoring_rule: {
       description: "Validate a detection rule",
-      arguments: z.object({}),
+      arguments: z.object({
+        calculatedFields: z.array(z.unknown()).optional().describe(
+          "Calculated fields. Only allowed for scheduled rules - in other words, when sc...",
+        ),
+        cases: z.array(z.unknown()).describe("Cases for generating signals."),
+        customMessage: z.string().optional().describe(
+          "Custom/Overridden message for generated signals (used in case of Default rule...",
+        ),
+        customName: z.string().optional().describe(
+          "Custom/Overridden name of the rule (used in case of Default rule update).",
+        ),
+        filters: z.array(z.unknown()).optional().describe(
+          "Additional queries to filter matched events before they are processed. This f...",
+        ),
+        groupSignalsBy: z.array(z.string()).optional().describe(
+          "Additional grouping to perform on top of the existing groups in the query sec...",
+        ),
+        hasExtendedTitle: z.boolean().optional().describe(
+          "Whether the notifications include the triggering group-by values in their title.",
+        ),
+        isEnabled: z.boolean().describe("Whether the rule is enabled."),
+        message: z.string().describe("Message for generated signals."),
+        name: z.string().describe("The name of the rule."),
+        options: z.unknown(),
+        queries: z.array(z.unknown()).describe(
+          "Queries for selecting logs which are part of the rule.",
+        ),
+        referenceTables: z.array(z.unknown()).optional().describe(
+          "Reference tables for the rule.",
+        ),
+        schedulingOptions: z.unknown().optional(),
+        tags: z.array(z.string()).optional().describe(
+          "Tags for generated signals.",
+        ),
+        thirdPartyCases: z.array(z.unknown()).optional().describe(
+          "Cases for generating signals from third-party rules. Only available for third...",
+        ),
+        type: z.unknown().optional(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -491,12 +623,15 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
           "validate_security_monitoring_rule",
-          "latest",
-          result ?? {},
+          id,
+          result,
         );
-        context.logger.info("Executed validate_security_monitoring_rule", {});
+        context.logger.info("Created validate_security_monitoring_rule {id}", {
+          id,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -525,7 +660,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/security_monitoring/rules/${args.rule_id}`,
+          `/api/v2/security_monitoring/rules/${
+            encodeURIComponent(String(args.rule_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -614,7 +751,9 @@ export const model = {
           appKey,
           site,
           "PUT",
-          `/api/v2/security_monitoring/rules/${args.rule_id}`,
+          `/api/v2/security_monitoring/rules/${
+            encodeURIComponent(String(args.rule_id))
+          }`,
           body,
         );
 
@@ -652,7 +791,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/security_monitoring/rules/${args.rule_id}`,
+          `/api/v2/security_monitoring/rules/${
+            encodeURIComponent(String(args.rule_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.rule_id });
@@ -684,7 +825,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/security_monitoring/rules/${args.rule_id}/convert`,
+          `/api/v2/security_monitoring/rules/${
+            encodeURIComponent(String(args.rule_id))
+          }/convert`,
         );
 
         const handle = await context.writeResource(
@@ -734,7 +877,9 @@ export const model = {
           appKey,
           site,
           "POST",
-          `/api/v2/security_monitoring/rules/${args.rule_id}/test`,
+          `/api/v2/security_monitoring/rules/${
+            encodeURIComponent(String(args.rule_id))
+          }/test`,
           body,
         );
 

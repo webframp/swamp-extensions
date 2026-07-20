@@ -100,7 +100,7 @@ const CreateIncidentImpactSchema = z.object({
 /** Datadog Incidents — incident lifecycle, timelines, teams, and attachments */
 export const model = {
   type: "@webframp/datadog/incidents",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -154,7 +154,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/incidents/${args.incident_id}/impacts`,
+          `/api/v2/incidents/${
+            encodeURIComponent(String(args.incident_id))
+          }/impacts`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -185,6 +187,12 @@ export const model = {
         include: z.string().optional().describe(
           "Specifies which related resources should be included in the response.",
         ),
+        description: z.string().describe("Description of the impact."),
+        end_at: z.string().nullable().optional().describe(
+          "Timestamp when the impact ended.",
+        ),
+        fields: z.unknown().optional(),
+        start_at: z.string().describe("Timestamp when the impact started."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -201,18 +209,30 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && ["include"].includes(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["incident_id", "include"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "incident_impacts", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/incidents/${args.incident_id}/impacts`,
+          `/api/v2/incidents/${
+            encodeURIComponent(String(args.incident_id))
+          }/impacts${qs}`,
           body,
         );
 
@@ -252,7 +272,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/incidents/${args.incident_id}/impacts/${args.impact_id}`,
+          `/api/v2/incidents/${
+            encodeURIComponent(String(args.incident_id))
+          }/impacts/${encodeURIComponent(String(args.impact_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.impact_id });

@@ -271,7 +271,7 @@ const GetSuppressionVersionHistorySchema = z.object({
 /** Datadog Security Suppressions — suppression rule management */
 export const model = {
   type: "@webframp/datadog/security-suppressions",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -384,7 +384,33 @@ export const model = {
     },
     create_security_monitoring_suppression: {
       description: "Create a suppression rule",
-      arguments: z.object({}),
+      arguments: z.object({
+        data_exclusion_query: z.string().optional().describe(
+          "An exclusion query on the input data of the security rules, which could be lo...",
+        ),
+        description: z.string().optional().describe(
+          "A description for the suppression rule.",
+        ),
+        enabled: z.boolean().describe(
+          "Whether the suppression rule is enabled.",
+        ),
+        expiration_date: z.number().int().optional().describe(
+          "A Unix millisecond timestamp giving an expiration date for the suppression ru...",
+        ),
+        name: z.string().describe("The name of the suppression rule."),
+        rule_query: z.string().describe(
+          "The rule query of the suppression rule, with the same syntax as the search ba...",
+        ),
+        start_date: z.number().int().optional().describe(
+          "A Unix millisecond timestamp giving the start date for the suppression rule. ...",
+        ),
+        suppression_query: z.string().optional().describe(
+          "The suppression query of the suppression rule. If a signal matches this query...",
+        ),
+        tags: z.array(z.string()).optional().describe(
+          "List of tags associated with the suppression rule.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -400,11 +426,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "suppressions", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -429,7 +456,39 @@ export const model = {
     },
     get_suppressions_affecting_future_rule: {
       description: "Get suppressions affecting future rule",
-      arguments: z.object({}),
+      arguments: z.object({
+        calculatedFields: z.array(z.unknown()).optional().describe(
+          "Calculated fields. Only allowed for scheduled rules - in other words, when sc...",
+        ),
+        cases: z.array(z.unknown()).describe("Cases for generating signals."),
+        filters: z.array(z.unknown()).optional().describe(
+          "Additional queries to filter matched events before they are processed. This f...",
+        ),
+        groupSignalsBy: z.array(z.string()).optional().describe(
+          "Additional grouping to perform on top of the existing groups in the query sec...",
+        ),
+        hasExtendedTitle: z.boolean().optional().describe(
+          "Whether the notifications include the triggering group-by values in their title.",
+        ),
+        isEnabled: z.boolean().describe("Whether the rule is enabled."),
+        message: z.string().describe("Message for generated signals."),
+        name: z.string().describe("The name of the rule."),
+        options: z.unknown(),
+        queries: z.array(z.unknown()).describe(
+          "Queries for selecting logs which are part of the rule.",
+        ),
+        referenceTables: z.array(z.unknown()).optional().describe(
+          "Reference tables for the rule.",
+        ),
+        schedulingOptions: z.unknown().optional(),
+        tags: z.array(z.string()).optional().describe(
+          "Tags for generated signals.",
+        ),
+        thirdPartyCases: z.array(z.unknown()).optional().describe(
+          "Cases for generating signals from third-party rules. Only available for third...",
+        ),
+        type: z.unknown().optional(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -460,14 +519,15 @@ export const model = {
           body,
         );
 
+        const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
-          "suppressions_affecting_future_rule",
-          "latest",
-          result ?? {},
+          "get_suppressions_affecting_future_rule",
+          id,
+          result,
         );
         context.logger.info(
-          "Executed get_suppressions_affecting_future_rule",
-          {},
+          "Created get_suppressions_affecting_future_rule {id}",
+          { id },
         );
         return { dataHandles: [handle] };
       },
@@ -502,7 +562,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/security_monitoring/configuration/suppressions/rules/${args.rule_id}`,
+          `/api/v2/security_monitoring/configuration/suppressions/rules/${
+            encodeURIComponent(String(args.rule_id))
+          }`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -532,7 +594,33 @@ export const model = {
     },
     validate_security_monitoring_suppression: {
       description: "Validate a suppression rule",
-      arguments: z.object({}),
+      arguments: z.object({
+        data_exclusion_query: z.string().optional().describe(
+          "An exclusion query on the input data of the security rules, which could be lo...",
+        ),
+        description: z.string().optional().describe(
+          "A description for the suppression rule.",
+        ),
+        enabled: z.boolean().describe(
+          "Whether the suppression rule is enabled.",
+        ),
+        expiration_date: z.number().int().optional().describe(
+          "A Unix millisecond timestamp giving an expiration date for the suppression ru...",
+        ),
+        name: z.string().describe("The name of the suppression rule."),
+        rule_query: z.string().describe(
+          "The rule query of the suppression rule, with the same syntax as the search ba...",
+        ),
+        start_date: z.number().int().optional().describe(
+          "A Unix millisecond timestamp giving the start date for the suppression rule. ...",
+        ),
+        suppression_query: z.string().optional().describe(
+          "The suppression query of the suppression rule. If a signal matches this query...",
+        ),
+        tags: z.array(z.string()).optional().describe(
+          "List of tags associated with the suppression rule.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -548,11 +636,12 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "suppressions", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -601,7 +690,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/security_monitoring/configuration/suppressions/${args.suppression_id}`,
+          `/api/v2/security_monitoring/configuration/suppressions/${
+            encodeURIComponent(String(args.suppression_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -617,6 +708,36 @@ export const model = {
       description: "Update a suppression rule",
       arguments: z.object({
         suppression_id: z.string().describe("The ID of the suppression rule"),
+        data_exclusion_query: z.string().optional().describe(
+          "An exclusion query on the input data of the security rules, which could be lo...",
+        ),
+        description: z.string().optional().describe(
+          "A description for the suppression rule.",
+        ),
+        enabled: z.boolean().optional().describe(
+          "Whether the suppression rule is enabled.",
+        ),
+        expiration_date: z.number().int().nullable().optional().describe(
+          "A Unix millisecond timestamp giving an expiration date for the suppression ru...",
+        ),
+        name: z.string().optional().describe(
+          "The name of the suppression rule.",
+        ),
+        rule_query: z.string().optional().describe(
+          "The rule query of the suppression rule, with the same syntax as the search ba...",
+        ),
+        start_date: z.number().int().nullable().optional().describe(
+          "A Unix millisecond timestamp giving the start date for the suppression rule. ...",
+        ),
+        suppression_query: z.string().optional().describe(
+          "The suppression query of the suppression rule. If a signal matches this query...",
+        ),
+        tags: z.array(z.string()).optional().describe(
+          "List of tags associated with the suppression rule.",
+        ),
+        version: z.number().int().max(2147483647).optional().describe(
+          "The current version of the suppression. This is optional, but it can help pre...",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -633,18 +754,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["suppression_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "suppressions", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/security_monitoring/configuration/suppressions/${args.suppression_id}`,
+          `/api/v2/security_monitoring/configuration/suppressions/${
+            encodeURIComponent(String(args.suppression_id))
+          }`,
           body,
         );
 
@@ -682,7 +806,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/security_monitoring/configuration/suppressions/${args.suppression_id}`,
+          `/api/v2/security_monitoring/configuration/suppressions/${
+            encodeURIComponent(String(args.suppression_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", {
@@ -721,7 +847,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/security_monitoring/configuration/suppressions/${args.suppression_id}/version_history`,
+          `/api/v2/security_monitoring/configuration/suppressions/${
+            encodeURIComponent(String(args.suppression_id))
+          }/version_history`,
           {
             "style": "page_number",
             "limitParam": "page[size]",

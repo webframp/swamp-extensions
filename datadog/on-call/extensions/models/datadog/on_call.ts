@@ -176,7 +176,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -251,6 +251,18 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
+        name: z.string().min(1).describe(
+          "Specifies the name for the new escalation policy.",
+        ),
+        resolve_page_on_policy_end: z.boolean().optional().describe(
+          "Indicates whether the page is automatically resolved when the policy ends.",
+        ),
+        retries: z.number().int().min(0).max(10).optional().describe(
+          "Specifies how many times the escalation sequence is retried if there is no re...",
+        ),
+        steps: z.array(z.unknown()).describe(
+          "A list of escalation steps, each defining assignment, escalation timeout, and...",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -267,18 +279,28 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && ["include"].includes(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["include"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "policies", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/on-call/escalation-policies`,
+          `/api/v2/on-call/escalation-policies${qs}`,
           body,
         );
 
@@ -331,7 +353,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/on-call/escalation-policies/${args.policy_id}${qs}`,
+          `/api/v2/on-call/escalation-policies/${
+            encodeURIComponent(String(args.policy_id))
+          }${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -350,6 +374,18 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
+        name: z.string().min(1).describe(
+          "Specifies the name of the escalation policy.",
+        ),
+        resolve_page_on_policy_end: z.boolean().optional().describe(
+          "Indicates whether the page is automatically resolved when the policy ends.",
+        ),
+        retries: z.number().int().min(0).max(10).optional().describe(
+          "Specifies how many times the escalation sequence is retried if there is no re...",
+        ),
+        steps: z.array(z.unknown()).describe(
+          "A list of escalation steps, each defining assignment, escalation timeout, and...",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -366,18 +402,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id", "include"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "policies", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/on-call/escalation-policies/${args.policy_id}`,
+          `/api/v2/on-call/escalation-policies/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
           body,
         );
 
@@ -415,7 +454,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/on-call/escalation-policies/${args.policy_id}`,
+          `/api/v2/on-call/escalation-policies/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });
@@ -427,6 +468,15 @@ export const model = {
       arguments: z.object({
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
+        ),
+        layers: z.array(z.unknown()).describe(
+          "The layers of On-Call coverage that define rotation intervals and restrictions.",
+        ),
+        name: z.string().describe(
+          "A human-readable name for the new schedule.",
+        ),
+        time_zone: z.string().describe(
+          "The time zone in which the schedule is defined.",
         ),
       }),
       execute: async (
@@ -444,18 +494,28 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && ["include"].includes(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["include"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "schedules", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/on-call/schedules`,
+          `/api/v2/on-call/schedules${qs}`,
           body,
         );
 
@@ -508,7 +568,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/on-call/schedules/${args.schedule_id}${qs}`,
+          `/api/v2/on-call/schedules/${
+            encodeURIComponent(String(args.schedule_id))
+          }${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -527,6 +589,13 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
+        layers: z.array(z.unknown()).describe(
+          "The updated list of layers (rotations) for this schedule.",
+        ),
+        name: z.string().describe("A short name for the schedule."),
+        time_zone: z.string().describe(
+          "The time zone used when interpreting rotation times.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -543,18 +612,21 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["schedule_id", "include"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = { data: { type: "schedules", attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/on-call/schedules/${args.schedule_id}`,
+          `/api/v2/on-call/schedules/${
+            encodeURIComponent(String(args.schedule_id))
+          }`,
           body,
         );
 
@@ -592,7 +664,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/on-call/schedules/${args.schedule_id}`,
+          `/api/v2/on-call/schedules/${
+            encodeURIComponent(String(args.schedule_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.schedule_id });
@@ -644,7 +718,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/on-call/schedules/${args.schedule_id}/responders${qs}`,
+          `/api/v2/on-call/schedules/${
+            encodeURIComponent(String(args.schedule_id))
+          }/responders${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -695,7 +771,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/on-call/teams/${args.team_id}/on-call${qs}`,
+          `/api/v2/on-call/teams/${
+            encodeURIComponent(String(args.team_id))
+          }/on-call${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -746,7 +824,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/on-call/teams/${args.team_id}/routing-rules${qs}`,
+          `/api/v2/on-call/teams/${
+            encodeURIComponent(String(args.team_id))
+          }/routing-rules${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -765,6 +845,9 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
+        rules: z.array(z.unknown()).optional().describe(
+          "A list of routing rule items that define how incoming pages should be handled.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -781,18 +864,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "include"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "team_routing_rules", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/on-call/teams/${args.team_id}/routing-rules`,
+          `/api/v2/on-call/teams/${
+            encodeURIComponent(String(args.team_id))
+          }/routing-rules`,
           body,
         );
 
@@ -835,7 +923,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/on-call/users/${args.user_id}/notification-channels`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-channels`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -867,6 +957,9 @@ export const model = {
       description: "Create an On-Call notification channel for a user",
       arguments: z.object({
         user_id: z.string().describe("The user ID"),
+        config: z.unknown().optional().describe(
+          "Notification channel configuration",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -883,18 +976,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "notification_channels", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/on-call/users/${args.user_id}/notification-channels`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-channels`,
           body,
         );
 
@@ -934,7 +1032,11 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/on-call/users/${args.user_id}/notification-channels/${args.channel_id}`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-channels/${
+            encodeURIComponent(String(args.channel_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -972,7 +1074,11 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/on-call/users/${args.user_id}/notification-channels/${args.channel_id}`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-channels/${
+            encodeURIComponent(String(args.channel_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.channel_id });
@@ -1012,7 +1118,9 @@ export const model = {
           apiKey,
           appKey,
           site,
-          `/api/v2/on-call/users/${args.user_id}/notification-rules`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-rules`,
           { "style": "none", "limitParam": "", "limitDefault": 0 },
           params,
         );
@@ -1044,6 +1152,13 @@ export const model = {
       description: "Create an On-Call notification rule for a user",
       arguments: z.object({
         user_id: z.string().describe("The user ID"),
+        category: z.unknown().optional(),
+        channel_settings: z.unknown().nullable().optional().describe(
+          "Configuration for the associated channel, if necessary",
+        ),
+        delay_minutes: z.number().int().optional().describe(
+          "The number of minutes that will elapse before this rule is evaluated. 0 indic...",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1060,18 +1175,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "notification_rules", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "POST",
-          `/api/v2/on-call/users/${args.user_id}/notification-rules`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-rules`,
           body,
         );
 
@@ -1125,7 +1245,11 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/on-call/users/${args.user_id}/notification-rules/${args.rule_id}${qs}`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-rules/${
+            encodeURIComponent(String(args.rule_id))
+          }${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -1145,6 +1269,13 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
+        category: z.unknown().optional(),
+        channel_settings: z.unknown().nullable().optional().describe(
+          "Configuration for the associated channel, if necessary",
+        ),
+        delay_minutes: z.number().int().optional().describe(
+          "The number of minutes that will elapse before this rule is evaluated. 0 indic...",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1161,18 +1292,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id", "rule_id", "include"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "notification_rules", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PUT",
-          `/api/v2/on-call/users/${args.user_id}/notification-rules/${args.rule_id}`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-rules/${encodeURIComponent(String(args.rule_id))}`,
           body,
         );
 
@@ -1211,7 +1347,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/on-call/users/${args.user_id}/notification-rules/${args.rule_id}`,
+          `/api/v2/on-call/users/${
+            encodeURIComponent(String(args.user_id))
+          }/notification-rules/${encodeURIComponent(String(args.rule_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.rule_id });

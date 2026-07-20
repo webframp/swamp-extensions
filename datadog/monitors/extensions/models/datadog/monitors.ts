@@ -124,7 +124,7 @@ const CreateMonitorConfigPolicySchema = z.object({
 /** Datadog Monitors — monitor definitions, muting, status, and downtime management */
 export const model = {
   type: "@webframp/datadog/monitors",
-  version: "2026.07.19.6",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -230,7 +230,12 @@ export const model = {
     },
     create_monitor_notification_rule: {
       description: "Create a monitor notification rule",
-      arguments: z.object({}),
+      arguments: z.object({
+        conditional_recipients: z.unknown().optional(),
+        filter: z.unknown().optional(),
+        name: z.unknown(),
+        recipients: z.unknown().optional(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -246,11 +251,14 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "monitor-notification-rule", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
@@ -312,7 +320,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/monitor/notification_rule/${args.rule_id}${qs}`,
+          `/api/v2/monitor/notification_rule/${
+            encodeURIComponent(String(args.rule_id))
+          }${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -330,6 +340,10 @@ export const model = {
         rule_id: z.string().describe(
           "ID of the monitor notification rule to update.",
         ),
+        conditional_recipients: z.unknown().optional(),
+        filter: z.unknown().optional(),
+        name: z.unknown(),
+        recipients: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -346,18 +360,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "monitor-notification-rule", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/monitor/notification_rule/${args.rule_id}`,
+          `/api/v2/monitor/notification_rule/${
+            encodeURIComponent(String(args.rule_id))
+          }`,
           body,
         );
 
@@ -397,7 +416,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/monitor/notification_rule/${args.rule_id}`,
+          `/api/v2/monitor/notification_rule/${
+            encodeURIComponent(String(args.rule_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.rule_id });
@@ -462,7 +483,10 @@ export const model = {
     },
     create_monitor_config_policy: {
       description: "Create a monitor configuration policy",
-      arguments: z.object({}),
+      arguments: z.object({
+        policy: z.unknown(),
+        policy_type: z.unknown(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -478,11 +502,14 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "monitor-config-policy", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
@@ -530,7 +557,9 @@ export const model = {
           appKey,
           site,
           "GET",
-          `/api/v2/monitor/policy/${args.policy_id}`,
+          `/api/v2/monitor/policy/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -548,6 +577,8 @@ export const model = {
         policy_id: z.string().describe(
           "ID of the monitor configuration policy.",
         ),
+        policy: z.unknown(),
+        policy_type: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -564,18 +595,23 @@ export const model = {
         },
       ) => {
         const { apiKey, appKey, site } = context.globalArgs;
-        const body: Record<string, unknown> = {};
+        const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (!excludeKeys.has(k)) attrs[k] = v;
         }
+        const body = {
+          data: { type: "monitor-config-policy", attributes: attrs },
+        };
 
         const result = await ddApi(
           apiKey,
           appKey,
           site,
           "PATCH",
-          `/api/v2/monitor/policy/${args.policy_id}`,
+          `/api/v2/monitor/policy/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
           body,
         );
 
@@ -615,7 +651,9 @@ export const model = {
           appKey,
           site,
           "DELETE",
-          `/api/v2/monitor/policy/${args.policy_id}`,
+          `/api/v2/monitor/policy/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });

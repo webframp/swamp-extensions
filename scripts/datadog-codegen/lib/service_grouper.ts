@@ -45,6 +45,10 @@ export interface GroupedOperation {
   queryParams: ParameterObject[];
   /** Resolved request body schema */
   requestBody?: SchemaObject;
+  /** Whether the request body uses JSON:API envelope ({data: {type, attributes}}) */
+  requestBodyIsJsonApi: boolean;
+  /** The JSON:API type value for request bodies (e.g., "team", "downtime") */
+  requestBodyType?: string;
   /** Resolved success response schema */
   responseSchema?: SchemaObject;
   /** Whether the response is a collection (array in data) */
@@ -222,12 +226,48 @@ function extractOperation(
     uniqueQuery,
   );
 
-  // Extract request body schema
+  // Extract request body schema — unwrap JSON:API envelope if present
   let requestBody: SchemaObject | undefined;
+  let requestBodyIsJsonApi = false;
+  let requestBodyType: string | undefined;
   if (operation.requestBody?.content) {
     const jsonContent = operation.requestBody.content["application/json"];
     if (jsonContent?.schema) {
-      requestBody = resolveSchema(spec, jsonContent.schema);
+      const fullBody = resolveSchema(spec, jsonContent.schema);
+
+      // Check for JSON:API pattern: {data: {type, attributes: {...}}}
+      if (fullBody.properties?.data) {
+        const dataSchema = resolveSchema(spec, fullBody.properties.data);
+        if (dataSchema.properties?.attributes) {
+          // Unwrap: expose attributes fields as the user-facing schema
+          const attrsSchema = resolveSchema(
+            spec,
+            dataSchema.properties.attributes,
+          );
+          requestBody = attrsSchema;
+          requestBodyIsJsonApi = true;
+          // Extract the type enum/const if available
+          if (dataSchema.properties?.type) {
+            const typeSchema = resolveSchema(spec, dataSchema.properties.type);
+            if (typeSchema.enum && typeSchema.enum.length > 0) {
+              requestBodyType = String(typeSchema.enum[0]);
+            }
+          }
+        } else {
+          // data exists but no attributes — use data's properties directly
+          requestBody = dataSchema;
+          requestBodyIsJsonApi = true;
+        }
+      } else if (
+        fullBody.properties && Object.keys(fullBody.properties).length > 0
+      ) {
+        // Flat body — use as-is
+        requestBody = fullBody;
+      } else if (fullBody.oneOf && fullBody.oneOf.length > 0) {
+        // oneOf — take the first variant's properties
+        const first = resolveSchema(spec, fullBody.oneOf[0]);
+        requestBody = first;
+      }
     }
   }
 
@@ -249,6 +289,8 @@ function extractOperation(
     pathParams,
     queryParams,
     requestBody,
+    requestBodyIsJsonApi,
+    requestBodyType,
     responseSchema,
     isCollection,
     isJsonApi,
