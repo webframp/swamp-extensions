@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/snyk/service-accounts"
+version: "2026.07.19.1"
+description: "Snyk Service Accounts — automated access management for CI/CD"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - snyk/service_accounts.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - snyk
+  - service-accounts
+  - ci-cd
+  - automation

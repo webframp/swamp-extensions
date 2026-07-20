@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/snyk/self"
+version: "2026.07.19.1"
+description: "Snyk Self — current user context, org listing, and app management"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - snyk/self.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - snyk
+  - self
+  - user
+  - account

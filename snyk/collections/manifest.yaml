@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@webframp/snyk/collections"
+version: "2026.07.19.1"
+description: "Snyk Collections — project collection groupings and management"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - snyk/collections.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - snyk
+  - collections
+  - organization
