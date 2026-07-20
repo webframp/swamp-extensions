@@ -99,7 +99,7 @@ const GetChannelNameByIdSchema = z.object({
 /** Snyk Slack Integration — Slack app configuration and channel management */
 export const model = {
   type: "@webframp/snyk/slack",
-  version: "2026.07.19.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -213,7 +213,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_slack_default_notification_settings",
+          "slack_default_notification_settings",
           "latest",
           result ?? {},
         );
@@ -352,7 +352,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_slack_project_notification_settings",
+          "slack_project_notification_settings",
           "latest",
           result ?? {},
         );
