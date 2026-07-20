@@ -225,7 +225,7 @@ export async function ddApi(
 
   // 429 rate limit: read Retry-After, wait, retry once
   if (response.status === 429) {
-    const retryAfter = parseInt(response.headers.get("Retry-After") ?? "5", 10);
+    const retryAfter = Math.min(parseInt(response.headers.get("Retry-After") ?? "5", 10), 60);
     await response.body?.cancel();
     await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
     response = await fetch(url, {
@@ -321,7 +321,7 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get("Retry-After") ?? "5", 10);
+        const retryAfter = Math.min(parseInt(response.headers.get("Retry-After") ?? "5", 10), 60);
         await response.body?.cancel();
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         response = await fetch(url, { headers });
@@ -370,7 +370,7 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get("Retry-After") ?? "5", 10);
+        const retryAfter = Math.min(parseInt(response.headers.get("Retry-After") ?? "5", 10), 60);
         await response.body?.cancel();
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         response = await fetch(url, { headers });
@@ -419,7 +419,7 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get("Retry-After") ?? "5", 10);
+        const retryAfter = Math.min(parseInt(response.headers.get("Retry-After") ?? "5", 10), 60);
         await response.body?.cancel();
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         response = await fetch(url, { headers });
@@ -460,7 +460,7 @@ export async function ddApiPaginated(
 
     // 429 retry
     if (response.status === 429) {
-      const retryAfter = parseInt(response.headers.get("Retry-After") ?? "5", 10);
+      const retryAfter = Math.min(parseInt(response.headers.get("Retry-After") ?? "5", 10), 60);
       await response.body?.cancel();
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
       response = await fetch(url, { headers });
@@ -529,7 +529,10 @@ function extractItems(json: unknown): Record<string, unknown>[] {
   }
 
   // Fallback: scan all top-level keys for the first array value
-  for (const [_key, value] of Object.entries(obj)) {
+  // Skip known metadata keys that are not data arrays
+  const metadataKeys = new Set(["warnings", "errors", "included", "links", "meta"]);
+  for (const [key, value] of Object.entries(obj)) {
+    if (metadataKeys.has(key)) continue;
     if (Array.isArray(value) && value.length > 0) {
       return value as Record<string, unknown>[];
     }
@@ -614,7 +617,7 @@ export async function ddApiPostPaginated(
 
     // 429 retry
     if (response.status === 429) {
-      const retryAfter = parseInt(response.headers.get("Retry-After") ?? "5", 10);
+      const retryAfter = Math.min(parseInt(response.headers.get("Retry-After") ?? "5", 10), 60);
       await response.body?.cancel();
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
       response = await fetch(url, {

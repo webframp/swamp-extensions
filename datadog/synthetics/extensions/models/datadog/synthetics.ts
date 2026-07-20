@@ -981,7 +981,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.07.20.10",
+  version: "2026.07.20.11",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1184,8 +1184,8 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -1247,8 +1247,8 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -1319,8 +1319,8 @@ export const model = {
         };
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = paramNameMap[k] ?? k;
-            params[apiKey] = String(v);
+            const paramKey = paramNameMap[k] ?? k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -2076,8 +2076,8 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -2467,8 +2467,8 @@ export const model = {
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -2746,8 +2746,8 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -2825,8 +2825,8 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -2951,8 +2951,8 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 

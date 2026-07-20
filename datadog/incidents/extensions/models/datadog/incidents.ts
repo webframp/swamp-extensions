@@ -100,7 +100,7 @@ const CreateIncidentImpactSchema = z.object({
 /** Datadog Incidents — incident lifecycle, timelines, teams, and attachments */
 export const model = {
   type: "@webframp/datadog/incidents",
-  version: "2026.07.20.10",
+  version: "2026.07.20.11",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -148,8 +148,8 @@ export const model = {
         const excludeKeys = new Set<string>(["incident_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 

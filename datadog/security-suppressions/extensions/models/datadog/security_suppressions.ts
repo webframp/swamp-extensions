@@ -277,7 +277,7 @@ const GetSuppressionVersionHistorySchema = z.object({
 /** Datadog Security Suppressions — suppression rule management */
 export const model = {
   type: "@webframp/datadog/security-suppressions",
-  version: "2026.07.20.10",
+  version: "2026.07.20.11",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -349,8 +349,8 @@ export const model = {
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -576,8 +576,8 @@ export const model = {
         const excludeKeys = new Set<string>(["rule_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -864,8 +864,8 @@ export const model = {
         const excludeKeys = new Set<string>(["suppression_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 

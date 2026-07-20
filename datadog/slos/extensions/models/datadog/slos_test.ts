@@ -30,7 +30,6 @@ Deno.test("slos model: has globalArguments with apiKey and appKey", () => {
 Deno.test("slos model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.create_slo_report_job);
-  assertExists(model.methods.get_slo_report);
   assertExists(model.methods.get_slo_report_job_status);
   assertExists(model.methods.get_slo_status);
 });
@@ -38,7 +37,6 @@ Deno.test("slos model: has expected methods", () => {
 Deno.test("slos model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["slo_report_job"]);
-  assertExists(model.resources["slo_report"]);
   assertExists(model.resources["slo_report_job_status"]);
   assertExists(model.resources["slo_status"]);
 });
@@ -134,12 +132,20 @@ Deno.test({
 });
 
 Deno.test({
-  name: "slos model: get_slo_report fetches and writes resource",
+  name: "slos model: get_slo_report_job_status fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
-      "/test-id-123/download": { body: { "id": "fixture-123" } },
+      "/test-id-123/status": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": { "status": "completed" },
+          },
+        },
+      },
     });
     const uninstall = installFetchMock(url);
 
@@ -161,7 +167,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_slo_report.execute({ "report_id": "test-id-123" }, context);
+      >).get_slo_report_job_status.execute(
+        { "report_id": "test-id-123" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

@@ -21,7 +21,6 @@ swamp model create @webframp/datadog/slos dd-slos \
 | Method                      | Description             |
 | --------------------------- | ----------------------- |
 | `create_slo_report_job`     | Create a new SLO report |
-| `get_slo_report`            | Get SLO report          |
 | `get_slo_report_job_status` | Get SLO report status   |
 | `get_slo_status`            | Get SLO status          |
 

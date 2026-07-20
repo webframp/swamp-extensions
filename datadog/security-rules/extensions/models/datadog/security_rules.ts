@@ -68,7 +68,7 @@ const TestExistingSecurityMonitoringRuleSchema = z.object({
 /** Datadog Security Rules — detection rule CRUD and management */
 export const model = {
   type: "@webframp/datadog/security-rules",
-  version: "2026.07.20.10",
+  version: "2026.07.20.11",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -86,21 +86,9 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "bulk_export_security_monitoring_rules": {
-      description: "Bulk export security monitoring rules",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "convert_security_monitoring_rule_from_json_to_terraform": {
       description: "Convert a rule from JSON to Terraform",
       schema: ConvertSecurityMonitoringRuleFromJsonToTerraformSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "bulk_convert_existing_security_monitoring_rules": {
-      description: "Bulk convert rules to Terraform",
-      schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -160,8 +148,8 @@ export const model = {
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -309,62 +297,6 @@ export const model = {
         return { dataHandles: [] };
       },
     },
-    bulk_export_security_monitoring_rules: {
-      description: "Bulk export security monitoring rules",
-      arguments: z.object({
-        ruleIds: z.array(z.string()).describe(
-          "List of rule IDs to export. Each rule will be included in the resulting ZIP f...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiKey, appKey, site } = context.globalArgs;
-        const attrs: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) attrs[k] = v;
-        }
-        const body = {
-          data: {
-            type: "security_monitoring_rules_bulk_export",
-            attributes: attrs,
-          },
-        };
-
-        const result = await ddApi(
-          apiKey,
-          appKey,
-          site,
-          "POST",
-          `/api/v2/security_monitoring/rules/bulk_export`,
-          body,
-        );
-
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource(
-          "bulk_export_security_monitoring_rules",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created bulk_export_security_monitoring_rules {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     convert_security_monitoring_rule_from_json_to_terraform: {
       description: "Convert a rule from JSON to Terraform",
       arguments: z.object({
@@ -444,62 +376,6 @@ export const model = {
         );
         context.logger.info(
           "Created convert_security_monitoring_rule_from_json_to_terraform {id}",
-          { id },
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    bulk_convert_existing_security_monitoring_rules: {
-      description: "Bulk convert rules to Terraform",
-      arguments: z.object({
-        ruleIds: z.array(z.string()).describe(
-          "List of rule IDs to convert. Each rule will be included in the resulting ZIP ...",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiKey, appKey, site } = context.globalArgs;
-        const attrs: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) attrs[k] = v;
-        }
-        const body = {
-          data: {
-            type: "security_monitoring_rules_convert_bulk",
-            attributes: attrs,
-          },
-        };
-
-        const result = await ddApi(
-          apiKey,
-          appKey,
-          site,
-          "POST",
-          `/api/v2/security_monitoring/rules/convert/bulk`,
-          body,
-        );
-
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource(
-          "bulk_convert_existing_security_monitoring_rules",
-          id,
-          result,
-        );
-        context.logger.info(
-          "Created bulk_convert_existing_security_monitoring_rules {id}",
           { id },
         );
         return { dataHandles: [handle] };

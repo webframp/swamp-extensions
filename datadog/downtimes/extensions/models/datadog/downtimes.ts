@@ -139,7 +139,7 @@ const ListMonitorDowntimesSchema = z.object({
 /** Datadog Downtimes — scheduled downtime management for monitors */
 export const model = {
   type: "@webframp/datadog/downtimes",
-  version: "2026.07.20.10",
+  version: "2026.07.20.11",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -195,8 +195,8 @@ export const model = {
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 
@@ -445,8 +445,8 @@ export const model = {
         const excludeKeys = new Set<string>(["monitor_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = k;
-            params[apiKey] = String(v);
+            const paramKey = k;
+            params[paramKey] = String(v);
           }
         }
 

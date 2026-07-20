@@ -1,4 +1,4 @@
-## 2026.07.20.10
+## 2026.07.20.11
 
 **Added:** Initial code-generated release of @webframp/datadog/synthetics with
 35 methods covering the Datadog synthetics API surface.

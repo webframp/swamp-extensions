@@ -552,8 +552,8 @@ ${indent}    const excludeKeys = new Set<string>(${
   }
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (v !== undefined && !excludeKeys.has(k)) {
-${indent}        const apiKey = ${hasParamMap ? "paramNameMap[k] ?? k" : "k"};
-${indent}        params[apiKey] = String(v);
+${indent}        const paramKey = ${hasParamMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        params[paramKey] = String(v);
 ${indent}      }
 ${indent}    }
 ${indent}

@@ -71,7 +71,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.07.20.10",
+  version: "2026.07.20.11",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -80,12 +80,6 @@ export const model = {
     "slo_report_job": {
       description: "Create a new SLO report",
       schema: CreateSloReportJobSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "slo_report": {
-      description: "Get SLO report",
-      schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -159,45 +153,6 @@ export const model = {
           result,
         );
         context.logger.info("Created slo_report_job {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_slo_report: {
-      description: "Get SLO report",
-      arguments: z.object({
-        report_id: z.string().describe("The ID of the report job."),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiKey, appKey, site } = context.globalArgs;
-        const result = await ddApi(
-          apiKey,
-          appKey,
-          site,
-          "GET",
-          `/api/v2/slo/report/${
-            encodeURIComponent(String(args.report_id))
-          }/download`,
-        );
-
-        const handle = await context.writeResource(
-          "slo_report",
-          String(args.report_id),
-          result,
-        );
-        context.logger.info("Fetched slo_report", {});
         return { dataHandles: [handle] };
       },
     },

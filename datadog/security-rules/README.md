@@ -23,9 +23,7 @@ swamp model create @webframp/datadog/security-rules dd-security-rules \
 | `list_security_monitoring_rules`                          | List rules                                      |
 | `create_security_monitoring_rule`                         | Create a detection rule                         |
 | `bulk_delete_security_monitoring_rules`                   | Bulk delete security monitoring rules           |
-| `bulk_export_security_monitoring_rules`                   | Bulk export security monitoring rules           |
 | `convert_security_monitoring_rule_from_json_to_terraform` | Convert a rule from JSON to Terraform           |
-| `bulk_convert_existing_security_monitoring_rules`         | Bulk convert rules to Terraform                 |
 | `test_security_monitoring_rule`                           | Test a rule                                     |
 | `validate_security_monitoring_rule`                       | Validate a detection rule                       |
 | `get_security_monitoring_rule`                            | Get a rule's details                            |

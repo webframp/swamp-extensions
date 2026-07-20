@@ -192,6 +192,9 @@ function extractOperation(
   pathLevelParams: ParameterObject[],
   service: ServiceConfig,
 ): GroupedOperation | null {
+  // Skip endpoints whose success response is non-JSON (CSV, binary, etc.)
+  if (hasNonJsonResponse(operation)) return null;
+
   // Resolve all parameters (may contain $refs)
   const opParams = resolveParams(
     spec,
@@ -464,4 +467,20 @@ function flattenJsonApiItem(
     properties,
     required: required.length > 0 ? required : undefined,
   };
+}
+
+/**
+ * Detect if an operation's success response is exclusively non-JSON.
+ * Skips endpoints returning CSV, binary, XML, etc.
+ */
+function hasNonJsonResponse(operation: OperationObject): boolean {
+  if (!operation.responses) return false;
+  for (const code of ["200", "201", "202"]) {
+    const resp = operation.responses[code] as ResponseObject | undefined;
+    if (!resp?.content) continue;
+    const contentTypes = Object.keys(resp.content);
+    const hasJson = contentTypes.some((t) => t.includes("json"));
+    if (!hasJson && contentTypes.length > 0) return true;
+  }
+  return false;
 }

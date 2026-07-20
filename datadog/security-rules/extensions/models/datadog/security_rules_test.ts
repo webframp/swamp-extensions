@@ -32,11 +32,9 @@ Deno.test("security-rules model: has expected methods", () => {
   assertExists(model.methods.list_security_monitoring_rules);
   assertExists(model.methods.create_security_monitoring_rule);
   assertExists(model.methods.bulk_delete_security_monitoring_rules);
-  assertExists(model.methods.bulk_export_security_monitoring_rules);
   assertExists(
     model.methods.convert_security_monitoring_rule_from_json_to_terraform,
   );
-  assertExists(model.methods.bulk_convert_existing_security_monitoring_rules);
   assertExists(model.methods.test_security_monitoring_rule);
   assertExists(model.methods.validate_security_monitoring_rule);
   assertExists(model.methods.get_security_monitoring_rule);
@@ -50,12 +48,8 @@ Deno.test("security-rules model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["security_monitoring_rules"]);
   assertExists(model.resources["security_monitoring_rule"]);
-  assertExists(model.resources["bulk_export_security_monitoring_rules"]);
   assertExists(
     model.resources["convert_security_monitoring_rule_from_json_to_terraform"],
-  );
-  assertExists(
-    model.resources["bulk_convert_existing_security_monitoring_rules"],
   );
   assertExists(model.resources["test_security_monitoring_rule"]);
   assertExists(model.resources["validate_security_monitoring_rule"]);

@@ -100,7 +100,7 @@ const ListLogsSchema = z.object({
 /** Datadog Logs — log search, aggregation, and analytics */
 export const model = {
   type: "@webframp/datadog/logs",
-  version: "2026.07.20.10",
+  version: "2026.07.20.11",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -282,8 +282,8 @@ export const model = {
         };
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
-            const apiKey = paramNameMap[k] ?? k;
-            params[apiKey] = String(v);
+            const paramKey = paramNameMap[k] ?? k;
+            params[paramKey] = String(v);
           }
         }
 
