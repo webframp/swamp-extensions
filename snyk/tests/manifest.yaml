@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/snyk/tests"
+version: "2026.07.19.1"
+description: "Snyk Tests — on-demand package and dependency vulnerability testing"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - snyk/tests.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - snyk
+  - tests
+  - scanning
+  - vulnerabilities
