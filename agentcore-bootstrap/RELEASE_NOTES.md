@@ -1,11 +1,9 @@
-## 2026.07.18.1
+## 2026.07.20.1
 
-**Added:** An `upgrades` array entry (no-op) to `provisioner.ts` for proper
-`typeVersion` tracking on existing instances. No schema or behavior changes.
+**Changed:** Pinned the previously unpinned dependencies to exact versions for
+reproducible builds. No behavioral or schema changes to the provisioner model or
+bootstrap workflow.
 
-## 2026.07.16.2
-
-**Fixed:** `2026.07.16.1` published successfully but the registry's
-`latestVersion` never advanced to it (filed as swamp Lab #1195) —
-`swamp extension pull` was still resolving `2026.06.23.1`. This bump re-triggers
-the publish. No content change beyond the previous release.
+**Upgrade note:** Now pins `@webframp/container-image@2026.07.13.1` and
+`@webframp/agentcore@2026.07.13.1`. Both are pulled automatically with this
+extension.

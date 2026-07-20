@@ -1,7 +1,8 @@
-## 2026.07.18.1
+## 2026.07.20.1
 
-**Changed:** Version bump only, no code changes.
+**Changed:** Refreshed dependency pins to the latest published releases. No
+behavioral changes to the cost-audit workflow or report.
 
-## 2026.07.16.1
-
-**Changed:** README and LICENSE reformatted (deno fmt) in PR #134; this is the first version bump to publish that formatting to the registry. No functional or behavioral change.
+**Upgrade note:** Bumps `@webframp/aws/cost-explorer`, `@webframp/aws/networking`,
+and `@webframp/aws/inventory` 2026.05.20.1 → 2026.07.18.1, pulled automatically
+with this extension.

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/redmine-kanban"
-version: "2026.07.18.1"
+version: "2026.07.20.1"
 description: |
   Kanban workflow reports and automation for Redmine.
 
@@ -44,4 +44,4 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/redmine@2026.04.30.2"
+  - "@webframp/redmine@2026.07.09.1"

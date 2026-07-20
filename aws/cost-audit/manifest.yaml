@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws-cost-audit"
-version: "2026.07.18.1"
+version: "2026.07.20.1"
 description: |
   AWS cost audit workflow — identifies infrastructure waste by combining
   Cost Explorer spend data, resource inventory, and networking inspection.
@@ -49,6 +49,6 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/aws/cost-explorer@2026.05.20.1"
-  - "@webframp/aws/networking@2026.05.20.1"
-  - "@webframp/aws/inventory@2026.05.20.1"
+  - "@webframp/aws/cost-explorer@2026.07.18.1"
+  - "@webframp/aws/networking@2026.07.18.1"
+  - "@webframp/aws/inventory@2026.07.18.1"
