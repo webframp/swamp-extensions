@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -135,7 +135,7 @@ const CreateSecurityMonitoringSuppressionSchema = z.object({
   ),
 });
 
-const GetSuppressionsAffectingFutureRuleSchema = z.object({
+const SuppressionsAffectingFutureRuleItemSchema = z.object({
   id: z.string().describe("The ID of the suppression rule."),
   type: z.enum(["suppressions"]).optional().describe(
     "The type of the resource. The value should always be `suppressions`.",
@@ -185,6 +185,12 @@ const GetSuppressionsAffectingFutureRuleSchema = z.object({
   version: z.number().int().max(2147483647).optional().describe(
     "The version of the suppression rule; it starts at 1, and is incremented at each update.",
   ),
+});
+
+const GetSuppressionsAffectingFutureRuleSchema = z.object({
+  items: z.array(SuppressionsAffectingFutureRuleItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
 });
 
 const SuppressionsAffectingRuleItemSchema = z.object({
@@ -271,7 +277,7 @@ const GetSuppressionVersionHistorySchema = z.object({
 /** Datadog Security Suppressions — suppression rule management */
 export const model = {
   type: "@webframp/datadog/security-suppressions",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -293,7 +299,7 @@ export const model = {
       description: "Get suppressions affecting future rule",
       schema: GetSuppressionsAffectingFutureRuleSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
     "suppressions_affecting_rule": {
       description: "Get suppressions affecting a specific rule",
@@ -507,27 +513,38 @@ export const model = {
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await ddApi(
+        const { results, truncated } = await ddApiPostPaginated(
           apiKey,
           appKey,
           site,
-          "POST",
           `/api/v2/security_monitoring/configuration/suppressions/rules`,
           body,
+          "meta.page.after",
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
         const handle = await context.writeResource(
-          "get_suppressions_affecting_future_rule",
-          id,
-          result,
+          "suppressions_affecting_future_rule",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          },
         );
+
         context.logger.info(
-          "Created get_suppressions_affecting_future_rule {id}",
-          { id },
+          "Found {count} suppressions_affecting_future_rule",
+          { count: results.length },
         );
         return { dataHandles: [handle] };
       },

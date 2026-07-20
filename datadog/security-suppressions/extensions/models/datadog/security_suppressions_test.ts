@@ -259,6 +259,84 @@ Deno.test({
 
 Deno.test({
   name:
+    "security-suppressions model: get_suppressions_affecting_future_rule fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockDdServer({
+      "/suppressions/rules": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "creation_date": 1,
+              "creator": {
+                "handle": "john.doe@datadoghq.com",
+                "name": "John Doe",
+              },
+              "data_exclusion_query": "source:cloudtrail account_id:12345",
+              "description":
+                "This rule suppresses low-severity signals in staging environments.",
+              "editable": true,
+              "enabled": true,
+              "expiration_date": 1703187336000,
+              "name": "Custom suppression",
+              "rule_query": "type:log_detection source:cloudtrail",
+              "start_date": 1703187336000,
+              "suppression_query": "env:staging status:low",
+              "tags": ["technique:T1110-brute-force", "source:cloudtrail"],
+              "update_date": 1,
+              "updater": {
+                "handle": "john.doe@datadoghq.com",
+                "name": "John Doe",
+              },
+              "version": 42,
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-suppressions",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_suppressions_affecting_future_rule.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "security-suppressions model: get_security_monitoring_suppression fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,

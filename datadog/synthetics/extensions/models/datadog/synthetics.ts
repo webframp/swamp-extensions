@@ -981,7 +981,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1797,7 +1797,7 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
+        const id = (result as { id?: string }).id ?? "delete_synthetics_suites";
         const handle = await context.writeResource(
           "synthetics_suites",
           id,
@@ -2198,7 +2198,7 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
+        const id = (result as { id?: string }).id ?? "delete_synthetics_tests";
         const handle = await context.writeResource(
           "synthetics_tests",
           id,

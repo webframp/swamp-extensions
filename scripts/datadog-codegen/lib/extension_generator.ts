@@ -326,7 +326,8 @@ export async function ddApiPaginated(
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         response = await fetch(url, { headers });
         if (!response.ok) {
-          throw new Error(\`Datadog API rate limited (429) after retry on page \${page}\`);
+          const text = await response.text();
+          throw new Error(\`Datadog API rate limited (429) after retry on page \${page}: \${text.slice(0, 300)}\`);
         }
       }
 
@@ -374,7 +375,8 @@ export async function ddApiPaginated(
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         response = await fetch(url, { headers });
         if (!response.ok) {
-          throw new Error(\`Datadog API rate limited (429) after retry on page \${page}\`);
+          const text = await response.text();
+          throw new Error(\`Datadog API rate limited (429) after retry on page \${page}: \${text.slice(0, 300)}\`);
         }
       }
 
@@ -422,7 +424,8 @@ export async function ddApiPaginated(
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         response = await fetch(url, { headers });
         if (!response.ok) {
-          throw new Error(\`Datadog API rate limited (429) after retry on page \${page}\`);
+          const text = await response.text();
+          throw new Error(\`Datadog API rate limited (429) after retry on page \${page}: \${text.slice(0, 300)}\`);
         }
       }
 
@@ -462,7 +465,8 @@ export async function ddApiPaginated(
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
       response = await fetch(url, { headers });
       if (!response.ok) {
-        throw new Error(\`Datadog API rate limited (429) after retry\`);
+        const text = await response.text();
+        throw new Error(\`Datadog API rate limited (429) after retry: \${text.slice(0, 300)}\`);
       }
     }
 
@@ -557,6 +561,87 @@ function flattenJsonApiItem(item: Record<string, unknown>): Record<string, unkno
   }
 
   return result;
+}
+
+/**
+ * Paginated POST search request (body-based cursor pagination).
+ *
+ * For Datadog search endpoints that accept {filter, page: {cursor, limit}}
+ * in the request body and return {data: [...], meta: {page: {after: "..."}}}
+ */
+export async function ddApiPostPaginated(
+  apiKey: string,
+  appKey: string,
+  site: string,
+  path: string,
+  body: Record<string, unknown>,
+  cursorResponsePath = "meta.page.after",
+): Promise<PaginatedResult> {
+  const baseUrl = getBaseUrl(site);
+  const allResults: Record<string, unknown>[] = [];
+  let page = 0;
+  let truncated = false;
+
+  const headers: Record<string, string> = {
+    "DD-API-KEY": apiKey,
+    "DD-APPLICATION-KEY": appKey,
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+  };
+
+  let cursor: string | null = null;
+
+  while (page < MAX_PAGES) {
+    // Inject cursor into body.page.cursor for subsequent pages
+    const requestBody = { ...body };
+    if (cursor) {
+      requestBody.page = { ...(requestBody.page as Record<string, unknown> ?? {}), cursor };
+    }
+
+    const url = \`\${baseUrl}\${path}\`;
+    let response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    // 429 retry
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get("Retry-After") ?? "5", 10);
+      await response.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+      response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(\`Datadog API rate limited (429) after retry on page \${page}: \${text.slice(0, 300)}\`);
+      }
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(\`Datadog API HTTP \${response.status}: \${text.slice(0, 500)}\`);
+    }
+
+    const json = await response.json();
+    const items = extractItems(json);
+    allResults.push(...items);
+
+    // Get next cursor from response
+    cursor = getNestedValue(json, cursorResponsePath) as string | null;
+    if (!cursor || items.length === 0) break;
+
+    page++;
+  }
+
+  if (page >= MAX_PAGES && cursor) {
+    truncated = true;
+  }
+
+  return { results: allResults, truncated, totalFetched: allResults.length };
 }
 
 /**

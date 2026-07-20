@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -66,7 +66,7 @@ const BulkEditSecurityMonitoringSignalsSchema = z.object({
   type: z.string().describe("The type of the response."),
 });
 
-const SearchSecurityMonitoringSignalsSchema = z.object({
+const SearchSecurityMonitoringSignalsItemSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
   type: z.enum(["signal"]).optional().describe("The type of event."),
   custom: z.record(z.string(), z.unknown()).optional().describe(
@@ -81,6 +81,12 @@ const SearchSecurityMonitoringSignalsSchema = z.object({
   timestamp: z.string().optional().describe(
     "The timestamp of the security signal.",
   ),
+});
+
+const SearchSecurityMonitoringSignalsSchema = z.object({
+  items: z.array(SearchSecurityMonitoringSignalsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
 });
 
 const GetSecurityMonitoringSignalSchema = z.object({
@@ -363,7 +369,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
 /** Datadog Security Signals — signal search, triage, and archiving */
 export const model = {
   type: "@webframp/datadog/security-signals",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -397,7 +403,7 @@ export const model = {
       description: "Get a list of security signals",
       schema: SearchSecurityMonitoringSignalsSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
     "security_monitoring_signal": {
       description: "Get a signal's details",
@@ -542,7 +548,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -588,7 +594,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -634,7 +640,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -682,25 +688,39 @@ export const model = {
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await ddApi(
+        const { results, truncated } = await ddApiPostPaginated(
           apiKey,
           appKey,
           site,
-          "POST",
           `/api/v2/security_monitoring/signals/search`,
           body,
+          "meta.page.after",
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
         const handle = await context.writeResource(
           "search_security_monitoring_signals",
-          id,
-          result ?? {},
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          },
         );
-        context.logger.info("Executed search_security_monitoring_signals", {});
+
+        context.logger.info(
+          "Found {count} search_security_monitoring_signals",
+          { count: results.length },
+        );
         return { dataHandles: [handle] };
       },
     },
@@ -770,7 +790,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -822,7 +842,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,

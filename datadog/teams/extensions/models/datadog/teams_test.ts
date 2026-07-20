@@ -70,6 +70,7 @@ Deno.test("teams model: has expected resources", () => {
   assertExists(model.resources["add_team_hierarchy_link"]);
   assertExists(model.resources["team_hierarchy_link"]);
   assertExists(model.resources["team_connections"]);
+  assertExists(model.resources["create_team_connections"]);
   assertExists(model.resources["team_sync"]);
   assertExists(model.resources["sync_teams"]);
   assertExists(model.resources["team_links"]);
@@ -359,14 +360,14 @@ Deno.test({
 });
 
 Deno.test({
-  name: "teams model: create_team_connections executes and writes resource",
+  name: "teams model: create_team_connections fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
       "/team/connections": {
         body: {
-          "data": {
+          "data": [{
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
@@ -375,7 +376,8 @@ Deno.test({
               "connected_team_id": "test-value",
               "team_id": "test-value",
             },
-          },
+          }],
+          "meta": { "page": {} },
         },
       },
     });
@@ -399,10 +401,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_team_connections.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_team_connections.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi } from "./_lib/api.ts";
+import { ddApi, ddApiPostPaginated } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -30,7 +30,7 @@ const CreateDoraDeploymentSchema = z.object({
   type: z.unknown().optional(),
 });
 
-const ListDoraDeploymentsSchema = z.object({
+const DoraDeploymentsItemSchema = z.object({
   id: z.string().describe("The ID of the deployment event."),
   type: z.enum(["dora_deployment"]).optional().describe(
     "JSON:API type for DORA deployment events.",
@@ -58,12 +58,18 @@ const ListDoraDeploymentsSchema = z.object({
   ),
 });
 
+const ListDoraDeploymentsSchema = z.object({
+  items: z.array(DoraDeploymentsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
 const CreateDoraFailureSchema = z.object({
   id: z.string().describe("The ID of the received DORA incident event."),
   type: z.unknown().optional(),
 });
 
-const ListDoraFailuresSchema = z.object({
+const DoraFailuresItemSchema = z.object({
   id: z.string().describe("The ID of the incident event."),
   type: z.enum(["dora_failure"]).optional().describe(
     "JSON:API type for DORA incident events.",
@@ -97,6 +103,12 @@ const ListDoraFailuresSchema = z.object({
   ),
 });
 
+const ListDoraFailuresSchema = z.object({
+  items: z.array(DoraFailuresItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -104,7 +116,7 @@ const ListDoraFailuresSchema = z.object({
 /** Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate */
 export const model = {
   type: "@webframp/datadog/dora",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -116,11 +128,11 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "list_dora_deployments": {
+    "dora_deployments": {
       description: "Get a list of deployment events",
       schema: ListDoraDeploymentsSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
     "patch_dora_deployment": {
       description: "Patch a deployment event",
@@ -134,11 +146,11 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "list_dora_failures": {
+    "dora_failures": {
       description: "Get a list of incident events",
       schema: ListDoraFailuresSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
   },
 
@@ -185,7 +197,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -281,25 +293,34 @@ export const model = {
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await ddApi(
+        const { results, truncated } = await ddApiPostPaginated(
           apiKey,
           appKey,
           site,
-          "POST",
           `/api/v2/dora/deployments`,
           body,
+          "meta.page.after",
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
-        const handle = await context.writeResource(
-          "list_dora_deployments",
-          id,
-          result ?? {},
-        );
-        context.logger.info("Executed list_dora_deployments", {});
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("dora_deployments", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        context.logger.info("Found {count} dora_deployments", {
+          count: results.length,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -441,7 +462,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -529,25 +550,34 @@ export const model = {
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await ddApi(
+        const { results, truncated } = await ddApiPostPaginated(
           apiKey,
           appKey,
           site,
-          "POST",
           `/api/v2/dora/failures`,
           body,
+          "meta.page.after",
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
-        const handle = await context.writeResource(
-          "list_dora_failures",
-          id,
-          result ?? {},
-        );
-        context.logger.info("Executed list_dora_failures", {});
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("dora_failures", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        context.logger.info("Found {count} dora_failures", {
+          count: results.length,
+        });
         return { dataHandles: [handle] };
       },
     },

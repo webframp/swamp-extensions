@@ -189,7 +189,7 @@ const SubmitMetricsSchema = z.object({
 /** Datadog Metrics — metric queries, submissions, tag configurations, and metadata */
 export const model = {
   type: "@webframp/datadog/metrics",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

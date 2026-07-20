@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -63,7 +63,7 @@ const ListLogsGetSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const ListLogsSchema = z.object({
+const LogsItemSchema = z.object({
   id: z.string().describe("Unique ID of the Log."),
   type: z.enum(["log"]).optional().describe("Type of the event."),
   attributes: z.record(z.string(), z.unknown()).optional().describe(
@@ -87,6 +87,12 @@ const ListLogsSchema = z.object({
   timestamp: z.string().optional().describe("Timestamp of your log."),
 });
 
+const ListLogsSchema = z.object({
+  items: z.array(LogsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -94,7 +100,7 @@ const ListLogsSchema = z.object({
 /** Datadog Logs — log search, aggregation, and analytics */
 export const model = {
   type: "@webframp/datadog/logs",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -118,11 +124,11 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
-    "list_logs": {
+    "logs": {
       description: "Search logs (POST)",
       schema: ListLogsSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
   },
 
@@ -219,7 +225,7 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
+        const id = (result as { id?: string }).id ?? "aggregate_logs";
         const handle = await context.writeResource(
           "aggregate_logs",
           id,
@@ -330,25 +336,32 @@ export const model = {
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await ddApi(
+        const { results, truncated } = await ddApiPostPaginated(
           apiKey,
           appKey,
           site,
-          "POST",
           `/api/v2/logs/events/search`,
           body,
+          "meta.page.after",
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
-        const handle = await context.writeResource(
-          "list_logs",
-          id,
-          result ?? {},
-        );
-        context.logger.info("Executed list_logs", {});
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("logs", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        context.logger.info("Found {count} logs", { count: results.length });
         return { dataHandles: [handle] };
       },
     },

@@ -239,14 +239,14 @@ Deno.test({
 
 Deno.test({
   name:
-    "security-signals model: search_security_monitoring_signals executes and writes resource",
+    "security-signals model: search_security_monitoring_signals fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
       "/signals/search": {
         body: {
-          "data": {
+          "data": [{
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
@@ -266,7 +266,8 @@ Deno.test({
               "tags": ["security:attack", "technique:T1110-brute-force"],
               "timestamp": "2019-01-02T09:42:36.320Z",
             },
-          },
+          }],
+          "meta": { "page": {} },
         },
       },
     });
@@ -295,9 +296,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).search_security_monitoring_signals.execute({
-        "name": "test-resource",
-      }, context);
+      >).search_security_monitoring_signals.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

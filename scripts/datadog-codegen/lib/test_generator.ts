@@ -122,11 +122,15 @@ export function generateTestSource(
   lines.push(generateMockServer());
   lines.push(``);
 
-  // One execution test per method type
+  // One execution test per method type (distinguish GET-list from POST-list)
   const testedTypes = new Set<string>();
   for (const method of methods) {
-    if (testedTypes.has(method.type)) continue;
-    testedTypes.add(method.type);
+    const typeKey =
+      method.type === "list" && method.operation.httpMethod === "post"
+        ? "list_post"
+        : method.type;
+    if (testedTypes.has(typeKey)) continue;
+    testedTypes.add(typeKey);
     lines.push(generateExecutionTest(config, method));
     lines.push(``);
   }
@@ -454,6 +458,10 @@ function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
     const name = p.name.replace(/[^a-zA-Z0-9_]/g, "_").replace(/_+/g, "_")
       .replace(/^_|_$/g, "");
     args[name] = "test-id-123";
+  }
+  // Array-body methods need entries arg
+  if (method.operation.requestBodyIsArray) {
+    args.entries = [{ message: "test log", ddsource: "test" }];
   }
   return args;
 }

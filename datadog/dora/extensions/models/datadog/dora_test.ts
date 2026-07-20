@@ -43,10 +43,10 @@ Deno.test("dora model: has expected methods", () => {
 Deno.test("dora model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["dora_deployment"]);
-  assertExists(model.resources["list_dora_deployments"]);
+  assertExists(model.resources["dora_deployments"]);
   assertExists(model.resources["patch_dora_deployment"]);
   assertExists(model.resources["dora_failure"]);
-  assertExists(model.resources["list_dora_failures"]);
+  assertExists(model.resources["dora_failures"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -180,14 +180,14 @@ Deno.test({
 });
 
 Deno.test({
-  name: "dora model: list_dora_deployments executes and writes resource",
+  name: "dora model: list_dora_deployments fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
       "/dora/deployments": {
         body: {
-          "data": {
+          "data": [{
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
@@ -200,7 +200,8 @@ Deno.test({
               "team": "backend",
               "version": "v1.12.07",
             },
-          },
+          }],
+          "meta": { "page": {} },
         },
       },
     });
@@ -224,7 +225,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_dora_deployments.execute({ "name": "test-resource" }, context);
+      >).list_dora_deployments.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

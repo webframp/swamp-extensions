@@ -51,9 +51,11 @@ export function classifyOperation(op: GroupedOperation): MethodType {
       if (lastSegment.startsWith("{")) return "action";
       // POST endpoints with "Delete" in operationId are bulk deletes
       if (op.operationId.toLowerCase().includes("delete")) return "action";
+      // POST endpoints that return collections are list operations
+      if (op.isCollection) return "list";
       // POST endpoints with "List" or "Search" in operationId are queries
-      if (op.operationId.toLowerCase().includes("list")) return "action";
       if (
+        op.operationId.toLowerCase().includes("list") ||
         op.operationId.toLowerCase().includes("search") ||
         op.operationId.toLowerCase().includes("aggregate")
       ) {
@@ -170,10 +172,16 @@ export function generateModelSource(
 
   // Import API helpers based on what's used
   const usesSingle = methods.some((m) => m.type !== "list");
-  const usesPaginated = methods.some((m) => m.type === "list");
+  const usesPaginated = methods.some(
+    (m) => m.type === "list" && m.operation.httpMethod !== "post",
+  );
+  const usesPostPaginated = methods.some(
+    (m) => m.type === "list" && m.operation.httpMethod === "post",
+  );
   const apiImports: string[] = [];
   if (usesSingle) apiImports.push("ddApi");
   if (usesPaginated) apiImports.push("ddApiPaginated");
+  if (usesPostPaginated) apiImports.push("ddApiPostPaginated");
   if (apiImports.length > 0) {
     lines.push(
       `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
@@ -484,6 +492,39 @@ function generateListBody(
     .map((p) => sanitizeFieldName(p.name));
   const excludeNames = [...pathParamNames];
 
+  // POST-list methods (search endpoints) use body-based cursor pagination
+  if (method.operation.httpMethod === "post") {
+    return `${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
+${indent}    }
+${indent}
+${indent}    const { results, truncated } = await ddApiPostPaginated(
+${indent}      apiKey,
+${indent}      appKey,
+${indent}      site,
+${indent}      \`${apiPath}\`,
+${indent}      body,
+${indent}      "${paginationConfig.cursorResponsePath ?? "meta.page.after"}",
+${indent}    );
+${indent}
+${indent}    if (truncated) {
+${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
+${indent}    }
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}      items: results,
+${indent}      truncated,
+${indent}      fetchedAt: new Date().toISOString(),
+${indent}    });
+${indent}
+${indent}    context.logger.info("Found {count} ${resourceName}", { count: results.length });
+${indent}    return { dataHandles: [handle] };`;
+  }
+
   return `${indent}    const params: Record<string, string> = {};
 ${indent}    const excludeKeys = new Set<string>(${
     JSON.stringify(excludeNames)
@@ -587,7 +628,7 @@ function generateCreateBody(
   const isJsonApi = method.operation.requestBodyIsJsonApi;
   const bodyType = method.operation.requestBodyType
     ? `"${method.operation.requestBodyType}"`
-    : '"resource"';
+    : null;
 
   // Handle query params on POST (finding #3)
   const hasQueryParams = queryParamNames.length > 0;
@@ -629,7 +670,9 @@ ${indent}    const excludeKeys = new Set<string>(${
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
 ${indent}    }
-${indent}    const body = { data: { type: ${bodyType}, attributes: attrs } };
+${indent}    const body = { data: { ${
+      bodyType ? `type: ${bodyType}, ` : ""
+    }attributes: attrs } };
 ${indent}
 ${indent}    const result = await ddApi(
 ${indent}      apiKey,
@@ -693,7 +736,7 @@ function generateUpdateBody(
   const isJsonApi = method.operation.requestBodyIsJsonApi;
   const bodyType = method.operation.requestBodyType
     ? `"${method.operation.requestBodyType}"`
-    : '"resource"';
+    : null;
 
   if (isJsonApi) {
     return `${indent}    const attrs: Record<string, unknown> = {};
@@ -703,7 +746,9 @@ ${indent}    const excludeKeys = new Set<string>(${
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
 ${indent}    }
-${indent}    const body = { data: { type: ${bodyType}, attributes: attrs } };
+${indent}    const body = { data: { ${
+      bodyType ? `type: ${bodyType}, ` : ""
+    }attributes: attrs } };
 ${indent}
 ${indent}    const result = await ddApi(
 ${indent}      apiKey,
@@ -847,7 +892,7 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const id = (result as { id?: string }).id ?? "latest";
+${indent}    const id = (result as { id?: string }).id ?? "${method.name}";
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;

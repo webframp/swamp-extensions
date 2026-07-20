@@ -219,14 +219,14 @@ Deno.test({
 });
 
 Deno.test({
-  name: "events model: search_events executes and writes resource",
+  name: "events model: search_events fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
       "/events/search": {
         body: {
-          "data": {
+          "data": [{
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
@@ -255,7 +255,8 @@ Deno.test({
               "tags": ["team:A"],
               "timestamp": "2019-01-02T09:42:36.320Z",
             },
-          },
+          }],
+          "meta": { "page": {} },
         },
       },
     });
@@ -284,7 +285,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).search_events.execute({ "name": "test-resource" }, context);
+      >).search_events.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

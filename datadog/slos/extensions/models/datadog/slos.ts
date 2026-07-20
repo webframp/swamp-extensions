@@ -71,7 +71,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -141,7 +141,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,

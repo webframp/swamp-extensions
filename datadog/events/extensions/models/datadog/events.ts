@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -67,7 +67,7 @@ const CreateEventSchema = z.object({
   type: z.string().optional().describe("Entity type."),
 });
 
-const SearchEventsSchema = z.object({
+const SearchEventsItemSchema = z.object({
   id: z.string().describe("the unique ID of the event."),
   type: z.enum(["event"]).optional().describe("Type of the event."),
   attributes: z.object({
@@ -98,6 +98,12 @@ const SearchEventsSchema = z.object({
   timestamp: z.string().optional().describe("The timestamp of the event."),
 });
 
+const SearchEventsSchema = z.object({
+  items: z.array(SearchEventsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -105,7 +111,7 @@ const SearchEventsSchema = z.object({
 /** Datadog Events — event search and submission */
 export const model = {
   type: "@webframp/datadog/events",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -127,7 +133,7 @@ export const model = {
       description: "Search events",
       schema: SearchEventsSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
   },
 
@@ -287,25 +293,34 @@ export const model = {
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await ddApi(
+        const { results, truncated } = await ddApiPostPaginated(
           apiKey,
           appKey,
           site,
-          "POST",
           `/api/v2/events/search`,
           body,
+          "meta.page.after",
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
-        const handle = await context.writeResource(
-          "search_events",
-          id,
-          result ?? {},
-        );
-        context.logger.info("Executed search_events", {});
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("search_events", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+        });
+
+        context.logger.info("Found {count} search_events", {
+          count: results.length,
+        });
         return { dataHandles: [handle] };
       },
     },

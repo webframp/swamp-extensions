@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -179,6 +179,27 @@ const TeamConnectionsItemSchema = z.object({
 
 const ListTeamConnectionsSchema = z.object({
   items: z.array(TeamConnectionsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+});
+
+const CreateTeamConnectionsItemSchema = z.object({
+  id: z.string().describe("The unique identifier of the team connection."),
+  type: z.enum(["team_connection"]).optional().describe(
+    "Team connection resource type.",
+  ),
+  managed_by: z.string().optional().describe(
+    "The entity that manages this team connection.",
+  ),
+  source: z.string().optional().describe("The name of the external source."),
+  connected_team_id: z.string().optional().describe(
+    "Related connected_team ID",
+  ),
+  team_id: z.string().optional().describe("Related team ID"),
+});
+
+const CreateTeamConnectionsSchema = z.object({
+  items: z.array(CreateTeamConnectionsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
 });
@@ -417,7 +438,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.07.20.3",
+  version: "2026.07.20.8",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -456,6 +477,12 @@ export const model = {
     "team_connections": {
       description: "List team connections",
       schema: ListTeamConnectionsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "create_team_connections": {
+      description: "Create team connections",
+      schema: CreateTeamConnectionsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -751,7 +778,7 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
-        const body = { data: { type: "resource", attributes: attrs } };
+        const body = { data: { attributes: attrs } };
 
         const result = await ddApi(
           apiKey,
@@ -936,25 +963,38 @@ export const model = {
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
+          if (v !== undefined && !excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await ddApi(
+        const { results, truncated } = await ddApiPostPaginated(
           apiKey,
           appKey,
           site,
-          "POST",
           `/api/v2/team/connections`,
           body,
+          "meta.page.after",
         );
 
-        const id = (result as { id?: string }).id ?? "latest";
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
         const handle = await context.writeResource(
-          "team_connections",
-          id,
-          result ?? {},
+          "create_team_connections",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+          },
         );
-        context.logger.info("Executed create_team_connections", {});
+
+        context.logger.info("Found {count} create_team_connections", {
+          count: results.length,
+        });
         return { dataHandles: [handle] };
       },
     },
