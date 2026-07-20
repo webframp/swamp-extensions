@@ -741,7 +741,11 @@ function generateActionBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^action_/, "");
+  // Strip whatever verb prefix the action's name carries (an action-classified
+  // POST may be named create_/update_/get_*). This must match the resource-key
+  // derivation in generateModelSource, or the method writes to an undeclared
+  // resource spec.
+  const resourceName = method.name.replace(/^(get|create|update|action)_/, "");
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const hasBody = method.operation.requestBody !== undefined;
   const pathParamNames = method.operation.pathParams.map((p) =>
