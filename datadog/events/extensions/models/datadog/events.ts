@@ -111,7 +111,7 @@ const SearchEventsSchema = z.object({
 /** Datadog Events — event search and submission */
 export const model = {
   type: "@webframp/datadog/events",
-  version: "2026.07.20.8",
+  version: "2026.07.20.10",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -169,8 +169,16 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_query": "filter[query]",
+          "filter_from": "filter[from]",
+          "filter_to": "filter[to]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(

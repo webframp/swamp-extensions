@@ -176,7 +176,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.07.20.8",
+  version: "2026.07.20.10",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -282,8 +282,9 @@ export const model = {
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && ["include"].includes(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -341,8 +342,9 @@ export const model = {
         const excludeKeys = new Set<string>(["policy_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -497,8 +499,9 @@ export const model = {
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && ["include"].includes(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -556,8 +559,9 @@ export const model = {
         const excludeKeys = new Set<string>(["schedule_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -704,10 +708,15 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["schedule_id"]);
+        const paramNameMap: Record<string, string> = {
+          "filter_position": "filter[position]",
+          "filter_at_ts": "filter[at_ts]",
+        };
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = paramNameMap[k] ?? k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -759,8 +768,9 @@ export const model = {
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -812,8 +822,9 @@ export const model = {
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -916,7 +927,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1111,7 +1125,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1233,8 +1250,9 @@ export const model = {
         const excludeKeys = new Set<string>(["user_id", "rule_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }

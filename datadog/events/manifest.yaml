@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/events"
-version: "2026.07.20.8"
+version: "2026.07.20.10"
 description: "Datadog Events — event search and submission"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

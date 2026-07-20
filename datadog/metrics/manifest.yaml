@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/metrics"
-version: "2026.07.20.8"
+version: "2026.07.20.10"
 description: "Datadog Metrics — metric queries, submissions, tag configurations, and metadata"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

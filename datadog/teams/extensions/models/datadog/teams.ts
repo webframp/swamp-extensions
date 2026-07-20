@@ -438,7 +438,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.07.20.8",
+  version: "2026.07.20.10",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -591,8 +591,16 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_keyword": "filter[keyword]",
+          "filter_me": "filter[me]",
+          "fields_team": "fields[team]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -711,8 +719,15 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_parent_team": "filter[parent_team]",
+          "filter_sub_team": "filter[sub_team]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -905,8 +920,17 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_sources": "filter[sources]",
+          "filter_team_ids": "filter[team_ids]",
+          "filter_connected_team_ids": "filter[connected_team_ids]",
+          "filter_connection_ids": "filter[connection_ids]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1052,8 +1076,14 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_source": "filter[source]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1284,7 +1314,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1518,8 +1551,14 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
+        const paramNameMap: Record<string, string> = {
+          "filter_keyword": "filter[keyword]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1725,7 +1764,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1968,7 +2010,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -2079,7 +2124,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_uuid"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(

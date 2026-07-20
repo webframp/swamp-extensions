@@ -100,7 +100,7 @@ const CreateIncidentImpactSchema = z.object({
 /** Datadog Incidents — incident lifecycle, timelines, teams, and attachments */
 export const model = {
   type: "@webframp/datadog/incidents",
-  version: "2026.07.20.8",
+  version: "2026.07.20.10",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -147,7 +147,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["incident_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -212,8 +215,9 @@ export const model = {
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && ["include"].includes(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }

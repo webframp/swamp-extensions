@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/teams"
-version: "2026.07.20.8"
+version: "2026.07.20.10"
 description: "Datadog Teams — team management, memberships, and permissions"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

@@ -163,7 +163,7 @@ export async function ddApiPaginated(
       }
       if (params) {
         for (const [k, v] of Object.entries(params)) {
-          if (v) {
+          if (v != null) {
             queryParts.push(
               `${encodeURIComponent(k)}=${encodeURIComponent(v)}`,
             );
@@ -232,7 +232,7 @@ export async function ddApiPaginated(
       }
       if (params) {
         for (const [k, v] of Object.entries(params)) {
-          if (v) {
+          if (v != null) {
             queryParts.push(
               `${encodeURIComponent(k)}=${encodeURIComponent(v)}`,
             );
@@ -298,7 +298,7 @@ export async function ddApiPaginated(
       }
       if (params) {
         for (const [k, v] of Object.entries(params)) {
-          if (v) {
+          if (v != null) {
             queryParts.push(
               `${encodeURIComponent(k)}=${encodeURIComponent(v)}`,
             );
@@ -354,7 +354,7 @@ export async function ddApiPaginated(
     const queryParts: string[] = [];
     if (params) {
       for (const [k, v] of Object.entries(params)) {
-        if (v) {
+        if (v != null) {
           queryParts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
         }
       }
@@ -429,7 +429,19 @@ function extractItems(json: unknown): Record<string, unknown>[] {
   }
 
   // Flat: check common array field names
-  for (const key of ["results", "items", "records", "signals"]) {
+  for (
+    const key of [
+      "results",
+      "items",
+      "records",
+      "signals",
+      "logs",
+      "series",
+      "events",
+      "schedules",
+      "escalation_policies",
+    ]
+  ) {
     if (Array.isArray(obj[key])) {
       return (obj[key] as Record<string, unknown>[]);
     }
@@ -444,7 +456,14 @@ function extractItems(json: unknown): Record<string, unknown>[] {
     return [data];
   }
 
-  // Fallback: no known list field found — return empty
+  // Fallback: scan all top-level keys for the first array value
+  for (const [_key, value] of Object.entries(obj)) {
+    if (Array.isArray(value) && value.length > 0) {
+      return value as Record<string, unknown>[];
+    }
+  }
+
+  // Nothing found
   return [];
 }
 
@@ -456,8 +475,8 @@ function flattenJsonApiItem(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
 
-  if (item.id) result.id = item.id;
-  if (item.type) result.type = item.type;
+  if (item.id !== undefined) result.id = item.id;
+  if (item.type !== undefined) result.type = item.type;
 
   if (item.attributes && typeof item.attributes === "object") {
     const attrs = item.attributes as Record<string, unknown>;

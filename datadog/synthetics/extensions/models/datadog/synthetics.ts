@@ -981,7 +981,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.07.20.8",
+  version: "2026.07.20.10",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1183,7 +1183,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1243,7 +1246,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1307,8 +1313,15 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_test_ids": "filter[test_ids]",
+          "filter_active": "filter[active]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -1843,8 +1856,9 @@ export const model = {
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -2061,7 +2075,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -2132,8 +2149,9 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id", "result_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -2448,7 +2466,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -2724,7 +2745,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -2800,7 +2824,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -2870,8 +2897,9 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id", "result_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -2922,7 +2950,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -2995,8 +3026,9 @@ export const model = {
         const excludeKeys = new Set<string>(["public_id", "version_number"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }

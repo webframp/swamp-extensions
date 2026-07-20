@@ -189,7 +189,7 @@ const SubmitMetricsSchema = z.object({
 /** Datadog Metrics — metric queries, submissions, tag configurations, and metadata */
 export const model = {
   type: "@webframp/datadog/metrics",
-  version: "2026.07.20.8",
+  version: "2026.07.20.10",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -327,8 +327,23 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_configured": "filter[configured]",
+          "filter_is_configurable": "filter[is_configurable]",
+          "filter_tags_configured": "filter[tags_configured]",
+          "filter_metric_type": "filter[metric_type]",
+          "filter_include_percentiles": "filter[include_percentiles]",
+          "filter_queried": "filter[queried]",
+          "filter_queried_window_seconds": "filter[queried][window][seconds]",
+          "filter_tags": "filter[tags]",
+          "filter_related_assets": "filter[related_assets]",
+          "window_seconds": "window[seconds]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -394,10 +409,14 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
+        const paramNameMap: Record<string, string> = {
+          "window_seconds": "window[seconds]",
+        };
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = paramNameMap[k] ?? k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -459,8 +478,18 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
+        const paramNameMap: Record<string, string> = {
+          "window_seconds": "window[seconds]",
+          "filter_tags": "filter[tags]",
+          "filter_match": "filter[match]",
+          "filter_include_tag_values": "filter[include_tag_values]",
+          "filter_allow_partial": "filter[allow_partial]",
+        };
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = paramNameMap[k] ?? k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -578,10 +607,18 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
+        const paramNameMap: Record<string, string> = {
+          "filter_groups": "filter[groups]",
+          "filter_hours_ago": "filter[hours_ago]",
+          "filter_num_aggregations": "filter[num_aggregations]",
+          "filter_pct": "filter[pct]",
+          "filter_timespan_h": "filter[timespan_h]",
+        };
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = paramNameMap[k] ?? k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
@@ -629,7 +666,10 @@ export const model = {
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const apiKey = k;
+            params[apiKey] = String(v);
+          }
         }
 
         const { results, truncated } = await ddApiPaginated(
@@ -880,10 +920,14 @@ export const model = {
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
+        const paramNameMap: Record<string, string> = {
+          "window_seconds": "window[seconds]",
+        };
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = paramNameMap[k] ?? k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }

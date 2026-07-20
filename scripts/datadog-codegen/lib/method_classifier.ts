@@ -127,7 +127,12 @@ export function classifyServiceMethods(
     const type = classifyOperation(op);
     const name = generateMethodName(op, type);
 
-    if (seen.has(name)) continue;
+    if (seen.has(name)) {
+      console.warn(
+        `   ⚠️  Duplicate method name "${name}" from ${op.operationId} — skipping`,
+      );
+      continue;
+    }
     seen.add(name);
 
     methods.push({
@@ -525,12 +530,31 @@ ${indent}    context.logger.info("Found {count} ${resourceName}", { count: resul
 ${indent}    return { dataHandles: [handle] };`;
   }
 
+  // Build name mapping for bracket-notation params (filter[query] → filter_query → back to filter[query])
+  const paramNameMap: Record<string, string> = {};
+  for (const p of method.operation.queryParams) {
+    const sanitized = sanitizeFieldName(p.name);
+    if (sanitized !== p.name) {
+      paramNameMap[sanitized] = p.name;
+    }
+  }
+  const hasParamMap = Object.keys(paramNameMap).length > 0;
+
   return `${indent}    const params: Record<string, string> = {};
 ${indent}    const excludeKeys = new Set<string>(${
     JSON.stringify(excludeNames)
-  });
+  });${
+    hasParamMap
+      ? `\n${indent}    const paramNameMap: Record<string, string> = ${
+        JSON.stringify(paramNameMap)
+      };`
+      : ""
+  }
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+${indent}      if (v !== undefined && !excludeKeys.has(k)) {
+${indent}        const apiKey = ${hasParamMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        params[apiKey] = String(v);
+${indent}      }
 ${indent}    }
 ${indent}
 ${indent}    const { results, truncated } = await ddApiPaginated(
@@ -576,12 +600,31 @@ function generateGetBody(
   );
 
   if (hasQueryParams) {
+    // Build name mapping for bracket-notation params
+    const paramNameMap: Record<string, string> = {};
+    for (const p of method.operation.queryParams) {
+      const sanitized = sanitizeFieldName(p.name);
+      if (sanitized !== p.name) {
+        paramNameMap[sanitized] = p.name;
+      }
+    }
+    const hasParamMap = Object.keys(paramNameMap).length > 0;
+
     return `${indent}    const queryParts: string[] = [];
 ${indent}    const excludeKeys = new Set<string>(${
       JSON.stringify(pathParamNames)
-    });
+    });${
+      hasParamMap
+        ? `\n${indent}    const paramNameMap: Record<string, string> = ${
+          JSON.stringify(paramNameMap)
+        };`
+        : ""
+    }
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !excludeKeys.has(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
+${indent}      if (v !== undefined && !excludeKeys.has(k)) {
+${indent}        const apiName = ${hasParamMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        queryParts.push(\`\${encodeURIComponent(apiName)}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
 ${indent}    }
 ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
 ${indent}
@@ -635,11 +678,30 @@ function generateCreateBody(
   let querySetup = "";
   let urlSuffix = "";
   if (hasQueryParams) {
-    querySetup = `${indent}    const queryParts: string[] = [];
+    // Build name mapping for bracket-notation query params on create
+    const createParamMap: Record<string, string> = {};
+    for (const p of method.operation.queryParams) {
+      const sanitized = sanitizeFieldName(p.name);
+      if (sanitized !== p.name) {
+        createParamMap[sanitized] = p.name;
+      }
+    }
+    const hasCreateMap = Object.keys(createParamMap).length > 0;
+
+    querySetup = `${indent}    const queryParts: string[] = [];${
+      hasCreateMap
+        ? `\n${indent}    const paramNameMap: Record<string, string> = ${
+          JSON.stringify(createParamMap)
+        };`
+        : ""
+    }
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (v !== undefined && ${
       JSON.stringify(queryParamNames)
-    }.includes(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
+    }.includes(k)) {
+${indent}        const apiName = ${hasCreateMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        queryParts.push(\`\${encodeURIComponent(apiName)}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
 ${indent}    }
 ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
 `;
@@ -805,12 +867,31 @@ function generateDeleteBody(
   );
 
   if (hasQueryParams) {
+    // Build name mapping for bracket-notation params
+    const paramNameMap: Record<string, string> = {};
+    for (const p of method.operation.queryParams) {
+      const sanitized = sanitizeFieldName(p.name);
+      if (sanitized !== p.name) {
+        paramNameMap[sanitized] = p.name;
+      }
+    }
+    const hasParamMap = Object.keys(paramNameMap).length > 0;
+
     return `${indent}    const queryParts: string[] = [];
 ${indent}    const pathKeys = new Set<string>(${
       JSON.stringify(pathParamNames)
-    });
+    });${
+      hasParamMap
+        ? `\n${indent}    const paramNameMap: Record<string, string> = ${
+          JSON.stringify(paramNameMap)
+        };`
+        : ""
+    }
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !pathKeys.has(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
+${indent}      if (v !== undefined && !pathKeys.has(k)) {
+${indent}        const apiName = ${hasParamMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        queryParts.push(\`\${encodeURIComponent(apiName)}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
 ${indent}    }
 ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
 ${indent}
@@ -871,12 +952,31 @@ ${indent}    }
   } else if (
     queryParamNames.length > 0 || method.operation.queryParams.length > 0
   ) {
+    // Build name mapping for bracket-notation params
+    const actionParamMap: Record<string, string> = {};
+    for (const p of method.operation.queryParams) {
+      const sanitized = sanitizeFieldName(p.name);
+      if (sanitized !== p.name) {
+        actionParamMap[sanitized] = p.name;
+      }
+    }
+    const hasActionMap = Object.keys(actionParamMap).length > 0;
+
     bodySetup = `${indent}    const queryParts: string[] = [];
 ${indent}    const pathKeys = new Set<string>(${
       JSON.stringify(pathParamNames)
-    });
+    });${
+      hasActionMap
+        ? `\n${indent}    const paramNameMap: Record<string, string> = ${
+          JSON.stringify(actionParamMap)
+        };`
+        : ""
+    }
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !pathKeys.has(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
+${indent}      if (v !== undefined && !pathKeys.has(k)) {
+${indent}        const apiName = ${hasActionMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        queryParts.push(\`\${encodeURIComponent(apiName)}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
 ${indent}    }
 ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
 `;

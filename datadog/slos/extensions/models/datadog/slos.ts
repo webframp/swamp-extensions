@@ -71,7 +71,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.07.20.8",
+  version: "2026.07.20.10",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -273,8 +273,9 @@ export const model = {
         const excludeKeys = new Set<string>(["slo_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
+            const apiName = k;
             queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+              `${encodeURIComponent(apiName)}=${encodeURIComponent(String(v))}`,
             );
           }
         }
