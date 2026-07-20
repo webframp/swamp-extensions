@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/inventory"
-version: "2026.07.19.1"
+version: "2026.07.20.1"
 description: "Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

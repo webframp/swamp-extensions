@@ -489,7 +489,7 @@ const ListAssetTargetsOrgSchema = z.object({
 /** Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources */
 export const model = {
   type: "@webframp/snyk/inventory",
-  version: "2026.07.19.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -642,6 +642,7 @@ export const model = {
       description:
         "List or search all assets (synchronous) - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         filter: z.string().optional().describe(
           "RSQL filter expression for filtering results. See schema for full documentation.",
         ),
@@ -671,7 +672,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -705,6 +706,7 @@ export const model = {
     update_assets_bulk_group: {
       description: "Bulk update asset attributes - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         data: z.array(z.unknown()),
       }),
       execute: async (
@@ -723,7 +725,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -738,7 +740,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "assets_bulk_group",
-          "updated",
+          String(args.group_id),
           result,
         );
         context.logger.info("Updated assets_bulk_group", {});
@@ -748,6 +750,7 @@ export const model = {
     get_filter_fields_group: {
       description: "Get available filter fields - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         asset_types: z.string().optional().describe(
           "Comma-separated list of asset types to filter the available filter fields",
         ),
@@ -768,7 +771,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -807,6 +810,7 @@ export const model = {
       description:
         "Get filter value suggestions (autocomplete) - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         filter_id: z.string().describe(
           "The UUID of the filter field to get values for (from the filter fields list e...",
         ),
@@ -836,7 +840,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["filter_id"]);
+        const excludeKeys = new Set<string>(["group_id", "filter_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -874,6 +878,7 @@ export const model = {
     get_group_fields_group: {
       description: "Get available group fields - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         asset_types: z.string().optional().describe(
           "Comma-separated list of asset types to filter group fields",
         ),
@@ -894,7 +899,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -932,6 +937,7 @@ export const model = {
     get_group_values_group: {
       description: "Get group value aggregation - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         group_field_id: z.string().describe(
           "The UUID of the group field to get values for (from the group fields list end...",
         ),
@@ -967,7 +973,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_field_id"]);
+        const excludeKeys = new Set<string>(["group_id", "group_field_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -1006,6 +1012,7 @@ export const model = {
       description:
         "Create an asset search (asynchronous) - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         data: z.object({
           attributes: z.object({
             filter: z.unknown().optional(),
@@ -1032,7 +1039,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -1059,6 +1066,7 @@ export const model = {
       description:
         "Retrieve asset search results (asynchronous) - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         search_id: z.string().describe(
           "The unique identifier of the search operation",
         ),
@@ -1085,7 +1093,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["search_id"]);
+        const excludeKeys = new Set<string>(["group_id", "search_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -1123,6 +1131,7 @@ export const model = {
     get_asset_group: {
       description: "Get a single asset by ID - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         asset_id: z.string().describe("The unique identifier of the asset"),
         fields: z.string().optional().describe(
           "Sparse fieldsets allow clients to request only specific fields for a given re...",
@@ -1144,7 +1153,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["asset_id"]);
+        const excludeKeys = new Set<string>(["group_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
             queryParts.push(
@@ -1173,6 +1182,7 @@ export const model = {
     update_asset_group: {
       description: "Update asset attributes - Group scope (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         asset_id: z.string().describe("The unique identifier of the asset"),
         data: z.unknown(),
       }),
@@ -1192,7 +1202,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>(["asset_id"]);
+        const excludeKeys = new Set<string>(["group_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -1217,6 +1227,7 @@ export const model = {
     list_asset_projects_group: {
       description: "List projects for an asset (group scope) (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         asset_id: z.string().describe("The unique identifier of the asset"),
         canonical: z.enum(["with", "only", "none"]).optional().describe(
           "Filter projects by canonical status. - `with`: Returns all projects (canonica...",
@@ -1249,7 +1260,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["asset_id"]);
+        const excludeKeys = new Set<string>(["group_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -1287,6 +1298,7 @@ export const model = {
     list_asset_targets_group: {
       description: "List targets for an asset (group scope) (Early Access)",
       arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
         asset_id: z.string().describe("The unique identifier of the asset"),
       }),
       execute: async (
@@ -1305,7 +1317,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["asset_id"]);
+        const excludeKeys = new Set<string>(["group_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }

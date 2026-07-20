@@ -282,7 +282,7 @@ const UpdateOrgAppInstallSecretSchema = z.object({
 /** Snyk Apps — OAuth application management, bots, installations */
 export const model = {
   type: "@webframp/snyk/apps",
-  version: "2026.07.19.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -363,6 +363,7 @@ export const model = {
     get_app_installs_for_group: {
       description: "Get a list of Snyk Apps installed for a Group",
       arguments: z.object({
+        group_id: z.string().describe("Group ID"),
         expand: z.string().optional().describe("Expand relationships."),
       }),
       execute: async (
@@ -381,7 +382,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -419,6 +420,7 @@ export const model = {
     create_group_app_install: {
       description: "Install a Snyk App for a Group",
       arguments: z.object({
+        group_id: z.string().describe("Group ID"),
         data: z.object({
           type: z.enum(["app_install"]).optional(),
         }),
@@ -447,7 +449,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -473,6 +475,7 @@ export const model = {
     delete_group_app_install_by_id: {
       description: "Revoke app authorization for a Snyk group with install ID",
       arguments: z.object({
+        group_id: z.string().describe("Group ID"),
         install_id: z.string().describe("Install ID"),
       }),
       execute: async (
@@ -505,6 +508,7 @@ export const model = {
       description:
         "Manage client secret for non-interactive Snyk App installations",
       arguments: z.object({
+        group_id: z.string().describe("Group ID"),
         install_id: z.string().describe("Install ID"),
         data: z.object({
           attributes: z.object({
@@ -530,7 +534,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>(["install_id"]);
+        const excludeKeys = new Set<string>(["group_id", "install_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }

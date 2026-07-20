@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/settings"
-version: "2026.07.19.1"
+version: "2026.07.20.1"
 description: "Snyk Settings — organization and group setting management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

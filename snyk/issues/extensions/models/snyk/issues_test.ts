@@ -131,7 +131,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_group_issues.execute({}, context);
+      >).list_group_issues.execute({ "group_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

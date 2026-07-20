@@ -391,7 +391,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
 /** Snyk Service Accounts — automated access management for CI/CD */
 export const model = {
   type: "@webframp/snyk/service-accounts",
-  version: "2026.07.19.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -450,7 +450,11 @@ export const model = {
   methods: {
     get_many_group_service_account: {
       description: "Get a list of group service accounts.",
-      arguments: z.object({}),
+      arguments: z.object({
+        group_id: z.string().describe(
+          "The ID of the Snyk Group that owns the service accounts.",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -467,7 +471,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -505,6 +509,9 @@ export const model = {
     create_group_service_account: {
       description: "Create a service account for a group.",
       arguments: z.object({
+        group_id: z.string().describe(
+          "The ID of the Snyk Group that is creating and owns the service account",
+        ),
         data: z.object({
           attributes: z.object({
             access_token_expires_at: z.string().optional(),
@@ -539,7 +546,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -565,6 +572,9 @@ export const model = {
     get_one_group_service_account: {
       description: "Get a group service account.",
       arguments: z.object({
+        group_id: z.string().describe(
+          "The ID of the Snyk Group that owns the service account.",
+        ),
         serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
@@ -603,6 +613,9 @@ export const model = {
     update_group_service_account: {
       description: "Update a group service account.",
       arguments: z.object({
+        group_id: z.string().describe(
+          "The ID of the Snyk Group that owns the service account.",
+        ),
         serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
@@ -630,7 +643,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>(["serviceaccount_id"]);
+        const excludeKeys = new Set<string>(["group_id", "serviceaccount_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -655,6 +668,9 @@ export const model = {
     delete_one_group_service_account: {
       description: "Delete a group service account.",
       arguments: z.object({
+        group_id: z.string().describe(
+          "The ID of the Snyk Group that owns the service account.",
+        ),
         serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
@@ -690,6 +706,9 @@ export const model = {
     update_service_account_secret: {
       description: "Manage a group service account's client secret.",
       arguments: z.object({
+        group_id: z.string().describe(
+          "The ID of the Snyk Group that owns the service account.",
+        ),
         serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
@@ -717,7 +736,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>(["serviceaccount_id"]);
+        const excludeKeys = new Set<string>(["group_id", "serviceaccount_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }

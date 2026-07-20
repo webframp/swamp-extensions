@@ -35,7 +35,7 @@ export interface GroupedOperation {
   summary: string;
   /** Full description */
   description: string;
-  /** Path parameters (excluding scope params like org_id, group_id) */
+  /** Path parameters (excluding this service's scope param, e.g. org_id) */
   pathParams: ParameterObject[];
   /** Query parameters (excluding pagination params) */
   queryParams: ParameterObject[];
@@ -67,9 +67,6 @@ const PAGINATION_PARAMS = new Set([
   "ending_before",
   "limit",
 ]);
-
-/** Scope params that become globalArgs, not method args */
-const SCOPE_PARAMS = new Set(["org_id", "group_id"]);
 
 /**
  * Group all operations in the spec into their service groups.
@@ -186,11 +183,13 @@ function extractOperation(
     ? "group_id"
     : null;
 
-  // Path params: exclude scope param and version header
+  // Path params: exclude only this service's scope param (sourced from
+  // globalArgs). A secondary scope param — e.g. group_id on an org-scoped
+  // service — is a genuine method argument sourced from `args`, so it must
+  // stay in pathParams for the args schema and test generator to see it.
   const pathParams = allParams.filter(
     (p) =>
       p.in === "path" &&
-      !SCOPE_PARAMS.has(p.name) &&
       p.name !== scopeParam,
   );
 

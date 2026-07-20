@@ -28,7 +28,7 @@ import {
   generateSwampYaml,
 } from "./lib/extension_generator.ts";
 import { join } from "@std/path";
-import { ensureDir } from "@std/fs";
+import { ensureDir, exists } from "@std/fs";
 
 interface GenerateOptions {
   dryRun: boolean;
@@ -210,7 +210,12 @@ async function main() {
     await Deno.writeTextFile(join(extDir, "README.md"), readme);
     await Deno.writeTextFile(join(extDir, "LICENSE.md"), license);
     await Deno.writeTextFile(join(extDir, "RELEASE_NOTES.md"), releaseNotes);
-    await Deno.writeTextFile(join(extDir, ".swamp.yaml"), swampYaml);
+    // .swamp.yaml carries a stable repoId assigned at repo init. Never
+    // clobber an existing marker — only write it for brand-new extensions.
+    const swampYamlPath = join(extDir, ".swamp.yaml");
+    if (!(await exists(swampYamlPath))) {
+      await Deno.writeTextFile(swampYamlPath, swampYaml);
+    }
     await Deno.writeTextFile(join(extDir, ".gitignore"), gitignore);
     await Deno.writeTextFile(join(modelDir, modelFileName), modelSource);
     await Deno.writeTextFile(join(modelDir, testFileName), testSource);

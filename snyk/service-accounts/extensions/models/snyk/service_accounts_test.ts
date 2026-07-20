@@ -164,7 +164,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_many_group_service_account.execute({}, context);
+      >).get_many_group_service_account.execute(
+        { "group_id": "test-id-123" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -227,10 +230,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_group_service_account.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_group_service_account.execute({
+        "group_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -294,6 +297,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).get_one_group_service_account.execute({
+        "group_id": "test-id-123",
         "serviceaccount_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
@@ -359,6 +363,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_group_service_account.execute({
+        "group_id": "test-id-123",
         "serviceaccount_id": "test-id-123",
         "name": "test-resource",
       }, context);
@@ -409,6 +414,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).delete_one_group_service_account.execute({
+        "group_id": "test-id-123",
         "serviceaccount_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 0);
