@@ -1,15 +1,7 @@
-## 2026.07.18.1
+## 2026.07.20.1
 
-**Changed:** Version bump only, no code changes.
+**Changed:** Refreshed the dependency pin to the latest published release. No
+behavioral changes to the audit workflow or report.
 
-## 2026.06.26.1
-
-**Changed:** Audit reports now include cache hit-rate and security event findings that were
-previously missing. The underlying cloudflare extension's GraphQL methods were silently
-failing — now that they work, the audit report produces complete results.
-
-**Upgrade note:** Requires `@webframp/cloudflare@2026.06.26.1`. Pull both extensions together:
-```
-swamp extension pull @webframp/cloudflare
-swamp extension pull @webframp/cloudflare-audit
-```
+**Upgrade note:** Bumps `@webframp/cloudflare` 2026.06.26.1 → 2026.07.18.1,
+pulled automatically with this extension.

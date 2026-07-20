@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/agentcore-bootstrap"
-version: "2026.07.18.1"
+version: "2026.07.20.1"
 description: |
   One-shot bootstrap for @webframp/agentcore. Ships a provisioner model
   that creates an ECR repository, builds and pushes the worker container
@@ -29,8 +29,8 @@ description: |
   ```
 repository: "https://github.com/webframp/swamp-extensions"
 dependencies:
-  - "@webframp/container-image"
-  - "@webframp/agentcore"
+  - "@webframp/container-image@2026.07.13.1"
+  - "@webframp/agentcore@2026.07.13.1"
 models:
   - provisioner.ts
 workflows:

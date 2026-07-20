@@ -455,11 +455,11 @@ const NORMALIZERS: Record<
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.07.18.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
-      toVersion: "2026.07.18.1",
+      toVersion: "2026.07.20.1",
       description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
