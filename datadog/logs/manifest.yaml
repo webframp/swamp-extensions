@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/datadog/logs"
+version: "2026.07.20.11"
+description: "Datadog Logs — log search, aggregation, and analytics"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - datadog/logs.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - datadog
+  - logs
+  - search
+  - observability

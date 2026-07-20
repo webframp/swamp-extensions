@@ -39,6 +39,20 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/anthropic/compliance`](anthropic/compliance/) | Syncs a Claude Enterprise account's org directory, effective runtime settings, and 6-year audit activity feed via the Compliance API | None (uses fetch) |
 | [`@webframp/anthropic/analytics`](anthropic/analytics/) | Pulls Claude Enterprise seat, adoption, and cost/usage analytics (DAU/WAU/MAU, feature adoption, token cost) via the Enterprise Analytics API | None (uses fetch) |
 | [`@webframp/microsoft/teams`](microsoft/teams/) | Read-only Microsoft Teams integration (channels, chats, mentions) via the Graph API using device-code auth | None (uses fetch) |
+| [`@webframp/datadog/monitors`](datadog/monitors/) | Datadog Monitors — notification rules, config policies, muting | None (uses fetch) |
+| [`@webframp/datadog/incidents`](datadog/incidents/) | Datadog Incidents — attachments and related APIs | None (uses fetch) |
+| [`@webframp/datadog/slos`](datadog/slos/) | Datadog SLOs — service level objective reports and status | None (uses fetch) |
+| [`@webframp/datadog/metrics`](datadog/metrics/) | Datadog Metrics — timeseries queries, bulk tags, metadata, estimates | None (uses fetch) |
+| [`@webframp/datadog/logs`](datadog/logs/) | Datadog Logs — search, aggregation, and submission | None (uses fetch) |
+| [`@webframp/datadog/events`](datadog/events/) | Datadog Events — search and submission | None (uses fetch) |
+| [`@webframp/datadog/downtimes`](datadog/downtimes/) | Datadog Downtimes — scheduled downtime management | None (uses fetch) |
+| [`@webframp/datadog/synthetics`](datadog/synthetics/) | Datadog Synthetics — tests, suites, results, global variables | None (uses fetch) |
+| [`@webframp/datadog/on-call`](datadog/on-call/) | Datadog On-Call — schedules, escalation, routing, shifts | None (uses fetch) |
+| [`@webframp/datadog/teams`](datadog/teams/) | Datadog Teams — management, memberships, permissions, links | None (uses fetch) |
+| [`@webframp/datadog/dora`](datadog/dora/) | Datadog DORA Metrics — deployment, incident, and failure events | None (uses fetch) |
+| [`@webframp/datadog/security-rules`](datadog/security-rules/) | Datadog Security Rules — detection rule CRUD | None (uses fetch) |
+| [`@webframp/datadog/security-signals`](datadog/security-signals/) | Datadog Security Signals — search, triage, state management | None (uses fetch) |
+| [`@webframp/datadog/security-suppressions`](datadog/security-suppressions/) | Datadog Security Suppressions — suppression rule management | None (uses fetch) |
 | [`@webframp/gitlab-review`](gitlab-review/) | AI-assisted GitLab merge request code review (GraphQL + REST) with a human approval gate and draft/edit/post workflow | None (uses fetch) |
 | [`@webframp/reddit/moderation`](reddit/) | Reddit moderation API wrapper — modqueue inspection, reports, mod action logs, and actions (approve, remove, ban, modmail, flair) | None (uses fetch) |
 | [`@webframp/discourse`](discourse/) | Queries Discourse forums — categories, topics, and search via the public REST API | None (uses fetch) |
@@ -166,6 +180,22 @@ swamp extension pull @webframp/anthropic/analytics
 
 # Microsoft extensions
 swamp extension pull @webframp/microsoft/teams
+
+# Datadog extensions
+swamp extension pull @webframp/datadog/monitors
+swamp extension pull @webframp/datadog/incidents
+swamp extension pull @webframp/datadog/slos
+swamp extension pull @webframp/datadog/metrics
+swamp extension pull @webframp/datadog/logs
+swamp extension pull @webframp/datadog/events
+swamp extension pull @webframp/datadog/downtimes
+swamp extension pull @webframp/datadog/synthetics
+swamp extension pull @webframp/datadog/on-call
+swamp extension pull @webframp/datadog/teams
+swamp extension pull @webframp/datadog/dora
+swamp extension pull @webframp/datadog/security-rules
+swamp extension pull @webframp/datadog/security-signals
+swamp extension pull @webframp/datadog/security-suppressions
 
 # GCP extensions
 swamp extension pull @webframp/gcp/vertex-usage

@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/datadog/monitors"
+version: "2026.07.20.11"
+description: "Datadog Monitors — monitor definitions, muting, status, and downtime management"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - datadog/monitors.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - datadog
+  - monitors
+  - alerting
+  - observability

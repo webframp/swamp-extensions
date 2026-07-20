@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/datadog/dora"
+version: "2026.07.20.11"
+description: "Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - datadog/dora.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - datadog
+  - dora
+  - devops
+  - engineering-velocity
