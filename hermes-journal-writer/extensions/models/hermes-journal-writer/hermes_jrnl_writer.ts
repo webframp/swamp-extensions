@@ -18,6 +18,7 @@ const ALL_SOURCES = [
   "ifin",
   "redmonk",
   "arxiv",
+  "aiDailyBrief",
 ] as const;
 type SourceName = typeof ALL_SOURCES[number];
 
@@ -201,6 +202,12 @@ function buildDailyFile(
       Record<string, unknown>
     >)
     : [];
+  const aiDailyBriefEditions = enabledSources.has("aiDailyBrief")
+    ? (((data["aiDailyBrief"] as Record<string, unknown>)?.editions ??
+      []) as Array<
+        Record<string, unknown>
+      >)
+    : [];
 
   // Collect tags from tagged sources
   for (const s of lobStories) {
@@ -214,6 +221,10 @@ function buildDailyFile(
   for (const e of arxivEntries) {
     const cat = e["category"] as string | undefined;
     if (cat) addTag(allTags, cat);
+  }
+  for (const ed of aiDailyBriefEditions) {
+    const tags = ed["tags"] as string[] | undefined;
+    if (tags) { for (const tag of tags) addTag(allTags, String(tag)); }
   }
 
   // Collect source URLs for the SOURCES property
@@ -243,6 +254,10 @@ function buildDailyFile(
     const l = e["link"] as string;
     if (l) allSources.push(l);
   }
+  for (const ed of aiDailyBriefEditions) {
+    const u = ed["url"] as string | undefined;
+    if (u) allSources.push(u);
+  }
 
   // Org FILETAGS are colon-delimited: `:tag1:tag2:`. Build with a single join
   // so adjacent tags don't produce a `::` (which org parses as an empty tag).
@@ -258,6 +273,9 @@ function buildDailyFile(
   if (ifinTopics.length) counts.push(`${ifinTopics.length} IFIN`);
   if (redmonkItems.length) counts.push(`${redmonkItems.length} RedMonk`);
   if (arxivEntries.length) counts.push(`${arxivEntries.length} arXiv`);
+  if (aiDailyBriefEditions.length) {
+    counts.push(`${aiDailyBriefEditions.length} AI Daily Brief`);
+  }
 
   // === File header ===
   let file = `#+TITLE: Research Journal ${orgDate}\n`;
@@ -356,6 +374,37 @@ function buildDailyFile(
       if (link) file += `  ${link}\n`;
     }
     file += "\n";
+  }
+
+  if (aiDailyBriefEditions.length > 0) {
+    file += `* The AI Daily Brief\n`;
+    for (const ed of aiDailyBriefEditions) {
+      const date = ed["date"] as string;
+      const title = ed["title"] as string;
+      const url = ed["url"] as string;
+      const summary = (ed["summary"] as string ?? "").replace(/\n/g, " ").slice(
+        0,
+        240,
+      );
+      const tags = (ed["tags"] as string[]) ?? [];
+      const nuggets = (ed["nuggets"] as Array<Record<string, unknown>>) ??
+        [];
+      file += `** ${date} — *${title}*\n`;
+      if (tags.length > 0) file += `  tags: ${tags.join(", ")}\n`;
+      if (summary) file += `  ${summary}\n`;
+      if (url) file += `  ${url}\n`;
+      // Written takeaways only — the collector excludes video/audio embeds.
+      for (const n of nuggets.slice(0, 8)) {
+        const heading = (n["heading"] as string ?? "").replace(/\n/g, " ");
+        const body = (n["body"] as string ?? "").replace(/\n/g, " ").slice(
+          0,
+          200,
+        );
+        if (heading) file += `- ${heading}\n`;
+        if (body) file += `  ${body}\n`;
+      }
+      file += "\n";
+    }
   }
 
   return file;
@@ -554,13 +603,27 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.07.18.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.20.1",
+      description:
+        "Adds the aiDailyBrief source to the sources list and formats The AI Daily Brief editions in the org entry. Existing instances keep their configured sources; new instances include aiDailyBrief by default.",
+      upgradeAttributes: (old: Record<string, unknown>) => {
+        const prev = old as { sources?: string[] };
+        if (
+          Array.isArray(prev.sources) && !prev.sources.includes("aiDailyBrief")
+        ) {
+          return { ...prev, sources: [...prev.sources, "aiDailyBrief"] };
+        }
+        return old;
+      },
     },
   ],
   resources: {
