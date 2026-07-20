@@ -106,6 +106,70 @@ jobs:
             deno check extensions/reports/*.ts
           fi
 
+  datadog-check:
+    name: datadog/${{ matrix.extension }} - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extension: [dora, downtimes, events, incidents, logs, metrics, monitors, on-call, security-rules, security-signals, security-suppressions, slos, synthetics, teams]
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: datadog/${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: "2.7.14"
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/models/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/models/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            if ls extensions/models/datadog/*_test.ts 1> /dev/null 2>&1; then
+              deno test --allow-env --allow-net extensions/models/
+            else
+              echo "No tests found, skipping"
+            fi
+          else
+            deno check extensions/models/datadog/*.ts extensions/models/datadog/_lib/*.ts
+          fi
+
+  snyk-check:
+    name: snyk/${{ matrix.extension }} - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extension: [apps, assets, cloud, collections, container-images, groups, inventory, issues, memberships, policies, projects, sast, sbom, self, service-accounts, settings, slack, sso, tenants, tests]
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: snyk/${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: "2.7.14"
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/models/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/models/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            if ls extensions/models/snyk/*_test.ts 1> /dev/null 2>&1; then
+              deno test --allow-env --allow-net extensions/models/
+            else
+              echo "No tests found, skipping"
+            fi
+          else
+            deno check extensions/models/snyk/*.ts extensions/models/snyk/_lib/*.ts
+          fi
+
   gitlab-report-check:
     name: gitlab/report - ${{ matrix.task }}
     runs-on: ubuntu-latest
@@ -248,9 +312,9 @@ jobs:
         working-directory: twitch
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
-          deno-version: v2.x
+          deno-version: "2.7.14"
       - name: deno test
         run: deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/
 
