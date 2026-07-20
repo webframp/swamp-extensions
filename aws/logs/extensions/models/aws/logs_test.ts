@@ -1,7 +1,7 @@
 // AWS CloudWatch Logs Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists, assertMatch } from "jsr:@std/assert@1";
+import { assertEquals, assertExists, assertMatch } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1090.0";
 import { model } from "./logs.ts";

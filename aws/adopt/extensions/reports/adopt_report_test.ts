@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import { report } from "./adopt_report.ts";
 
 function makeContext(

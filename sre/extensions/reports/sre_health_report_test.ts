@@ -1,7 +1,7 @@
 // SRE Health Check Report Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import { createReportTestContext } from "@systeminit/swamp-testing";
 import { parseSizeToMB, report } from "./sre_health_report.ts";
 

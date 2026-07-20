@@ -5,7 +5,7 @@ import {
   assertEquals,
   assertExists,
   assertStringIncludes,
-} from "jsr:@std/assert@1";
+} from "jsr:@std/assert@1.0.19";
 import { report } from "./ai_usage_report.ts";
 
 // =============================================================================

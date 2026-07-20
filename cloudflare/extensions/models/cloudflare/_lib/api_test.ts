@@ -1,7 +1,7 @@
 // Cloudflare API Helper Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import { cfApi, cfApiPaginated } from "./api.ts";
 
 // ---------------------------------------------------------------------------

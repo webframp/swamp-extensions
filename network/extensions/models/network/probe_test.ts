@@ -1,7 +1,7 @@
 // Network Probe Model Tests — http_check error-as-data
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists } from "jsr:@std/assert@1";
+import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { _internals, model } from "./probe.ts";
 
