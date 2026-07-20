@@ -153,7 +153,7 @@ const UpdateOrgSecretsSettingsSchema = z.object({
 /** Snyk Settings — organization and group setting management */
 export const model = {
   type: "@webframp/snyk/settings",
-  version: "2026.07.19.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -262,7 +262,11 @@ export const model = {
   methods: {
     get_iac_settings_for_group: {
       description: "Get the Infrastructure as Code Settings for a group",
-      arguments: z.object({}),
+      arguments: z.object({
+        group_id: z.string().describe(
+          "The id of the group whose Infrastructure as Code settings are requested",
+        ),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -287,7 +291,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "iac_settings_for_group",
-          "latest",
+          String(args.group_id),
           result,
         );
         context.logger.info("Fetched iac_settings_for_group", {});
@@ -297,6 +301,9 @@ export const model = {
     update_iac_settings_for_group: {
       description: "Update the Infrastructure as Code Settings for a group",
       arguments: z.object({
+        group_id: z.string().describe(
+          "The id of the group whose Infrastructure as Code settings are getting updated",
+        ),
         data: z.unknown().optional(),
       }),
       execute: async (
@@ -315,7 +322,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -330,7 +337,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "iac_settings_for_group",
-          "updated",
+          String(args.group_id),
           result,
         );
         context.logger.info("Updated iac_settings_for_group", {});
@@ -339,7 +346,9 @@ export const model = {
     },
     get_opensource_broker_setting_for_group: {
       description: "Get opensource broker setting for group",
-      arguments: z.object({}),
+      arguments: z.object({
+        group_id: z.string().describe("Group ID"),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -364,7 +373,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "opensource_broker_setting_for_group",
-          "latest",
+          String(args.group_id),
           result,
         );
         context.logger.info("Fetched opensource_broker_setting_for_group", {});
@@ -373,7 +382,9 @@ export const model = {
     },
     enable_opensource_broker_for_group: {
       description: "Enable opensource broker for group",
-      arguments: z.object({}),
+      arguments: z.object({
+        group_id: z.string().describe("Group ID"),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -408,7 +419,9 @@ export const model = {
     },
     delete_opensource_broker_setting_for_group: {
       description: "Delete opensource broker setting for group",
-      arguments: z.object({}),
+      arguments: z.object({
+        group_id: z.string().describe("Group ID"),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -431,13 +444,15 @@ export const model = {
           version,
         );
 
-        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        context.logger.info("Deleted resource {id}", { id: args.group_id });
         return { dataHandles: [] };
       },
     },
     get_pull_request_template: {
       description: "Get pull request template for group",
-      arguments: z.object({}),
+      arguments: z.object({
+        group_id: z.string().describe("Snyk Group ID"),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -462,7 +477,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "pull_request_template",
-          "latest",
+          String(args.group_id),
           result,
         );
         context.logger.info("Fetched pull_request_template", {});
@@ -472,6 +487,7 @@ export const model = {
     create_or_update_pull_request_template: {
       description: "Create or update pull request template for group",
       arguments: z.object({
+        group_id: z.string().describe("Snyk Group ID"),
         data: z.object({
           attributes: z.unknown(),
           type: z.unknown(),
@@ -493,7 +509,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -520,7 +536,9 @@ export const model = {
     },
     delete_pull_request_template: {
       description: "Delete pull request template for group",
-      arguments: z.object({}),
+      arguments: z.object({
+        group_id: z.string().describe("Snyk Group ID"),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -543,7 +561,7 @@ export const model = {
           version,
         );
 
-        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        context.logger.info("Deleted resource {id}", { id: args.group_id });
         return { dataHandles: [] };
       },
     },

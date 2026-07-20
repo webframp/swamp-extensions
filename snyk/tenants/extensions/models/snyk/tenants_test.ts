@@ -362,6 +362,7 @@ Deno.test({
       >).create_broker_connection_integration.execute({
         "tenant_id": "test-id-123",
         "connection_id": "test-id-123",
+        "org_id": "test-id-123",
         "name": "test-resource",
       }, context);
       assertEquals(result.dataHandles.length, 1);
@@ -408,6 +409,7 @@ Deno.test({
       >).delete_broker_connection_integration.execute({
         "tenant_id": "test-id-123",
         "connection_id": "test-id-123",
+        "org_id": "test-id-123",
         "integration_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 0);

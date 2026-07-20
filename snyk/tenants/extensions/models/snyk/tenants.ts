@@ -565,7 +565,7 @@ const CreateTenantRoleSchema = z.object({
 /** Snyk Tenants — tenant and organization lifecycle management */
 export const model = {
   type: "@webframp/snyk/tenants",
-  version: "2026.07.19.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -968,6 +968,7 @@ export const model = {
       arguments: z.object({
         tenant_id: z.string().describe("Tenant ID"),
         connection_id: z.string().describe("Connection ID"),
+        org_id: z.string().describe("Org ID"),
         data: z.unknown(),
       }),
       execute: async (
@@ -986,7 +987,11 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "connection_id"]);
+        const excludeKeys = new Set<string>([
+          "tenant_id",
+          "connection_id",
+          "org_id",
+        ]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -1016,6 +1021,7 @@ export const model = {
       arguments: z.object({
         tenant_id: z.string().describe("Tenant ID"),
         connection_id: z.string().describe("Connection ID"),
+        org_id: z.string().describe("Org ID"),
         integration_id: z.string().describe("Integration ID"),
       }),
       execute: async (

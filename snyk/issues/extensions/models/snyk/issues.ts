@@ -27,7 +27,7 @@ const GlobalArgsSchema = z.object({
 /** Snyk Issues — vulnerability issues across projects and groups */
 export const model = {
   type: "@webframp/snyk/issues",
-  version: "2026.07.19.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -63,6 +63,7 @@ export const model = {
     list_group_issues: {
       description: "Get issues by group ID",
       arguments: z.object({
+        group_id: z.string().describe("Group ID"),
         scan_item_id: z.string().optional().describe(
           "A scan item id to filter issues through their scan item relationship.",
         ),
@@ -106,7 +107,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) {
             queryParts.push(
@@ -125,7 +126,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_group_issues",
-          "latest",
+          String(args.group_id),
           result,
         );
         context.logger.info("Fetched list_group_issues", {});
@@ -135,6 +136,7 @@ export const model = {
     get_group_issue_by_issue_id: {
       description: "Get an issue",
       arguments: z.object({
+        group_id: z.string().describe("Group ID"),
         issue_id: z.string().describe("Issue ID"),
       }),
       execute: async (

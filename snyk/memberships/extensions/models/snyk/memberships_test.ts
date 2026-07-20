@@ -148,7 +148,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_group_memberships.execute({}, context);
+      >).list_group_memberships.execute(
+        { "group_id": "test-id-123" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -203,10 +206,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_group_membership.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_group_membership.execute({
+        "group_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -253,6 +256,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_group_user_membership.execute({
+        "group_id": "test-id-123",
         "membership_id": "test-id-123",
         "name": "test-resource",
       }, context);
@@ -301,10 +305,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).delete_group_membership.execute(
-        { "membership_id": "test-id-123" },
-        context,
-      );
+      >).delete_group_membership.execute({
+        "group_id": "test-id-123",
+        "membership_id": "test-id-123",
+      }, context);
       assertEquals(result.dataHandles.length, 0);
     } finally {
       uninstall();

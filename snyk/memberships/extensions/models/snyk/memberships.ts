@@ -83,7 +83,7 @@ const CreateOrgMembershipSchema = z.object({
 /** Snyk Memberships — group and org member management */
 export const model = {
   type: "@webframp/snyk/memberships",
-  version: "2026.07.19.1",
+  version: "2026.07.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -125,6 +125,7 @@ export const model = {
     list_group_memberships: {
       description: "Get all memberships of the group",
       arguments: z.object({
+        group_id: z.string().describe("The ID of the group"),
         sort_by: z.enum([
           "username",
           "user_display_name",
@@ -167,7 +168,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -205,6 +206,7 @@ export const model = {
     create_group_membership: {
       description: "Create a group membership for a user with role",
       arguments: z.object({
+        group_id: z.string().describe("The ID of the group"),
         data: z.object({
           relationships: z.object({
             group: z.object({
@@ -245,7 +247,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
+        const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -271,6 +273,7 @@ export const model = {
     update_group_user_membership: {
       description: "Update a role from a group membership",
       arguments: z.object({
+        group_id: z.string().describe("The ID of the group"),
         membership_id: z.string().describe("The ID of the Group Membership"),
         data: z.unknown().optional(),
       }),
@@ -290,7 +293,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>(["membership_id"]);
+        const excludeKeys = new Set<string>(["group_id", "membership_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
@@ -315,6 +318,7 @@ export const model = {
     delete_group_membership: {
       description: "Delete a membership from a group",
       arguments: z.object({
+        group_id: z.string().describe("The ID of the group"),
         membership_id: z.string().describe("The ID of the Group Membership"),
         cascade: z.boolean().optional().describe(
           "indicates whether to delete the child org memberships of the group membership.",
@@ -336,7 +340,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
-        const pathKeys = new Set<string>(["membership_id"]);
+        const pathKeys = new Set<string>(["group_id", "membership_id"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !pathKeys.has(k)) {
             queryParts.push(

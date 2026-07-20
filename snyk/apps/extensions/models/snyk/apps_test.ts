@@ -154,7 +154,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_app_installs_for_group.execute({}, context);
+      >).get_app_installs_for_group.execute(
+        { "group_id": "test-id-123" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -202,10 +205,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_group_app_install.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_group_app_install.execute({
+        "group_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -247,6 +250,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).delete_group_app_install_by_id.execute({
+        "group_id": "test-id-123",
         "install_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 0);

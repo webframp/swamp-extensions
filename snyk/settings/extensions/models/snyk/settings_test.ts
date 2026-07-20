@@ -183,7 +183,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_iac_settings_for_group.execute({}, context);
+      >).get_iac_settings_for_group.execute(
+        { "group_id": "test-id-123" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -240,10 +243,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).update_iac_settings_for_group.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).update_iac_settings_for_group.execute({
+        "group_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -294,6 +297,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).enable_opensource_broker_for_group.execute({
+        "group_id": "test-id-123",
         "name": "test-resource",
       }, context);
       assertEquals(result.dataHandles.length, 1);
@@ -342,7 +346,9 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).delete_opensource_broker_setting_for_group.execute({}, context);
+      >).delete_opensource_broker_setting_for_group.execute({
+        "group_id": "test-id-123",
+      }, context);
       assertEquals(result.dataHandles.length, 0);
     } finally {
       uninstall();
@@ -397,6 +403,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_or_update_pull_request_template.execute({
+        "group_id": "test-id-123",
         "name": "test-resource",
       }, context);
       assertEquals(result.dataHandles.length, 1);

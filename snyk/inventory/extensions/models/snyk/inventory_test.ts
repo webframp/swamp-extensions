@@ -176,7 +176,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_assets_group.execute({}, context);
+      >).list_assets_group.execute({ "group_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -222,10 +222,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).update_assets_bulk_group.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).update_assets_bulk_group.execute({
+        "group_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -271,10 +271,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_asset_search_group.execute(
-        { "name": "test-resource" },
-        context,
-      );
+      >).create_asset_search_group.execute({
+        "group_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -323,7 +323,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_asset_group.execute({ "asset_id": "test-id-123" }, context);
+      >).get_asset_group.execute({
+        "group_id": "test-id-123",
+        "asset_id": "test-id-123",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
