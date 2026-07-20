@@ -28,7 +28,7 @@ export function generateTestSource(
   lines.push(`// SPDX-License-Identifier: Apache-2.0`);
   lines.push(``);
   lines.push(
-    `import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";`,
+    `import { assertEquals, assertExists, assertStringIncludes } from "jsr:@std/assert@1.0.19";`,
   );
   lines.push(
     `import { createModelTestContext } from "@systeminit/swamp-testing";`,
@@ -135,25 +135,60 @@ export function generateTestSource(
     lines.push(``);
   }
 
+  // One error-path test per service: a 5xx must throw, not silently succeed.
+  if (methods.length > 0) {
+    lines.push(generateErrorTest(config, methods[0]));
+    lines.push(``);
+  }
+
   return lines.join("\n");
 }
 
 /** Generate the mock HTTP server for Datadog */
 function generateMockServer(): string {
-  return `function startMockDdServer(
+  return `interface CapturedRequest {
+  method: string;
+  path: string;
+  search: string;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+function startMockDdServer(
   responses: Record<string, { body: unknown; status?: number }>,
-): { url: string; server: Deno.HttpServer } {
-  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+): { url: string; server: Deno.HttpServer; requests: CapturedRequest[] } {
+  const requests: CapturedRequest[] = [];
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
 
-    for (const [pattern, { body, status }] of Object.entries(responses)) {
+    // Capture the request (headers, method, path, parsed body) for assertions.
+    let body: unknown = null;
+    if (req.body) {
+      const text = await req.text();
+      if (text) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          body = text;
+        }
+      }
+    }
+    requests.push({
+      method: req.method,
+      path,
+      search: url.search,
+      headers: Object.fromEntries(req.headers),
+      body,
+    });
+
+    for (const [pattern, { body: respBody, status }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
         const code = status ?? 200;
         if (code === 204 || code === 205) {
           return new Response(null, { status: code });
         }
-        return Response.json(body, { status: code });
+        return Response.json(respBody, { status: code });
       }
     }
 
@@ -164,7 +199,7 @@ function generateMockServer(): string {
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: \`http://localhost:\${addr.port}\`, server };
+  return { url: \`http://localhost:\${addr.port}\`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -192,20 +227,34 @@ function generateExecutionTest(
   config: ServiceConfig,
   method: ClassifiedMethod,
 ): string {
-  const globalArgs: Record<string, string> = {
-    apiKey: "test-api-key",
-    appKey: "test-app-key",
-    site: "us1",
-  };
-
   const fixture = generateFixture(method);
   const pathPattern = extractPathPattern(method.operation.path);
   const testArgs = buildTestArgs(method);
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const resourceName = testResourceName(method);
+  const hasPathParam = method.operation.pathParams.length > 0;
+
+  // Request-level assertions shared by every method type: the request was
+  // actually made, hit the right verb + path, and carried both auth headers.
+  // `write` adds the JSON content-type + non-empty body checks.
+  const reqAsserts = (write: boolean): string =>
+    `      assertEquals(requests.length >= 1, true);
+      const req0 = requests[0];
+      assertEquals(req0.method, "${httpMethod}");
+      assertStringIncludes(req0.path, "${pathPattern}");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");${
+      write
+        ? `\n      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);`
+        : ""
+    }`;
 
   if (method.type === "list") {
     const responseBody = method.operation.isJsonApi
       ? { data: [fixture], meta: { page: {} } }
       : { data: [fixture] };
+    const isWrite = httpMethod === "POST";
     const argsStr = Object.keys(testArgs).length > 0
       ? JSON.stringify(testArgs)
       : "{}";
@@ -214,22 +263,29 @@ function generateExecutionTest(
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockDdServer({
+    const { url, server, requests } = startMockDdServer({
       "${pathPattern}": { body: ${JSON.stringify(responseBody)} },
     });
     const uninstall = installFetchMock(url);
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${argsStr}, context);
+      const result = await ${execCall(method.name, argsStr)};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(isWrite)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      const data = resources[0].data as { items: unknown[]; truncated: boolean };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
     } finally {
       uninstall();
       await server.shutdown();
@@ -242,29 +298,34 @@ function generateExecutionTest(
     const responseBody = method.operation.isJsonApi
       ? { data: fixture }
       : fixture;
+    const expectedInstance = hasPathParam ? "test-id-123" : "latest";
     return `Deno.test({
   name: "${config.name} model: ${method.name} fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockDdServer({
+    const { url, server, requests } = startMockDdServer({
       "${pathPattern}": { body: ${JSON.stringify(responseBody)} },
     });
     const uninstall = installFetchMock(url);
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-      JSON.stringify(testArgs)
-    }, context);
+      const result = await ${execCall(method.name, JSON.stringify(testArgs))};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(false)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertEquals(resources[0].name, "${expectedInstance}");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -283,24 +344,26 @@ function generateExecutionTest(
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockDdServer({
+    const { url, server, requests } = startMockDdServer({
       "${pathPattern}": { body: ${JSON.stringify(responseBody)} },
     });
     const uninstall = installFetchMock(url);
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-      JSON.stringify(createArgs)
-    }, context);
+      const result = await ${execCall(method.name, JSON.stringify(createArgs))};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(true)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -315,21 +378,24 @@ function generateExecutionTest(
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockDdServer({
+    const { url, server, requests } = startMockDdServer({
       "${pathPattern}": { body: {}, status: 204 },
     });
     const uninstall = installFetchMock(url);
 
     try {
-      const { context } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-      JSON.stringify(testArgs)
-    }, context);
+      const result = await ${execCall(method.name, JSON.stringify(testArgs))};
       assertEquals(result.dataHandles.length, 0);
+
+${reqAsserts(false)}
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -338,32 +404,147 @@ function generateExecutionTest(
 });`;
   }
 
-  // Default: action/update
-  const responseBody = method.operation.isJsonApi ? { data: fixture } : fixture;
-  const actionArgs = { ...testArgs, name: "test-resource" };
-  return `Deno.test({
+  if (method.type === "update") {
+    const responseBody = method.operation.isJsonApi
+      ? { data: fixture }
+      : fixture;
+    const updateArgs = { ...testArgs, name: "test-resource" };
+    const expectedInstance = hasPathParam ? "test-id-123" : "updated";
+    return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockDdServer({
+    const { url, server, requests } = startMockDdServer({
       "${pathPattern}": { body: ${JSON.stringify(responseBody)} },
     });
     const uninstall = installFetchMock(url);
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-    JSON.stringify(actionArgs)
-  }, context);
+      const result = await ${execCall(method.name, JSON.stringify(updateArgs))};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(true)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertEquals(resources[0].name, "${expectedInstance}");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
+  }
+
+  // Default: action
+  const responseBody = method.operation.isJsonApi ? { data: fixture } : fixture;
+  const actionArgs = { ...testArgs, name: "test-resource" };
+  const actionHasBody = method.operation.requestBody !== undefined;
+  return `Deno.test({
+  name: "${config.name} model: ${method.name} executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "${pathPattern}": { body: ${JSON.stringify(responseBody)} },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      const result = await ${execCall(method.name, JSON.stringify(actionArgs))};
+      assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(actionHasBody)}
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertExists(resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
+}
+
+/** Standard test globalArgs for the Datadog two-header auth. */
+function globalArgsFixture(): Record<string, string> {
+  return { apiKey: "test-api-key", appKey: "test-app-key", site: "us1" };
+}
+
+/** The typed cast + execute call shared by every generated test. */
+function execCall(methodName: string, argsStr: string): string {
+  return `(model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${methodName}.execute(${argsStr}, context)`;
+}
+
+/** Resource key (specName) a method writes — mirrors the model generator. */
+function testResourceName(method: ClassifiedMethod): string {
+  if (method.type === "list") return method.name.replace(/^(list|get)_/, "");
+  return method.name.replace(/^(get|create|update|action|delete)_/, "");
+}
+
+/** Args passed to execute() in tests, including the write-method name field. */
+function buildExecuteArgs(method: ClassifiedMethod): Record<string, unknown> {
+  const testArgs = buildTestArgs(method);
+  if (
+    method.type === "create" || method.type === "update" ||
+    method.type === "action"
+  ) {
+    return { ...testArgs, name: "test-resource" };
+  }
+  return testArgs;
+}
+
+/**
+ * Generate one error-path test per service: a 5xx response from the API must
+ * surface as a thrown error, not a silent success or an empty write.
+ */
+function generateErrorTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+): string {
+  const pathPattern = extractPathPattern(method.operation.path);
+  const args = buildExecuteArgs(method);
+  const argsStr = Object.keys(args).length > 0 ? JSON.stringify(args) : "{}";
+  return `Deno.test({
+  name: "${config.name} model: ${method.name} surfaces API errors",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockDdServer({
+      "${pathPattern}": {
+        body: { errors: [{ status: "500", title: "Internal Error" }] },
+        status: 500,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      let threw = false;
+      try {
+        await ${execCall(method.name, argsStr)};
+      } catch (_err) {
+        threw = true;
+      }
+      assertEquals(threw, true);
     } finally {
       uninstall();
       await server.shutdown();
@@ -399,6 +580,9 @@ function generateFixture(
   for (const [name, prop] of Object.entries(schema.properties)) {
     result[name] = synthesizeValue(prop);
   }
+  // Guarantee a deterministic id even if the schema declares an `id` property,
+  // so tests can assert the response body flowed through to the resource.
+  result.id = "fixture-123";
   return result;
 }
 
