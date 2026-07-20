@@ -124,7 +124,7 @@ const CreateMonitorConfigPolicySchema = z.object({
 /** Datadog Monitors — monitor definitions, muting, status, and downtime management */
 export const model = {
   type: "@webframp/datadog/monitors",
-  version: "2026.07.20.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

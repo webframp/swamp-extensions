@@ -76,7 +76,11 @@ function startMockDdServer(
 
     for (const [pattern, { body, status }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
-        return Response.json(body, { status: status ?? 200 });
+        const code = status ?? 200;
+        if (code === 204 || code === 205) {
+          return new Response(null, { status: code });
+        }
+        return Response.json(body, { status: code });
       }
     }
 

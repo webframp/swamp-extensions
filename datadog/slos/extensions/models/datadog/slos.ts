@@ -71,7 +71,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.07.20.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

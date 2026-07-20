@@ -94,7 +94,7 @@ const ListLogsSchema = z.object({
 /** Datadog Logs — log search, aggregation, and analytics */
 export const model = {
   type: "@webframp/datadog/logs",
-  version: "2026.07.20.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

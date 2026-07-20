@@ -139,7 +139,7 @@ const ListMonitorDowntimesSchema = z.object({
 /** Datadog Downtimes — scheduled downtime management for monitors */
 export const model = {
   type: "@webframp/datadog/downtimes",
-  version: "2026.07.20.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

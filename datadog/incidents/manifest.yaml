@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/incidents"
-version: "2026.07.20.1"
+version: "2026.07.20.2"
 description: "Datadog Incidents — incident lifecycle, timelines, teams, and attachments"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

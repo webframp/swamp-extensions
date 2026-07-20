@@ -176,7 +176,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.07.20.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

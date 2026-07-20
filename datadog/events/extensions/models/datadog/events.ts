@@ -105,7 +105,7 @@ const SearchEventsSchema = z.object({
 /** Datadog Events — event search and submission */
 export const model = {
   type: "@webframp/datadog/events",
-  version: "2026.07.20.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
