@@ -73,7 +73,10 @@ deno task check && deno task lint && deno task fmt && deno task test
 swamp extension quality manifest.yaml --json
 ```
 
-Then optionally: `./scripts/local-adversarial-review.sh`
+Then perform a local adversarial review: read the branch diff
+(`git diff origin/main...HEAD`) and probe it against the CI adversarial
+dimensions — logic errors, edge cases, failure modes, pattern consistency across
+sibling methods, and partial-failure handling — before pushing.
 
 ## PR Workflow
 
