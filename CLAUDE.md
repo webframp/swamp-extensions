@@ -135,6 +135,7 @@ deno task test     # Run tests
 - CalVer format: `YYYY.MM.DD.N` (e.g., `2026.03.31.1`)
 - Bump version in `manifest.yaml` for each release
 - **ALWAYS bump `manifest.yaml` version in the first commit of a PR.** Do not defer to a follow-up. The publish workflow keys off version changes — forgetting the bump means the extension won't publish after merge.
+- **Exception — test-only changes do not require a version bump or `RELEASE_NOTES.md`.** Test files (`*_test.ts`) are not bundled into the published extension; only the paths in `models`/`vaults`/`datastores`/`drivers`/`reports`/`workflows` and `additionalFiles` are shipped. A PR that changes only test files produces a byte-identical published artifact, so bumping would republish identical bytes with empty release notes. CI still runs the tests on every PR. If a PR changes both a shipped file and its test, the normal bump rule applies.
 - Pin all npm dependencies to exact versions in `deno.json` (no ranges)
 - Swamp's bundler inlines npm packages at bundle time; `deno.lock` does NOT cover extension deps
 

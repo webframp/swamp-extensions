@@ -13,6 +13,13 @@ requirements — they are not suggestions.
    to get the next version. The publish workflow keys off version changes — no
    bump means no publish after merge.
 
+   **Exception:** test-only changes (`*_test.ts`) need no bump or
+   `RELEASE_NOTES.md` — test files are not bundled into the published extension
+   (only `models`/`vaults`/`datastores`/`drivers`/`reports`/`workflows` paths
+   and `additionalFiles` ship), so a test-only PR produces a byte-identical
+   artifact. CI still runs the tests. If a PR touches both a shipped file and
+   its test, the normal bump rule applies.
+
 2. **Update `RELEASE_NOTES.md` in the same commit as the version bump.** CI
    passes this to `swamp extension push --release-notes` and to the GitHub
    release. Format:

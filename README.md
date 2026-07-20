@@ -53,6 +53,26 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/datadog/security-rules`](datadog/security-rules/) | Datadog Security Rules — detection rule CRUD | None (uses fetch) |
 | [`@webframp/datadog/security-signals`](datadog/security-signals/) | Datadog Security Signals — search, triage, state management | None (uses fetch) |
 | [`@webframp/datadog/security-suppressions`](datadog/security-suppressions/) | Datadog Security Suppressions — suppression rule management | None (uses fetch) |
+| [`@webframp/snyk/apps`](snyk/apps/) | Snyk Apps — OAuth application management, bots, installations | None (uses fetch) |
+| [`@webframp/snyk/assets`](snyk/assets/) | Snyk Assets — asset discovery and classification across the group | None (uses fetch) |
+| [`@webframp/snyk/cloud`](snyk/cloud/) | Snyk Cloud — cloud environments, scans, and resource posture management | None (uses fetch) |
+| [`@webframp/snyk/collections`](snyk/collections/) | Snyk Collections — project collection groupings and management | None (uses fetch) |
+| [`@webframp/snyk/container-images`](snyk/container-images/) | Snyk Container Images — container image scanning and vulnerability data | None (uses fetch) |
+| [`@webframp/snyk/groups`](snyk/groups/) | Snyk Groups — group management, orgs, members, and audit | None (uses fetch) |
+| [`@webframp/snyk/inventory`](snyk/inventory/) | Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources | None (uses fetch) |
+| [`@webframp/snyk/issues`](snyk/issues/) | Snyk Issues — vulnerability issues across projects and groups | None (uses fetch) |
+| [`@webframp/snyk/memberships`](snyk/memberships/) | Snyk Memberships — group and org member management | None (uses fetch) |
+| [`@webframp/snyk/policies`](snyk/policies/) | Snyk Policies — security policy management and rule configuration | None (uses fetch) |
+| [`@webframp/snyk/projects`](snyk/projects/) | Snyk Projects — project listing, attributes, relationships, and target management | None (uses fetch) |
+| [`@webframp/snyk/sast`](snyk/sast/) | Snyk SAST — static application security testing results and management | None (uses fetch) |
+| [`@webframp/snyk/sbom`](snyk/sbom/) | Snyk SBOM — software bill of materials testing and analysis | None (uses fetch) |
+| [`@webframp/snyk/self`](snyk/self/) | Snyk Self — current user context, org listing, and app management | None (uses fetch) |
+| [`@webframp/snyk/service-accounts`](snyk/service-accounts/) | Snyk Service Accounts — automated access management for CI/CD | None (uses fetch) |
+| [`@webframp/snyk/settings`](snyk/settings/) | Snyk Settings — organization and group setting management | None (uses fetch) |
+| [`@webframp/snyk/slack`](snyk/slack/) | Snyk Slack Integration — Slack app configuration and channel management | None (uses fetch) |
+| [`@webframp/snyk/sso`](snyk/sso/) | Snyk SSO — single sign-on connection management for groups | None (uses fetch) |
+| [`@webframp/snyk/tenants`](snyk/tenants/) | Snyk Tenants — tenant and organization lifecycle management | None (uses fetch) |
+| [`@webframp/snyk/tests`](snyk/tests/) | Snyk Tests — on-demand package and dependency vulnerability testing | None (uses fetch) |
 | [`@webframp/gitlab-review`](gitlab-review/) | AI-assisted GitLab merge request code review (GraphQL + REST) with a human approval gate and draft/edit/post workflow | None (uses fetch) |
 | [`@webframp/reddit/moderation`](reddit/) | Reddit moderation API wrapper — modqueue inspection, reports, mod action logs, and actions (approve, remove, ban, modmail, flair) | None (uses fetch) |
 | [`@webframp/discourse`](discourse/) | Queries Discourse forums — categories, topics, and search via the public REST API | None (uses fetch) |
@@ -196,6 +216,28 @@ swamp extension pull @webframp/datadog/dora
 swamp extension pull @webframp/datadog/security-rules
 swamp extension pull @webframp/datadog/security-signals
 swamp extension pull @webframp/datadog/security-suppressions
+
+# Snyk extensions
+swamp extension pull @webframp/snyk/apps
+swamp extension pull @webframp/snyk/assets
+swamp extension pull @webframp/snyk/cloud
+swamp extension pull @webframp/snyk/collections
+swamp extension pull @webframp/snyk/container-images
+swamp extension pull @webframp/snyk/groups
+swamp extension pull @webframp/snyk/inventory
+swamp extension pull @webframp/snyk/issues
+swamp extension pull @webframp/snyk/memberships
+swamp extension pull @webframp/snyk/policies
+swamp extension pull @webframp/snyk/projects
+swamp extension pull @webframp/snyk/sast
+swamp extension pull @webframp/snyk/sbom
+swamp extension pull @webframp/snyk/self
+swamp extension pull @webframp/snyk/service-accounts
+swamp extension pull @webframp/snyk/settings
+swamp extension pull @webframp/snyk/slack
+swamp extension pull @webframp/snyk/sso
+swamp extension pull @webframp/snyk/tenants
+swamp extension pull @webframp/snyk/tests
 
 # GCP extensions
 swamp extension pull @webframp/gcp/vertex-usage
