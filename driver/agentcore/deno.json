@@ -24,7 +24,7 @@
   "imports": {
     "@aws-sdk/client-bedrock-agentcore": "npm:@aws-sdk/client-bedrock-agentcore@3.1066.0",
     "@aws-sdk/client-s3": "npm:@aws-sdk/client-s3@3.1066.0",
-    "@std/assert": "jsr:@std/assert@1",
+    "@std/assert": "jsr:@std/assert@1.0.19",
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260504.10"
   },
   "compilerOptions": {

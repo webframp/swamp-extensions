@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals } from "jsr:@std/assert@1.0.19";
 import { createDriverTestContext } from "@systeminit/swamp-testing";
 import { driver } from "./nix_driver.ts";
 

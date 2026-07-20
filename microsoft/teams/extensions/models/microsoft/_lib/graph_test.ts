@@ -1,7 +1,7 @@
 // Tests for _lib/graph.ts
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import { GraphApiError, graphRequest, graphRequestPaginated } from "./graph.ts";
 
 // ---------------------------------------------------------------------------

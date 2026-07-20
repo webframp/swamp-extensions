@@ -27,7 +27,9 @@ export function generateTestSource(
   );
   lines.push(`// SPDX-License-Identifier: Apache-2.0`);
   lines.push(``);
-  lines.push(`import { assertEquals, assertExists } from "jsr:@std/assert@1";`);
+  lines.push(
+    `import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";`,
+  );
   lines.push(
     `import { createModelTestContext } from "@systeminit/swamp-testing";`,
   );

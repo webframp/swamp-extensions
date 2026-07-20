@@ -1,7 +1,11 @@
 // AWS Drift State Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists, assertMatch } from "jsr:@std/assert@1";
+import {
+  assertEquals,
+  assertExists,
+  assertMatch,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./drift_state.ts";
 

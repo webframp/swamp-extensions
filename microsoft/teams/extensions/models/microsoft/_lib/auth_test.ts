@@ -1,7 +1,7 @@
 // Tests for _lib/auth.ts (public client — no client secret)
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import {
   initiateDeviceCode,
   MicrosoftAuthError,

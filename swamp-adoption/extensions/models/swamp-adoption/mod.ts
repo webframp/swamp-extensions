@@ -424,7 +424,7 @@ Each generated file includes TODO comments marking where the user adds real logi
         ].join("\n");
 
         const testContent = [
-          'import { assertEquals, assertExists } from "jsr:@std/assert@1";',
+          'import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";',
           `import { model } from "./mod.ts";`,
           "",
           'Deno.test("model has correct type", () => {',

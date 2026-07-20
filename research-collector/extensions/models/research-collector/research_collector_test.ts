@@ -5,7 +5,7 @@
  * and verifies that single-source failures still produce partial results.
  */
 
-import { assertEquals, assertExists } from "jsr:@std/assert@1";
+import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./research_collector.ts";
 

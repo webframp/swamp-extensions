@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import { createDriverTestContext } from "@systeminit/swamp-testing";
 import { driver } from "./dry_run.ts";
 

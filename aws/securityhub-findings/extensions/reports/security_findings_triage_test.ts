@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals } from "jsr:@std/assert@1.0.19";
 import { report } from "./security_findings_triage.ts";
 
 function createMockContext(
