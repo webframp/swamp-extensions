@@ -93,13 +93,11 @@ Work through findings by severity — Critical/High first, then Medium, then Low
    # For workflows:
    swamp workflow validate <name> --json
    ```
-4. **Run local adversarial review** before pushing to avoid round-trips:
-   ```bash
-   ./scripts/local-adversarial-review.sh
-   ```
-   This auto-detects `claude` or `kiro-cli`, runs a fast pattern-symmetry check,
-   then a full adversarial review matching the CI prompt. Fix any HIGH findings
-   before pushing.
+4. **Run local adversarial review** before pushing to avoid round-trips.
+   Review the branch diff (`git diff origin/main...HEAD`) adversarially against
+   the CI prompt's dimensions — logic errors, edge cases, failure modes, pattern
+   consistency across sibling methods, and partial-failure handling. Fix any
+   HIGH findings before pushing.
 5. **Commit with a descriptive message** referencing what was fixed:
    ```bash
    git add <specific files>
