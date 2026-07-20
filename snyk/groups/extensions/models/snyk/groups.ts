@@ -295,7 +295,7 @@ const CreateSecretsRuleExtensionSchema = z.object({
 /** Snyk Groups — group management, orgs, members, and audit */
 export const model = {
   type: "@webframp/snyk/groups",
-  version: "2026.07.19.1",
+  version: "2026.07.20.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -576,7 +576,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_group_export",
+          "group_export",
           "latest",
           result ?? {},
         );

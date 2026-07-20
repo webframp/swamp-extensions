@@ -27,7 +27,7 @@ export function generateTestSource(
   lines.push(`// SPDX-License-Identifier: Apache-2.0`);
   lines.push(``);
   lines.push(
-    `import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";`,
+    `import { assertEquals, assertExists, assertStringIncludes } from "jsr:@std/assert@1.0.19";`,
   );
   lines.push(
     `import { createModelTestContext } from "@systeminit/swamp-testing";`,
@@ -126,17 +126,52 @@ export function generateTestSource(
     lines.push(``);
   }
 
+  // One error-path test per service: a 5xx must throw, not silently succeed.
+  if (methods.length > 0) {
+    lines.push(generateErrorTest(config, methods[0]));
+    lines.push(``);
+  }
+
   return lines.join("\n");
 }
 
 /** Generate the mock HTTP server for Snyk JSON:API */
 function generateMockServer(): string {
-  return `function startMockSnykServer(
+  return `interface CapturedRequest {
+  method: string;
+  path: string;
+  search: string;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+function startMockSnykServer(
   responses: Record<string, { data: unknown; isCollection?: boolean }>,
-): { url: string; server: Deno.HttpServer } {
-  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+): { url: string; server: Deno.HttpServer; requests: CapturedRequest[] } {
+  const requests: CapturedRequest[] = [];
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    // Capture the request (headers, method, path, query, parsed body).
+    let reqBody: unknown = null;
+    if (req.body) {
+      const text = await req.text();
+      if (text) {
+        try {
+          reqBody = JSON.parse(text);
+        } catch {
+          reqBody = text;
+        }
+      }
+    }
+    requests.push({
+      method: req.method,
+      path,
+      search: url.search,
+      headers: Object.fromEntries(req.headers),
+      body: reqBody,
+    });
 
     for (const [pattern, { data, isCollection }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
@@ -164,7 +199,7 @@ function generateMockServer(): string {
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: \`http://localhost:\${addr.port}\`, server };
+  return { url: \`http://localhost:\${addr.port}\`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -185,22 +220,30 @@ function generateExecutionTest(
   config: ServiceConfig,
   method: ClassifiedMethod,
 ): string {
-  const scopeId = config.scope === "org"
-    ? "orgId"
-    : config.scope === "group"
-    ? "groupId"
-    : undefined;
-  const globalArgs: Record<string, string> = {
-    apiToken: "test-token",
-    version: "2024-10-15",
-  };
-  if (scopeId) {
-    globalArgs[scopeId] = "test-org-123";
-  }
-
+  const globalArgs = snykGlobalArgs(config);
   const fixture = generateJsonApiFixture(method);
   const pathPattern = extractPathPattern(method.operation.path, config.scope);
   const testArgs = buildTestArgs(method);
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const resourceName = testResourceName(method);
+  const hasPathParam = method.operation.pathParams.length > 0;
+
+  // Shared request assertions: exactly one request (the mock returns a single
+  // page with links.next=null, so even paginated lists issue one call), the
+  // right verb + path, the Snyk `version` query param, and token auth.
+  // `write` adds the JSON:API content-type + non-empty body checks.
+  const reqAsserts = (write: boolean): string =>
+    `      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "${httpMethod}");
+      assertStringIncludes(req0.path, "${pathPattern}");
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");${
+      write
+        ? `\n      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertExists(req0.body);`
+        : ""
+    }`;
 
   if (method.type === "list") {
     const argsStr = Object.keys(testArgs).length > 0
@@ -211,7 +254,7 @@ function generateExecutionTest(
   sanitizeResources: false,
   fn: async () => {
     const mockItem = ${JSON.stringify(fixture)};
-    const { url, server } = startMockSnykServer({
+    const { url, server, requests } = startMockSnykServer({
       "${pathPattern}": { data: [mockItem], isCollection: true },
     });
     const uninstall = installFetchMock(url);
@@ -222,11 +265,18 @@ function generateExecutionTest(
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${argsStr}, context);
+      const result = await ${execCall(method.name, argsStr)};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(false)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      const data = resources[0].data as { items: unknown[]; truncated: boolean };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
     } finally {
       uninstall();
       await server.shutdown();
@@ -236,12 +286,13 @@ function generateExecutionTest(
   }
 
   if (method.type === "get") {
+    const expectedInstance = hasPathParam ? "test-id-123" : "latest";
     return `Deno.test({
   name: "${config.name} model: ${method.name} fetches and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = ${JSON.stringify(fixture)};
-    const { url, server } = startMockSnykServer({
+    const { url, server, requests } = startMockSnykServer({
       "${pathPattern}": { data: mockData },
     });
     const uninstall = installFetchMock(url);
@@ -252,13 +303,17 @@ function generateExecutionTest(
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-      JSON.stringify(testArgs)
-    }, context);
+      const result = await ${execCall(method.name, JSON.stringify(testArgs))};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(false)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertEquals(resources[0].name, "${expectedInstance}");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -274,7 +329,7 @@ function generateExecutionTest(
   sanitizeResources: false,
   fn: async () => {
     const mockData = ${JSON.stringify({ ...fixture, id: "new-123" })};
-    const { url, server } = startMockSnykServer({
+    const { url, server, requests } = startMockSnykServer({
       "${pathPattern}": { data: mockData },
     });
     const uninstall = installFetchMock(url);
@@ -285,13 +340,15 @@ function generateExecutionTest(
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-      JSON.stringify(createArgs)
-    }, context);
+      const result = await ${execCall(method.name, JSON.stringify(createArgs))};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(true)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -305,21 +362,24 @@ function generateExecutionTest(
   name: "${config.name} model: ${method.name} executes successfully",
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockSnykServer({
+    const { url, server, requests } = startMockSnykServer({
       "${pathPattern}": { data: { id: "test-id-123", type: "resource" } },
     });
     const uninstall = installFetchMock(url);
 
     try {
-      const { context } = createModelTestContext({
+      const { context, getWrittenResources } = createModelTestContext({
         globalArgs: ${JSON.stringify(globalArgs)},
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-      JSON.stringify(testArgs)
-    }, context);
+      const result = await ${execCall(method.name, JSON.stringify(testArgs))};
       assertEquals(result.dataHandles.length, 0);
+
+${reqAsserts(false)}
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -328,14 +388,15 @@ function generateExecutionTest(
 });`;
   }
 
-  // Default: action/update
-  const actionArgs = { ...testArgs, name: "test-resource" };
-  return `Deno.test({
+  if (method.type === "update") {
+    const updateArgs = { ...testArgs, name: "test-resource" };
+    const expectedInstance = hasPathParam ? "test-id-123" : "updated";
+    return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = ${JSON.stringify(fixture)};
-    const { url, server } = startMockSnykServer({
+    const { url, server, requests } = startMockSnykServer({
       "${pathPattern}": { data: mockData },
     });
     const uninstall = installFetchMock(url);
@@ -346,15 +407,150 @@ function generateExecutionTest(
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
 
-      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
-    JSON.stringify(actionArgs)
-  }, context);
+      const result = await ${execCall(method.name, JSON.stringify(updateArgs))};
       assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(true)}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertEquals(resources[0].name, "${expectedInstance}");
     } finally {
       uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
+  }
+
+  // Default: action
+  const actionArgs = { ...testArgs, name: "test-resource" };
+  const actionHasBody = method.operation.requestBody !== undefined;
+  return `Deno.test({
+  name: "${config.name} model: ${method.name} executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = ${JSON.stringify(fixture)};
+    const { url, server, requests } = startMockSnykServer({
+      "${pathPattern}": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgs)},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      const result = await ${execCall(method.name, JSON.stringify(actionArgs))};
+      assertEquals(result.dataHandles.length, 1);
+
+${reqAsserts(actionHasBody)}
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      assertExists(resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
+}
+
+/** Standard test globalArgs for a service, including its scope id. */
+function snykGlobalArgs(config: ServiceConfig): Record<string, string> {
+  const scopeId = config.scope === "org"
+    ? "orgId"
+    : config.scope === "group"
+    ? "groupId"
+    : undefined;
+  const g: Record<string, string> = {
+    apiToken: "test-token",
+    version: "2024-10-15",
+  };
+  if (scopeId) g[scopeId] = "test-org-123";
+  return g;
+}
+
+/** The typed cast + execute call shared by every generated test. */
+function execCall(methodName: string, argsStr: string): string {
+  return `(model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${methodName}.execute(${argsStr}, context)`;
+}
+
+/** Resource key (specName) a method writes — mirrors the model generator. */
+function testResourceName(method: ClassifiedMethod): string {
+  if (method.type === "list") return method.name.replace(/^list_/, "");
+  return method.name.replace(/^(get|create|update|action)_/, "");
+}
+
+/** Args passed to execute() in tests, including the write-method name field. */
+function buildExecuteArgs(method: ClassifiedMethod): Record<string, unknown> {
+  const testArgs = buildTestArgs(method);
+  if (
+    method.type === "create" || method.type === "update" ||
+    method.type === "action"
+  ) {
+    return { ...testArgs, name: "test-resource" };
+  }
+  return testArgs;
+}
+
+/**
+ * Generate one error-path test per service: a 5xx response must surface as a
+ * thrown error, not a silent success or empty write.
+ */
+function generateErrorTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+): string {
+  const globalArgs = snykGlobalArgs(config);
+  const args = buildExecuteArgs(method);
+  const argsStr = Object.keys(args).length > 0 ? JSON.stringify(args) : "{}";
+  return `Deno.test({
+  name: "${config.name} model: ${method.name} surfaces API errors",
+  sanitizeResources: false,
+  fn: async () => {
+    // A server that returns 500 for every request, exercising the error path.
+    const originalFetch = globalThis.fetch;
+    const server = Deno.serve({ port: 0, onListen() {} }, () =>
+      new Response(
+        JSON.stringify({
+          jsonapi: { version: "1.0" },
+          errors: [{ status: "500", detail: "Internal Server Error" }],
+        }),
+        {
+          status: 500,
+          headers: { "content-type": "application/vnd.api+json" },
+        },
+      ));
+    const addr = server.addr as Deno.NetAddr;
+    const mockUrl = \`http://localhost:\${addr.port}\`;
+    globalThis.fetch = (input, init) => {
+      const reqUrl = typeof input === "string" ? input : input.toString();
+      return originalFetch(
+        reqUrl.replace("https://api.snyk.io/rest", mockUrl),
+        init,
+      );
+    };
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgs)},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      let threw = false;
+      try {
+        await ${execCall(method.name, argsStr)};
+      } catch (_err) {
+        threw = true;
+      }
+      assertEquals(threw, true);
+    } finally {
+      globalThis.fetch = originalFetch;
       await server.shutdown();
     }
   },
