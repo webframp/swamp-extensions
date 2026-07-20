@@ -208,7 +208,7 @@ Deno.test({
       >).list_security_monitoring_signals.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/security_monitoring/signals");
@@ -278,7 +278,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "PATCH");
       assertStringIncludes(req0.path, "/bulk/assignee");
@@ -363,7 +363,7 @@ Deno.test({
       >).search_security_monitoring_signals.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/signals/search");
@@ -452,7 +452,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/signals/test-id-123");

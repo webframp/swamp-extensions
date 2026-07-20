@@ -197,7 +197,7 @@ Deno.test({
       >).list_events.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/events");
@@ -259,7 +259,7 @@ Deno.test({
       >).create_event.execute({ "name": "test-resource" }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/events");
@@ -349,7 +349,7 @@ Deno.test({
       >).search_events.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/events/search");
@@ -424,7 +424,7 @@ Deno.test({
       >).get_event.execute({ "event_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/events/test-id-123");

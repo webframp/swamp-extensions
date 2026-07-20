@@ -189,7 +189,7 @@ Deno.test({
       >).list_downtimes.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/downtime");
@@ -272,7 +272,7 @@ Deno.test({
       >).create_downtime.execute({ "name": "test-resource" }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/downtime");
@@ -351,7 +351,7 @@ Deno.test({
       >).get_downtime.execute({ "downtime_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/downtime/test-id-123");
@@ -433,7 +433,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "PATCH");
       assertStringIncludes(req0.path, "/downtime/test-id-123");
@@ -489,7 +489,7 @@ Deno.test({
       >).cancel_downtime.execute({ "downtime_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 0);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "DELETE");
       assertStringIncludes(req0.path, "/downtime/test-id-123");

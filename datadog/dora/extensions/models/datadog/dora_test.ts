@@ -165,7 +165,7 @@ Deno.test({
       >).create_dora_deployment.execute({ "name": "test-resource" }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/dora/deployment");
@@ -219,7 +219,7 @@ Deno.test({
       );
       assertEquals(result.dataHandles.length, 0);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "DELETE");
       assertStringIncludes(req0.path, "/deployment/test-id-123");
@@ -284,7 +284,7 @@ Deno.test({
       >).list_dora_deployments.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/dora/deployments");
@@ -361,7 +361,7 @@ Deno.test({
       );
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/deployments/test-id-123");
@@ -415,7 +415,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "PATCH");
       assertStringIncludes(req0.path, "/deployments/test-id-123");

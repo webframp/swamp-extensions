@@ -204,7 +204,7 @@ Deno.test({
       >).list_security_monitoring_suppressions.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/configuration/suppressions");
@@ -298,7 +298,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/configuration/suppressions");
@@ -387,7 +387,7 @@ Deno.test({
       >).get_suppressions_affecting_future_rule.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/suppressions/rules");
@@ -483,7 +483,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/suppressions/test-id-123");
@@ -574,7 +574,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "PATCH");
       assertStringIncludes(req0.path, "/suppressions/test-id-123");
@@ -633,7 +633,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 0);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "DELETE");
       assertStringIncludes(req0.path, "/suppressions/test-id-123");

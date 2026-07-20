@@ -191,7 +191,7 @@ Deno.test({
       >).get_monitor_notification_rules.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/monitor/notification_rule");
@@ -274,7 +274,7 @@ Deno.test({
       );
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/monitor/notification_rule");
@@ -353,7 +353,7 @@ Deno.test({
       );
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/notification_rule/test-id-123");
@@ -432,7 +432,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "PATCH");
       assertStringIncludes(req0.path, "/notification_rule/test-id-123");
@@ -491,7 +491,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 0);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "DELETE");
       assertStringIncludes(req0.path, "/notification_rule/test-id-123");

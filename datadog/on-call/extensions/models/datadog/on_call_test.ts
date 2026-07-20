@@ -205,7 +205,7 @@ Deno.test({
       );
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "POST");
       assertStringIncludes(req0.path, "/on-call/escalation-policies");
@@ -279,7 +279,7 @@ Deno.test({
       );
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/escalation-policies/test-id-123");
@@ -353,7 +353,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "PUT");
       assertStringIncludes(req0.path, "/escalation-policies/test-id-123");
@@ -411,7 +411,7 @@ Deno.test({
       }, context);
       assertEquals(result.dataHandles.length, 0);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "DELETE");
       assertStringIncludes(req0.path, "/escalation-policies/test-id-123");
@@ -476,7 +476,7 @@ Deno.test({
       );
       assertEquals(result.dataHandles.length, 1);
 
-      assertEquals(requests.length >= 1, true);
+      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/test-id-123/notification-channels");

@@ -234,11 +234,13 @@ function generateExecutionTest(
   const resourceName = testResourceName(method);
   const hasPathParam = method.operation.pathParams.length > 0;
 
-  // Request-level assertions shared by every method type: the request was
-  // actually made, hit the right verb + path, and carried both auth headers.
-  // `write` adds the JSON content-type + non-empty body checks.
+  // Request-level assertions shared by every method type: exactly one request
+  // was made (a double-call regression would fail this), hit the right verb +
+  // path, and carried both auth headers. `write` adds the JSON content-type +
+  // non-empty body checks. The mock returns a single page with no cursor, so
+  // even paginated list methods issue exactly one request here.
   const reqAsserts = (write: boolean): string =>
-    `      assertEquals(requests.length >= 1, true);
+    `      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "${httpMethod}");
       assertStringIncludes(req0.path, "${pathPattern}");
