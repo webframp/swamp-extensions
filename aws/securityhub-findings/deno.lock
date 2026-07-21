@@ -2,13 +2,16 @@
   "version": "5",
   "specifiers": {
     "jsr:@std/assert@1": "1.0.19",
+    "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "npm:@aws-sdk/client-organizations@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-organizations@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-organizations@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-organizations@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-securityhub@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-securityhub@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-securityhub@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-securityhub@3.1091.0": "3.1091.0",
     "npm:zod@4.3.6": "4.3.6",
     "npm:zod@4.4.3": "4.4.3"
   },
@@ -130,6 +133,19 @@
         "tslib"
       ]
     },
+    "@aws-sdk/client-organizations@3.1091.0": {
+      "integrity": "sha512-j2gBRVGRrhNjgG9u7Yxr2/cmhYhJUBdyz4EbfGbTcMiY+feL8aOVKbVQnKlV5Hrd+AuHfSWu09WPQwOcuoxUvg==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
     "@aws-sdk/client-securityhub@3.1010.0": {
       "integrity": "sha512-QtxHDxNKo0K7CF2FNZ2EaNZ28B/ZFNu2/rqZM/MltIKOE/iHmoSOnBpemmG57YdOJIpqQtdRWro95G87TZjh+Q==",
       "dependencies": [
@@ -191,6 +207,19 @@
     },
     "@aws-sdk/client-securityhub@3.1090.0": {
       "integrity": "sha512-DEWkKPSxwLnMdCrsl87Vkrum288CSFULzGlKizZngQfOHaSMTKmYb5ER2FSLTuYOpD2TQPhOdFD19dV6q8nf0A==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-securityhub@3.1091.0": {
+      "integrity": "sha512-Dw7ed9Nxa39ZRkLs5wrIogsSjU3eIUCuWFcMt5fBZlIIBJnPntJvfo6q/LibGEow4pwr9jHF+SFT7TsBcQdjIA==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",

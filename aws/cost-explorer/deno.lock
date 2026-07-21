@@ -8,6 +8,7 @@
     "npm:@aws-sdk/client-cost-explorer@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-cost-explorer@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-cost-explorer@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-cost-explorer@3.1091.0": "3.1091.0",
     "npm:zod@4.3.6": "4.3.6",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
@@ -126,6 +127,19 @@
     },
     "@aws-sdk/client-cost-explorer@3.1090.0": {
       "integrity": "sha512-H1b2u5pK/4OEwNAqf8mKKTtakdYH2icALKnTWimV9trVD5rg+y0Z0YFFIIWAWwjG+xD7KmniQNyG3Daqc4KM7A==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-cost-explorer@3.1091.0": {
+      "integrity": "sha512-AOHaOG0Xx7u25UX/sqruFfuKB/JHkPYtpvdpqlZBuEI9Fsx57wG7eUbXekIEuAJIHTH70bkZEvgQ3AJsVyPCAw==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",

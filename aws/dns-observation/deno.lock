@@ -7,8 +7,10 @@
     "jsr:@systeminit/swamp-testing@0.20260504.10": "0.20260504.10",
     "npm:@aws-sdk/client-route-53@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-route-53@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-route-53@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-sts@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-sts@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-sts@3.1091.0": "3.1091.0",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
   },
@@ -95,6 +97,20 @@
         "tslib"
       ]
     },
+    "@aws-sdk/client-route-53@3.1091.0": {
+      "integrity": "sha512-8u8ncj9keDvHjfP5okKJqW54Qz9OICSkUxlnCTZhNidaxcPtU02z8Jc8tkk7G7lnOq/cDVJO1RWzXCJ1hnkA7w==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/middleware-sdk-route53",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
     "@aws-sdk/client-sts@3.1069.0": {
       "integrity": "sha512-AJZ9Ujy0NL5KWb4NjP80FeHEgFDb5MvFnNDls3motxOedpyp4vXC5PtOLOlX4eh5k2PysLOQzamfBWee09dXqw==",
       "dependencies": [
@@ -113,6 +129,20 @@
     },
     "@aws-sdk/client-sts@3.1090.0": {
       "integrity": "sha512-r3XZJpSqnFsM8Ikv1Se4nMlDnlmIxZAV3Zfw6ILQTzeoJ/pZpX4bixBXg960r2t+XAqVtfa21pJ7X2WQ2vlvDQ==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/signature-v4-multi-region",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-sts@3.1091.0": {
+      "integrity": "sha512-9eY19PwqeZHX3ktpbGSZGgNYkVXrL6dbivmwKB8NAKdg6WpOFMrdxHrPpbVTaK9L87nRstuWsD6WDTu0/KkgAw==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",
@@ -238,8 +268,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/middleware-sdk-route53@3.972.22": {
-      "integrity": "sha512-tDeFEVW8faVKC+7wEfvnQQqrJLO1155iSKb0b8D2KvtIvx7JDWC986WGEazMwIrYt5Wme15Ds0SGKJPk2sACVg==",
+    "@aws-sdk/middleware-sdk-route53@3.972.23": {
+      "integrity": "sha512-p2mbkuh45ZLjaDPiQVHP679Rpj7hcK7zUAy4SBe91xur8jG43OZOyX0M9ScLP5BcqWksX87V+ucyvq8YJ/gIHQ==",
       "dependencies": [
         "@aws-sdk/types",
         "@smithy/types",

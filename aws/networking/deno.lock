@@ -8,12 +8,15 @@
     "npm:@aws-sdk/client-cloudwatch@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-cloudwatch@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-cloudwatch@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-cloudwatch@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-ec2@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-ec2@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-ec2@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-ec2@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-elastic-load-balancing-v2@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-elastic-load-balancing-v2@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-elastic-load-balancing-v2@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-elastic-load-balancing-v2@3.1091.0": "3.1091.0",
     "npm:zod@4.3.6": "4.3.6",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
@@ -147,6 +150,20 @@
         "tslib"
       ]
     },
+    "@aws-sdk/client-cloudwatch@3.1091.0": {
+      "integrity": "sha512-Wr3R0cQrVjUyIrECavdQYcvm480KWgckdvn2etpntVha6/q7+//m8O5GRVxSgXuJXLhTIrNUaIfRW0FNsYQAVg==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/middleware-compression",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
     "@aws-sdk/client-ec2@3.1010.0": {
       "integrity": "sha512-hA1z2rmou3qD03Q76sZtSJR7gaRwW8LBIFK3wiNoLcv+2XBjh+mqYStsbAV+gW4634fgcptlrOR7JLMJVLqYJw==",
       "dependencies": [
@@ -223,6 +240,20 @@
         "tslib"
       ]
     },
+    "@aws-sdk/client-ec2@3.1091.0": {
+      "integrity": "sha512-CbhjDP/yDYUDvuYfMZE6cgkNVESO9rk3m0MhWCvm5NkYJfIfoBgemTkY8bubOAhGo7d7HRme8WdZPKqFBW/49Q==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/middleware-sdk-ec2",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
     "@aws-sdk/client-elastic-load-balancing-v2@3.1010.0": {
       "integrity": "sha512-bGRLgDajQICoCj87qxOYIHwa6QhTvyyQXO53ukzdTmhnSg3LnudieZgrbpD1kI4IehTGwXVz1jTUCJETdaRE1Q==",
       "dependencies": [
@@ -285,6 +316,19 @@
     },
     "@aws-sdk/client-elastic-load-balancing-v2@3.1090.0": {
       "integrity": "sha512-eFt6J0RCkBq71E21g2NrTwrPjlhMU2K+8v9RBpQmi5TkJKmHV7+m+vTGafZRmp/O/zSfWE0h2qmK1zUfQ6K5sQ==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-elastic-load-balancing-v2@3.1091.0": {
+      "integrity": "sha512-P3yTvLN3akplQ00uLWATPTa+RskzGRaa8mSSyWcPp3jJuJYi4gcbB15myZWdR/f2nNSst2hVXDatXLI5I2rMtA==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",

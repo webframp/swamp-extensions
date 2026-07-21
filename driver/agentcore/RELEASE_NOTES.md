@@ -1,10 +1,9 @@
-## 2026.07.18.1
+## 2026.07.21.1
 
-**Changed:** Version bump only, no code changes.
+**Changed:** Bumped AWS SDK dependencies to 3.1091.0 (from 3.1069.0).
 
-## 2026.07.13.1
+**Fixed:** Test task was missing `--allow-sys` permission, causing mock-server
+tests to hang in Deno 2.8+ (the SDK's credential provider calls system APIs
+that require this permission).
 
-**Changed:** Upgraded the test-only dev dependency `@systeminit/swamp-testing`
-to `0.20260504.10`, matching the rest of the repo. This is a test-harness change
-only — the published extension bundle is unchanged and no runtime behavior is
-affected.
+**Upgrade note:** No behavioral changes. Routine dependency maintenance.

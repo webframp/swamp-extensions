@@ -7,7 +7,7 @@ import {
   assertMatch,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1090.0";
+import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1091.0";
 import { model } from "./logs.ts";
 
 // =============================================================================

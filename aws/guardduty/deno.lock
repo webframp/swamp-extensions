@@ -8,6 +8,7 @@
     "npm:@aws-sdk/client-guardduty@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-guardduty@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-guardduty@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-guardduty@3.1091.0": "3.1091.0",
     "npm:zod@4.3.6": "4.3.6",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
@@ -126,6 +127,19 @@
     },
     "@aws-sdk/client-guardduty@3.1090.0": {
       "integrity": "sha512-DS8iGULGi52RoT3xHTo6rVBXZhjGPN8kURPKx/tMpRbxqwma9Lni30JF5xSo6IbBUjrlho78dd76F8+ptUGHvw==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-guardduty@3.1091.0": {
+      "integrity": "sha512-67jmTs5SMQoFYrYAHzxNQ+Q69mWD2jpbPR1OrLt1mRk748pDK0hO9Hm7wNnAUkocBi0KfvafpcT05Ai23zaRAA==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",
