@@ -3,11 +3,11 @@
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1090.0";
-import { RDSClient } from "npm:@aws-sdk/client-rds@3.1090.0";
-import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1090.0";
-import { LambdaClient } from "npm:@aws-sdk/client-lambda@3.1090.0";
-import { S3Client } from "npm:@aws-sdk/client-s3@3.1090.0";
+import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1091.0";
+import { RDSClient } from "npm:@aws-sdk/client-rds@3.1091.0";
+import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1091.0";
+import { LambdaClient } from "npm:@aws-sdk/client-lambda@3.1091.0";
+import { S3Client } from "npm:@aws-sdk/client-s3@3.1091.0";
 import { model } from "./inventory.ts";
 
 // =============================================================================
@@ -727,9 +727,9 @@ Deno.test({
 // inventory_scan and inventory_diff Tests
 // =============================================================================
 
-import { ResourceExplorer2Client } from "npm:@aws-sdk/client-resource-explorer-2@3.1090.0";
-import { ConfigServiceClient } from "npm:@aws-sdk/client-config-service@3.1090.0";
-import { ResourceGroupsTaggingAPIClient } from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1090.0";
+import { ResourceExplorer2Client } from "npm:@aws-sdk/client-resource-explorer-2@3.1091.0";
+import { ConfigServiceClient } from "npm:@aws-sdk/client-config-service@3.1091.0";
+import { ResourceGroupsTaggingAPIClient } from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1091.0";
 
 function mockScanClients(overrides: {
   re2?: (cmd: unknown) => unknown;

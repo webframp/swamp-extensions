@@ -19,7 +19,7 @@
   },
   "imports": {
     "zod": "npm:zod@4.4.3",
-    "ioredis": "npm:ioredis@5.6.1",
+    "ioredis": "npm:ioredis@5.11.1",
     "@std/assert": "jsr:@std/assert@1.0.19"
   },
   "compilerOptions": {

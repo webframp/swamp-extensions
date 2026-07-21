@@ -14,7 +14,7 @@
  */
 
 import { z } from "npm:zod@4.4.3";
-import { Redis } from "npm:ioredis@5.6.1";
+import { Redis } from "npm:ioredis@5.11.1";
 import { Sidecar } from "./sidecar.ts";
 import type { SidecarState } from "./sidecar.ts";
 

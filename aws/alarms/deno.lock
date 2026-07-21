@@ -8,6 +8,7 @@
     "npm:@aws-sdk/client-cloudwatch@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-cloudwatch@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-cloudwatch@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-cloudwatch@3.1091.0": "3.1091.0",
     "npm:zod@4.3.6": "4.3.6",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
@@ -129,6 +130,20 @@
     },
     "@aws-sdk/client-cloudwatch@3.1090.0": {
       "integrity": "sha512-VFVOCrpI6Wp8KfiVo6LNkL0VJhiyPL8ePr6qyvO2e+TsoqilygCTbkl7VWXK5eoDO4xBu6jetD9hFmmUyFgRug==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/middleware-compression",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-cloudwatch@3.1091.0": {
+      "integrity": "sha512-Wr3R0cQrVjUyIrECavdQYcvm480KWgckdvn2etpntVha6/q7+//m8O5GRVxSgXuJXLhTIrNUaIfRW0FNsYQAVg==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",

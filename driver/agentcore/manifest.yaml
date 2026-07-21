@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/agentcore"
-version: "2026.07.18.1"
+version: "2026.07.21.1"
 description: "AWS Bedrock AgentCore execution driver. Runs model methods in isolated microVM sessions with S3-based coordination for elastic remote execution."
 repository: "https://github.com/webframp/swamp-extensions"
 drivers:

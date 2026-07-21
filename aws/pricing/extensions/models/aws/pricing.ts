@@ -18,7 +18,7 @@ import {
   GetAttributeValuesCommand,
   GetProductsCommand,
   PricingClient,
-} from "npm:@aws-sdk/client-pricing@3.1090.0";
+} from "npm:@aws-sdk/client-pricing@3.1091.0";
 
 const MAX_PAGES = 10;
 
@@ -77,7 +77,7 @@ const PriceResultSchema = z.object({
  */
 export const model = {
   type: "@webframp/aws/pricing",
-  version: "2026.07.18.2",
+  version: "2026.07.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

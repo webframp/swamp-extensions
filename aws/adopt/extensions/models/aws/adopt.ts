@@ -12,7 +12,7 @@ import { z } from "npm:zod@4.4.3";
 import {
   CloudFormationClient,
   ListStackResourcesCommand,
-} from "npm:@aws-sdk/client-cloudformation@3.1090.0";
+} from "npm:@aws-sdk/client-cloudformation@3.1091.0";
 import {
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
@@ -20,17 +20,17 @@ import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
-} from "npm:@aws-sdk/client-ec2@3.1090.0";
+} from "npm:@aws-sdk/client-ec2@3.1091.0";
 import {
   DescribeDBClustersCommand,
   DescribeDBInstancesCommand,
   DescribeDBSubnetGroupsCommand,
   RDSClient,
-} from "npm:@aws-sdk/client-rds@3.1090.0";
+} from "npm:@aws-sdk/client-rds@3.1091.0";
 import {
   ListSecretsCommand,
   SecretsManagerClient,
-} from "npm:@aws-sdk/client-secrets-manager@3.1090.0";
+} from "npm:@aws-sdk/client-secrets-manager@3.1091.0";
 
 // =============================================================================
 // Schemas
@@ -1144,7 +1144,7 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.07.18.2",
+  version: "2026.07.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

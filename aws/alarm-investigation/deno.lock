@@ -8,9 +8,11 @@
     "npm:@aws-sdk/client-cloudwatch@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-cloudwatch@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-cloudwatch@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-cloudwatch@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-sns@3.1010.0": "3.1010.0",
     "npm:@aws-sdk/client-sns@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-sns@3.1090.0": "3.1090.0",
+    "npm:@aws-sdk/client-sns@3.1091.0": "3.1091.0",
     "npm:zod@4.3.6": "4.3.6",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
@@ -144,6 +146,20 @@
         "tslib"
       ]
     },
+    "@aws-sdk/client-cloudwatch@3.1091.0": {
+      "integrity": "sha512-Wr3R0cQrVjUyIrECavdQYcvm480KWgckdvn2etpntVha6/q7+//m8O5GRVxSgXuJXLhTIrNUaIfRW0FNsYQAVg==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/middleware-compression",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
     "@aws-sdk/client-sns@3.1010.0": {
       "integrity": "sha512-kkiHnPG3NO7Wd3X2iRAZlZvwXdhduS1r9IQIeGRVBfI6Ei5n9D3dVYcMbF4eFBrRYguIux0SrkPO9Vbgukk8nw==",
       "dependencies": [
@@ -205,6 +221,19 @@
     },
     "@aws-sdk/client-sns@3.1090.0": {
       "integrity": "sha512-jxp0EGquRO3BgpDQ4BxdGNGvjMEN157Qe0+zwdqluH2V7ScnfU75pWd1q5uOgehpDm+i24cXkvr7YTMcA+hUtA==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-sns@3.1091.0": {
+      "integrity": "sha512-4tgghB5bt0s0gSS7DafBaAeROU+1o0oYQz2SWQuAHS6oNRigDd42vzlNckm+d7tTRMY6cIGZ4wcyLlYRZb/cYw==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",
