@@ -37,6 +37,10 @@ function evalCondition(
 export class FakeDynamoTable {
   items = new Map<string, Item>();
   tableStatus: "ACTIVE" | "MISSING" = "ACTIVE";
+  /** Caps items-per-page in query() to exercise the real pagination loops
+   * (queryAllFileMeta/fetchChunks) in sync.ts against ExclusiveStartKey/
+   * LastEvaluatedKey — defaults high enough that most tests see one page. */
+  queryPageSize = 1_000;
 
   private applyUpdate(existing: Item | undefined, params: Item): Item {
     // Only supports the one UpdateExpression shape this extension issues.
@@ -133,7 +137,9 @@ export class FakeDynamoTable {
     }
   }
 
-  private query(params: Item): { Items: Item[] } {
+  private query(
+    params: Item,
+  ): { Items: Item[]; LastEvaluatedKey?: Item } {
     const values = params.ExpressionAttributeValues ?? {};
     let candidates = [...this.items.values()];
 
@@ -157,7 +163,28 @@ export class FakeDynamoTable {
       candidates.sort((a, b) => (a.sk as string).localeCompare(b.sk));
     }
 
-    return { Items: candidates.map((it) => ({ ...it })) };
+    const exclusiveStartKey = params.ExclusiveStartKey as Item | undefined;
+    let startIndex = 0;
+    if (exclusiveStartKey) {
+      const idx = candidates.findIndex(
+        (it) =>
+          it.pk === exclusiveStartKey.pk && it.sk === exclusiveStartKey.sk,
+      );
+      // If the resume-point item was deleted since the last page, resume from
+      // the first item that still sorts after it (real DynamoDB has the same
+      // "item may no longer exist" caveat for ExclusiveStartKey).
+      startIndex = idx === -1 ? candidates.length : idx + 1;
+    }
+
+    const page = candidates.slice(startIndex, startIndex + this.queryPageSize);
+    const hasMore = startIndex + page.length < candidates.length;
+    const last = page[page.length - 1];
+    return {
+      Items: page.map((it) => ({ ...it })),
+      LastEvaluatedKey: hasMore && last
+        ? { pk: last.pk, sk: last.sk, gsi1pk: last.gsi1pk, gsi1sk: last.gsi1sk }
+        : undefined,
+    };
   }
 
   describeTable(): Item {

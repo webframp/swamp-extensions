@@ -1,4 +1,8 @@
-import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1091.0";
 import { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1091.0";
 import { createSyncService } from "./sync.ts";
@@ -278,5 +282,135 @@ Deno.test("overwriting a file with fewer chunks cleans up the stale trailing chu
       k.startsWith(`FILE#${relPath} CHUNK#`)
     ).length;
     assertEquals(chunkCountAfter, 1);
+  });
+});
+
+Deno.test("pull/push round-trip survives real multi-page Query pagination (GSI listing and chunk fetch)", async () => {
+  await withHarness(async ({ doc, cachePath, table }) => {
+    const svc = sync(doc, cachePath);
+    // 5 files, each split into several chunks at MAX_CHUNK_BYTES=64 — forces
+    // both queryAllFileMeta's GSI listing and fetchChunks' per-file chunk
+    // query to paginate across multiple pages when queryPageSize is tiny.
+    await Deno.mkdir(`${cachePath}/data/model/instance`, { recursive: true });
+    const contents: Record<string, string> = {};
+    for (let i = 0; i < 5; i++) {
+      const relPath = `data/model/instance/page-${i}.json`;
+      const content = `${i}-`.repeat(50); // > MAX_CHUNK_BYTES, multiple chunks
+      contents[relPath] = content;
+      await Deno.writeFile(
+        `${cachePath}/${relPath}`,
+        new TextEncoder().encode(content),
+      );
+    }
+    await svc.markDirty();
+    const pushed = await svc.pushChanged();
+    assertEquals(pushed, 5);
+
+    table.queryPageSize = 1; // force every query() call to paginate
+
+    const cachePath2 = await Deno.makeTempDir();
+    try {
+      const svc2 = createSyncService(
+        doc,
+        TABLE_NAME,
+        cachePath2,
+        MAX_CHUNK_BYTES,
+        () => Promise.resolve(),
+      );
+      const pulled = await svc2.pullChanged();
+      assertEquals(pulled, 5);
+      for (const [relPath, expected] of Object.entries(contents)) {
+        const bytes = await Deno.readFile(`${cachePath2}/${relPath}`);
+        assertEquals(new TextDecoder().decode(bytes), expected);
+      }
+    } finally {
+      await Deno.remove(cachePath2, { recursive: true });
+    }
+  });
+});
+
+Deno.test("pushing a dirty file does not tombstone a sibling whose name is a string-prefix match", async () => {
+  await withHarness(async ({ doc, cachePath }) => {
+    const svc = sync(doc, cachePath);
+    await Deno.mkdir(`${cachePath}/data/model/instance`, { recursive: true });
+    await Deno.writeFile(
+      `${cachePath}/data/model/instance/report.json`,
+      new TextEncoder().encode("report"),
+    );
+    await Deno.writeFile(
+      `${cachePath}/data/model/instance/report.json.bak`,
+      new TextEncoder().encode("backup"),
+    );
+    await svc.markDirty();
+    await svc.pushChanged();
+    await svc.pullChanged(); // establish this client's own watermark
+
+    // Now mark ONLY report.json dirty (not the .bak sibling) and push again —
+    // a begins_with-based lookup for "report.json" would also match
+    // "report.json.bak" and could incorrectly tombstone it as "remote-only".
+    await svc.markDirty({ relPath: "data/model/instance/report.json" });
+    await svc.pushChanged();
+
+    const cachePath2 = await Deno.makeTempDir();
+    try {
+      const svc2 = createSyncService(
+        doc,
+        TABLE_NAME,
+        cachePath2,
+        MAX_CHUNK_BYTES,
+        () => Promise.resolve(),
+      );
+      await svc2.pullChanged();
+      assertExists(
+        await Deno.stat(`${cachePath2}/data/model/instance/report.json`),
+      );
+      assertExists(
+        await Deno.stat(`${cachePath2}/data/model/instance/report.json.bak`),
+      );
+    } finally {
+      await Deno.remove(cachePath2, { recursive: true });
+    }
+  });
+});
+
+Deno.test("pull rejects a file whose reassembled content hash doesn't match its metadata", async () => {
+  await withHarness(async ({ doc, cachePath, table }) => {
+    const svc = sync(doc, cachePath);
+    const relPath = "data/model/instance/tampered.json";
+    await Deno.mkdir(`${cachePath}/data/model/instance`, { recursive: true });
+    await Deno.writeFile(
+      `${cachePath}/${relPath}`,
+      new TextEncoder().encode("original"),
+    );
+    await svc.markDirty({ relPath });
+    await svc.pushChanged();
+
+    // Simulate a stale/corrupted chunk: overwrite chunk 0's content directly
+    // without updating META's hash, mimicking a partially-applied write.
+    const chunkKey = `FILE#${relPath} CHUNK#0000000`;
+    const chunk = table.items.get(chunkKey);
+    assertExists(chunk);
+    table.items.set(chunkKey, {
+      ...chunk,
+      content: new TextEncoder().encode("corrupted"),
+    });
+
+    const cachePath2 = await Deno.makeTempDir();
+    try {
+      const svc2 = createSyncService(
+        doc,
+        TABLE_NAME,
+        cachePath2,
+        MAX_CHUNK_BYTES,
+        () => Promise.resolve(),
+      );
+      await assertRejects(
+        () => svc2.pullChanged(),
+        Error,
+        "does not match expected",
+      );
+    } finally {
+      await Deno.remove(cachePath2, { recursive: true });
+    }
   });
 });

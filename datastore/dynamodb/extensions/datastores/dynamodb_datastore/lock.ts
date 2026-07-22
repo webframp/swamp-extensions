@@ -49,6 +49,7 @@ export function createDynamoLock(
   tableName: string,
   datastorePath: string,
   options?: LockOptions,
+  ensureInfrastructure?: () => Promise<void>,
 ): DistributedLock {
   const key = options?.lockKey ?? datastorePath;
   const ttlMs = options?.ttlMs ?? 30_000;
@@ -58,10 +59,41 @@ export function createDynamoLock(
   let nonce: string | undefined;
   let heartbeatId: ReturnType<typeof setInterval> | undefined;
 
+  /** Shared by heartbeat() and the periodic auto-renewal timer, so the two
+   * renewal paths can never silently diverge in what they persist. */
+  const renewLock = async (currentNonce: string): Promise<boolean> => {
+    const nowMs = Date.now();
+    try {
+      await doc.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: { pk, sk },
+          UpdateExpression:
+            "SET acquiredAt = :at, acquiredAtMs = :atMs, expiresAtMs = :exp, #ttl = :ttlVal",
+          ConditionExpression: "nonce = :nonce",
+          ExpressionAttributeNames: { "#ttl": "ttl" },
+          ExpressionAttributeValues: {
+            ":at": new Date(nowMs).toISOString(),
+            ":atMs": nowMs,
+            ":exp": nowMs + ttlMs,
+            ":ttlVal": Math.floor((nowMs + ttlMs) / 1000) +
+              TTL_SWEEP_BUFFER_SECONDS,
+            ":nonce": currentNonce,
+          },
+        }),
+      );
+      return true;
+    } catch (err) {
+      if (isConditionalCheckFailed(err)) return false;
+      throw err;
+    }
+  };
+
   const acquire = async () => {
     if (nonce !== undefined) {
       throw new Error("Lock already acquired; call release() first");
     }
+    if (ensureInfrastructure) await ensureInfrastructure();
     const signal = options?.signal;
     const start = Date.now();
     const candidateNonce = crypto.randomUUID();
@@ -103,25 +135,7 @@ export function createDynamoLock(
           const acquiredNonce = candidateNonce;
           heartbeatId = setInterval(async () => {
             try {
-              const heartbeatNowMs = Date.now();
-              await doc.send(
-                new UpdateCommand({
-                  TableName: tableName,
-                  Key: { pk, sk },
-                  UpdateExpression:
-                    "SET acquiredAt = :at, acquiredAtMs = :atMs, expiresAtMs = :exp, #ttl = :ttlVal",
-                  ConditionExpression: "nonce = :nonce",
-                  ExpressionAttributeNames: { "#ttl": "ttl" },
-                  ExpressionAttributeValues: {
-                    ":at": new Date(heartbeatNowMs).toISOString(),
-                    ":atMs": heartbeatNowMs,
-                    ":exp": heartbeatNowMs + ttlMs,
-                    ":ttlVal": Math.floor((heartbeatNowMs + ttlMs) / 1000) +
-                      TTL_SWEEP_BUFFER_SECONDS,
-                    ":nonce": acquiredNonce,
-                  },
-                }),
-              );
+              await renewLock(acquiredNonce);
             } catch {
               // Connection lost or lock lost — lock will expire via expiresAtMs check
             }
@@ -198,31 +212,7 @@ export function createDynamoLock(
 
     heartbeat: async (): Promise<boolean> => {
       if (!nonce) return false;
-      const nowMs = Date.now();
-      try {
-        await doc.send(
-          new UpdateCommand({
-            TableName: tableName,
-            Key: { pk, sk },
-            UpdateExpression:
-              "SET acquiredAt = :at, acquiredAtMs = :atMs, expiresAtMs = :exp, #ttl = :ttlVal",
-            ConditionExpression: "nonce = :nonce",
-            ExpressionAttributeNames: { "#ttl": "ttl" },
-            ExpressionAttributeValues: {
-              ":at": new Date(nowMs).toISOString(),
-              ":atMs": nowMs,
-              ":exp": nowMs + ttlMs,
-              ":ttlVal": Math.floor((nowMs + ttlMs) / 1000) +
-                TTL_SWEEP_BUFFER_SECONDS,
-              ":nonce": nonce,
-            },
-          }),
-        );
-        return true;
-      } catch (err) {
-        if (isConditionalCheckFailed(err)) return false;
-        throw err;
-      }
+      return await renewLock(nonce);
     },
 
     withLock: async <T>(fn: () => Promise<T>): Promise<T> => {

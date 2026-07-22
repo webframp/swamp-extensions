@@ -17,6 +17,7 @@ import {
   fileMetaKey,
   GSI_FILE_PARTITION,
   GSI_NAME,
+  parseChunkIndex,
   SYNC_STATE_KEY,
 } from "./keys.ts";
 
@@ -175,6 +176,16 @@ function batchesOf<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+/** True when `candidate` is `boundary` itself, or nested under it as a path
+ * segment — never a mere string prefix (so "report.json" doesn't also match
+ * "report.json.bak"). Directory-style boundaries already ending in "/" behave
+ * exactly like a plain begins_with, preserving existing scoped-pull behavior. */
+function matchesPathBoundary(candidate: string, boundary: string): boolean {
+  if (candidate === boundary) return true;
+  const dirBoundary = boundary.endsWith("/") ? boundary : `${boundary}/`;
+  return candidate.startsWith(dirBoundary);
+}
+
 export function createSyncService(
   doc: DynamoDBDocumentClient,
   tableName: string,
@@ -206,7 +217,12 @@ export function createSyncService(
         )
       );
       for (const item of result.Items ?? []) {
-        out.set(item.gsi1sk as string, {
+        const relPath = item.gsi1sk as string;
+        // begins_with alone would also match unrelated siblings sharing a
+        // string prefix (e.g. "report.json" matching "report.json.bak") —
+        // require an exact match or a real path-segment boundary.
+        if (prefix && !matchesPathBoundary(relPath, prefix)) continue;
+        out.set(relPath, {
           hash: item.hash,
           deletedAt: item.deletedAt ?? null,
           updatedAt: new Date(item.updatedAt),
@@ -220,9 +236,50 @@ export function createSyncService(
     return out;
   }
 
-  async function fetchChunks(relPath: string): Promise<Uint8Array> {
+  /** Sends a BatchWriteCommand and retries any UnprocessedItems with backoff —
+   * DynamoDB's BatchWriteItem does not throw on partial throttling, it just
+   * returns the items it didn't get to, so callers must resubmit those. */
+  async function sendBatchWrite(
+    requests: Array<Record<string, unknown>>,
+  ): Promise<void> {
+    let pending = requests;
+    for (let attempt = 0; pending.length > 0 && attempt < 8; attempt++) {
+      if (attempt > 0) {
+        const delay = Math.min(500 * 2 ** attempt, 5_000);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+      const result = await retryable(() =>
+        doc.send(
+          new BatchWriteCommand({ RequestItems: { [tableName]: pending } }),
+        )
+      );
+      pending = (result.UnprocessedItems?.[tableName] ?? []) as Array<
+        Record<string, unknown>
+      >;
+    }
+    if (pending.length > 0) {
+      throw new Error(
+        `BatchWriteItem left ${pending.length} unprocessed item(s) after retrying`,
+      );
+    }
+  }
+
+  /**
+   * Fetches and reassembles a file's chunks, bounded to `expectedChunkCount`
+   * and verified against `expectedHash`. Both bounds matter: writeFileEntry
+   * makes the new metadata visible before its excess-chunk cleanup batch
+   * completes, so a concurrent or crash-interrupted read could otherwise see
+   * stale trailing chunks from a previous, larger version of the file —
+   * silently reassembling corrupted content. Bounding by chunkCount and
+   * verifying the hash turns that into a loud, retryable error instead.
+   */
+  async function fetchChunks(
+    relPath: string,
+    expectedChunkCount: number,
+    expectedHash: string,
+  ): Promise<Uint8Array> {
     const { pk, skPrefix } = fileChunkPrefix(relPath);
-    const chunks: Uint8Array[] = [];
+    const items: Array<{ sk: string; content: Uint8Array }> = [];
     let exclusiveStartKey: Record<string, unknown> | undefined;
     do {
       const result = await retryable(() =>
@@ -236,13 +293,35 @@ export function createSyncService(
         )
       );
       for (const item of result.Items ?? []) {
-        chunks.push(item.content as Uint8Array);
+        items.push({
+          sk: item.sk as string,
+          content: item.content as Uint8Array,
+        });
       }
       exclusiveStartKey = result.LastEvaluatedKey as
         | Record<string, unknown>
         | undefined;
     } while (exclusiveStartKey);
-    return reassembleChunks(chunks);
+
+    // Sort numerically (not trusting Query's lexicographic sk order alone)
+    // and drop anything beyond expectedChunkCount — stale trailing chunks
+    // left over from a not-yet-cleaned-up shrink write must never be read.
+    items.sort((a, b) => parseChunkIndex(a.sk) - parseChunkIndex(b.sk));
+    const bounded = items.slice(0, expectedChunkCount).map((i) => i.content);
+    if (bounded.length !== expectedChunkCount) {
+      throw new Error(
+        `${relPath}: expected ${expectedChunkCount} chunk(s), found ${bounded.length}`,
+      );
+    }
+
+    const bytes = reassembleChunks(bounded);
+    const actualHash = await sha256Hex(bytes);
+    if (actualHash !== expectedHash) {
+      throw new Error(
+        `${relPath}: reassembled content hash ${actualHash} does not match expected ${expectedHash}`,
+      );
+    }
+    return bytes;
   }
 
   async function writeFileEntry(
@@ -259,13 +338,7 @@ export function createSyncService(
       },
     }));
     for (const batch of batchesOf(writeRequests, 25)) {
-      await retryable(() =>
-        doc.send(
-          new BatchWriteCommand({
-            RequestItems: { [tableName]: batch },
-          }),
-        )
-      );
+      await sendBatchWrite(batch);
     }
 
     // Metadata written last — readers only trust chunks once this is visible.
@@ -296,13 +369,7 @@ export function createSyncService(
         });
       }
       for (const batch of batchesOf(deleteRequests, 25)) {
-        await retryable(() =>
-          doc.send(
-            new BatchWriteCommand({
-              RequestItems: { [tableName]: batch },
-            }),
-          )
-        );
+        await sendBatchWrite(batch);
       }
     }
   }
@@ -381,7 +448,7 @@ export function createSyncService(
     }
 
     let changes = 0;
-    const needContent: string[] = [];
+    const needContent: Array<[string, RemoteFileMeta]> = [];
     for (const [relPath, meta] of entries) {
       signal?.throwIfAborted();
       if (isTraversal(relPath)) continue;
@@ -405,12 +472,12 @@ export function createSyncService(
         const local = await Deno.readFile(localPath);
         if (await sha256Hex(local) === meta.hash) continue;
       } catch { /* file missing — need content */ }
-      needContent.push(relPath);
+      needContent.push([relPath, meta]);
     }
 
-    for (const relPath of needContent) {
+    for (const [relPath, meta] of needContent) {
       signal?.throwIfAborted();
-      const bytes = await fetchChunks(relPath);
+      const bytes = await fetchChunks(relPath, meta.chunkCount, meta.hash);
       await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
       changes++;
     }
@@ -598,7 +665,7 @@ export function createSyncService(
       const map = await queryAllFileMeta(relPath);
       const meta = map.get(relPath);
       if (!meta || meta.deletedAt !== null) return false;
-      const bytes = await fetchChunks(relPath);
+      const bytes = await fetchChunks(relPath, meta.chunkCount, meta.hash);
       await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
       return true;
     },

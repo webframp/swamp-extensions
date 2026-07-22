@@ -192,7 +192,13 @@ export const datastore = {
         datastorePath: string,
         options?: LockOptions,
       ): DistributedLock => {
-        return createDynamoLock(doc, parsed.tableName, datastorePath, options);
+        return createDynamoLock(
+          doc,
+          parsed.tableName,
+          datastorePath,
+          options,
+          ensureInfrastructure,
+        );
       },
 
       createVerifier: (): DatastoreVerifier => ({
