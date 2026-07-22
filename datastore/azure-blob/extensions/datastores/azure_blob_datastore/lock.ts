@@ -3,6 +3,7 @@
 // ABOUTME: server-side, so this implementation is simpler than a hand-rolled CAS.
 
 import type { BlobClient, BlobResponse } from "./rest_client.ts";
+import { retryableRequest } from "./_lib/retry.ts";
 
 export interface LockInfo {
   holder: string;
@@ -56,28 +57,32 @@ async function leaseAction(
   if (durationSeconds !== undefined) {
     headers["x-ms-lease-duration"] = String(durationSeconds);
   }
-  return await client.request({
-    method: "PUT",
-    path,
-    query: { comp: "lease" },
-    headers,
-  });
+  return await retryableRequest(() =>
+    client.request({
+      method: "PUT",
+      path,
+      query: { comp: "lease" },
+      headers,
+    })
+  );
 }
 
 async function ensureBlobExists(
   client: BlobClient,
   path: string,
 ): Promise<void> {
-  const resp = await client.request({
-    method: "PUT",
-    path,
-    headers: {
-      "If-None-Match": "*",
-      "Content-Length": "0",
-      "x-ms-blob-type": "BlockBlob",
-    },
-    body: new Uint8Array(0),
-  });
+  const resp = await retryableRequest(() =>
+    client.request({
+      method: "PUT",
+      path,
+      headers: {
+        "If-None-Match": "*",
+        "Content-Length": "0",
+        "x-ms-blob-type": "BlockBlob",
+      },
+      body: new Uint8Array(0),
+    })
+  );
   // 201 Created, or 412 Precondition Failed (If-None-Match: * means "already
   // exists" — NOT 409, which Azure reserves for lease conflicts) are both fine.
   if (resp.status !== 201 && resp.status !== 412) {
@@ -102,22 +107,30 @@ export function createBlobLock(
   let leaseId: string | undefined;
   let heartbeatId: ReturnType<typeof setInterval> | undefined;
 
-  const stampMetadata = async (id: string) => {
+  const stampMetadata = async (id: string): Promise<void> => {
     const holder = `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`;
-    await client.request({
-      method: "PUT",
-      path,
-      query: { comp: "metadata" },
-      headers: {
-        "x-ms-lease-id": id,
-        "x-ms-meta-holder": holder,
-        "x-ms-meta-hostname": Deno.hostname(),
-        "x-ms-meta-pid": String(Deno.pid),
-        "x-ms-meta-acquiredat": new Date().toISOString(),
-        "x-ms-meta-ttlms": String(ttlMs),
-        "x-ms-meta-nonce": id,
-      },
-    });
+    const resp = await retryableRequest(() =>
+      client.request({
+        method: "PUT",
+        path,
+        query: { comp: "metadata" },
+        headers: {
+          "x-ms-lease-id": id,
+          "x-ms-meta-holder": holder,
+          "x-ms-meta-hostname": Deno.hostname(),
+          "x-ms-meta-pid": String(Deno.pid),
+          "x-ms-meta-acquiredat": new Date().toISOString(),
+          "x-ms-meta-ttlms": String(ttlMs),
+          "x-ms-meta-nonce": id,
+        },
+      })
+    );
+    if (resp.status !== 200) {
+      const message = new TextDecoder().decode(resp.body);
+      throw new Error(
+        `Failed to stamp lock metadata (${resp.status}): ${message}`,
+      );
+    }
   };
 
   const acquire = async () => {
@@ -145,8 +158,20 @@ export function createBlobLock(
         if (!acquiredId) {
           throw new Error("Azure did not return a lease ID on acquire");
         }
+        try {
+          await stampMetadata(acquiredId);
+        } catch (err) {
+          // Don't leave this instance permanently wedged (leaseId was never
+          // set, so acquire() can be retried) and don't strand the lease we
+          // just took on Azure — best-effort release it back.
+          try {
+            await leaseAction(client, path, "release", acquiredId);
+          } catch {
+            // Ignore — the lease will expire via its fixed duration anyway.
+          }
+          throw err;
+        }
         leaseId = acquiredId;
-        await stampMetadata(acquiredId);
         heartbeatId = setInterval(async () => {
           try {
             await leaseAction(client, path, "renew", acquiredId);
@@ -161,10 +186,12 @@ export function createBlobLock(
         const message = new TextDecoder().decode(resp.body);
         throw new Error(`Lease acquire failed (${resp.status}): ${message}`);
       }
-      // 409 LeaseAlreadyPresent — another holder has a live lease. Backoff and retry.
+      // 409 LeaseAlreadyPresent — another holder has a live lease. Backoff and
+      // retry. Cap at 1.5^4 (≈5x) so all 5 graduated tiers are distinct —
+      // capping lower would collapse most of them to the same flat value.
       const backoff = Math.min(
         retryIntervalMs * Math.pow(1.5, Math.min(attempt, 4)),
-        retryIntervalMs * 2,
+        retryIntervalMs * Math.pow(1.5, 4),
       );
       const jitter = backoff * (0.5 + Math.random() * 0.5);
       const delay = Math.floor(jitter);
@@ -250,7 +277,18 @@ export function createBlobLock(
 
     forceRelease: async (expectedNonce: string): Promise<boolean> => {
       const resp = await leaseAction(client, path, "release", expectedNonce);
-      return resp.status === 200;
+      if (resp.status !== 200) return false;
+      // If this instance itself held that lease, clear its local state too —
+      // otherwise a subsequent acquire() on this same object would wrongly
+      // throw "already acquired" even though the lease is now free on Azure.
+      if (leaseId === expectedNonce) {
+        if (heartbeatId !== undefined) {
+          clearInterval(heartbeatId);
+          heartbeatId = undefined;
+        }
+        leaseId = undefined;
+      }
+      return true;
     },
   };
 }

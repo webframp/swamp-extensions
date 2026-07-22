@@ -132,7 +132,11 @@ function canonicalizeResource(
     }
     const sortedKeys = [...params.keys()].sort();
     for (const key of sortedKeys) {
-      resource += `\n${key}:${params.get(key)!.join(",")}`;
+      // Azure's Shared Key spec requires repeated values for the same
+      // parameter to be sorted lexicographically before comma-joining, not
+      // left in the order they appeared in the query string.
+      const values = params.get(key)!.slice().sort();
+      resource += `\n${key}:${values.join(",")}`;
     }
   }
   return resource;

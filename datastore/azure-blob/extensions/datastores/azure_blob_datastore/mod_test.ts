@@ -258,3 +258,79 @@ Deno.test("verifier reports healthy against a reachable container, unhealthy on 
     }
   });
 });
+
+Deno.test("acquire() is retryable after a failure in the post-acquire metadata write, and doesn't leave an orphaned lease", async () => {
+  await withMockServer(async ({ container }) => {
+    // Install the failure-injecting wrapper BEFORE constructing the client —
+    // BlobClient captures `fetch` as a default-parameter value at
+    // construction time, so a client built earlier would keep using the
+    // mock-redirecting fetch and never see this override.
+    const mockRedirectFetch = globalThis.fetch;
+    let failNext = false;
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      if (failNext && url.searchParams.get("comp") === "metadata") {
+        failNext = false;
+        return Promise.reject(new Error("simulated transient network error"));
+      }
+      return mockRedirectFetch(input, init);
+    }) as typeof fetch;
+
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const lock = createBlobLock(client, container, "swamp", "/test/wedge", {
+      ttlMs: 15_000,
+      retryIntervalMs: 50,
+      maxWaitMs: 1_000,
+    });
+
+    try {
+      failNext = true;
+      await assertRejects(
+        () => lock.acquire(),
+        Error,
+        "simulated transient network error",
+      );
+
+      // The failed acquire() must not have left this instance wedged...
+      await lock.acquire();
+      assertExists(await lock.inspect());
+      await lock.release();
+    } finally {
+      globalThis.fetch = mockRedirectFetch;
+    }
+  });
+});
+
+Deno.test("forceRelease on the holding instance clears local state so it can re-acquire", async () => {
+  await withMockServer(async ({ container }) => {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const lock = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/self-force",
+      {
+        ttlMs: 15_000,
+        retryIntervalMs: 50,
+        maxWaitMs: 1_000,
+      },
+    );
+    await lock.acquire();
+    const info = await lock.inspect();
+    assertEquals(await lock.forceRelease(info!.nonce!), true);
+
+    // Must be able to re-acquire on the SAME instance without "already acquired".
+    await lock.acquire();
+    await lock.release();
+  });
+});

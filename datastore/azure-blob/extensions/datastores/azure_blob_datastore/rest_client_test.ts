@@ -61,7 +61,7 @@ Deno.test("buildStringToSign includes non-zero content-length", () => {
   assertEquals(contentLengthField, "42");
 });
 
-Deno.test("buildStringToSign sorts and comma-joins repeated query params", () => {
+Deno.test("buildStringToSign sorts distinct query params by key", () => {
   const headers = new Headers({ "x-ms-date": "d", "x-ms-version": "v" });
   const stringToSign = buildStringToSign(
     "myaccount",
@@ -75,6 +75,26 @@ Deno.test("buildStringToSign sorts and comma-joins repeated query params", () =>
     "/myaccount/mycontainer/myblob",
     "comp:metadata",
     "timeout:30",
+  ]);
+});
+
+Deno.test("buildStringToSign sorts repeated values for the same query key lexicographically", () => {
+  const headers = new Headers({ "x-ms-date": "d", "x-ms-version": "v" });
+  // Values deliberately out of order in the query string ("b" before "a") —
+  // Azure's spec requires them sorted before comma-joining, regardless of
+  // the order they appeared in the request.
+  const stringToSign = buildStringToSign(
+    "myaccount",
+    "GET",
+    "/mycontainer?comp=list&include=b&include=a",
+    headers,
+    0,
+  );
+  const resourceLines = stringToSign.split("\n").slice(-3);
+  assertEquals(resourceLines, [
+    "/myaccount/mycontainer",
+    "comp:list",
+    "include:a,b",
   ]);
 });
 

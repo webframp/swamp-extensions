@@ -68,22 +68,24 @@ export function createMockAzureServer(): MockAzureServer {
           headers: { "x-ms-lease-id": leaseId },
         });
       }
-      if (action === "renew") {
-        if (blob.leaseState !== "leased" || blob.leaseId !== leaseIdHeader) {
+      if (action === "renew" || action === "release") {
+        // Azure distinguishes "no lease exists at all" (409) from "a lease
+        // exists but you supplied the wrong ID" (412) — collapsing both into
+        // one status would hide a real status-code regression from tests.
+        if (blob.leaseState !== "leased") {
+          return new Response("LeaseNotPresentWithLeaseOperation", {
+            status: 409,
+          });
+        }
+        if (blob.leaseId !== leaseIdHeader) {
           return new Response("LeaseIdMismatchWithLeaseOperation", {
             status: 412,
           });
         }
-        return new Response(null, { status: 200 });
-      }
-      if (action === "release") {
-        if (blob.leaseState !== "leased" || blob.leaseId !== leaseIdHeader) {
-          return new Response("LeaseIdMismatchWithLeaseOperation", {
-            status: 412,
-          });
+        if (action === "release") {
+          blob.leaseState = "available";
+          blob.leaseId = undefined;
         }
-        blob.leaseState = "available";
-        blob.leaseId = undefined;
         return new Response(null, { status: 200 });
       }
       return new Response("UnsupportedLeaseAction", { status: 400 });

@@ -279,3 +279,41 @@ Deno.test("two files landing in the same shard bucket both survive the read-modi
     }
   });
 });
+
+Deno.test("metadataOnly pull skips downloading content bytes", async () => {
+  await withHarness(async ({ client, cachePath }) => {
+    const svc = sync(client, cachePath);
+    const relPath = "data/model/instance/lazy-meta.json";
+    await Deno.mkdir(`${cachePath}/data/model/instance`, { recursive: true });
+    await Deno.writeFile(
+      `${cachePath}/${relPath}`,
+      new TextEncoder().encode("content"),
+    );
+    await svc.markDirty({ relPath });
+    await svc.pushChanged();
+
+    const cachePath2 = await Deno.makeTempDir();
+    try {
+      const svc2 = sync(client, cachePath2);
+      const pulled = await svc2.pullChanged({ metadataOnly: true });
+      // Nothing counted as "changed" — metadataOnly must not download bytes.
+      assertEquals(pulled, 0);
+      let contentWritten = true;
+      try {
+        await Deno.stat(`${cachePath2}/${relPath}`);
+      } catch (err) {
+        if (err instanceof Deno.errors.NotFound) contentWritten = false;
+        else throw err;
+      }
+      assertEquals(contentWritten, false);
+
+      // hydrateFile can still fetch it on demand afterward.
+      const found = await svc2.hydrateFile!(relPath);
+      assertEquals(found, true);
+      const bytes = await Deno.readFile(`${cachePath2}/${relPath}`);
+      assertEquals(new TextDecoder().decode(bytes), "content");
+    } finally {
+      await Deno.remove(cachePath2, { recursive: true });
+    }
+  });
+});

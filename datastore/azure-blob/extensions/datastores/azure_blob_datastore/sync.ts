@@ -246,15 +246,17 @@ export function createSyncService(
       const { map, etag } = await getShard(shard);
       const updated = mutator(map);
       const body = new TextEncoder().encode(JSON.stringify(updated));
-      const resp: BlobResponse = await client.request({
-        method: "PUT",
-        path: shardPath(shard),
-        headers: {
-          "x-ms-blob-type": "BlockBlob",
-          ...(etag ? { "If-Match": etag } : { "If-None-Match": "*" }),
-        },
-        body,
-      });
+      const resp: BlobResponse = await retryableRequest(() =>
+        client.request({
+          method: "PUT",
+          path: shardPath(shard),
+          headers: {
+            "x-ms-blob-type": "BlockBlob",
+            ...(etag ? { "If-Match": etag } : { "If-None-Match": "*" }),
+          },
+          body,
+        })
+      );
       if (resp.status === 201 || resp.status === 200) return;
       if (resp.status === 412) continue; // ETag conflict — re-read and retry
       throw new Error(`Update shard ${shard} failed (${resp.status})`);
@@ -265,14 +267,15 @@ export function createSyncService(
   async function queryAllFileMeta(
     prefixFilter?: string,
   ): Promise<Map<string, ShardEntry>> {
-    const shards = await listIndexShards();
+    const shardBlobNames = await listIndexShards();
+    const shards = shardBlobNames.map((name) =>
+      name.slice(`${prefix}/_index/`.length, -".json".length)
+    );
+    // Shard fetches are independent — run them concurrently instead of one
+    // round trip at a time, since every sync operation is on this hot path.
+    const maps = await Promise.all(shards.map((shard) => getShard(shard)));
     const out = new Map<string, ShardEntry>();
-    for (const shardBlobName of shards) {
-      const shard = shardBlobName.slice(
-        `${prefix}/_index/`.length,
-        -".json".length,
-      );
-      const { map } = await getShard(shard);
+    for (const { map } of maps) {
       for (const [relPath, entry] of Object.entries(map)) {
         if (prefixFilter && !relPath.startsWith(prefixFilter)) continue;
         out.set(relPath, entry);
@@ -404,11 +407,13 @@ export function createSyncService(
       needContent.push(relPath);
     }
 
-    for (const relPath of needContent) {
-      signal?.throwIfAborted();
-      const bytes = await fetchContent(relPath);
-      await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
-      changes++;
+    if (!metadataOnly) {
+      for (const relPath of needContent) {
+        signal?.throwIfAborted();
+        const bytes = await fetchContent(relPath);
+        await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
+        changes++;
+      }
     }
 
     if (!scoped && !metadataOnly) {
@@ -579,8 +584,12 @@ export function createSyncService(
       _options?: DatastoreSyncOptions,
     ): Promise<boolean> {
       if (isTraversal(relPath)) return false;
-      const all = await queryAllFileMeta(relPath);
-      const meta = all.get(relPath);
+      // Jump straight to the one shard that owns this path instead of
+      // listing+fetching every shard in the index — that's the whole point
+      // of the shard-first design, and this is the path meant to be cheap.
+      const shard = await shardKey(relPath);
+      const { map } = await getShard(shard);
+      const meta = map[relPath];
       if (!meta || meta.deletedAt !== null) return false;
       const bytes = await fetchContent(relPath);
       await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
