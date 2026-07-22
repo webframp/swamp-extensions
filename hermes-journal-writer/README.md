@@ -21,7 +21,7 @@ swamp model method run journal-writer write_daily_entry
 
 | Method              | Description                                                                                                                                 |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `write_daily_entry` | Reads the latest research-collector brief and appends a dated org entry with Hacker News, Lobste.rs, SRE Weekly, IFIN, and RedMonk content. |
+| `write_daily_entry` | Reads the latest research-collector brief and appends a dated org entry with Hacker News, Lobste.rs, arXiv, SRE Weekly, IFIN, RedMonk, and The AI Daily Brief content. |
 
 ## Org entry format
 
@@ -37,7 +37,7 @@ source URLs, source counts, and timestamps:
 :UPDATED: 2026-06-14 18:03:35Z
 :END:
 
-Research brief — 20 HN, 20 Lobste.rs, 5 SRE Weekly, 15 IFIN, 5 RedMonk
+Research brief — 20 HN, 20 Lobste.rs, 5 SRE Weekly, 15 IFIN, 5 RedMonk, 3 AI Daily Brief
 ```
 
 ## Global arguments
@@ -48,6 +48,7 @@ Research brief — 20 HN, 20 Lobste.rs, 5 SRE Weekly, 15 IFIN, 5 RedMonk
 | `jrnlSubdir` | `journal`            | Subdirectory for journal files |
 | `swampBin`   | `~/.local/bin/swamp` | Path to swamp binary           |
 | `repoDir`    | `/tmp/swamp-fresh`   | Swamp repo for data queries    |
+| `sources`    | all seven sources    | Which sources to include: `hn`, `lobsters`, `sre`, `ifin`, `redmonk`, `arxiv`, `aiDailyBrief`. Drop a name to disable it. |
 
 ## Dependencies
 

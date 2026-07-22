@@ -1,6 +1,6 @@
 /**
  * Research data collector — gathers intelligence from HN, Lobste.rs, arXiv,
- * SRE Weekly, IFIN Discourse, and RedMonk.
+ * SRE Weekly, IFIN Discourse, RedMonk, and The AI Daily Brief.
  *
  * Configurable counts per source. Hermes can self-tune by editing the model's
  * globalArguments when stories consistently return low-relevance content.
@@ -23,6 +23,10 @@ const GlobalArgsSchema = z.object({
     .describe("Number of RedMonk blog posts to fetch"),
   arxivCount: z.number().int().min(1).max(30).default(8)
     .describe("Number of arXiv paper entries to fetch"),
+  aiDailyBriefDays: z.number().int().min(1).max(14).default(3)
+    .describe(
+      "Number of recent The AI Daily Brief editions to gather (one per day)",
+    ),
 }).strict();
 
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
@@ -97,6 +101,28 @@ const ArxivEntrySchema = z.object({
   category: z.string(),
 });
 
+/**
+ * A written analysis "nugget" from a The AI Daily Brief edition. The site
+ * publishes daily editions at /e/YYYY-MM-DD; each edition is a thesis plus a
+ * set of written takeaways. Editions also link to the audio/video episode —
+ * we deliberately keep only the written analysis here and drop video embeds,
+ * so downstream briefings get articles + analysis, not video sources.
+ */
+const AiDailyBriefNuggetSchema = z.object({
+  heading: z.string(),
+  body: z.string(),
+  anchor: z.string().describe("In-page anchor id for deep-linking"),
+});
+
+const AiDailyBriefEditionSchema = z.object({
+  date: z.string().describe("Edition date as YYYY-MM-DD"),
+  url: z.string().describe("Canonical edition URL"),
+  title: z.string().describe("Edition headline (ed-h1)"),
+  summary: z.string().describe("Edition thesis / og:description"),
+  tags: z.array(z.string()).describe("Topical tags shown on the edition"),
+  nuggets: z.array(AiDailyBriefNuggetSchema),
+});
+
 const ResearchBriefSchema = z.object({
   hnFrontPage: z.object({
     stories: z.array(HnItemSchema),
@@ -122,6 +148,10 @@ const ResearchBriefSchema = z.object({
     entries: z.array(ArxivEntrySchema),
     fetchedAt: z.string(),
   }),
+  aiDailyBrief: z.object({
+    editions: z.array(AiDailyBriefEditionSchema),
+    fetchedAt: z.string(),
+  }),
   config: z.object({
     hnCount: z.number(),
     lobstersCount: z.number(),
@@ -129,6 +159,7 @@ const ResearchBriefSchema = z.object({
     ifinCount: z.number(),
     redmonkCount: z.number(),
     arxivCount: z.number(),
+    aiDailyBriefDays: z.number(),
   }),
   fetchedAt: z.string(),
 });
@@ -332,6 +363,103 @@ async function gatherArxiv(count: number) {
   }
 }
 
+/** Strip HTML tags and decode entities, collapsing whitespace. */
+function stripHtml(input: string): string {
+  const noTags = input.replace(/<[^>]*>/g, " ");
+  const decoded = noTags
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+  return decoded.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Pull recent The AI Daily Brief editions from the homepage index, then fetch
+ * each edition page and extract its written analysis nuggets. Video/audio
+ * embeds are intentionally discarded — only written takeaways are kept.
+ */
+async function gatherAiDailyBrief(
+  days: number,
+): Promise<z.infer<typeof AiDailyBriefEditionSchema>[]> {
+  // The homepage lists recent editions as links to /e/YYYY-MM-DD.
+  const htmlText = await fetchText("https://aidailybrief.ai/");
+  const dateSet = new Set<string>();
+  const dateRe = /href="\/e\/(\d{4}-\d{2}-\d{2})"/g;
+  let dm;
+  while ((dm = dateRe.exec(htmlText)) !== null) {
+    dateSet.add(dm[1]);
+  }
+  // Dates are not guaranteed sorted on the page; sort descending (newest first)
+  // and take the requested window.
+  const dates = Array.from(dateSet).sort().reverse().slice(0, days);
+  const editions = await Promise.all(
+    dates.map(
+      async (
+        date,
+      ): Promise<z.infer<typeof AiDailyBriefEditionSchema> | null> => {
+        try {
+          const url = `https://aidailybrief.ai/e/${date}`;
+          const page = await fetchText(url);
+          // Edition headline lives in <h1 class="ed-h1">…</h1>.
+          const h1 = page.match(/<h1 class="ed-h1"[^>]*>([\s\S]*?)<\/h1>/);
+          // og:description holds the edition thesis and is always present.
+          const desc = page.match(
+            /<meta property="og:description" content="([^"]*)"/,
+          );
+          // Topical tags appear as <span class="tag">…</span> near each nugget.
+          const tagSet = new Set<string>();
+          const tagRe = /<span class="tag">([^<]*)<\/span>/g;
+          let tm;
+          while ((tm = tagRe.exec(page)) !== null) {
+            const t = stripHtml(tm[1]);
+            if (t) tagSet.add(t);
+          }
+          // Written nuggets: each lives in an <article class="nug-wrap" id="…">
+          // wrapper containing an <h3 class="nug-h"> heading and a
+          // <p class="nug-b"> written-analysis body. The wrapper's id is the
+          // deep-link anchor. Video/audio embeds sit in separate <div
+          // class="ep-embed"> elements outside the h3/p pair, so they are
+          // naturally excluded — we keep only written analysis.
+          const nuggets: z.infer<typeof AiDailyBriefNuggetSchema>[] = [];
+          const nugRe =
+            /<article class="nug-wrap[^">]*"([^>]*)>([\s\S]*?)<\/article>/g;
+          let nm;
+          while ((nm = nugRe.exec(page)) !== null) {
+            const attrs = nm[1];
+            const inner = nm[2];
+            const anchorMatch = attrs.match(/id="([^"]*)"/);
+            const hm = inner.match(/<h3 class="nug-h"[^>]*>([\s\S]*?)<\/h3>/);
+            const bm = inner.match(/<p class="nug-b"[^>]*>([\s\S]*?)<\/p>/);
+            if (!hm || !bm) continue;
+            nuggets.push({
+              heading: stripHtml(hm[1]),
+              body: stripHtml(bm[1]),
+              anchor: anchorMatch ? anchorMatch[1] : "",
+            });
+          }
+          return {
+            date,
+            url,
+            title: stripHtml(h1?.[1] ?? ""),
+            summary: stripHtml(desc?.[1] ?? ""),
+            tags: Array.from(tagSet),
+            nuggets,
+          };
+        } catch {
+          return null;
+        }
+      },
+    ),
+  );
+  return editions.filter(
+    (e): e is z.infer<typeof AiDailyBriefEditionSchema> => e !== null,
+  );
+}
+
 /** Gather research data from all configured sources and write a brief resource. */
 async function gatherAll(
   _args: Record<string, never>,
@@ -343,20 +471,22 @@ async function gatherAll(
   ctx.logger.info("Gathering research data from all sources");
   // Each source is independently wrapped so a single source failure
   // never kills the entire brief — partial data is better than no data.
-  const [hn, lobsters, sre, ifin, redmonk, arxiv] = await Promise.all([
-    gatherHnFrontPage(cfg.hnCount).catch(() => ({
-      stories: [],
-      fetchedAt: new Date().toISOString(),
-    })),
-    gatherLobstersHottest(cfg.lobstersCount).catch(() => ({
-      stories: [],
-      fetchedAt: new Date().toISOString(),
-    })),
-    gatherSreWeekly(cfg.sreCount).catch(() => []),
-    gatherIfinDiscourse(cfg.ifinCount).catch(() => []),
-    gatherRedmonk(cfg.redmonkCount).catch(() => []),
-    gatherArxiv(cfg.arxivCount),
-  ]);
+  const [hn, lobsters, sre, ifin, redmonk, arxiv, aiDailyBrief] = await Promise
+    .all([
+      gatherHnFrontPage(cfg.hnCount).catch(() => ({
+        stories: [],
+        fetchedAt: new Date().toISOString(),
+      })),
+      gatherLobstersHottest(cfg.lobstersCount).catch(() => ({
+        stories: [],
+        fetchedAt: new Date().toISOString(),
+      })),
+      gatherSreWeekly(cfg.sreCount).catch(() => []),
+      gatherIfinDiscourse(cfg.ifinCount).catch(() => []),
+      gatherRedmonk(cfg.redmonkCount).catch(() => []),
+      gatherArxiv(cfg.arxivCount),
+      gatherAiDailyBrief(cfg.aiDailyBriefDays).catch(() => []),
+    ]);
   const handle = await ctx.writeResource("research", "brief", {
     hnFrontPage: hn,
     lobstersHottest: lobsters,
@@ -364,6 +494,10 @@ async function gatherAll(
     ifin: { topics: ifin, fetchedAt: new Date().toISOString() },
     redmonk: { items: redmonk, fetchedAt: new Date().toISOString() },
     arxiv,
+    aiDailyBrief: {
+      editions: aiDailyBrief,
+      fetchedAt: new Date().toISOString(),
+    },
     config: {
       hnCount: cfg.hnCount,
       lobstersCount: cfg.lobstersCount,
@@ -371,13 +505,14 @@ async function gatherAll(
       ifinCount: cfg.ifinCount,
       redmonkCount: cfg.redmonkCount,
       arxivCount: cfg.arxivCount,
+      aiDailyBriefDays: cfg.aiDailyBriefDays,
     },
     fetchedAt: new Date().toISOString(),
   });
   ctx.logger.info(
     `Gathered ${hn.stories.length} HN, ${lobsters.stories.length} Lobste.rs, ` +
       `${sre.length} SRE Weekly, ${ifin.length} IFIN, ${redmonk.length} RedMonk, ` +
-      `${arxiv.entries.length} arXiv`,
+      `${arxiv.entries.length} arXiv, ${aiDailyBrief.length} AI Daily Brief editions`,
   );
   return { dataHandles: [handle] };
 }
@@ -385,11 +520,25 @@ async function gatherAll(
 /** Research data collector model. */
 export const model = {
   type: "@webframp/research-collector" as const,
-  version: "2026.07.18.1",
+  version: "2026.07.21.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.20.1",
+      description:
+        "Adds the aiDailyBrief source and aiDailyBriefDays global arg. Existing instances keep their per-source counts; new instances default to 3 editions/day.",
+      upgradeAttributes: (old: Record<string, unknown>) => ({
+        ...old,
+        aiDailyBriefDays: 3,
+      }),
+    },
+    {
+      toVersion: "2026.07.21.1",
+      description: "Repair broken XML test fixtures; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -397,7 +546,7 @@ export const model = {
   resources: {
     research: {
       description:
-        "Aggregated research data from HN, Lobste.rs, arXiv, SRE Weekly, IFIN Discourse, and RedMonk",
+        "Aggregated research data from HN, Lobste.rs, arXiv, SRE Weekly, IFIN Discourse, RedMonk, and The AI Daily Brief",
       schema: ResearchBriefSchema,
       lifetime: "1h" as const,
       garbageCollection: 10,
@@ -406,7 +555,7 @@ export const model = {
   methods: {
     gather: {
       description:
-        "Gather research data from HN, Lobste.rs, arXiv, SRE Weekly, IFIN Discourse, and RedMonk.",
+        "Gather research data from HN, Lobste.rs, arXiv, SRE Weekly, IFIN Discourse, RedMonk, and The AI Daily Brief.",
       arguments: z.object({}),
       execute: gatherAll,
     },

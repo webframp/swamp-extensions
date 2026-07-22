@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/hermes-journal-writer"
-version: "2026.07.18.1"
+version: "2026.07.20.1"
 description: |
   Journal Writer — reads research-collector data from the swamp catalog and
   writes org-mode journal entries to ~/org/journal/. Commits and pushes to the

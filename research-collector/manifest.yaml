@@ -1,10 +1,11 @@
 manifestVersion: 1
 name: "@webframp/research-collector"
-version: "2026.07.18.1"
+version: "2026.07.21.1"
 description: |
   Research data collector — gathers intelligence from Hacker News, Lobste.rs,
-  SRE Weekly, IFIN Discourse, and RedMonk for daily AI/tech intelligence
-  briefings. Produces typed resources for downstream workflows.
+  arXiv, SRE Weekly, IFIN Discourse, RedMonk, and The AI Daily Brief for daily
+  AI/tech intelligence briefings. Produces typed resources for downstream
+  workflows.
 
   ## Usage
 
@@ -17,8 +18,8 @@ description: |
 
   ## Methods
 
-  - **gather** — Gather data from HN front page, Lobste.rs hottest, SRE Weekly,
-    IFIN Discourse security topics, and RedMonk analysis.
+  - **gather** — Gather data from HN front page, Lobste.rs hottest, arXiv,
+    SRE Weekly, IFIN Discourse security topics, RedMonk, and The AI Daily Brief.
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - research-collector/research_collector.ts

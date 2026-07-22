@@ -1,3 +1,9 @@
+## 2026.07.20.1
+
+**Added:** Renders The AI Daily Brief editions in daily org journal entries. When `sources` global arg includes `"aiDailyBrief"`, the writer produces an `* AI Daily Brief` section with per-edition headings, summaries, and linked nuggets.
+
+**Changed:** The `sources` global arg now accepts `"aiDailyBrief"` as an additional source name alongside the existing set (`hn`, `lobsters`, `sre`, `ifin`, `redmonk`, `arxiv`).
+
 ## 2026.07.18.1
 
 **Added:** An `upgrades` array entry (no-op) to `hermes_jrnl_writer.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.

@@ -583,3 +583,54 @@ Deno.test("write_daily_entry treats a failed git status as an error, not nothing
     restoreCmd();
   }
 });
+
+Deno.test("write_daily_entry renders The AI Daily Brief editions with written takeaways", async () => {
+  const files: Record<string, string> = {};
+  const restoreFs = mockFs(files);
+  const restoreCmd = mockDenoCommand((cmd) => {
+    if (cmd.includes("data") && cmd.includes("get")) {
+      return {
+        stdout: JSON.stringify({
+          content: JSON.stringify({
+            aiDailyBrief: {
+              editions: [{
+                date: "2026-07-19",
+                url: "https://aidailybrief.ai/e/2026-07-19",
+                title: "The Self-Driving Company",
+                summary: "A weekend long-read on agents in the org.",
+                tags: ["Enterprise", "Models"],
+                nuggets: [
+                  { heading: "Take one", body: "Written analysis body.", anchor: "a" },
+                  { heading: "Take two", body: "Second analysis body.", anchor: "b" },
+                ],
+              }],
+            },
+          }),
+        }),
+        success: true,
+      };
+    }
+    if (cmd.includes("status")) return { stdout: " A journal/x.org", success: true };
+    return { stdout: "", success: true };
+  });
+  try {
+    const { context } = createModelTestContext({ globalArgs: TEST_ARGS });
+    await model.methods.write_daily_entry.execute({} as any, context as any);
+    const content = files[Object.keys(files)[0]];
+    // Section heading present
+    assertEquals(content.includes("* The AI Daily Brief"), true);
+    // Edition date + title rendered as a level-2 heading
+    assertEquals(content.includes("** 2026-07-19 — *The Self-Driving Company*"), true);
+    // Edition URL included
+    assertEquals(content.includes("https://aidailybrief.ai/e/2026-07-19"), true);
+    // Written takeaways rendered, video markers absent
+    assertEquals(content.includes("- Take one"), true);
+    assertEquals(content.includes("Written analysis body."), true);
+    assertEquals(/youtube|youtu\.be|spotify|iframe/i.test(content), false);
+    // Tags surfaced
+    assertEquals(content.includes("tags: Enterprise, Models"), true);
+  } finally {
+    restoreFs();
+    restoreCmd();
+  }
+});

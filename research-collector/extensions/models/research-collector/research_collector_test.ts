@@ -16,6 +16,7 @@ const DEFAULT_GLOBAL_ARGS = {
   ifinCount: 3,
   redmonkCount: 2,
   arxivCount: 2,
+  aiDailyBriefDays: 2,
 };
 
 // =============================================================================
@@ -48,7 +49,7 @@ Deno.test("research-collector model: global args have correct defaults", () => {
 // =============================================================================
 
 Deno.test({
-  name: "gather: all six sources produce data",
+  name: "gather: all seven sources produce data",
   sanitizeResources: false,
   fn: async () => {
     const originalFetch = globalThis.fetch;
@@ -159,6 +160,32 @@ Deno.test({
           ),
         );
       }
+      if (url === "https://aidailybrief.ai/") {
+        // Homepage listing two recent editions (out of order to verify sorting)
+        return Promise.resolve(
+          new Response(
+            '<a href="/e/2026-07-16">y</a><a href="/e/2026-07-19">x</a>',
+          ),
+        );
+      }
+      if (url.startsWith("https://aidailybrief.ai/e/")) {
+        return Promise.resolve(
+          new Response(
+            '<meta property="og:description" content="Edition thesis"/>' +
+              '<h1 class="ed-h1">Edition Headline</h1>' +
+              '<span class="tag">Enterprise</span>' +
+              '<article class="nug-wrap reveal" id="nug-1">' +
+              '<h3 class="nug-h">First takeaway</h3>' +
+              '<p class="nug-b">Written analysis body one.</p>' +
+              "</article>" +
+              '<article class="nug-wrap reveal">' +
+              '<h3 class="nug-h">Second takeaway</h3>' +
+              '<p class="nug-b">Written analysis body two.</p>' +
+              "</article>" +
+              '<div class="ep-embed"><iframe src="https://youtube.com/x"></iframe></div>',
+          ),
+        );
+      }
       return Promise.resolve(new Response("", { status: 404 }));
     };
 
@@ -197,6 +224,17 @@ Deno.test({
         (data.ifin as Record<string, unknown>).topics ? true : false,
         true,
       );
+      // AI Daily Brief: two editions gathered, sorted newest-first, with
+      // written nuggets only (video embed discarded).
+      const aidb = data.aiDailyBrief as Record<string, unknown>;
+      const editions = aidb.editions as Array<Record<string, unknown>>;
+      assertEquals(editions.length, 2);
+      assertEquals(editions[0].date, "2026-07-19");
+      assertEquals(editions[0].title, "Edition Headline");
+      const nuggets = editions[0].nuggets as Array<Record<string, unknown>>;
+      assertEquals(nuggets.length, 2);
+      assertEquals(nuggets[0].heading, "First takeaway");
+      assertEquals(nuggets[0].anchor, "nug-1");
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -568,6 +606,145 @@ Deno.test({
       assertEquals(entries.length, 1);
       assertEquals(entries[0].published, "2026-01-01");
       assertEquals(entries[0].updated, "2026-03-15");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+});
+
+// =============================================================================
+// gather: The AI Daily Brief — written analysis only, video discarded
+// =============================================================================
+
+Deno.test({
+  name: "gather: AI Daily Brief keeps written nuggets and drops video embeds",
+  sanitizeResources: false,
+  fn: async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL
+        ? ""
+        : input.url;
+      if (url === "https://aidailybrief.ai/") {
+        return Promise.resolve(
+          new Response(
+            '<a href="/e/2026-07-15">old</a>' +
+              '<a href="/e/2026-07-19">new</a>' +
+              '<a href="/e/2026-07-17">mid</a>',
+          ),
+        );
+      }
+      if (url === "https://aidailybrief.ai/e/2026-07-19") {
+        return Promise.resolve(
+          new Response(
+            '<meta property="og:description" content="Newest thesis"/>' +
+              '<h1 class="ed-h1">Newest Edition</h1>' +
+              '<span class="tag">Agents</span><span class="tag">Enterprise</span>' +
+              '<article class="nug-wrap reveal" id="a">' +
+              '<h3 class="nug-h">Take one</h3>' +
+              '<p class="nug-b">Analysis one.</p>' +
+              "</article>" +
+              '<div class="ep-embed"><iframe src="https://youtube.com/embed/x"></iframe></div>' +
+              '<article class="nug-wrap reveal" id="b">' +
+              '<h3 class="nug-h">Take two</h3>' +
+              '<p class="nug-b">Analysis two.</p>' +
+              "</article>",
+          ),
+        );
+      }
+      // 2026-07-17: an edition whose page fetch fails (500) — must be dropped
+      // without killing the whole source.
+      if (url === "https://aidailybrief.ai/e/2026-07-17") {
+        return Promise.resolve(new Response("", { status: 500 }));
+      }
+      if (url === "https://aidailybrief.ai/e/2026-07-15") {
+        return Promise.resolve(
+          new Response(
+            '<meta property="og:description" content="Oldest thesis"/>' +
+              '<h1 class="ed-h1">Oldest Edition</h1>' +
+              '<article class="nug-wrap reveal" id="solo">' +
+              '<h3 class="nug-h">Solo takeaway</h3>' +
+              '<p class="nug-b">Only analysis.</p>' +
+              "</article>",
+          ),
+        );
+      }
+      // Other sources return minimal empty shapes so gather completes.
+      if (url.includes("hacker-news.firebaseio.com/v0/topstories.json")) {
+        return Promise.resolve(new Response(JSON.stringify([])));
+      }
+      if (url.includes("lobste.rs")) {
+        return Promise.resolve(new Response("[]"));
+      }
+      if (url.includes("sreweekly.com")) {
+        return Promise.resolve(
+          new Response(`<?xml version="1.0"?><rss><channel></channel></rss>`),
+        );
+      }
+      if (url.includes("discourse.ifin.network")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ topic_list: { topics: [] } })),
+        );
+      }
+      if (url.includes("redmonk.com")) {
+        return Promise.resolve(
+          new Response(`<?xml version="1.0"?><rss><channel></channel></rss>`),
+        );
+      }
+      if (url.includes("export.arxiv.org")) {
+        return Promise.resolve(
+          new Response(`<?xml version="1.0"?><feed></feed>`),
+        );
+      }
+      return Promise.resolve(new Response("", { status: 404 }));
+    };
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { ...DEFAULT_GLOBAL_ARGS, aiDailyBriefDays: 3 },
+        definition: {
+          id: "test-id",
+          name: "test-collector",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await model.methods.gather.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.gather.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      const data = resources[0].data as Record<string, unknown>;
+      const aidb = data.aiDailyBrief as Record<string, unknown>;
+      const editions = aidb.editions as Array<Record<string, unknown>>;
+
+      // Two editions survived: newest and oldest. The 500 on 07-17 was dropped.
+      assertEquals(editions.length, 2);
+      assertEquals(editions[0].date, "2026-07-19");
+      assertEquals(editions[1].date, "2026-07-15");
+
+      const newest = editions[0];
+      assertEquals(newest.title, "Newest Edition");
+      assertEquals(newest.summary, "Newest thesis");
+      assertEquals(newest.tags, ["Agents", "Enterprise"]);
+      const nuggets = newest.nuggets as Array<Record<string, unknown>>;
+      // Both written takeaways kept; the video iframe lives outside the
+      // nug-wrap article wrappers so it never becomes a nugget.
+      assertEquals(nuggets.length, 2);
+      assertEquals(nuggets[0].heading, "Take one");
+      assertEquals(nuggets[0].body, "Analysis one.");
+      assertEquals(nuggets[0].anchor, "a");
+      assertEquals(nuggets[1].heading, "Take two");
+      assertEquals(nuggets[1].anchor, "b");
+      // No nugget body references the video source.
+      const allBodies = nuggets.map((n) => String(n.body)).join(" ");
+      assertEquals(allBodies.includes("youtube"), false);
     } finally {
       globalThis.fetch = originalFetch;
     }
