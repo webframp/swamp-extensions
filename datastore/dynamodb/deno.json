@@ -1,0 +1,30 @@
+{
+  "name": "@webframp/dynamodb-datastore",
+  "version": "0.1.0",
+  "exports": "./extensions/datastores/dynamodb_datastore/mod.ts",
+  "tasks": {
+    "test": "deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/",
+    "check": "deno check extensions/datastores/dynamodb_datastore/mod.ts",
+    "lint": "deno lint extensions/",
+    "fmt": "deno fmt extensions/",
+    "fmt:check": "deno fmt --check extensions/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-import-prefix",
+        "no-slow-types"
+      ]
+    }
+  },
+  "imports": {
+    "zod": "npm:zod@4.4.3",
+    "@aws-sdk/client-dynamodb": "npm:@aws-sdk/client-dynamodb@3.1091.0",
+    "@aws-sdk/lib-dynamodb": "npm:@aws-sdk/lib-dynamodb@3.1091.0",
+    "@std/assert": "jsr:@std/assert@1.0.19",
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260504.10"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}
