@@ -5,6 +5,9 @@
  * across multiple subscriptions. Discovers CognitiveServices/OpenAI resources
  * and provides per-deployment breakdowns.
  *
+ * Authentication uses Azure AD client credentials flow (tenant_id + client_id +
+ * client_secret) with no dependency on the `az` CLI.
+ *
  * @module
  */
 // SPDX-License-Identifier: Apache-2.0
@@ -22,6 +25,18 @@ const GlobalArgsSchema = z.object({
     .describe(
       "Azure subscription IDs to scan for OpenAI/AI Services resources",
     ),
+  tenantId: z
+    .string()
+    .uuid()
+    .describe("Azure AD tenant ID for authentication"),
+  clientId: z
+    .string()
+    .uuid()
+    .describe("Azure AD application (client) ID"),
+  clientSecret: z
+    .string()
+    .meta({ sensitive: true })
+    .describe("Azure AD client secret"),
 });
 
 /** Schema for a single deployment's token usage. */
@@ -48,7 +63,6 @@ const ResourceUsageSchema = z.object({
   generatedTokensPerMinute: z.number(),
 });
 
-/** Schema for the full scan results. */
 /** Schema for discovered AI resources (no metrics). */
 const ResourceListSchema = z.object({
   discoveredAt: z.string(),
@@ -61,6 +75,7 @@ const ResourceListSchema = z.object({
   })),
 });
 
+/** Schema for the full scan results. */
 const ScanResultsSchema = z.object({
   scannedAt: z.string(),
   days: z.number(),
@@ -77,23 +92,52 @@ const ScanResultsSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Auth Helpers
 // ---------------------------------------------------------------------------
 
-/** Run an az CLI command and return parsed JSON output. */
-async function azJson(args: string[]): Promise<unknown> {
-  const cmd = new Deno.Command("az", {
-    args: [...args, "-o", "json"],
-    stdout: "piped",
-    stderr: "piped",
+const ARM_SCOPE = "https://management.azure.com/.default";
+
+/**
+ * Acquire an access token via Azure AD client credentials flow.
+ */
+async function getAccessToken(
+  tenantId: string,
+  clientId: string,
+  clientSecret: string,
+  fetchFn: typeof fetch,
+): Promise<string> {
+  const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: ARM_SCOPE,
   });
-  const output = await cmd.output();
-  if (!output.success) {
-    const err = new TextDecoder().decode(output.stderr);
-    throw new Error(`az command failed: ${err}`);
+
+  const resp = await fetchFn(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text();
+    throw new Error(
+      `Azure token exchange failed (${resp.status}): ${errBody}`,
+    );
   }
-  return JSON.parse(new TextDecoder().decode(output.stdout));
+
+  const data = (await resp.json()) as { access_token?: string };
+  if (!data.access_token) {
+    throw new Error("Azure token response missing access_token field");
+  }
+  return data.access_token;
 }
+
+// ---------------------------------------------------------------------------
+// Resource Discovery
+// ---------------------------------------------------------------------------
 
 /** Discovered AI resource. */
 interface AiResource {
@@ -104,25 +148,59 @@ interface AiResource {
 }
 
 /**
- * List OpenAI/AIServices resources in a subscription.
- *
- * @param subscription - Azure subscription ID.
- * @returns Array of AI resource descriptors.
+ * List OpenAI/AIServices resources in a subscription via ARM REST API.
  */
 async function listAiResources(
   subscription: string,
+  token: string,
+  fetchFn: typeof fetch,
 ): Promise<AiResource[]> {
-  const data = (await azJson([
-    "cognitiveservices",
-    "account",
-    "list",
-    "--subscription",
-    subscription,
-    "--query",
-    "[?kind=='OpenAI' || kind=='AIServices'].{name:name,resourceGroup:resourceGroup,location:location,kind:kind}",
-  ])) as AiResource[];
-  return data || [];
+  const filter = encodeURIComponent(
+    "kind eq 'OpenAI' or kind eq 'AIServices'",
+  );
+  const url = `https://management.azure.com/subscriptions/${subscription}` +
+    `/providers/Microsoft.CognitiveServices/accounts` +
+    `?api-version=2024-10-01&$filter=${filter}`;
+
+  const resp = await fetchFn(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(
+      `ARM resource list failed for ${subscription} (${resp.status}): ${body}`,
+    );
+  }
+
+  const data = (await resp.json()) as {
+    value?: Array<{
+      name?: string;
+      location?: string;
+      kind?: string;
+      id?: string;
+    }>;
+  };
+
+  return (data.value || []).map((r) => ({
+    name: r.name || "unknown",
+    resourceGroup: extractResourceGroup(r.id || ""),
+    location: r.location || "unknown",
+    kind: r.kind || "unknown",
+  }));
 }
+
+/** Extract resource group name from an ARM resource ID. */
+function extractResourceGroup(resourceId: string): string {
+  const match = resourceId.match(
+    /\/resourceGroups\/([^/]+)/i,
+  );
+  return match ? match[1] : "unknown";
+}
+
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
 
 /** Token metrics result from Azure Monitor. */
 interface TokenMetrics {
@@ -137,14 +215,7 @@ interface TokenMetrics {
 }
 
 /**
- * Get token metrics for a CognitiveServices resource.
- *
- * @param subscription - Azure subscription ID.
- * @param resourceGroup - Resource group name.
- * @param resourceName - CognitiveServices account name.
- * @param startTime - ISO start time.
- * @param endTime - ISO end time.
- * @returns Token metrics with optional per-deployment breakdown.
+ * Get token metrics for a CognitiveServices resource via Azure Monitor REST API.
  */
 async function getTokenMetrics(
   subscription: string,
@@ -152,34 +223,44 @@ async function getTokenMetrics(
   resourceName: string,
   startTime: string,
   endTime: string,
+  token: string,
+  fetchFn: typeof fetch,
 ): Promise<TokenMetrics> {
   const resourceId =
     `/subscriptions/${subscription}/resourceGroups/${resourceGroup}` +
     `/providers/Microsoft.CognitiveServices/accounts/${resourceName}`;
 
-  // Get aggregate metrics
-  const data = (await azJson([
-    "monitor",
-    "metrics",
-    "list",
-    "--resource",
-    resourceId,
-    "--metric",
-    "ProcessedPromptTokens",
-    "GeneratedTokens",
-    "--interval",
-    "P1D",
-    "--aggregation",
-    "Total",
-    "--start-time",
-    startTime,
-    "--end-time",
-    endTime,
-  ])) as {
+  const timespan = `${startTime}/${endTime}`;
+
+  // Aggregate metrics (no dimension split)
+  const metricsUrl = `https://management.azure.com${resourceId}` +
+    `/providers/microsoft.insights/metrics` +
+    `?api-version=2024-02-01` +
+    `&metricnames=ProcessedPromptTokens,GeneratedTokens` +
+    `&timespan=${encodeURIComponent(timespan)}` +
+    `&interval=P1D` +
+    `&aggregation=Total`;
+
+  const resp = await fetchFn(metricsUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(
+      `Azure Monitor metrics failed for ${resourceName} (${resp.status}): ${body}`,
+    );
+  }
+
+  const data = (await resp.json()) as {
     value?: Array<{
       name?: { value?: string };
       timeseries?: Array<{
         data?: Array<{ total?: number | null }>;
+        metadatavalues?: Array<{
+          name?: { value?: string };
+          value?: string;
+        }>;
       }>;
     }>;
   };
@@ -199,40 +280,32 @@ async function getTokenMetrics(
     if (name === "GeneratedTokens") generatedTokens = total;
   }
 
-  // Try per-deployment breakdown
+  // Per-deployment breakdown (with dimension filter)
   const deployments: TokenMetrics["deployments"] = [];
   try {
-    const dimData = (await azJson([
-      "monitor",
-      "metrics",
-      "list",
-      "--resource",
-      resourceId,
-      "--metric",
-      "ProcessedPromptTokens",
-      "GeneratedTokens",
-      "--interval",
-      "P1D",
-      "--aggregation",
-      "Total",
-      "--start-time",
-      startTime,
-      "--end-time",
-      endTime,
-      "--dimension",
-      "ModelDeploymentName",
-    ])) as {
-      value?: Array<{
-        name?: { value?: string };
-        timeseries?: Array<{
-          metadatavalues?: Array<{
-            name?: { value?: string };
-            value?: string;
-          }>;
-          data?: Array<{ total?: number | null }>;
-        }>;
-      }>;
-    };
+    const dimUrl = `https://management.azure.com${resourceId}` +
+      `/providers/microsoft.insights/metrics` +
+      `?api-version=2024-02-01` +
+      `&metricnames=ProcessedPromptTokens,GeneratedTokens` +
+      `&timespan=${encodeURIComponent(timespan)}` +
+      `&interval=P1D` +
+      `&aggregation=Total` +
+      `&$filter=ModelDeploymentName eq '*'`;
+
+    const dimResp = await fetchFn(dimUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!dimResp.ok) {
+      return {
+        promptTokens,
+        generatedTokens,
+        deployments,
+        deploymentBreakdownFailed: true,
+      };
+    }
+
+    const dimData = (await dimResp.json()) as typeof data;
 
     const deploymentMap = new Map<
       string,
@@ -299,12 +372,13 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.07.18.1",
+  version: "2026.07.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
-      toVersion: "2026.07.18.1",
-      description: "No schema changes",
+      toVersion: "2026.07.21.1",
+      description:
+        "Remove az CLI dependency; auth via Azure AD client credentials flow",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -336,7 +410,12 @@ export const model = {
       execute: async (
         args: { days: number },
         context: {
-          globalArgs: { subscriptions: string[] };
+          globalArgs: {
+            subscriptions: string[];
+            tenantId: string;
+            clientId: string;
+            clientSecret: string;
+          };
           writeResource: (
             spec: string,
             instance: string,
@@ -346,8 +425,18 @@ export const model = {
             info: (msg: string, props: Record<string, unknown>) => void;
             warn: (msg: string, props: Record<string, unknown>) => void;
           };
+          fetchFn?: typeof fetch;
         },
       ) => {
+        const fetchFn = context.fetchFn ?? fetch;
+        const { tenantId, clientId, clientSecret } = context.globalArgs;
+        const token = await getAccessToken(
+          tenantId,
+          clientId,
+          clientSecret,
+          fetchFn,
+        );
+
         const endTime = new Date();
         const startTime = new Date(
           endTime.getTime() - args.days * 24 * 60 * 60 * 1000,
@@ -358,7 +447,11 @@ export const model = {
 
         for (const subscription of context.globalArgs.subscriptions) {
           try {
-            const aiResources = await listAiResources(subscription);
+            const aiResources = await listAiResources(
+              subscription,
+              token,
+              fetchFn,
+            );
 
             for (const res of aiResources) {
               try {
@@ -368,6 +461,8 @@ export const model = {
                   res.name,
                   startTime.toISOString(),
                   endTime.toISOString(),
+                  token,
+                  fetchFn,
                 );
 
                 if (
@@ -469,7 +564,12 @@ export const model = {
       execute: async (
         _args: Record<string, never>,
         context: {
-          globalArgs: { subscriptions: string[] };
+          globalArgs: {
+            subscriptions: string[];
+            tenantId: string;
+            clientId: string;
+            clientSecret: string;
+          };
           writeResource: (
             spec: string,
             instance: string,
@@ -479,13 +579,27 @@ export const model = {
             info: (msg: string, props: Record<string, unknown>) => void;
             warn: (msg: string, props: Record<string, unknown>) => void;
           };
+          fetchFn?: typeof fetch;
         },
       ) => {
+        const fetchFn = context.fetchFn ?? fetch;
+        const { tenantId, clientId, clientSecret } = context.globalArgs;
+        const token = await getAccessToken(
+          tenantId,
+          clientId,
+          clientSecret,
+          fetchFn,
+        );
+
         const allResources: Array<AiResource & { subscription: string }> = [];
 
         for (const subscription of context.globalArgs.subscriptions) {
           try {
-            const resources = await listAiResources(subscription);
+            const resources = await listAiResources(
+              subscription,
+              token,
+              fetchFn,
+            );
             for (const r of resources) {
               allResources.push({ ...r, subscription });
             }

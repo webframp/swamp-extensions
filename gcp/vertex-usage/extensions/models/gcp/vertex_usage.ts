@@ -5,6 +5,9 @@
  * multiple GCP projects. Provides per-model breakdowns with input/output
  * direction split and tokens-per-minute rates.
  *
+ * Authentication uses a GCP service account JSON key (signed JWT → access
+ * token exchange) with no dependency on the `gcloud` CLI.
+ *
  * @module
  */
 // SPDX-License-Identifier: Apache-2.0
@@ -20,6 +23,14 @@ const GlobalArgsSchema = z.object({
   projects: z
     .array(z.string())
     .describe("GCP project IDs to scan for Vertex AI metrics"),
+  serviceAccountJson: z
+    .string()
+    .meta({ sensitive: true })
+    .describe(
+      "GCP service account JSON key (stringified). " +
+        "Falls back to GOOGLE_APPLICATION_CREDENTIALS env var if omitted.",
+    )
+    .optional(),
 });
 
 /** Schema for a single model's token usage. */
@@ -59,30 +70,141 @@ const ScanResultsSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Auth Helpers
 // ---------------------------------------------------------------------------
 
+/** Parsed service account key fields we need. */
+interface ServiceAccountKey {
+  client_email: string;
+  private_key: string;
+  token_uri: string;
+}
+
+const MONITORING_SCOPE = "https://www.googleapis.com/auth/monitoring.read";
+const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+
+/** Base64url encode a buffer or string. */
+function base64url(input: Uint8Array | string): string {
+  const bytes = typeof input === "string"
+    ? new TextEncoder().encode(input)
+    : input;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 /**
- * Get an access token from gcloud CLI.
- *
- * @returns Bearer token string.
+ * Import a PEM-encoded RSA private key for RS256 signing.
  */
-async function getAccessToken(): Promise<string> {
-  const cmd = new Deno.Command("gcloud", {
-    args: ["auth", "print-access-token"],
-    stdout: "piped",
-    stderr: "piped",
+async function importPrivateKey(pem: string): Promise<CryptoKey> {
+  const pemBody = pem
+    .replace(/-----BEGIN (RSA )?PRIVATE KEY-----/g, "")
+    .replace(/-----END (RSA )?PRIVATE KEY-----/g, "")
+    .replace(/\s/g, "");
+  const binary = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    binary,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+}
+
+/**
+ * Create a signed JWT for the service account and exchange it for an
+ * access token at Google's token endpoint.
+ */
+async function getAccessToken(
+  sa: ServiceAccountKey,
+  fetchFn: typeof fetch,
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = base64url(
+    JSON.stringify({
+      iss: sa.client_email,
+      scope: MONITORING_SCOPE,
+      aud: sa.token_uri || TOKEN_ENDPOINT,
+      iat: now,
+      exp: now + 3600,
+    }),
+  );
+
+  const signingInput = `${header}.${payload}`;
+  const key = await importPrivateKey(sa.private_key);
+  const sig = new Uint8Array(
+    await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      new TextEncoder().encode(signingInput),
+    ),
+  );
+  const jwt = `${signingInput}.${base64url(sig)}`;
+
+  const body = new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    assertion: jwt,
   });
-  const output = await cmd.output();
-  if (!output.success) {
+
+  const resp = await fetchFn(sa.token_uri || TOKEN_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!resp.ok) {
+    const errBody = await resp.text();
     throw new Error(
-      `Failed to get gcloud access token: ${
-        new TextDecoder().decode(output.stderr).trim()
-      }`,
+      `GCP token exchange failed (${resp.status}): ${errBody}`,
     );
   }
-  return new TextDecoder().decode(output.stdout).trim();
+
+  const data = (await resp.json()) as { access_token?: string };
+  if (!data.access_token) {
+    throw new Error("GCP token response missing access_token field");
+  }
+  return data.access_token;
 }
+
+/**
+ * Resolve service account credentials from globalArgs or environment.
+ */
+function resolveServiceAccount(
+  globalArgs: { serviceAccountJson?: string },
+): ServiceAccountKey {
+  const raw = globalArgs.serviceAccountJson ??
+    (() => {
+      const path = Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS");
+      if (!path) {
+        throw new Error(
+          "No serviceAccountJson provided and GOOGLE_APPLICATION_CREDENTIALS " +
+            "environment variable is not set. Provide one or the other.",
+        );
+      }
+      return Deno.readTextFileSync(path);
+    })();
+
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  if (!parsed.client_email || !parsed.private_key) {
+    throw new Error(
+      "Service account JSON must contain client_email and private_key fields",
+    );
+  }
+
+  return {
+    client_email: parsed.client_email as string,
+    private_key: parsed.private_key as string,
+    token_uri: (parsed.token_uri as string) || TOKEN_ENDPOINT,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Monitoring API Helpers
+// ---------------------------------------------------------------------------
 
 /** Parsed time series data point. */
 interface TokenData {
@@ -98,6 +220,8 @@ interface TokenData {
  * @param token - Bearer access token.
  * @param startTime - ISO start time.
  * @param endTime - ISO end time.
+ * @param days - Lookback period for alignment.
+ * @param fetchFn - Fetch function (injected for testability).
  * @returns Array of token data points grouped by model and direction.
  */
 async function queryTokenMetrics(
@@ -106,6 +230,7 @@ async function queryTokenMetrics(
   startTime: string,
   endTime: string,
   days: number,
+  fetchFn: typeof fetch,
 ): Promise<{ data: TokenData[]; truncated: boolean }> {
   const MAX_PAGES = 50;
   const alignPeriod = Math.min(days * 24 * 3600, 30 * 24 * 3600);
@@ -131,7 +256,7 @@ async function queryTokenMetrics(
       ? `${baseUrl}&pageToken=${encodeURIComponent(pageToken)}`
       : baseUrl;
 
-    const resp = await fetch(url, {
+    const resp = await fetchFn(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -143,7 +268,16 @@ async function queryTokenMetrics(
       throw new Error(`Monitoring API error for ${project}: ${resp.status}`);
     }
 
-    const data = await resp.json();
+    const data = (await resp.json()) as {
+      timeSeries?: Array<{
+        metric?: { labels?: Record<string, string> };
+        resource?: { labels?: Record<string, string> };
+        points?: Array<{
+          value?: { int64Value?: string; doubleValue?: number };
+        }>;
+      }>;
+      nextPageToken?: string;
+    };
 
     for (const ts of data.timeSeries || []) {
       const labels = ts.metric?.labels || {};
@@ -173,13 +307,14 @@ async function queryTokenMetrics(
 /** GCP Vertex AI token usage monitoring model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.07.18.1",
+  version: "2026.07.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
-      toVersion: "2026.07.18.1",
-      description: "No schema changes",
+      toVersion: "2026.07.21.1",
+      description:
+        "Remove gcloud CLI dependency; auth via service account JSON key",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -211,7 +346,7 @@ export const model = {
       execute: async (
         args: { days: number },
         context: {
-          globalArgs: { projects: string[] };
+          globalArgs: { projects: string[]; serviceAccountJson?: string };
           writeResource: (
             spec: string,
             instance: string,
@@ -221,8 +356,10 @@ export const model = {
             info: (msg: string, props: Record<string, unknown>) => void;
             warn: (msg: string, props: Record<string, unknown>) => void;
           };
+          fetchFn?: typeof fetch;
         },
       ) => {
+        const fetchFn = context.fetchFn ?? fetch;
         const endTime = new Date();
         const startTime = new Date(
           endTime.getTime() - args.days * 24 * 60 * 60 * 1000,
@@ -231,15 +368,18 @@ export const model = {
         const projects: z.infer<typeof ProjectUsageSchema>[] = [];
         let anyTruncated = false;
 
+        const sa = resolveServiceAccount(context.globalArgs);
+        const token = await getAccessToken(sa, fetchFn);
+
         for (const project of context.globalArgs.projects) {
           try {
-            const token = await getAccessToken();
             const { data, truncated: pageTruncated } = await queryTokenMetrics(
               project,
               token,
               startTime.toISOString(),
               endTime.toISOString(),
               args.days,
+              fetchFn,
             );
 
             if (data.length === 0) continue;
@@ -347,7 +487,7 @@ export const model = {
       execute: async (
         args: { project: string; days: number },
         context: {
-          globalArgs: { projects: string[] };
+          globalArgs: { projects: string[]; serviceAccountJson?: string };
           writeResource: (
             spec: string,
             instance: string,
@@ -356,14 +496,18 @@ export const model = {
           logger: {
             info: (msg: string, props: Record<string, unknown>) => void;
           };
+          fetchFn?: typeof fetch;
         },
       ) => {
+        const fetchFn = context.fetchFn ?? fetch;
         const endTime = new Date();
         const startTime = new Date(
           endTime.getTime() - args.days * 24 * 60 * 60 * 1000,
         );
         const periodMinutes = args.days * 24 * 60;
-        const token = await getAccessToken();
+
+        const sa = resolveServiceAccount(context.globalArgs);
+        const token = await getAccessToken(sa, fetchFn);
 
         const { data, truncated: pageTruncated } = await queryTokenMetrics(
           args.project,
@@ -371,6 +515,7 @@ export const model = {
           startTime.toISOString(),
           endTime.toISOString(),
           args.days,
+          fetchFn,
         );
 
         const modelMap = new Map<

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/azure/openai-usage"
-version: "2026.07.18.1"
+version: "2026.07.21.1"
 description: |
   Azure OpenAI / AI Services token usage monitoring — multi-subscription
   scanning of ProcessedPromptTokens and GeneratedTokens via Azure Monitor.
@@ -9,7 +9,8 @@ description: |
 
   ## Authentication
 
-  Uses `az` CLI authentication (az login). Requires an active session.
+  Uses Azure AD client credentials flow (tenant_id + client_id +
+  client_secret). No `az` CLI dependency.
 
   ## Required Permissions
 
@@ -21,7 +22,10 @@ description: |
 
   ```bash
   swamp model create @webframp/azure/openai-usage azure-ai-usage \
-    --global-arg 'subscriptions=["cef96095-...","690e5f6d-..."]'
+    --global-arg 'subscriptions=["cef96095-...","690e5f6d-..."]' \
+    --global-arg 'tenantId=<your-tenant-id>' \
+    --global-arg 'clientId=<your-app-id>' \
+    --global-arg 'clientSecret=<vault:azure/sp-secret>'
 
   # Scan all subscriptions
   swamp model method run azure-ai-usage scan_subscriptions
