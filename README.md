@@ -57,7 +57,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/reddit/moderation`](reddit/) | Reddit moderation API wrapper — modqueue inspection, reports, mod action logs, and actions (approve, remove, ban, modmail, flair) | None (uses fetch) |
 | [`@webframp/discourse`](discourse/) | Queries Discourse forums — categories, topics, and search via the public REST API | None (uses fetch) |
 | [`@webframp/artifactory`](artifactory/) | Queries and monitors JFrog Artifactory — AQL package search, repo health checks, and service status with diff detection | None (uses fetch) |
-| [`@webframp/research-collector`](research-collector/) | Collects research intelligence from HN, Lobste.rs, SRE Weekly, IFIN Discourse, and RedMonk for daily briefing workflows | None (uses fetch) |
+| [`@webframp/research-collector`](research-collector/) | Collects research intelligence from HN, Lobste.rs, arXiv, SRE Weekly, IFIN Discourse, RedMonk, and The AI Daily Brief for daily briefing workflows | None (uses fetch) |
 | [`@webframp/hermes-journal-writer`](hermes-journal-writer/) | Reads research-collector data and writes/commits/pushes daily org-mode journal entries to a local org repo | None (shells out to `git`) |
 | [`@webframp/hermes-kanban-orchestrator`](hermes-kanban-orchestrator/) | Creates and tracks Kanban tasks as versioned swamp resources via `hermes kanban create`, with idempotency-key deduplication | None |
 | [`@webframp/container-image`](container-image/) | Registry-agnostic OCI image build/push/inspect model (docker, podman, nerdctl, buildah; ECR, GHCR, DockerHub) | None (shells out to docker/podman/etc.) |

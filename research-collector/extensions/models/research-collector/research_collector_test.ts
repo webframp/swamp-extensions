@@ -177,11 +177,11 @@ Deno.test({
               '<article class="nug-wrap reveal" id="nug-1">' +
               '<h3 class="nug-h">First takeaway</h3>' +
               '<p class="nug-b">Written analysis body one.</p>' +
-              '</article>' +
+              "</article>" +
               '<article class="nug-wrap reveal">' +
               '<h3 class="nug-h">Second takeaway</h3>' +
               '<p class="nug-b">Written analysis body two.</p>' +
-              '</article>' +
+              "</article>" +
               '<div class="ep-embed"><iframe src="https://youtube.com/x"></iframe></div>',
           ),
         );
@@ -645,12 +645,12 @@ Deno.test({
               '<article class="nug-wrap reveal" id="a">' +
               '<h3 class="nug-h">Take one</h3>' +
               '<p class="nug-b">Analysis one.</p>' +
-              '</article>' +
+              "</article>" +
               '<div class="ep-embed"><iframe src="https://youtube.com/embed/x"></iframe></div>' +
               '<article class="nug-wrap reveal" id="b">' +
               '<h3 class="nug-h">Take two</h3>' +
               '<p class="nug-b">Analysis two.</p>' +
-              '</article>',
+              "</article>",
           ),
         );
       }
@@ -667,7 +667,7 @@ Deno.test({
               '<article class="nug-wrap reveal" id="solo">' +
               '<h3 class="nug-h">Solo takeaway</h3>' +
               '<p class="nug-b">Only analysis.</p>' +
-              '</article>',
+              "</article>",
           ),
         );
       }
@@ -679,7 +679,9 @@ Deno.test({
         return Promise.resolve(new Response("[]"));
       }
       if (url.includes("sreweekly.com")) {
-        return Promise.resolve(new Response("<?xml version=\"1.0"?><rss><channel></channel></rss>"));
+        return Promise.resolve(
+          new Response(`<?xml version="1.0"?><rss><channel></channel></rss>`),
+        );
       }
       if (url.includes("discourse.ifin.network")) {
         return Promise.resolve(
@@ -688,11 +690,13 @@ Deno.test({
       }
       if (url.includes("redmonk.com")) {
         return Promise.resolve(
-          new Response("<?xml version=\"1.0"?><rss><channel></channel></rss>"),
+          new Response(`<?xml version="1.0"?><rss><channel></channel></rss>`),
         );
       }
       if (url.includes("export.arxiv.org")) {
-        return Promise.resolve(new Response("<?xml version=\"1.0"?><feed></feed>"));
+        return Promise.resolve(
+          new Response(`<?xml version="1.0"?><feed></feed>`),
+        );
       }
       return Promise.resolve(new Response("", { status: 404 }));
     };
