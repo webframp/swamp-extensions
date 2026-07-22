@@ -520,7 +520,7 @@ async function gatherAll(
 /** Research data collector model. */
 export const model = {
   type: "@webframp/research-collector" as const,
-  version: "2026.07.20.1",
+  version: "2026.07.21.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -535,6 +535,11 @@ export const model = {
         ...old,
         aiDailyBriefDays: 3,
       }),
+    },
+    {
+      toVersion: "2026.07.21.1",
+      description: "Repair broken XML test fixtures; no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
   globalArguments: GlobalArgsSchema,
