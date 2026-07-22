@@ -1,0 +1,23 @@
+manifestVersion: 1
+name: "@webframp/azure-blob-datastore"
+version: "2026.07.22.1"
+description: >
+  Stores swamp runtime data in Azure Blob Storage using native blob-lease
+  distributed locking (the lease ID doubles as the fencing-token nonce) and
+  ETag-conditional writes on a shard-first path index for optimistic
+  concurrency. Supports Shared Key (account key or connection string) and
+  Azure AD service-principal authentication. No Azure SDK dependency — talks
+  to the Blob REST API directly via fetch.
+license: Apache-2.0
+repository: https://github.com/webframp/swamp-extensions
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels: [azure, blob-storage, datastore]
+datastores:
+  - azure_blob_datastore/mod.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md

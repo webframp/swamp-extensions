@@ -122,6 +122,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/gitlab-datastore`](datastore/gitlab-datastore/) | Stores swamp runtime data in GitLab using the Terraform state HTTP API. Provides distributed locking and bidirectional sync. | None (uses fetch) |
 | [`@webframp/valkey-datastore`](datastore/valkey/) | Stores swamp runtime data in Valkey/Redis with sorted-set path indexing and SET NX distributed locking; compatible with ElastiCache Serverless and MemoryDB | `ioredis` |
 | [`@webframp/postgres-datastore`](datastore/postgres/) | Stores swamp runtime data in PostgreSQL (RDS/Aurora/Aurora Serverless v2) with fencing-token-based distributed locking | `postgres` (npm client) |
+| [`@webframp/azure-blob-datastore`](datastore/azure-blob/) | Stores swamp runtime data in Azure Blob Storage with native blob-lease distributed locking and ETag-conditional shard-index writes | None (uses fetch) |
 | [`@webframp/dynamodb-datastore`](datastore/dynamodb/) | Stores swamp runtime data in AWS DynamoDB (single-table design) with conditional-write distributed locking and chunked blob storage | `@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb` |
 
 ## Driver Extensions
@@ -256,6 +257,7 @@ swamp extension pull @webframp/macos-keychain
 swamp extension pull @webframp/gitlab-datastore
 swamp extension pull @webframp/valkey-datastore
 swamp extension pull @webframp/postgres-datastore
+swamp extension pull @webframp/azure-blob-datastore
 swamp extension pull @webframp/dynamodb-datastore
 
 # Driver extensions
