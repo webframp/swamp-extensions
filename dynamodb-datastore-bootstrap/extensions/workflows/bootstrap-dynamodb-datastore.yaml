@@ -1,0 +1,67 @@
+id: f8d2a1c3-5e7b-4f9a-b6d0-8c4e2a1f3d5b
+name: "@webframp/bootstrap-dynamodb-datastore"
+description: |
+  Provision a DynamoDB table + least-privilege IAM managed policy for
+  @webframp/dynamodb-datastore, then switch the current repo to use DynamoDB.
+
+  After completion the repo is configured. Verify with `swamp datastore status`.
+version: 1
+tags:
+  extension: "@webframp/dynamodb-datastore-bootstrap"
+  category: "infrastructure"
+inputs:
+  properties:
+    region:
+      type: string
+      description: AWS region for the DynamoDB table.
+      pattern: "^[a-z0-9-]+$"
+      default: "us-east-1"
+    table_name:
+      type: string
+      description: DynamoDB table name.
+      default: "swamp-datastore"
+      minLength: 3
+      maxLength: 255
+      pattern: "^[a-zA-Z0-9._-]+$"
+    policy_name:
+      type: string
+      description: IAM managed policy name.
+      default: "SwampDynamoDBDatastorePolicy"
+      minLength: 1
+      maxLength: 128
+  required: []
+jobs:
+  - name: infra
+    description: Create the DynamoDB table and IAM managed policy.
+    steps:
+      - name: provision
+        description: |
+          Run the provisioner model to create/verify the table + scoped
+          managed policy. Instance `swamp-dynamodb-provisioner` must be
+          pre-created with globalArguments wired to the workflow inputs:
+            table_name: ${{ inputs.table_name }}
+            region:     ${{ inputs.region }}
+            policy_name: ${{ inputs.policy_name }}
+        task:
+          type: model_method
+          modelIdOrName: swamp-dynamodb-provisioner
+          methodName: provision
+
+  - name: configure
+    description: Point this repo's datastore at the new DynamoDB table.
+    dependsOn:
+      - job: infra
+        condition:
+          type: completed
+    steps:
+      - name: run-setup
+        description: Run `swamp datastore setup extension @webframp/dynamodb-datastore`.
+        task:
+          type: model_method
+          modelIdOrName: swamp-dynamodb-setup
+          methodName: execute
+          inputs:
+            run: |
+              swamp datastore setup extension @webframp/dynamodb-datastore \
+                --config '{"tableName":"${{ inputs.table_name }}","region":"${{ inputs.region }}"}' \
+                --skip-migration

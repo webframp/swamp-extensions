@@ -1,0 +1,63 @@
+manifestVersion: 1
+name: "@webframp/dynamodb-datastore-bootstrap"
+version: "2026.07.22.1"
+description: |
+  One-shot bootstrap for @webframp/dynamodb-datastore. Ships a single
+  provisioner model that creates a DynamoDB table (with GSI and TTL) and a
+  least-privilege IAM managed policy, plus a workflow that runs the
+  provisioner and then switches the current swamp repository over to the
+  DynamoDB datastore.
+
+  ## Prerequisites
+
+  - AWS credentials in the default credential chain (env / profile / role)
+    with permissions to create the DynamoDB table, enable TTL, and create
+    the managed policy.
+  - The caller that will run swamp after setup must already hold, or will
+    attach, the managed policy produced by this workflow.
+
+  ## What it does
+
+  1. `provision` creates a DynamoDB table (PAY_PER_REQUEST, pk/sk key schema,
+     GSI `gsi1` for sync walks, TTL on `ttl` attribute) and a scoped IAM
+     managed policy granting the seven runtime actions limited to that table.
+  2. A final `command/shell` step runs
+     `swamp datastore setup extension @webframp/dynamodb-datastore --config ...`
+     to flip the repo's datastore to DynamoDB.
+
+  ## Running
+
+  ```bash
+  swamp extension pull @webframp/dynamodb-datastore-bootstrap
+
+  swamp model create @webframp/dynamodb-datastore-bootstrap/provisioner \
+    swamp-dynamodb-provisioner
+
+  swamp model create command/shell swamp-dynamodb-setup
+
+  swamp workflow run @webframp/bootstrap-dynamodb-datastore \
+    --input region=us-east-1
+
+  swamp datastore status
+  ```
+
+  See the bundled README for optional inputs (`table_name`, `policy_name`),
+  the exact IAM policy produced, and idempotency notes.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - provisioner.ts
+workflows:
+  - bootstrap-dynamodb-datastore.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - datastore
+  - bootstrap
+  - aws
+  - dynamodb
