@@ -374,7 +374,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/elasticache-datastore-bootstrap/provisioner",
-  version: "2026.07.22.1",
+  version: "2026.07.23.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {
@@ -440,15 +440,28 @@ export const model = {
           );
           cacheCreated = true;
           cache = await waitForCacheAvailable(cache_name, region);
+        } else if ((cache as { Status?: string }).Status !== "available") {
+          // Cache exists but is not yet ready — wait for it
+          cache = await waitForCacheAvailable(cache_name, region);
         }
 
-        const cacheArn = (cache as { ARN?: string }).ARN ?? "";
+        const cacheArn = (cache as { ARN?: string }).ARN;
+        if (!cacheArn) {
+          throw new Error(
+            `Cache ${cache_name} returned no ARN — cannot construct IAM policy`,
+          );
+        }
         const cacheStatus = (cache as { Status?: string }).Status ?? "unknown";
         const endpoint = (cache as {
           Endpoint?: { Address?: string; Port?: number };
         }).Endpoint;
-        const cacheHost = endpoint?.Address ?? "";
-        const cachePort = endpoint?.Port ?? 6379;
+        if (!endpoint?.Address) {
+          throw new Error(
+            `Cache ${cache_name} is available but has no endpoint address`,
+          );
+        }
+        const cacheHost = endpoint.Address;
+        const cachePort = endpoint.Port ?? 6379;
         const cacheEndpoint = `rediss://${cacheHost}:${cachePort}`;
 
         // 5. Create or verify IAM policy
@@ -457,6 +470,20 @@ export const model = {
           cacheArn,
           region,
         );
+
+        // Resolve the effective security group ID: when reusing an existing
+        // cache, report the SG actually attached to it rather than the one
+        // ensured by step 3 (they may differ if the cache was originally
+        // created with different parameters).
+        let effectiveSgId = sgId;
+        if (!cacheCreated) {
+          const cacheSgs = (cache as {
+            SecurityGroupIds?: string[];
+          }).SecurityGroupIds;
+          if (cacheSgs && cacheSgs.length > 0 && cacheSgs[0]) {
+            effectiveSgId = cacheSgs[0];
+          }
+        }
 
         // 6. Build datastore config JSON
         const datastoreConfig = JSON.stringify({
@@ -475,7 +502,7 @@ export const model = {
           cachePort,
           cacheStatus,
           cacheCreated,
-          securityGroupId: sgId,
+          securityGroupId: effectiveSgId,
           securityGroupCreated: sgCreated,
           policyArn,
           policyCreated,

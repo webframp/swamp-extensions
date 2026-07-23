@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/elasticache-datastore-bootstrap"
-version: "2026.07.22.1"
+version: "2026.07.23.1"
 description: |
   One-shot bootstrap for @webframp/valkey-datastore targeting AWS ElastiCache
   Serverless (Valkey). Creates a serverless cache, a VPC security group for
@@ -33,7 +33,7 @@ description: |
 
   swamp model create command/shell swamp-valkey-setup
 
-  swamp workflow run @webframp/bootstrap-valkey-elasticache \
+  swamp workflow run @webframp/bootstrap-elasticache-datastore \
     --input region=us-east-1
 
   swamp datastore status

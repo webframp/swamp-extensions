@@ -78,7 +78,7 @@ Deno.test("model exports correct type and version", () => {
     model.type,
     "@webframp/elasticache-datastore-bootstrap/provisioner",
   );
-  assertEquals(model.version, "2026.07.22.1");
+  assertEquals(model.version, "2026.07.23.1");
 });
 
 Deno.test("model has provision method", () => {
@@ -295,6 +295,7 @@ Deno.test("provision reuses existing resources", async () => {
               ARN:
                 "arn:aws:elasticache:us-west-2:999:serverlesscache:existing-cache",
               Status: "available",
+              SecurityGroupIds: ["sg-cache-original"],
               Endpoint: { Address: "existing.cache.amazonaws.com", Port: 6379 },
             },
           ],
@@ -328,7 +329,7 @@ Deno.test("provision reuses existing resources", async () => {
     assertEquals(written[0]!.data.cacheCreated, false);
     assertEquals(written[0]!.data.securityGroupCreated, false);
     assertEquals(written[0]!.data.policyCreated, false);
-    assertEquals(written[0]!.data.securityGroupId, "sg-existing");
+    assertEquals(written[0]!.data.securityGroupId, "sg-cache-original");
   });
 });
 
@@ -400,6 +401,7 @@ Deno.test("provision builds correct datastoreConfig", async () => {
               ServerlessCacheName: "my-cache",
               ARN: "arn:aws:elasticache:eu-west-1:111:serverlesscache:my-cache",
               Status: "available",
+              SecurityGroupIds: ["sg-xxx"],
               Endpoint: {
                 Address: "my-cache.eu.cache.amazonaws.com",
                 Port: 6379,
@@ -431,5 +433,167 @@ Deno.test("provision builds correct datastoreConfig", async () => {
     const config = JSON.parse(written[0]!.data.datastoreConfig as string);
     assertEquals(config.url, "rediss://my-cache.eu.cache.amazonaws.com:6379");
     assertEquals(config.prefix, "custom-prefix");
+  });
+});
+
+Deno.test("provision waits when existing cache is in creating state", async () => {
+  const { context, written } = createMockContext({
+    region: "us-east-1",
+    cache_name: "creating-cache",
+    vpc_id: "vpc-test",
+    subnet_ids: "subnet-1",
+    security_group_name: "sg",
+    policy_name: "pol",
+    key_prefix: "swamp",
+  });
+
+  let describeCallCount = 0;
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-test", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    if (sub === "ec2 describe-security-groups") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          SecurityGroups: [{ GroupId: "sg-abc" }],
+        }),
+      };
+    }
+    if (sub === "elasticache describe-serverless-caches") {
+      describeCallCount++;
+      // First call: cache exists but in creating state
+      // Second call (from waitForCacheAvailable): now available
+      if (describeCallCount === 1) {
+        return {
+          success: true,
+          stdout: JSON.stringify({
+            ServerlessCaches: [
+              {
+                ServerlessCacheName: "creating-cache",
+                ARN:
+                  "arn:aws:elasticache:us-east-1:123:serverlesscache:creating-cache",
+                Status: "creating",
+                SecurityGroupIds: ["sg-abc"],
+              },
+            ],
+          }),
+        };
+      }
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          ServerlessCaches: [
+            {
+              ServerlessCacheName: "creating-cache",
+              ARN:
+                "arn:aws:elasticache:us-east-1:123:serverlesscache:creating-cache",
+              Status: "available",
+              SecurityGroupIds: ["sg-abc"],
+              Endpoint: {
+                Address: "creating-cache.xxx.cache.amazonaws.com",
+                Port: 6379,
+              },
+            },
+          ],
+        }),
+      };
+    }
+    if (sub === "sts get-caller-identity") {
+      return { success: true, stdout: JSON.stringify({ Account: "123" }) };
+    }
+    if (sub === "iam get-policy") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Policy: { Arn: "arn:aws:iam::123:policy/pol" },
+        }),
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    const result = await model.methods.provision.execute(
+      {} as Record<string, never>,
+      context,
+    );
+    assertEquals(result.dataHandles.length, 1);
+    assertEquals(written[0]!.data.cacheCreated, false);
+    assertEquals(written[0]!.data.cacheStatus, "available");
+    assertEquals(
+      written[0]!.data.cacheEndpoint,
+      "rediss://creating-cache.xxx.cache.amazonaws.com:6379",
+    );
+    // Waited for availability — should have polled at least twice
+    assertEquals(describeCallCount >= 2, true);
+  });
+});
+
+Deno.test("provision throws when cache has no ARN", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    cache_name: "no-arn-cache",
+    vpc_id: "vpc-test",
+    subnet_ids: "subnet-1",
+    security_group_name: "sg",
+    policy_name: "pol",
+    key_prefix: "swamp",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-test", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    if (sub === "ec2 describe-security-groups") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          SecurityGroups: [{ GroupId: "sg-abc" }],
+        }),
+      };
+    }
+    if (sub === "elasticache describe-serverless-caches") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          ServerlessCaches: [
+            {
+              ServerlessCacheName: "no-arn-cache",
+              Status: "available",
+              SecurityGroupIds: ["sg-abc"],
+              Endpoint: { Address: "x.cache.amazonaws.com", Port: 6379 },
+              // No ARN field
+            },
+          ],
+        }),
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          context,
+        ),
+      Error,
+      "returned no ARN",
+    );
   });
 });

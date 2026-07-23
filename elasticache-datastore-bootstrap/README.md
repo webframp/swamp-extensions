@@ -39,15 +39,15 @@ swamp datastore status
 
 ## Inputs
 
-| Input | Default | Description |
-|-------|---------|-------------|
-| `region` | `us-east-1` | AWS region |
-| `cache_name` | `swamp-valkey` | ElastiCache Serverless cache name |
-| `vpc_id` | (default VPC) | VPC to deploy into |
-| `subnet_ids` | (all VPC subnets) | Comma-separated subnet IDs |
-| `security_group_name` | `swamp-valkey-access` | SG name for cache access |
-| `policy_name` | `SwampValkeyDatastorePolicy` | IAM policy name |
-| `key_prefix` | `swamp` | Valkey key namespace prefix |
+| Input                 | Default                      | Description                       |
+| --------------------- | ---------------------------- | --------------------------------- |
+| `region`              | `us-east-1`                  | AWS region                        |
+| `cache_name`          | `swamp-valkey`               | ElastiCache Serverless cache name |
+| `vpc_id`              | (default VPC)                | VPC to deploy into                |
+| `subnet_ids`          | (all VPC subnets)            | Comma-separated subnet IDs        |
+| `security_group_name` | `swamp-valkey-access`        | SG name for cache access          |
+| `policy_name`         | `SwampValkeyDatastorePolicy` | IAM policy name                   |
+| `key_prefix`          | `swamp`                      | Valkey key namespace prefix       |
 
 ## What gets created
 
@@ -75,7 +75,9 @@ swamp datastore status
         "elasticache:Connect",
         "elasticache:DescribeServerlessCaches"
       ],
-      "Resource": ["arn:aws:elasticache:<region>:<account>:serverlesscache:<name>"]
+      "Resource": [
+        "arn:aws:elasticache:<region>:<account>:serverlesscache:<name>"
+      ]
     }
   ]
 }
@@ -92,8 +94,8 @@ The provisioner is fully idempotent:
 
 ## Timing
 
-ElastiCache Serverless cache creation takes 2-5 minutes. The provisioner
-polls every 15 seconds with a 10-minute timeout.
+ElastiCache Serverless cache creation takes 2-5 minutes. The provisioner polls
+every 15 seconds with a 10-minute timeout.
 
 ## Development
 
