@@ -1,0 +1,62 @@
+manifestVersion: 1
+name: "@webframp/elasticache-datastore-bootstrap"
+version: "2026.07.22.1"
+description: |
+  One-shot bootstrap for @webframp/valkey-datastore targeting AWS ElastiCache
+  Serverless (Valkey). Creates a serverless cache, a VPC security group for
+  access, and a least-privilege IAM managed policy, then switches the current
+  swamp repository to the Valkey datastore.
+
+  ## Prerequisites
+
+  - AWS credentials with permissions to create ElastiCache serverless caches,
+    EC2 security groups, and IAM managed policies
+  - A VPC with at least one subnet (the cache is deployed into the default VPC
+    unless overridden)
+
+  ## What it does
+
+  1. `provision` creates an ElastiCache Serverless cache (Valkey engine,
+     TLS enabled), a security group allowing inbound on port 6379 from the
+     caller's VPC CIDR, and a scoped IAM managed policy.
+  2. A final `command/shell` step runs
+     `swamp datastore setup extension @webframp/valkey-datastore --config ...`
+     to flip the repo's datastore to Valkey.
+
+  ## Running
+
+  ```bash
+  swamp extension pull @webframp/elasticache-datastore-bootstrap
+
+  swamp model create @webframp/elasticache-datastore-bootstrap/provisioner \
+    swamp-valkey-provisioner
+
+  swamp model create command/shell swamp-valkey-setup
+
+  swamp workflow run @webframp/bootstrap-valkey-elasticache \
+    --input region=us-east-1
+
+  swamp datastore status
+  ```
+
+  See the bundled README for optional inputs (`cache_name`, `vpc_id`,
+  `subnet_ids`, `policy_name`) and the exact IAM policy produced.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - provisioner.ts
+workflows:
+  - bootstrap-elasticache-datastore.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - datastore
+  - bootstrap
+  - aws
+  - valkey
+  - elasticache

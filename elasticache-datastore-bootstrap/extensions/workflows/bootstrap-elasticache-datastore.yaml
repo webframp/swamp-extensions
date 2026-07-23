@@ -1,0 +1,73 @@
+id: c4a8f2e1-7d3b-4a6c-9e5f-1b2d3c4e5f6a
+name: "@webframp/bootstrap-elasticache-datastore"
+description: |
+  Provision an ElastiCache Serverless (Valkey) cache, security group, and
+  IAM managed policy for @webframp/valkey-datastore, then switch the current
+  repo to use Valkey.
+
+  After completion the repo is configured. Verify with `swamp datastore status`.
+version: 1
+tags:
+  extension: "@webframp/elasticache-datastore-bootstrap"
+  category: "infrastructure"
+inputs:
+  properties:
+    region:
+      type: string
+      description: AWS region for ElastiCache resources.
+      pattern: "^[a-z0-9-]+$"
+      default: "us-east-1"
+    cache_name:
+      type: string
+      description: ElastiCache Serverless cache name.
+      default: "swamp-valkey"
+      minLength: 1
+      maxLength: 40
+    vpc_id:
+      type: string
+      description: VPC ID (uses default VPC if omitted).
+      pattern: "^vpc-[a-f0-9]+$"
+    subnet_ids:
+      type: string
+      description: Comma-separated subnet IDs (uses default VPC subnets if omitted).
+    security_group_name:
+      type: string
+      description: Security group name for cache access.
+      default: "swamp-valkey-access"
+    policy_name:
+      type: string
+      description: IAM managed policy name.
+      default: "SwampValkeyDatastorePolicy"
+    key_prefix:
+      type: string
+      description: Key namespace prefix for swamp data in Valkey.
+      default: "swamp"
+  required: []
+jobs:
+  - name: infra
+    description: Create ElastiCache Serverless cache, security group, and IAM policy.
+    steps:
+      - name: provision
+        description: |
+          Run the provisioner model. Instance `swamp-valkey-provisioner` must
+          be pre-created with globalArguments wired to the workflow inputs.
+        task:
+          type: model_method
+          modelIdOrName: swamp-valkey-provisioner
+          methodName: provision
+
+  - name: configure
+    description: Point this repo's datastore at the new Valkey cache.
+    needs:
+      - infra
+    steps:
+      - name: run-setup
+        description: Run `swamp datastore setup extension @webframp/valkey-datastore`.
+        task:
+          type: model_method
+          modelIdOrName: swamp-valkey-setup
+          methodName: execute
+          inputs:
+            run: |
+              swamp datastore setup extension @webframp/valkey-datastore \
+                --config '${{ data.latest("swamp-valkey-provisioner", "state").attributes.datastoreConfig }}'
