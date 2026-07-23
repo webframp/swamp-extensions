@@ -1,0 +1,58 @@
+manifestVersion: 1
+name: "@webframp/azure-blob-datastore-bootstrap"
+version: "2026.07.22.1"
+description: |
+  One-shot bootstrap for @webframp/azure-blob-datastore. Creates an Azure
+  Storage account with a blob container, then switches the current swamp
+  repository to use Azure Blob Storage as the datastore backend.
+
+  ## Prerequisites
+
+  - Azure CLI (`az`) authenticated (`az login`)
+  - An Azure subscription
+  - Permissions to create resource groups, storage accounts, and containers
+
+  ## What it does
+
+  1. `provision` creates a resource group (if needed), a storage account
+     (StorageV2, LRS, blob-only public access disabled), and a blob container,
+     then retrieves the connection string.
+  2. A final `command/shell` step runs
+     `swamp datastore setup extension @webframp/azure-blob-datastore --config ...`
+     to flip the repo's datastore to Azure Blob.
+
+  ## Running
+
+  ```bash
+  swamp extension pull @webframp/azure-blob-datastore-bootstrap
+
+  swamp model create @webframp/azure-blob-datastore-bootstrap/provisioner \
+    swamp-azure-blob-provisioner
+
+  swamp model create command/shell swamp-azure-blob-setup
+
+  swamp workflow run @webframp/bootstrap-azure-blob-datastore \
+    --input location=eastus
+
+  swamp datastore status
+  ```
+
+  See the bundled README for optional inputs and idempotency notes.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - provisioner.ts
+workflows:
+  - bootstrap-azure-blob-datastore.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - datastore
+  - bootstrap
+  - azure
+  - blob-storage
