@@ -255,7 +255,7 @@ Deno.test("provision reuses existing resources", async () => {
     region: "us-west-2",
     cache_name: "existing-cache",
     vpc_id: "vpc-existing",
-    subnet_ids: "subnet-x,subnet-y",
+    subnet_ids: "subnet-aaa111,subnet-bbb222",
     security_group_name: "existing-sg",
     policy_name: "ExistingPolicy",
     key_prefix: "myprefix",
@@ -876,6 +876,190 @@ Deno.test("waitForCacheAvailable throws on deleting state", async () => {
         ),
       Error,
       "terminal state: deleting",
+    );
+  });
+});
+
+Deno.test("subnet_ids rejects argument injection attempts", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    cache_name: "test",
+    vpc_id: "vpc-abc123",
+    subnet_ids: "subnet-abc,--no-tls-enabled",
+    security_group_name: "sg",
+    policy_name: "pol",
+    key_prefix: "swamp",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-abc123", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    if (sub === "ec2 describe-security-groups") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          SecurityGroups: [{
+            GroupId: "sg-abc",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
+        }),
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          context,
+        ),
+      Error,
+      "Invalid subnet ID",
+    );
+  });
+});
+
+Deno.test("key_prefix rejects shell metacharacters", () => {
+  const result = model.globalArguments.safeParse({
+    key_prefix: "swamp'; echo pwned",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("key_prefix rejects values exceeding 64 characters", () => {
+  const result = model.globalArguments.safeParse({
+    key_prefix: "a".repeat(65),
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("key_prefix accepts valid characters", () => {
+  const result = model.globalArguments.safeParse({
+    key_prefix: "my-app_v2:prod.cache",
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("provision throws when cache is deleted mid-wait", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    cache_name: "vanishing-cache",
+    vpc_id: "vpc-abc123",
+    subnet_ids: "subnet-aaa",
+    security_group_name: "sg",
+    policy_name: "pol",
+    key_prefix: "swamp",
+  });
+
+  let describeCount = 0;
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-abc123", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    if (sub === "ec2 describe-security-groups") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          SecurityGroups: [{
+            GroupId: "sg-abc",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
+        }),
+      };
+    }
+    if (sub === "elasticache describe-serverless-caches") {
+      describeCount++;
+      // First call: cache exists but creating
+      if (describeCount === 1) {
+        return {
+          success: true,
+          stdout: JSON.stringify({
+            ServerlessCaches: [{
+              ServerlessCacheName: "vanishing-cache",
+              ARN:
+                "arn:aws:elasticache:us-east-1:123:serverlesscache:vanishing-cache",
+              Status: "creating",
+              SecurityGroupIds: ["sg-abc"],
+            }],
+          }),
+        };
+      }
+      // Second call (in waitForCacheAvailable): cache is gone (returns not found)
+      return {
+        success: false,
+        stdout: "ServerlessCacheNotFoundFault",
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          context,
+        ),
+      Error,
+      "was deleted while waiting",
+    );
+  });
+});
+
+Deno.test("provision throws when multiple default VPCs found", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    cache_name: "test",
+    security_group_name: "sg",
+    policy_name: "p",
+    key_prefix: "s",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [
+            { VpcId: "vpc-aaa" },
+            { VpcId: "vpc-bbb" },
+          ],
+        }),
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          context,
+        ),
+      Error,
+      "Multiple default VPCs found",
     );
   });
 });

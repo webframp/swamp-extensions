@@ -54,6 +54,11 @@ const GlobalArgsSchema = z.object({
   key_prefix: z
     .string()
     .min(1)
+    .max(64)
+    .regex(
+      /^[a-zA-Z0-9_\-:.]+$/,
+      "key_prefix must contain only alphanumeric characters, hyphens, underscores, colons, and dots",
+    )
     .default("swamp")
     .describe("Key namespace prefix for swamp data in Valkey"),
 });
@@ -96,10 +101,34 @@ async function awsCli(
   const output = await command.output();
   if (!output.success) {
     const stderr = new TextDecoder().decode(output.stderr);
-    throw new Error(`AWS CLI failed: aws ${args.join(" ")} — ${stderr.trim()}`);
+    // Redact --policy-document values from error messages to avoid leaking
+    // ARNs and account IDs in logs.
+    const redactedArgs = redactSensitiveArgs(args);
+    throw new Error(
+      `AWS CLI failed: aws ${redactedArgs.join(" ")} — ${stderr.trim()}`,
+    );
   }
   const stdout = new TextDecoder().decode(output.stdout);
   return stdout.trim() ? JSON.parse(stdout) : {};
+}
+
+/** Redact values of sensitive CLI flags from argument lists. */
+function redactSensitiveArgs(args: string[]): string[] {
+  const sensitiveFlags = new Set(["--policy-document"]);
+  const redacted: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (sensitiveFlags.has(args[i]!)) {
+      redacted.push(args[i]!);
+      // Skip the next arg (the value) and replace with placeholder
+      if (i + 1 < args.length) {
+        redacted.push("[REDACTED]");
+        i++;
+      }
+    } else {
+      redacted.push(args[i]!);
+    }
+  }
+  return redacted;
 }
 
 /** Get the default VPC ID for the region. */
@@ -116,6 +145,11 @@ async function getDefaultVpcId(region: string): Promise<string> {
   const vpcs = (result as { Vpcs?: Array<{ VpcId?: string }> }).Vpcs;
   if (!vpcs || vpcs.length === 0) {
     throw new Error("No default VPC found — provide vpc_id explicitly");
+  }
+  if (vpcs.length > 1) {
+    throw new Error(
+      `Multiple default VPCs found (${vpcs.length}) — provide vpc_id explicitly`,
+    );
   }
   const vpcId = vpcs[0]?.VpcId;
   if (!vpcId) throw new Error("Default VPC has no VpcId");
@@ -145,6 +179,24 @@ async function getSubnetIds(
   const ids = subnets.map((s) => s.SubnetId).filter(Boolean) as string[];
   if (ids.length === 0) {
     throw new Error(`No valid subnet IDs found for VPC ${vpcId}`);
+  }
+  return ids;
+}
+
+const SUBNET_ID_PATTERN = /^subnet-[a-f0-9]+$/;
+
+/** Validate and parse comma-separated subnet IDs. */
+function validateSubnetIds(input: string): string[] {
+  const ids = input.split(",").map((s) => s.trim()).filter(Boolean);
+  if (ids.length === 0) {
+    throw new Error("subnet_ids is empty after parsing");
+  }
+  for (const id of ids) {
+    if (!SUBNET_ID_PATTERN.test(id)) {
+      throw new Error(
+        `Invalid subnet ID: "${id}" — must match subnet-[a-f0-9]+`,
+      );
+    }
   }
   return ids;
 }
@@ -340,19 +392,22 @@ async function waitForCacheAvailable(
 
   while (Date.now() - start < maxWaitMs) {
     const cache = await describeServerlessCache(cacheName, region);
-    if (cache) {
-      const status = (cache as { Status?: string }).Status;
-      if (status === "available") return cache;
-      if (status === "create-failed") {
-        throw new Error(
-          `ElastiCache Serverless cache ${cacheName} creation failed`,
-        );
-      }
-      if (status === "deleting" || status === "deleted") {
-        throw new Error(
-          `ElastiCache Serverless cache ${cacheName} is in terminal state: ${status}`,
-        );
-      }
+    if (!cache) {
+      throw new Error(
+        `ElastiCache Serverless cache ${cacheName} was deleted while waiting for availability`,
+      );
+    }
+    const status = (cache as { Status?: string }).Status;
+    if (status === "available") return cache;
+    if (status === "create-failed") {
+      throw new Error(
+        `ElastiCache Serverless cache ${cacheName} creation failed`,
+      );
+    }
+    if (status === "deleting" || status === "deleted") {
+      throw new Error(
+        `ElastiCache Serverless cache ${cacheName} is in terminal state: ${status}`,
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
@@ -465,7 +520,7 @@ export const model = {
 
         // 2. Resolve subnets
         const resolvedSubnets = subnet_ids
-          ? subnet_ids.split(",").map((s) => s.trim())
+          ? validateSubnetIds(subnet_ids)
           : await getSubnetIds(resolvedVpcId, region);
 
         // 3. Create or find security group
