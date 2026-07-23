@@ -1,0 +1,35 @@
+manifestVersion: 1
+name: "@webframp/org-simulation"
+version: "2026.07.23.1"
+description: |
+  Agent-guided organization design simulation model inspired by the Curious
+  Duck simulation studio (ducksimng.onrender.com). Capture an organization as
+  a topology of teams, repos/modules, environments (with a defect/reliability
+  model), and customer bases, wired together by connectors. Then run a
+  deterministic, seedable flow simulation to estimate feature/bug cycle times,
+  defect detection, find-vs-fix balance, and customer sentiment (NPS) under a
+  chosen deploy policy.
+
+  Designed for organization design exploration: model the current org, model a
+  proposed redesign, run both, and compare the versioned outcomes to decide
+  whether a structural change is worth making. The agent interviews, the model
+  simulates and persists.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - org-simulation/mod.ts
+labels:
+  - organization-design
+  - simulation
+  - flow
+  - defects
+  - reliability
+  - conways-law
+  - team-topologies
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md

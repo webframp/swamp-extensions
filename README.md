@@ -82,6 +82,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/hermes-kanban-orchestrator`](hermes-kanban-orchestrator/) | Creates and tracks Kanban tasks as versioned swamp resources via `hermes kanban create`, with idempotency-key deduplication | None |
 | [`@webframp/container-image`](container-image/) | Registry-agnostic OCI image build/push/inspect model (docker, podman, nerdctl, buildah; ECR, GHCR, DockerHub) | None (shells out to docker/podman/etc.) |
 | [`@webframp/team-topology`](team-topology/) | Agent-guided team topology and value-stream mapping (teams, interactions, ownership, flows) as versioned snapshots | None |
+| [`@webframp/org-simulation`](org-simulation/) | Agent-guided organization design simulation (teams, repos, environments, customer bases) with a deterministic flow simulation for cycle time, defects, and NPS | None |
 | [`@webframp/threat-model`](threat-model/) | Agent-guided agile threat modeling — scope/identify/evaluate/mitigate/posture stages producing a risk matrix and posture snapshot | None |
 | [`@webframp/ddd-guidance`](ddd-guidance/) | Agent-guided Domain-Driven Design facilitator — bounded contexts, ubiquitous language, and aggregate boundaries as versioned domain knowledge | None |
 | [`@webframp/rice-scoring`](rice-scoring/) | Agent-guided RICE (Reach, Impact, Confidence, Effort) prioritization framework producing ranked, versioned scorecards | None |
@@ -158,6 +159,7 @@ swamp extension pull @webframp/hermes-journal-writer
 swamp extension pull @webframp/hermes-kanban-orchestrator
 swamp extension pull @webframp/container-image
 swamp extension pull @webframp/team-topology
+swamp extension pull @webframp/org-simulation
 swamp extension pull @webframp/threat-model
 swamp extension pull @webframp/ddd-guidance
 swamp extension pull @webframp/rice-scoring
