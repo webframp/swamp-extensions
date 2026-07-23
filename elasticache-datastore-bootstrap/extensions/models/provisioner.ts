@@ -36,6 +36,12 @@ const GlobalArgsSchema = z.object({
     ),
   security_group_name: z
     .string()
+    .min(1)
+    .max(255)
+    .regex(
+      /^[a-zA-Z0-9 ._\-:/()#@[\]+=&;{}!$*]+$/,
+      "Security group name contains invalid characters (commas are not allowed)",
+    )
     .default("swamp-valkey-access")
     .describe("Security group name for cache access"),
   policy_name: z
@@ -136,7 +142,11 @@ async function getSubnetIds(
   if (!subnets || subnets.length === 0) {
     throw new Error(`No subnets found for VPC ${vpcId}`);
   }
-  return subnets.map((s) => s.SubnetId).filter(Boolean) as string[];
+  const ids = subnets.map((s) => s.SubnetId).filter(Boolean) as string[];
+  if (ids.length === 0) {
+    throw new Error(`No valid subnet IDs found for VPC ${vpcId}`);
+  }
+  return ids;
 }
 
 /** Create or find a security group by name in a VPC. */
@@ -157,10 +167,46 @@ async function ensureSecurityGroup(
     region,
   );
   const groups = (existing as {
-    SecurityGroups?: Array<{ GroupId?: string }>;
+    SecurityGroups?: Array<{
+      GroupId?: string;
+      IpPermissions?: Array<{
+        IpProtocol?: string;
+        FromPort?: number;
+        ToPort?: number;
+      }>;
+    }>;
   }).SecurityGroups;
   if (groups && groups.length > 0 && groups[0]?.GroupId) {
-    return { id: groups[0].GroupId, created: false };
+    const groupId = groups[0].GroupId;
+    // Verify port 6379/tcp ingress exists; add it if missing (handles
+    // partial creation from a previous failed run).
+    const hasIngress = (groups[0].IpPermissions ?? []).some(
+      (p) =>
+        p.IpProtocol === "tcp" &&
+        p.FromPort !== undefined &&
+        p.ToPort !== undefined &&
+        p.FromPort <= 6379 &&
+        p.ToPort >= 6379,
+    );
+    if (!hasIngress) {
+      const vpcCidr = await getVpcCidr(vpcId, region);
+      await awsCli(
+        [
+          "ec2",
+          "authorize-security-group-ingress",
+          "--group-id",
+          groupId,
+          "--protocol",
+          "tcp",
+          "--port",
+          "6379",
+          "--cidr",
+          vpcCidr,
+        ],
+        region,
+      );
+    }
+    return { id: groupId, created: false };
   }
 
   // Create security group
@@ -250,10 +296,7 @@ async function describeServerlessCache(
     return null;
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (
-      msg.includes("ServerlessCacheNotFoundFault") ||
-      msg.includes("not found")
-    ) {
+    if (msg.includes("ServerlessCacheNotFoundFault")) {
       return null;
     }
     throw error;
@@ -303,6 +346,11 @@ async function waitForCacheAvailable(
       if (status === "create-failed") {
         throw new Error(
           `ElastiCache Serverless cache ${cacheName} creation failed`,
+        );
+      }
+      if (status === "deleting" || status === "deleted") {
+        throw new Error(
+          `ElastiCache Serverless cache ${cacheName} is in terminal state: ${status}`,
         );
       }
     }

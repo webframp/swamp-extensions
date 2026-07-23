@@ -279,7 +279,12 @@ Deno.test("provision reuses existing resources", async () => {
       return {
         success: true,
         stdout: JSON.stringify({
-          SecurityGroups: [{ GroupId: "sg-existing" }],
+          SecurityGroups: [{
+            GroupId: "sg-existing",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
         }),
       };
     }
@@ -388,7 +393,12 @@ Deno.test("provision builds correct datastoreConfig", async () => {
       return {
         success: true,
         stdout: JSON.stringify({
-          SecurityGroups: [{ GroupId: "sg-xxx" }],
+          SecurityGroups: [{
+            GroupId: "sg-xxx",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
         }),
       };
     }
@@ -463,7 +473,12 @@ Deno.test("provision waits when existing cache is in creating state", async () =
       return {
         success: true,
         stdout: JSON.stringify({
-          SecurityGroups: [{ GroupId: "sg-abc" }],
+          SecurityGroups: [{
+            GroupId: "sg-abc",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
         }),
       };
     }
@@ -562,7 +577,12 @@ Deno.test("provision throws when cache has no ARN", async () => {
       return {
         success: true,
         stdout: JSON.stringify({
-          SecurityGroups: [{ GroupId: "sg-abc" }],
+          SecurityGroups: [{
+            GroupId: "sg-abc",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
         }),
       };
     }
@@ -594,6 +614,268 @@ Deno.test("provision throws when cache has no ARN", async () => {
         ),
       Error,
       "returned no ARN",
+    );
+  });
+});
+
+Deno.test("describeServerlessCache propagates non-NotFound errors", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    cache_name: "perm-denied",
+    vpc_id: "vpc-test",
+    subnet_ids: "subnet-1",
+    security_group_name: "sg",
+    policy_name: "pol",
+    key_prefix: "swamp",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-test", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    if (sub === "ec2 describe-security-groups") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          SecurityGroups: [{
+            GroupId: "sg-abc",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
+        }),
+      };
+    }
+    // Return a permission error that contains "not found" but is NOT the
+    // specific ServerlessCacheNotFoundFault — must NOT be swallowed.
+    if (sub === "elasticache describe-serverless-caches") {
+      return {
+        success: false,
+        stdout: "AccessDeniedException: Endpoint not found for service",
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          context,
+        ),
+      Error,
+      "Endpoint not found for service",
+    );
+  });
+});
+
+Deno.test("ensureSecurityGroup adds ingress when existing SG lacks port 6379", async () => {
+  const { context, written } = createMockContext({
+    region: "us-east-1",
+    cache_name: "test-cache",
+    vpc_id: "vpc-test",
+    subnet_ids: "subnet-1",
+    security_group_name: "partial-sg",
+    policy_name: "pol",
+    key_prefix: "swamp",
+  });
+
+  let authorizeIngressCalled = false;
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-test", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    // SG exists but has NO ingress rules
+    if (sub === "ec2 describe-security-groups") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          SecurityGroups: [{
+            GroupId: "sg-partial",
+            IpPermissions: [],
+          }],
+        }),
+      };
+    }
+    if (sub === "ec2 authorize-security-group-ingress") {
+      authorizeIngressCalled = true;
+      return { success: true, stdout: "{}" };
+    }
+    if (sub === "elasticache describe-serverless-caches") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          ServerlessCaches: [
+            {
+              ServerlessCacheName: "test-cache",
+              ARN:
+                "arn:aws:elasticache:us-east-1:123:serverlesscache:test-cache",
+              Status: "available",
+              SecurityGroupIds: ["sg-partial"],
+              Endpoint: { Address: "test.cache.amazonaws.com", Port: 6379 },
+            },
+          ],
+        }),
+      };
+    }
+    if (sub === "sts get-caller-identity") {
+      return { success: true, stdout: JSON.stringify({ Account: "123" }) };
+    }
+    if (sub === "iam get-policy") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Policy: { Arn: "arn:aws:iam::123:policy/pol" },
+        }),
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await model.methods.provision.execute(
+      {} as Record<string, never>,
+      context,
+    );
+    assertEquals(authorizeIngressCalled, true);
+    assertEquals(written[0]!.data.securityGroupCreated, false);
+    assertEquals(written[0]!.data.securityGroupId, "sg-partial");
+  });
+});
+
+Deno.test("getSubnetIds throws when subnets have no SubnetId field", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    cache_name: "test",
+    vpc_id: "vpc-test",
+    security_group_name: "sg",
+    policy_name: "p",
+    key_prefix: "s",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-test", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    // Subnets exist but have no SubnetId field
+    if (sub === "ec2 describe-subnets") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Subnets: [{}, {}],
+        }),
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          // Override to NOT pass subnet_ids so getSubnetIds is called
+          {
+            ...context,
+            globalArgs: { ...context.globalArgs, subnet_ids: undefined },
+          },
+        ),
+      Error,
+      "No valid subnet IDs found",
+    );
+  });
+});
+
+Deno.test("security_group_name rejects commas", () => {
+  const result = model.globalArguments.safeParse({
+    security_group_name: "my-sg,Key=Env,Value=prod",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("waitForCacheAvailable throws on deleting state", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    cache_name: "deleting-cache",
+    vpc_id: "vpc-test",
+    subnet_ids: "subnet-1",
+    security_group_name: "sg",
+    policy_name: "pol",
+    key_prefix: "swamp",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const sub = args.slice(0, 2).join(" ");
+    if (sub === "ec2 describe-vpcs") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Vpcs: [{ VpcId: "vpc-test", CidrBlock: "10.0.0.0/16" }],
+        }),
+      };
+    }
+    if (sub === "ec2 describe-security-groups") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          SecurityGroups: [{
+            GroupId: "sg-abc",
+            IpPermissions: [
+              { IpProtocol: "tcp", FromPort: 6379, ToPort: 6379 },
+            ],
+          }],
+        }),
+      };
+    }
+    // Cache exists but in deleting state
+    if (sub === "elasticache describe-serverless-caches") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          ServerlessCaches: [
+            {
+              ServerlessCacheName: "deleting-cache",
+              ARN:
+                "arn:aws:elasticache:us-east-1:123:serverlesscache:deleting-cache",
+              Status: "deleting",
+              SecurityGroupIds: ["sg-abc"],
+            },
+          ],
+        }),
+      };
+    }
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          context,
+        ),
+      Error,
+      "terminal state: deleting",
     );
   });
 });
