@@ -1,0 +1,64 @@
+manifestVersion: 1
+name: "@webframp/aurora-datastore-bootstrap"
+version: "2026.07.22.1"
+description: |
+  One-shot bootstrap for @webframp/postgres-datastore targeting AWS Aurora
+  Serverless v2 (PostgreSQL). Creates an Aurora cluster with a serverless
+  writer instance, a DB subnet group, a VPC security group, and a scoped
+  IAM managed policy for RDS IAM authentication, then switches the current
+  swamp repository to the PostgreSQL datastore.
+
+  ## Prerequisites
+
+  - AWS credentials with permissions to create RDS clusters, DB subnet
+    groups, EC2 security groups, and IAM managed policies
+  - A VPC with at least two subnets in different AZs
+
+  ## What it does
+
+  1. `provision` creates a DB subnet group, security group (port 5432 from
+     VPC CIDR), Aurora Serverless v2 cluster (PostgreSQL 16, IAM auth
+     enabled), writer instance, and a scoped IAM managed policy granting
+     `rds-db:connect`.
+  2. A final `command/shell` step runs
+     `swamp datastore setup extension @webframp/postgres-datastore --config ...`
+     to flip the repo's datastore to PostgreSQL.
+
+  ## Running
+
+  ```bash
+  swamp extension pull @webframp/aurora-datastore-bootstrap
+
+  swamp model create @webframp/aurora-datastore-bootstrap/provisioner \
+    swamp-aurora-provisioner
+
+  swamp model create command/shell swamp-aurora-setup
+
+  swamp workflow run @webframp/bootstrap-aurora-datastore \
+    --input region=us-east-1 \
+    --input master_password=<your-password>
+
+  swamp datastore status
+  ```
+
+  See the bundled README for optional inputs and idempotency notes.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - provisioner.ts
+workflows:
+  - bootstrap-aurora-datastore.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - datastore
+  - bootstrap
+  - aws
+  - aurora
+  - postgres
+  - rds

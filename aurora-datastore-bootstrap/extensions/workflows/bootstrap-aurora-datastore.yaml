@@ -1,0 +1,87 @@
+id: b7e4d2a1-8f3c-4b5e-a9d6-2c1e3f4a5b7d
+name: "@webframp/bootstrap-aurora-datastore"
+description: |
+  Provision an Aurora Serverless v2 (PostgreSQL) cluster with networking
+  and IAM policy for @webframp/postgres-datastore, then switch the current
+  repo to use PostgreSQL.
+version: 1
+tags:
+  extension: "@webframp/aurora-datastore-bootstrap"
+  category: "infrastructure"
+inputs:
+  properties:
+    region:
+      type: string
+      description: AWS region.
+      pattern: "^[a-z0-9-]+$"
+      default: "us-east-1"
+    cluster_identifier:
+      type: string
+      description: Aurora cluster identifier.
+      default: "swamp-datastore"
+    instance_identifier:
+      type: string
+      description: Writer instance identifier.
+      default: "swamp-datastore-writer"
+    master_username:
+      type: string
+      description: Master database username.
+      default: "swamp"
+    master_password:
+      type: string
+      description: Master database password (8+ chars).
+    database_name:
+      type: string
+      description: Initial database name.
+      default: "swamp"
+    vpc_id:
+      type: string
+      description: VPC ID (uses default VPC if omitted).
+    subnet_ids:
+      type: string
+      description: Comma-separated subnet IDs in 2+ AZs.
+    security_group_name:
+      type: string
+      default: "swamp-aurora-access"
+    subnet_group_name:
+      type: string
+      default: "swamp-aurora-subnets"
+    policy_name:
+      type: string
+      default: "SwampAuroraDatastorePolicy"
+    min_acu:
+      type: number
+      default: 0.5
+    max_acu:
+      type: number
+      default: 8
+  required:
+    - master_password
+jobs:
+  - name: infra
+    description: Create Aurora Serverless v2 cluster, networking, and IAM policy.
+    steps:
+      - name: provision
+        description: |
+          Run the provisioner model. Instance `swamp-aurora-provisioner` must
+          be pre-created with globalArguments wired to the workflow inputs.
+        task:
+          type: model_method
+          modelIdOrName: swamp-aurora-provisioner
+          methodName: provision
+
+  - name: configure
+    description: Point this repo's datastore at the new Aurora cluster.
+    needs:
+      - infra
+    steps:
+      - name: run-setup
+        description: Run `swamp datastore setup extension @webframp/postgres-datastore`.
+        task:
+          type: model_method
+          modelIdOrName: swamp-aurora-setup
+          methodName: execute
+          inputs:
+            run: |
+              swamp datastore setup extension @webframp/postgres-datastore \
+                --config '{"connectionString":"${{ data.latest("swamp-aurora-provisioner", "state").attributes.connectionString }}","ssl":"require"}'
