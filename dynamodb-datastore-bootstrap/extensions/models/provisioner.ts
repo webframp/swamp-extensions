@@ -235,22 +235,32 @@ async function ensurePolicy(
     ],
   });
 
-  const result = await awsCli(
-    [
-      "iam",
-      "create-policy",
-      "--policy-name",
-      policyName,
-      "--policy-document",
-      policyDocument,
-      "--description",
-      "Least-privilege policy for @webframp/dynamodb-datastore runtime access",
-    ],
-    region,
-  );
-  const policy = (result as { Policy?: { Arn?: string } }).Policy;
-  if (!policy?.Arn) throw new Error("Failed to create IAM policy");
-  return { arn: policy.Arn, created: true };
+  try {
+    const result = await awsCli(
+      [
+        "iam",
+        "create-policy",
+        "--policy-name",
+        policyName,
+        "--policy-document",
+        policyDocument,
+        "--description",
+        "Least-privilege policy for @webframp/dynamodb-datastore runtime access",
+      ],
+      region,
+    );
+    const policy = (result as { Policy?: { Arn?: string } }).Policy;
+    if (!policy?.Arn) throw new Error("Failed to create IAM policy");
+    return { arn: policy.Arn, created: true };
+  } catch (error: unknown) {
+    // Handle TOCTOU race: another process created the policy between our
+    // get-policy check and this create-policy call.
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("EntityAlreadyExists")) {
+      return { arn: policyArn, created: false };
+    }
+    throw error;
+  }
 }
 
 /** Provisioner model definition. */

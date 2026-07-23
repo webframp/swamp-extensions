@@ -469,3 +469,72 @@ Deno.test("provision creates policy with correct resource ARNs", async () => {
     assertEquals(actions.includes("dynamodb:BatchWriteItem"), true);
   });
 });
+
+Deno.test("provision handles TOCTOU race on policy creation", async () => {
+  // Simulates: get-policy returns NoSuchEntity, but create-policy fails with
+  // EntityAlreadyExists because another process created it in between.
+  const { context, written } = createMockContext({
+    region: "us-east-1",
+    table_name: "race-table",
+    policy_name: "RacePolicy",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const subcommand = args.slice(0, 2).join(" ");
+
+    if (subcommand === "dynamodb describe-table") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          Table: {
+            TableName: "race-table",
+            TableArn:
+              "arn:aws:dynamodb:us-east-1:111222333444:table/race-table",
+            TableStatus: "ACTIVE",
+          },
+        }),
+      };
+    }
+
+    if (subcommand === "dynamodb describe-time-to-live") {
+      return {
+        success: true,
+        stdout: JSON.stringify({
+          TimeToLiveDescription: { TimeToLiveStatus: "ENABLED" },
+        }),
+      };
+    }
+
+    if (subcommand === "sts get-caller-identity") {
+      return {
+        success: true,
+        stdout: JSON.stringify({ Account: "111222333444" }),
+      };
+    }
+
+    if (subcommand === "iam get-policy") {
+      // Policy does not exist at check time
+      return { success: false, stdout: "NoSuchEntity" };
+    }
+
+    if (subcommand === "iam create-policy") {
+      // Another process created the policy between our check and create
+      return { success: false, stdout: "EntityAlreadyExists" };
+    }
+
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    const result = await model.methods.provision.execute(
+      {} as Record<string, never>,
+      context,
+    );
+    assertEquals(result.dataHandles.length, 1);
+    assertEquals(written[0]!.data.policyCreated, false);
+    assertEquals(
+      written[0]!.data.policyArn,
+      "arn:aws:iam::111222333444:policy/RacePolicy",
+    );
+  });
+});

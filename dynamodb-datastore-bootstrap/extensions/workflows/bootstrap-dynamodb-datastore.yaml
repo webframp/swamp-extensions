@@ -49,8 +49,10 @@ jobs:
 
   - name: configure
     description: Point this repo's datastore at the new DynamoDB table.
-    needs:
-      - infra
+    dependsOn:
+      - job: infra
+        condition:
+          type: completed
     steps:
       - name: run-setup
         description: Run `swamp datastore setup extension @webframp/dynamodb-datastore`.

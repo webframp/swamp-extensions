@@ -32,11 +32,11 @@ swamp datastore status
 
 ## Inputs
 
-| Input | Default | Description |
-|-------|---------|-------------|
-| `region` | `us-east-1` | AWS region for the DynamoDB table |
-| `table_name` | `swamp-datastore` | DynamoDB table name |
-| `policy_name` | `SwampDynamoDBDatastorePolicy` | IAM managed policy name |
+| Input         | Default                        | Description                       |
+| ------------- | ------------------------------ | --------------------------------- |
+| `region`      | `us-east-1`                    | AWS region for the DynamoDB table |
+| `table_name`  | `swamp-datastore`              | DynamoDB table name               |
+| `policy_name` | `SwampDynamoDBDatastorePolicy` | IAM managed policy name           |
 
 ## What gets created
 
