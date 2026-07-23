@@ -63,12 +63,13 @@ interface RemoteFileMeta {
   deletedAt: string | null;
   updatedAt: Date;
   chunkCount: number;
+  chunkVersion: number;
 }
 
 interface InternalPushManifest {
   toPush: FileEntry[];
   toTombstone: string[];
-  remoteChunkCounts: Map<string, number>;
+  remoteChunkCounts: Map<string, { count: number; version: number }>;
   snapshot: {
     dirtyPaths: string[];
     bulkInvalidated: boolean;
@@ -227,6 +228,7 @@ export function createSyncService(
           deletedAt: item.deletedAt ?? null,
           updatedAt: new Date(item.updatedAt),
           chunkCount: item.chunkCount ?? 0,
+          chunkVersion: item.chunkVersion ?? 0,
         });
       }
       exclusiveStartKey = result.LastEvaluatedKey as
@@ -266,19 +268,18 @@ export function createSyncService(
 
   /**
    * Fetches and reassembles a file's chunks, bounded to `expectedChunkCount`
-   * and verified against `expectedHash`. Both bounds matter: writeFileEntry
-   * makes the new metadata visible before its excess-chunk cleanup batch
-   * completes, so a concurrent or crash-interrupted read could otherwise see
-   * stale trailing chunks from a previous, larger version of the file —
-   * silently reassembling corrupted content. Bounding by chunkCount and
-   * verifying the hash turns that into a loud, retryable error instead.
+   * and verified against `expectedHash`. When `chunkVersion` > 0, only chunks
+   * matching that version's prefix are queried — isolating reads from
+   * concurrent writes that produce chunks under a different version. Legacy
+   * items (chunkVersion 0) use the bare `CHUNK#` prefix for backward compat.
    */
   async function fetchChunks(
     relPath: string,
     expectedChunkCount: number,
     expectedHash: string,
+    chunkVersion: number,
   ): Promise<Uint8Array> {
-    const { pk, skPrefix } = fileChunkPrefix(relPath);
+    const { pk, skPrefix } = fileChunkPrefix(relPath, chunkVersion);
     const items: Array<{ sk: string; content: Uint8Array }> = [];
     let exclusiveStartKey: Record<string, unknown> | undefined;
     do {
@@ -327,21 +328,26 @@ export function createSyncService(
   async function writeFileEntry(
     entry: FileEntry,
     previousChunkCount: number,
+    previousChunkVersion: number,
   ): Promise<void> {
     const chunks = splitIntoChunks(entry.bytes, maxChunkBytes);
     const now = new Date().toISOString();
     const { pk: metaPk, sk: metaSk } = fileMetaKey(entry.relPath);
+    const newVersion = previousChunkVersion + 1;
 
+    // Write new chunks under the new version prefix — these are invisible
+    // to readers until the metadata update below makes newVersion current.
     const writeRequests = chunks.map((content, index) => ({
       PutRequest: {
-        Item: { ...fileChunkKey(entry.relPath, index), content },
+        Item: { ...fileChunkKey(entry.relPath, index, newVersion), content },
       },
     }));
     for (const batch of batchesOf(writeRequests, 25)) {
       await sendBatchWrite(batch);
     }
 
-    // Metadata written last — readers only trust chunks once this is visible.
+    // Metadata written last — readers discover newVersion only after all
+    // chunks for that version exist in the table.
     await retryable(() =>
       doc.send(
         new PutCommand({
@@ -352,6 +358,7 @@ export function createSyncService(
             hash: entry.hash,
             size: entry.bytes.byteLength,
             chunkCount: chunks.length,
+            chunkVersion: newVersion,
             updatedAt: now,
             deletedAt: null,
             gsi1pk: GSI_FILE_PARTITION,
@@ -361,15 +368,35 @@ export function createSyncService(
       )
     );
 
-    if (previousChunkCount > chunks.length) {
+    // Clean up old version's chunks asynchronously. This is best-effort —
+    // stale chunks waste storage but never corrupt reads because readers
+    // query by version prefix.
+    if (previousChunkCount > 0 && previousChunkVersion > 0) {
       const deleteRequests = [];
-      for (let i = chunks.length; i < previousChunkCount; i++) {
+      for (let i = 0; i < previousChunkCount; i++) {
         deleteRequests.push({
-          DeleteRequest: { Key: fileChunkKey(entry.relPath, i) },
+          DeleteRequest: {
+            Key: fileChunkKey(entry.relPath, i, previousChunkVersion),
+          },
         });
       }
       for (const batch of batchesOf(deleteRequests, 25)) {
-        await sendBatchWrite(batch);
+        await sendBatchWrite(batch).catch(() => {
+          // Cleanup failure is non-fatal — stale chunks are orphaned but
+          // harmless. They'll never be read since no metadata points to them.
+        });
+      }
+    }
+    // Also clean up legacy unversioned chunks if migrating from v0
+    if (previousChunkVersion === 0 && previousChunkCount > 0) {
+      const deleteRequests = [];
+      for (let i = 0; i < previousChunkCount; i++) {
+        deleteRequests.push({
+          DeleteRequest: { Key: fileChunkKey(entry.relPath, i, 0) },
+        });
+      }
+      for (const batch of batchesOf(deleteRequests, 25)) {
+        await sendBatchWrite(batch).catch(() => {});
       }
     }
   }
@@ -477,7 +504,12 @@ export function createSyncService(
 
     for (const [relPath, meta] of needContent) {
       signal?.throwIfAborted();
-      const bytes = await fetchChunks(relPath, meta.chunkCount, meta.hash);
+      const bytes = await fetchChunks(
+        relPath,
+        meta.chunkCount,
+        meta.hash,
+        meta.chunkVersion,
+      );
       await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
       changes++;
     }
@@ -499,7 +531,7 @@ export function createSyncService(
     {
       toPush: FileEntry[];
       toTombstone: string[];
-      remoteChunkCounts: Map<string, number>;
+      remoteChunkCounts: Map<string, { count: number; version: number }>;
     }
   > {
     const remotePaths = relPaths === null
@@ -553,11 +585,19 @@ export function createSyncService(
 
     const localPathSet = new Set<string>();
     const toPush: FileEntry[] = [];
-    const remoteChunkCounts = new Map<string, number>();
+    const remoteChunkCounts = new Map<
+      string,
+      { count: number; version: number }
+    >();
     for (const f of localFiles) {
       localPathSet.add(f.relPath);
       const existing = remotePaths.get(f.relPath);
-      if (existing) remoteChunkCounts.set(f.relPath, existing.chunkCount);
+      if (existing) {
+        remoteChunkCounts.set(f.relPath, {
+          count: existing.chunkCount,
+          version: existing.chunkVersion,
+        });
+      }
       if (existing && existing.deletedAt === null && existing.hash === f.hash) {
         continue;
       }
@@ -580,14 +620,15 @@ export function createSyncService(
   async function applyDiff(
     toPush: FileEntry[],
     toTombstone: string[],
-    remoteChunkCounts: Map<string, number>,
+    remoteChunkCounts: Map<string, { count: number; version: number }>,
     signal?: AbortSignal,
   ): Promise<number> {
     if (toPush.length === 0 && toTombstone.length === 0) return 0;
     let count = 0;
     for (const f of toPush) {
       signal?.throwIfAborted();
-      await writeFileEntry(f, remoteChunkCounts.get(f.relPath) ?? 0);
+      const prev = remoteChunkCounts.get(f.relPath);
+      await writeFileEntry(f, prev?.count ?? 0, prev?.version ?? 0);
       count++;
     }
     for (const relPath of toTombstone) {
@@ -665,7 +706,12 @@ export function createSyncService(
       const map = await queryAllFileMeta(relPath);
       const meta = map.get(relPath);
       if (!meta || meta.deletedAt !== null) return false;
-      const bytes = await fetchChunks(relPath, meta.chunkCount, meta.hash);
+      const bytes = await fetchChunks(
+        relPath,
+        meta.chunkCount,
+        meta.hash,
+        meta.chunkVersion,
+      );
       await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
       return true;
     },
@@ -691,7 +737,10 @@ export function createSyncService(
 
       let toPush: FileEntry[] = [];
       let toTombstone: string[] = [];
-      let remoteChunkCounts = new Map<string, number>();
+      let remoteChunkCounts = new Map<
+        string,
+        { count: number; version: number }
+      >();
 
       if (snapshot.bulkInvalidated || snapshot.dirtyPaths.length > 0) {
         const result = await collectDiff(

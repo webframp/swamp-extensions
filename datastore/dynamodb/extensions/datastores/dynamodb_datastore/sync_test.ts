@@ -387,7 +387,8 @@ Deno.test("pull rejects a file whose reassembled content hash doesn't match its 
 
     // Simulate a stale/corrupted chunk: overwrite chunk 0's content directly
     // without updating META's hash, mimicking a partially-applied write.
-    const chunkKey = `FILE#${relPath} CHUNK#0000000`;
+    // After push, chunks are stored under version 1 (incremented from 0).
+    const chunkKey = `FILE#${relPath} CHUNK#v1#0000000`;
     const chunk = table.items.get(chunkKey);
     assertExists(chunk);
     table.items.set(chunkKey, {
