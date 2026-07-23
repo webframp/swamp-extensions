@@ -5,7 +5,11 @@
  * and verifies that single-source failures still produce partial results.
  */
 
-import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./research_collector.ts";
 
@@ -749,4 +753,181 @@ Deno.test({
       globalThis.fetch = originalFetch;
     }
   },
+});
+
+// =============================================================================
+// digest method tests
+// =============================================================================
+
+/** A minimal but realistic brief for digest tests — two sources, overlapping
+ * keywords so topic clustering is observable. */
+function mockBrief(): Record<string, unknown> {
+  return {
+    hnFrontPage: {
+      stories: [
+        {
+          id: 1,
+          title: "Kubernetes operators explained",
+          url: "https://hn/1",
+          score: 200,
+          by: "a",
+          time: 1,
+          descendants: 50,
+          type: "story",
+        },
+        {
+          id: 2,
+          title: "Rust memory safety wins again",
+          url: "https://hn/2",
+          score: 100,
+          by: "b",
+          time: 2,
+          descendants: 10,
+          type: "story",
+        },
+      ],
+      fetchedAt: "2026-07-23T10:00:00Z",
+    },
+    lobstersHottest: {
+      stories: [
+        {
+          id: "l1",
+          title: "Kubernetes operators patterns",
+          url: "https://lb/1",
+          score: 40,
+          commentCount: 5,
+          tags: ["k8s"],
+          submitterUser: "c",
+          created_at: "x",
+        },
+        {
+          id: "l2",
+          title: "Unrelated database talk",
+          url: "https://lb/2",
+          score: 20,
+          commentCount: 2,
+          tags: [],
+          submitterUser: "d",
+          created_at: "x",
+        },
+      ],
+      fetchedAt: "2026-07-23T10:00:00Z",
+    },
+    sreWeekly: { items: [], fetchedAt: "2026-07-23T10:00:00Z" },
+    ifin: { topics: [], fetchedAt: "2026-07-23T10:00:00Z" },
+    redmonk: { items: [], fetchedAt: "2026-07-23T10:00:00Z" },
+    arxiv: { entries: [], fetchedAt: "2026-07-23T10:00:00Z" },
+    aiDailyBrief: { editions: [], fetchedAt: "2026-07-23T10:00:00Z" },
+    config: {
+      hnCount: 5,
+      lobstersCount: 5,
+      sreCount: 2,
+      ifinCount: 3,
+      redmonkCount: 2,
+      arxivCount: 2,
+      aiDailyBriefDays: 2,
+    },
+    fetchedAt: "2026-07-23T10:00:00Z",
+  };
+}
+
+Deno.test("research-collector model: has digest method and resource", () => {
+  assertExists(model.methods.digest);
+  assertExists(model.methods.digest.execute);
+  assertExists(model.resources.digest);
+  assertEquals(model.resources.digest.lifetime, "24h");
+});
+
+Deno.test("research-collector digest: throws when no brief exists", async () => {
+  const { context } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+  });
+  // deno-lint-ignore no-explicit-any
+  (context as any).readResource = () => Promise.resolve(null);
+  await assertRejects(
+    () =>
+      model.methods.digest.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.digest.execute
+        >[1],
+      ),
+    Error,
+    "No research brief found",
+  );
+});
+
+Deno.test("research-collector digest: scores items and clusters cross-source topics", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+  });
+  let readCalls = 0;
+  // deno-lint-ignore no-explicit-any
+  (context as any).readResource = (instance: string) => {
+    readCalls++;
+    // First read returns the brief; the second (for prev digest) returns null.
+    return Promise.resolve(instance === "brief" ? mockBrief() : null);
+  };
+  const result = await model.methods.digest.execute(
+    {},
+    context as unknown as Parameters<typeof model.methods.digest.execute>[1],
+  );
+  assertEquals(result.dataHandles.length, 1);
+  assertEquals(readCalls, 2); // brief + previous digest
+  const resources = getWrittenResources();
+  assertEquals(resources.length, 1);
+  const data = resources[0].data as Record<string, unknown>;
+  // Top items: HN item 1 (score 100) ranks above HN item 2 (score 50) and
+  // Lobsters items (scaled to their own max of 40 -> 100/50, but cross-source
+  // sort still puts the highest absolute normalized score first).
+  const topItems = data.topItems as Array<Record<string, unknown>>;
+  assertExists(topItems);
+  assertEquals(topItems.length > 0, true);
+  // The "kubernetes operators" topic appears in both hn and lobsters.
+  const topics = data.topics as Array<Record<string, unknown>>;
+  const k8s = topics.find((t) => String(t.topic).startsWith("kubernetes"));
+  assertExists(k8s);
+  const k8sSources = k8s!.sources as string[];
+  assertEquals(k8sSources.includes("hn"), true);
+  assertEquals(k8sSources.includes("lobsters"), true);
+  // First-run delta: all items are new, no previous digest.
+  const delta = data.delta as Record<string, unknown>;
+  assertEquals(delta.previousDigestAt, null);
+  assertEquals(delta.newCount, topItems.length);
+  assertEquals(delta.carriedCount, 0);
+});
+
+Deno.test("research-collector digest: computes delta against previous digest", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+  });
+  // A previous digest whose topItems overlap the new brief by one title.
+  const prevDigest = {
+    topItems: [{ title: "Kubernetes operators explained", score: 90 }],
+    perSource: {},
+    topics: [],
+    delta: { newCount: 1, carriedCount: 0, previousDigestAt: null },
+    sourceCount: 2,
+    briefFetchedAt: "2026-07-23T09:00:00Z",
+    digestAt: "2026-07-23T09:05:00Z",
+  };
+  // deno-lint-ignore no-explicit-any
+  (context as any).readResource = (instance: string) =>
+    Promise.resolve(instance === "brief" ? mockBrief() : prevDigest);
+  await model.methods.digest.execute(
+    {},
+    context as unknown as Parameters<typeof model.methods.digest.execute>[1],
+  );
+  const data = getWrittenResources()[0].data as Record<string, unknown>;
+  const delta = data.delta as Record<string, unknown>;
+  assertEquals(delta.previousDigestAt, "2026-07-23T09:05:00Z");
+  // "Kubernetes operators explained" is carried; the rest are new.
+  assertEquals(delta.carriedCount as number >= 1, true);
+  assertEquals(
+    (delta.newCount as number) + (delta.carriedCount as number),
+    (data.topItems as unknown[]).length,
+  );
 });

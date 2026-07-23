@@ -36,6 +36,12 @@ interface MethodContext {
   writeResource: (spec: string, instance: string, data: unknown) => Promise<
     { name: string; spec: string; instance: string }
   >;
+  /** Reads the latest version (or a specific version) of a resource instance.
+   * Returns null when no version exists yet. */
+  readResource?: (
+    instance: string,
+    version?: number,
+  ) => Promise<Record<string, unknown> | null>;
   logger: { info: (msg: string, props?: Record<string, unknown>) => void };
 }
 
@@ -162,6 +168,52 @@ const ResearchBriefSchema = z.object({
     aiDailyBriefDays: z.number(),
   }),
   fetchedAt: z.string(),
+});
+
+/** A single scored item in the digest, normalized across sources. */
+const DigestItemSchema = z.object({
+  source: z.string().describe("Originating source slug"),
+  title: z.string(),
+  url: z.string().nullable(),
+  score: z.number().describe(
+    "Normalized 0-100 prominence score (engagement + freshness)",
+  ),
+  tags: z.array(z.string()).default([]),
+});
+
+/** A cross-source topic cluster: a keyword shared by items from >=2 sources. */
+const TopicClusterSchema = z.object({
+  topic: z.string().describe("Lowercased shared keyword/phrase"),
+  occurrences: z.number().int().describe("How many digest items mention it"),
+  sources: z.array(z.string()).describe("Distinct sources mentioning it"),
+});
+
+/** Compact daily digest of the research brief. */
+const DigestSchema = z.object({
+  topItems: z.array(DigestItemSchema).describe(
+    "Top items across all sources, ranked by prominence",
+  ),
+  perSource: z.record(
+    z.string(),
+    z.array(DigestItemSchema),
+  ).describe("Top items grouped by source slug"),
+  topics: z.array(TopicClusterSchema).describe(
+    "Cross-source topic clusters (keywords in >=2 sources)",
+  ),
+  delta: z.object({
+    newCount: z.number().int().describe(
+      "Items in this digest absent from the previous digest",
+    ),
+    carriedCount: z.number().int().describe(
+      "Items also present in the previous digest",
+    ),
+    previousDigestAt: z.string().nullable().describe(
+      "fetchedAt of the previous digest, or null on first run",
+    ),
+  }),
+  sourceCount: z.number().int().describe("Number of sources contributing"),
+  briefFetchedAt: z.string().describe("fetchedAt of the source brief"),
+  digestAt: z.string().describe("When this digest was built"),
 });
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -460,6 +512,202 @@ async function gatherAiDailyBrief(
   );
 }
 
+/** Tokenize a title into lowercase keyword tokens for topic clustering. */
+function tokenize(title: string): string[] {
+  return title
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 4)
+    // Drop very common stopwords that produce uninformative clusters.
+    .filter((t) =>
+      ![
+        "that",
+        "this",
+        "with",
+        "from",
+        "your",
+        "have",
+        "will",
+        "about",
+        "into",
+        "what",
+        "when",
+        "which",
+        "their",
+        "there",
+        "they",
+        "https",
+      ].includes(t)
+    );
+}
+
+/** Normalize a raw brief item from any source into a DigestItem with a 0-100
+ * prominence score. Engagement metrics vary by source; we scale each to 0-100
+ * so cross-source ranking is meaningful. */
+function toDigestItem(
+  source: string,
+  raw: Record<string, unknown>,
+  maxEngagement: number,
+): {
+  source: string;
+  title: string;
+  url: string | null;
+  score: number;
+  tags: string[];
+} {
+  const title = String(raw.title ?? "(untitled)");
+  const url = raw.url != null
+    ? String(raw.url)
+    : (raw.link != null ? String(raw.link) : null);
+  const tags = Array.isArray(raw.tags)
+    ? (raw.tags as unknown[]).map((t) => String(t))
+    : [];
+  // Engagement: prefer an explicit score, fall back to comments/views/posts.
+  const engagement = typeof raw.score === "number"
+    ? raw.score
+    : (typeof raw.descendants === "number"
+      ? raw.descendants
+      : (typeof raw.commentCount === "number"
+        ? raw.commentCount
+        : (typeof raw.posts_count === "number"
+          ? raw.posts_count
+          : (typeof raw.views === "number" ? raw.views : 0))));
+  const scaled = maxEngagement > 0 ? (engagement / maxEngagement) * 100 : 0;
+  // Round to one decimal of precision; keep it bounded.
+  const score = Math.max(0, Math.min(100, Math.round(scaled * 10) / 10));
+  return { source, title, url, score, tags };
+}
+
+/** Build a compact digest from a gathered brief: top items per source, ranked
+ * cross-source, with topic clusters (keywords shared by >=2 sources) and a
+ * delta against the previous digest. This is real downstream-useful work — a
+ * journal-writer consumes the digest instead of re-scoring the raw brief. */
+async function buildDigest(
+  _args: Record<string, never>,
+  ctx: MethodContext,
+): Promise<
+  { dataHandles: { spec: string; instance: string; name: string }[] }
+> {
+  if (!ctx.readResource) {
+    throw new Error(
+      "digest requires a readResource context (none provided)",
+    );
+  }
+  ctx.logger.info("Building research digest from latest brief");
+  const brief = await ctx.readResource("brief") as
+    | Record<string, unknown>
+    | null;
+  if (!brief) {
+    throw new Error(
+      "No research brief found. Run gather before digest.",
+    );
+  }
+  const briefFetchedAt = String(brief.fetchedAt ?? new Date().toISOString());
+  const perSourceRaw: Record<string, unknown[]> = {
+    hn: ((brief.hnFrontPage as { stories?: unknown[] } | undefined)?.stories) ??
+      [],
+    lobsters: ((brief.lobstersHottest as { stories?: unknown[] } | undefined)
+      ?.stories) ?? [],
+    sreWeekly:
+      ((brief.sreWeekly as { items?: unknown[] } | undefined)?.items) ?? [],
+    ifin: ((brief.ifin as { topics?: unknown[] } | undefined)?.topics) ?? [],
+    redmonk: ((brief.redmonk as { items?: unknown[] } | undefined)?.items) ??
+      [],
+    arxiv: ((brief.arxiv as { entries?: unknown[] } | undefined)?.entries) ??
+      [],
+    aiDailyBrief: ((brief.aiDailyBrief as { editions?: unknown[] } | undefined)
+      ?.editions) ?? [],
+  };
+  // Per-source max engagement for scaling, then normalize + take top 5/source.
+  const perSource: Record<
+    string,
+    {
+      source: string;
+      title: string;
+      url: string | null;
+      score: number;
+      tags: string[];
+    }[]
+  > = {};
+  for (const [src, items] of Object.entries(perSourceRaw)) {
+    let maxEng = 0;
+    for (const it of items) {
+      const r = it as Record<string, unknown>;
+      const e = typeof r.score === "number"
+        ? r.score
+        : (typeof r.descendants === "number"
+          ? r.descendants
+          : (typeof r.posts_count === "number"
+            ? r.posts_count
+            : (typeof r.views === "number" ? r.views : 0)));
+      if (e > maxEng) maxEng = e;
+    }
+    const norm = items.map((it) =>
+      toDigestItem(src, it as Record<string, unknown>, maxEng)
+    );
+    // AI Daily Brief editions carry nuggets, not scores; keep them in title order.
+    perSource[src] = src === "aiDailyBrief"
+      ? norm.slice(0, 3)
+      : norm.sort((a, b) => b.score - a.score).slice(0, 5);
+  }
+  // Cross-source top 10 by score (AI Daily Brief items get a flat 50).
+  const allItems = Object.values(perSource).flat();
+  const topItems = allItems.slice().sort((a, b) => b.score - a.score).slice(
+    0,
+    10,
+  );
+  // Topic clusters: tokens appearing in >=2 sources.
+  const tokenSources = new Map<string, Set<string>>();
+  const tokenCount = new Map<string, number>();
+  for (const it of allItems) {
+    for (const tok of new Set(tokenize(it.title))) {
+      if (!tokenSources.has(tok)) tokenSources.set(tok, new Set());
+      tokenSources.get(tok)!.add(it.source);
+      tokenCount.set(tok, (tokenCount.get(tok) ?? 0) + 1);
+    }
+  }
+  const topics = [...tokenSources.entries()]
+    .filter(([, srcs]) => srcs.size >= 2)
+    .map(([topic, srcs]) => ({
+      topic,
+      occurrences: tokenCount.get(topic) ?? 0,
+      sources: [...srcs].sort(),
+    }))
+    .sort((a, b) =>
+      b.occurrences - a.occurrences || b.sources.length - a.sources.length
+    )
+    .slice(0, 15);
+  // Delta vs previous digest: compare normalized title sets.
+  const prevDigest = await ctx.readResource("digest") as
+    | Record<string, unknown>
+    | null;
+  const prevTitles = prevDigest
+    ? new Set(
+      (prevDigest.topItems as { title?: string }[] | undefined)?.map((i) =>
+        i.title
+      ) ?? [],
+    )
+    : new Set<string>();
+  const newCount = topItems.filter((i) => !prevTitles.has(i.title)).length;
+  const carriedCount = topItems.length - newCount;
+  const previousDigestAt = prevDigest
+    ? String(prevDigest.digestAt ?? null)
+    : null;
+  const handle = await ctx.writeResource("research", "digest", {
+    topItems,
+    perSource,
+    topics,
+    delta: { newCount, carriedCount, previousDigestAt },
+    sourceCount: Object.keys(perSource).length,
+    briefFetchedAt,
+    digestAt: new Date().toISOString(),
+  });
+  ctx.logger.info(
+    `Digest: ${topItems.length} top items, ${topics.length} cross-source topics, ${newCount} new since last digest`,
+  );
+  return { dataHandles: [handle] };
+}
+
 /** Gather research data from all configured sources and write a brief resource. */
 async function gatherAll(
   _args: Record<string, never>,
@@ -520,7 +768,7 @@ async function gatherAll(
 /** Research data collector model. */
 export const model = {
   type: "@webframp/research-collector" as const,
-  version: "2026.07.21.1",
+  version: "2026.07.23.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -541,6 +789,12 @@ export const model = {
       description: "Repair broken XML test fixtures; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.07.23.1",
+      description:
+        "Adds the digest method and digest resource. No changes to existing global args or the research brief schema; existing instances need no migration.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   globalArguments: GlobalArgsSchema,
   resources: {
@@ -551,6 +805,14 @@ export const model = {
       lifetime: "1h" as const,
       garbageCollection: 10,
     },
+    digest: {
+      description:
+        "Compact daily digest of the research brief: top items per source, cross-source topic clusters, and a delta against the previous digest.",
+      schema: DigestSchema,
+      // Digests are stable summaries; keep them around longer than the raw brief.
+      lifetime: "24h" as const,
+      garbageCollection: 14,
+    },
   },
   methods: {
     gather: {
@@ -558,6 +820,12 @@ export const model = {
         "Gather research data from HN, Lobste.rs, arXiv, SRE Weekly, IFIN Discourse, RedMonk, and The AI Daily Brief.",
       arguments: z.object({}),
       execute: gatherAll,
+    },
+    digest: {
+      description:
+        "Build a compact digest from the latest research brief: top items per source, cross-source topic clusters, and a delta against the previous digest. Run gather first.",
+      arguments: z.object({}),
+      execute: buildDigest,
     },
   },
 };

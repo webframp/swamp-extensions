@@ -1,14 +1,15 @@
-## 2026.07.21.1
+## 2026.07.23.1
 
-**Added:** The AI Daily Brief as a seventh gather source. `gather` now fetches
-recent editions from theaidailybrief.com, keeps written takeaway "nuggets" with
-headings, bodies, and anchors, and drops video embeds so only written analysis
-survives. Controlled by a new `aiDailyBriefDays` global arg (1-14, default 3).
+**Added:** New `digest` method builds a compact daily digest from the latest
+research brief: top items per source (normalized 0-100 prominence score),
+cross-source topic clusters (keywords appearing in 2+ sources), and a delta
+against the previous digest (new vs carried items). Writes a new `digest`
+resource (24h lifetime) for downstream journal/briefing workflows.
 
-**Fixed:** The test module had unescaped quotes in three XML fixture string
-literals that stopped Deno from parsing the file, so the AI Daily Brief
-coverage test never ran. Switched those fixtures to template literals.
+**Changed:** The model now reads prior resources via the `readResource` context
+method. `digest` requires a `gather` run first — it throws if no brief exists.
 
-**Changed:** `gather`'s output resource now carries an `aiDailyBrief` object
-with `editions` alongside the existing source arrays. Existing sources and
-resource shapes are unchanged.
+**Upgrade note:** No changes to the `research` brief schema or existing global
+args. Existing instances upgrade in place (no attribute migration needed). The
+new `digest` resource is additive and safe to ignore for workflows that only
+use `gather`.
