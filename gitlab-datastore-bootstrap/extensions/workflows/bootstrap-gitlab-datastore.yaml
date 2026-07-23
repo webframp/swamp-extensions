@@ -1,0 +1,69 @@
+id: e1a3b5c7-d9f2-4a6b-8e0c-3f5a7b9d1e2f
+name: "@webframp/bootstrap-gitlab-datastore"
+description: |
+  Validate access to a GitLab project, optionally create a project access
+  token, and switch the current repo to use GitLab's Terraform state API as
+  the swamp datastore.
+version: 1
+tags:
+  extension: "@webframp/gitlab-datastore-bootstrap"
+  category: "infrastructure"
+inputs:
+  properties:
+    project_id:
+      type: string
+      description: GitLab project ID (numeric) or URL-encoded path.
+    base_url:
+      type: string
+      description: GitLab instance URL.
+      default: "https://gitlab.com"
+    token:
+      type: string
+      description: GitLab personal access token with api scope.
+    username:
+      type: string
+      description: GitLab username (optional).
+    state_prefix:
+      type: string
+      description: Prefix for state names.
+      default: "swamp"
+    create_project_token:
+      type: boolean
+      description: Create a dedicated project access token.
+      default: false
+    project_token_name:
+      type: string
+      description: Name for the project access token.
+      default: "swamp-datastore"
+  required:
+    - project_id
+    - token
+jobs:
+  - name: validate
+    description: Validate GitLab project access and prepare configuration.
+    steps:
+      - name: provision
+        description: |
+          Validate project, optionally create token, produce config.
+          Instance `swamp-gitlab-provisioner` must be pre-created with
+          globalArguments wired to the workflow inputs.
+        task:
+          type: model_method
+          modelIdOrName: swamp-gitlab-provisioner
+          methodName: provision
+
+  - name: configure
+    description: Point this repo's datastore at GitLab.
+    needs:
+      - validate
+    steps:
+      - name: run-setup
+        description: Run `swamp datastore setup extension @webframp/gitlab-datastore`.
+        task:
+          type: model_method
+          modelIdOrName: swamp-gitlab-setup
+          methodName: execute
+          inputs:
+            run: |
+              swamp datastore setup extension @webframp/gitlab-datastore \
+                --config '${{ data.latest("swamp-gitlab-provisioner", "state").attributes.datastoreConfig }}'
