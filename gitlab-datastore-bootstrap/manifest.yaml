@@ -1,0 +1,52 @@
+manifestVersion: 1
+name: "@webframp/gitlab-datastore-bootstrap"
+version: "2026.07.22.1"
+description: |
+  One-shot bootstrap for @webframp/gitlab-datastore. Validates access to a
+  GitLab project, optionally creates a scoped project access token, and
+  switches the current swamp repository to use GitLab's Terraform state API
+  as the datastore backend.
+
+  Useful as a zero-infrastructure PoC: if you already have a GitLab project,
+  this gives you a shared datastore with distributed locking in under a
+  minute.
+
+  ## Prerequisites
+
+  - A GitLab project (GitLab.com or self-hosted) with API access
+  - A personal access token with `api` scope (or Maintainer access to create
+    a project access token)
+
+  ## Running
+
+  ```bash
+  swamp extension pull @webframp/gitlab-datastore-bootstrap
+
+  swamp model create @webframp/gitlab-datastore-bootstrap/provisioner \
+    swamp-gitlab-provisioner
+
+  swamp model create command/shell swamp-gitlab-setup
+
+  swamp workflow run @webframp/bootstrap-gitlab-datastore \
+    --input project_id=12345 \
+    --input token=glpat-xxxxxxxxxxxxxxxxxxxx
+
+  swamp datastore status
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - provisioner.ts
+workflows:
+  - bootstrap-gitlab-datastore.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - datastore
+  - bootstrap
+  - gitlab
