@@ -548,6 +548,7 @@ function toDigestItem(
   source: string,
   raw: Record<string, unknown>,
   maxEngagement: number,
+  flatScore?: number,
 ): {
   source: string;
   title: string;
@@ -562,6 +563,12 @@ function toDigestItem(
   const tags = Array.isArray(raw.tags)
     ? (raw.tags as unknown[]).map((t) => String(t))
     : [];
+  // Sources without an engagement metric (AI Daily Brief, arXiv, RedMonk,
+  // SRE Weekly) receive a flat neutral score so they participate in
+  // cross-source ranking instead of scoring 0 and being silently excluded.
+  if (flatScore !== undefined) {
+    return { source, title, url, score: flatScore, tags };
+  }
   // Engagement: prefer an explicit score, fall back to comments/views/posts.
   const engagement = typeof raw.score === "number"
     ? raw.score
@@ -629,6 +636,18 @@ async function buildDigest(
       tags: string[];
     }[]
   > = {};
+  // Sources whose items carry no engagement metric (score/descendants/
+  // posts_count/views/commentCount). Without a floor these would all score 0
+  // and be excluded from topItems the moment any engagement-bearing source
+  // has positive values — silently misrepresenting the digest. Give them a
+  // flat neutral score so they participate in cross-source ranking without
+  // dominating it.
+  const NO_ENGAGEMENT_SOURCES = new Set([
+    "aiDailyBrief",
+    "sreWeekly",
+    "redmonk",
+    "arxiv",
+  ]);
   for (const [src, items] of Object.entries(perSourceRaw)) {
     let maxEng = 0;
     for (const it of items) {
@@ -642,15 +661,16 @@ async function buildDigest(
             : (typeof r.views === "number" ? r.views : 0)));
       if (e > maxEng) maxEng = e;
     }
+    const flatScore = NO_ENGAGEMENT_SOURCES.has(src) ? 50 : undefined;
     const norm = items.map((it) =>
-      toDigestItem(src, it as Record<string, unknown>, maxEng)
+      toDigestItem(src, it as Record<string, unknown>, maxEng, flatScore)
     );
-    // AI Daily Brief editions carry nuggets, not scores; keep them in title order.
-    perSource[src] = src === "aiDailyBrief"
-      ? norm.slice(0, 3)
+    // No-engagement sources have no meaningful ranking signal, so keep them
+    // in source order; engagement-bearing sources are ranked by score.
+    perSource[src] = NO_ENGAGEMENT_SOURCES.has(src)
+      ? norm.slice(0, src === "aiDailyBrief" ? 3 : 5)
       : norm.sort((a, b) => b.score - a.score).slice(0, 5);
   }
-  // Cross-source top 10 by score (AI Daily Brief items get a flat 50).
   const allItems = Object.values(perSource).flat();
   const topItems = allItems.slice().sort((a, b) => b.score - a.score).slice(
     0,
@@ -690,15 +710,21 @@ async function buildDigest(
     : new Set<string>();
   const newCount = topItems.filter((i) => !prevTitles.has(i.title)).length;
   const carriedCount = topItems.length - newCount;
-  const previousDigestAt = prevDigest
-    ? String(prevDigest.digestAt ?? null)
+  // Guard against "null": String(null) yields the literal string "null", which
+  // would break callers comparing previousDigestAt !== null. Only stringify a
+  // real value.
+  const previousDigestAt = prevDigest && prevDigest.digestAt != null
+    ? String(prevDigest.digestAt)
     : null;
   const handle = await ctx.writeResource("research", "digest", {
     topItems,
     perSource,
     topics,
     delta: { newCount, carriedCount, previousDigestAt },
-    sourceCount: Object.keys(perSource).length,
+    // Count only sources that actually contributed items, not every key in
+    // perSource (which includes empty arrays when a source returned nothing).
+    sourceCount: Object.values(perSource).filter((items) => items.length > 0)
+      .length,
     briefFetchedAt,
     digestAt: new Date().toISOString(),
   });

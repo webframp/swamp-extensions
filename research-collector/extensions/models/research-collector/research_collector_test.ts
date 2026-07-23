@@ -816,8 +816,34 @@ function mockBrief(): Record<string, unknown> {
     sreWeekly: { items: [], fetchedAt: "2026-07-23T10:00:00Z" },
     ifin: { topics: [], fetchedAt: "2026-07-23T10:00:00Z" },
     redmonk: { items: [], fetchedAt: "2026-07-23T10:00:00Z" },
-    arxiv: { entries: [], fetchedAt: "2026-07-23T10:00:00Z" },
-    aiDailyBrief: { editions: [], fetchedAt: "2026-07-23T10:00:00Z" },
+    arxiv: {
+      entries: [
+        {
+          id: "http://arxiv.org/abs/2607.12345v1",
+          title: "Kubernetes scheduling via reinforcement learning",
+          summary: "s",
+          authors: ["x"],
+          published: "2026-07-23T00:00:00Z",
+          updated: "2026-07-23T00:00:00Z",
+          link: "http://arxiv.org/abs/2607.12345v1",
+          category: "cs.LG",
+        },
+      ],
+      fetchedAt: "2026-07-23T10:00:00Z",
+    },
+    aiDailyBrief: {
+      editions: [
+        {
+          date: "2026-07-23",
+          url: "https://aidb.example/e/2026-07-23",
+          title: "AI Daily Brief: Kubernetes operators edition",
+          summary: "thesis",
+          tags: ["k8s"],
+          nuggets: [],
+        },
+      ],
+      fetchedAt: "2026-07-23T10:00:00Z",
+    },
     config: {
       hnCount: 5,
       lobstersCount: 5,
@@ -925,9 +951,73 @@ Deno.test("research-collector digest: computes delta against previous digest", a
   const delta = data.delta as Record<string, unknown>;
   assertEquals(delta.previousDigestAt, "2026-07-23T09:05:00Z");
   // "Kubernetes operators explained" is carried; the rest are new.
-  assertEquals(delta.carriedCount as number >= 1, true);
+  const carried = delta.carriedCount as number;
+  assertEquals(carried >= 1, true);
   assertEquals(
-    (delta.newCount as number) + (delta.carriedCount as number),
+    (delta.newCount as number) + carried,
     (data.topItems as unknown[]).length,
   );
+});
+
+Deno.test("research-collector digest: no-engagement sources appear in topItems with a flat score", async () => {
+  // Regression for the documented-but-unimplemented "flat 50" contract:
+  // arXiv and AI Daily Brief carry no engagement metric, so without a floor
+  // they would score 0 and be excluded from topItems whenever any
+  // engagement-bearing source (HN/Lobsters/IFIN) has positive values.
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+  });
+  // deno-lint-ignore no-explicit-any
+  (context as any).readResource = (instance: string) =>
+    Promise.resolve(instance === "brief" ? mockBrief() : null);
+  await model.methods.digest.execute(
+    {},
+    context as unknown as Parameters<typeof model.methods.digest.execute>[1],
+  );
+  const data = getWrittenResources()[0].data as Record<string, unknown>;
+  const topItems = data.topItems as Array<Record<string, unknown>>;
+  const topSources = new Set(topItems.map((it) => String(it.source)));
+  // arXiv and aiDailyBrief must be represented in the headline ranking.
+  assertEquals(topSources.has("arxiv"), true);
+  assertEquals(topSources.has("aiDailyBrief"), true);
+  // Their flat score is 50, never 0.
+  const flatScored = topItems.filter((i) =>
+    ["arxiv", "aiDailyBrief"].includes(String(i.source))
+  );
+  for (const it of flatScored) {
+    assertEquals(it.score, 50);
+  }
+  // sourceCount counts only contributing sources. mockBrief has items in hn,
+  // lobsters, arxiv, aiDailyBrief (4) and empty sreWeekly/ifin/redmonk (3).
+  assertEquals(data.sourceCount, 4);
+});
+
+Deno.test('research-collector digest: previousDigestAt stays null not "null"', async () => {
+  // Regression for String(null) producing the literal string "null".
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "test-id", name: "test-collector", version: 1, tags: {} },
+  });
+  // A previous digest with a missing digestAt field.
+  const prevDigest = {
+    topItems: [],
+    perSource: {},
+    topics: [],
+    delta: { newCount: 0, carriedCount: 0, previousDigestAt: null },
+    sourceCount: 0,
+    briefFetchedAt: "2026-07-23T09:00:00Z",
+    // digestAt deliberately absent
+  };
+  // deno-lint-ignore no-explicit-any
+  (context as any).readResource = (instance: string) =>
+    Promise.resolve(instance === "brief" ? mockBrief() : prevDigest);
+  await model.methods.digest.execute(
+    {},
+    context as unknown as Parameters<typeof model.methods.digest.execute>[1],
+  );
+  const data = getWrittenResources()[0].data as Record<string, unknown>;
+  const delta = data.delta as Record<string, unknown>;
+  assertEquals(delta.previousDigestAt, null);
+  assertEquals(delta.previousDigestAt === "null", false);
 });
