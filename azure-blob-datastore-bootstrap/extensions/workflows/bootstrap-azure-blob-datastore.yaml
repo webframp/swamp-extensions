@@ -1,0 +1,61 @@
+id: a2c4e6f8-1b3d-5a7c-9e0f-2d4b6a8c0e1f
+name: "@webframp/bootstrap-azure-blob-datastore"
+description: |
+  Provision an Azure Storage account with a blob container for
+  @webframp/azure-blob-datastore, then switch the current repo to use
+  Azure Blob Storage.
+version: 1
+tags:
+  extension: "@webframp/azure-blob-datastore-bootstrap"
+  category: "infrastructure"
+inputs:
+  properties:
+    location:
+      type: string
+      description: Azure region.
+      default: "eastus"
+    resource_group:
+      type: string
+      description: Resource group name.
+      default: "swamp-datastore-rg"
+    storage_account:
+      type: string
+      description: Storage account name (globally unique, 3-24 chars, lowercase).
+      default: "swampdatastore"
+    container_name:
+      type: string
+      description: Blob container name.
+      default: "swamp-datastore"
+    blob_prefix:
+      type: string
+      description: Blob-name prefix namespace.
+      default: "swamp"
+  required: []
+jobs:
+  - name: infra
+    description: Create Azure Storage account and blob container.
+    steps:
+      - name: provision
+        description: |
+          Run the provisioner model. Instance `swamp-azure-blob-provisioner`
+          must be pre-created with globalArguments wired to the workflow inputs.
+        task:
+          type: model_method
+          modelIdOrName: swamp-azure-blob-provisioner
+          methodName: provision
+
+  - name: configure
+    description: Point this repo's datastore at Azure Blob Storage.
+    needs:
+      - infra
+    steps:
+      - name: run-setup
+        description: Run `swamp datastore setup extension @webframp/azure-blob-datastore`.
+        task:
+          type: model_method
+          modelIdOrName: swamp-azure-blob-setup
+          methodName: execute
+          inputs:
+            run: |
+              swamp datastore setup extension @webframp/azure-blob-datastore \
+                --config '${{ data.latest("swamp-azure-blob-provisioner", "state").attributes.datastoreConfig }}'
