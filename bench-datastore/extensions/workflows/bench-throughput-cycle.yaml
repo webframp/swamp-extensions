@@ -1,0 +1,72 @@
+id: d1a2b3c4-e5f6-7890-abcd-ef1234567890
+name: "@webframp/bench-throughput-cycle"
+description: |
+  Single iteration of the throughput benchmark. Executes one model method
+  (rotated by iteration), then reads back the data and checks datastore health.
+  Designed to be called in a tight loop by an ECS worker.
+
+  Measures: write latency, read latency, datastore health,
+  and workflow orchestration overhead.
+version: 1
+tags:
+  extension: "@webframp/bench-datastore"
+  category: "benchmark"
+inputs:
+  properties:
+    harness_model:
+      type: string
+      description: "Harness model instance name (e.g., bench-harness-w001)."
+    probe_model:
+      type: string
+      description: "Read probe model instance name (e.g., bench-probe-w001)."
+    iteration:
+      type: number
+      description: Iteration counter.
+  required:
+    - harness_model
+    - probe_model
+    - iteration
+jobs:
+  - name: write
+    description: Execute a model method (write operation with sync push).
+    steps:
+      - name: run-method
+        description: Run the harness execute method for one throughput iteration.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.harness_model }}
+          methodName: execute
+          inputs:
+            iteration: ${{ inputs.iteration }}
+
+  - name: read
+    description: Read back data to measure sync pull latency.
+    dependsOn:
+      - job: write
+        condition:
+          type: succeeded
+    steps:
+      - name: data-search
+        description: Search recent data scoped to the harness model.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.probe_model }}
+          methodName: execute
+          inputs:
+            run: "swamp data search --model ${{ inputs.harness_model }} --since 5m --limit 5 --json | wc -c"
+
+  - name: health
+    description: Datastore health check (round-trip latency).
+    dependsOn:
+      - job: read
+        condition:
+          type: succeeded
+    steps:
+      - name: status
+        description: Check datastore connectivity and latency.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.probe_model }}
+          methodName: execute
+          inputs:
+            run: "swamp datastore status --json"
