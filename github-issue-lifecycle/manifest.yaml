@@ -1,0 +1,83 @@
+manifestVersion: 1
+name: "@webframp/github-issue-lifecycle"
+version: "2026.07.24.1"
+description: |
+  GitHub issue lifecycle tracker for swamp. Drives issues from open through
+  triage, planning, implementation, PR linkage, and merge as versioned swamp
+  data — with optional label sync and comment posting back to the issue.
+
+  No external dependencies beyond the `gh` CLI. Designed for solo developers
+  or small teams working on GitHub repos who want observable, queryable issue
+  lifecycle data without leaving the terminal.
+
+  ## State Machine
+
+  ```
+  opened ──[start]──> triaging
+  triaging ──[triage]──> classified
+  classified ──[plan]──> planned
+  planned ──[iterate]──> planned  (feedback loop)
+  planned ──[approve]──> approved
+  approved ──[implement]──> implementing
+  implementing ──[link_pr]──> pr_open
+  pr_open ──[pr_merged]──> done
+  pr_open ──[pr_failed]──> pr_failed
+  pr_failed ──[link_pr]──> pr_open  (retry)
+  Any ──[close]──> closed
+  ```
+
+  ## Usage
+
+  ```bash
+  swamp extension pull @webframp/github-issue-lifecycle
+
+  # Create a lifecycle tracker for a repo
+  swamp model create @webframp/github-issue-lifecycle tracker \
+    --global repo=webframp/swamp-extensions
+
+  # Start tracking an issue
+  swamp model method run tracker start --input issue_number=42
+
+  # Triage it
+  swamp model method run tracker triage \
+    --input issue_number=42 --input kind=bug --input priority=high
+
+  # Plan implementation
+  swamp model method run tracker plan \
+    --input issue_number=42 \
+    --input summary="Fix pagination bug" \
+    --input steps='["Read current code","Fix off-by-one","Add test"]'
+
+  # Approve and implement
+  swamp model method run tracker approve --input issue_number=42
+  swamp model method run tracker implement --input issue_number=42
+
+  # Link a PR
+  swamp model method run tracker link_pr \
+    --input issue_number=42 \
+    --input pr_url=https://github.com/webframp/swamp-extensions/pull/100
+
+  # Record merge
+  swamp model method run tracker pr_merged --input issue_number=42
+  ```
+
+  ## Prerequisites
+
+  - `gh` CLI installed and authenticated (`gh auth login`)
+  - swamp initialized in the repository (`swamp init`)
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - github-issue-lifecycle/lifecycle.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - github
+  - issue-lifecycle
+  - sdlc
+  - triage
+additionalFiles:
+  - README.md
+  - LICENSE.md

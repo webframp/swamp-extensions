@@ -88,6 +88,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/rice-scoring`](rice-scoring/) | Agent-guided RICE (Reach, Impact, Confidence, Effort) prioritization framework producing ranked, versioned scorecards | None |
 | [`@webframp/swamp-adoption`](swamp-adoption/) | Interactive onboarding model that interviews users to map their domain onto swamp primitives and scaffolds extension designs | None |
 | [`@webframp/redmine`](redmine/) | Workflow-agnostic Redmine CRUD model — 26 methods covering issues, projects, statuses, trackers, users, custom fields, relations, time entries, and more | None |
+| [`@webframp/github-issue-lifecycle`](github-issue-lifecycle/) | GitHub issue lifecycle tracker — drives issues from triage through planning, implementation, PR linkage, and merge as versioned swamp data with optional label sync and comment posting | None (shells out to `gh`) |
 
 ## Workflow + Report Extensions
 
@@ -151,6 +152,7 @@ swamp extension pull @webframp/network
 swamp extension pull @webframp/terraform
 swamp extension pull @webframp/twitch
 swamp extension pull @webframp/redmine
+swamp extension pull @webframp/github-issue-lifecycle
 swamp extension pull @webframp/gitlab-review
 swamp extension pull @webframp/reddit/moderation
 swamp extension pull @webframp/discourse
