@@ -465,9 +465,14 @@ export function createSyncService(
       await sendBatchWrite(batch);
     }
 
+    // Register the partition before the metadata write — a phantom registry
+    // entry for an empty partition is harmless, but a populated partition
+    // missing from the registry would be invisible to full-sync pulls.
+    const partition = gsiFilePartition(entry.relPath);
+    await registerPartition(partition);
+
     // Metadata written last — readers discover newVersion only after all
     // chunks for that version exist in the table.
-    const partition = gsiFilePartition(entry.relPath);
     await retryable(() =>
       doc.send(
         new PutCommand({
@@ -487,9 +492,6 @@ export function createSyncService(
         }),
       )
     );
-
-    // Register the partition so full-sync pulls can discover it.
-    await registerPartition(partition);
 
     // Clean up old version's chunks asynchronously. This is best-effort —
     // stale chunks waste storage but never corrupt reads because readers
@@ -574,8 +576,10 @@ export function createSyncService(
     const state = await sidecar.read();
 
     // Watermark fast-path: if nothing has been pushed since our last pull,
-    // skip the partition queries entirely — applies to both scoped and unscoped.
-    if (state.lastPulledAt !== null) {
+    // skip the partition queries entirely. Only applies to unscoped pulls
+    // because lastPulledAt certifies "all partitions seen up to this time" —
+    // a scoped pull for partition A cannot certify partition B is current.
+    if (!scoped && state.lastPulledAt !== null) {
       const watermark = await retryable(() =>
         doc.send(
           new GetCommand({ TableName: tableName, Key: { ...SYNC_STATE_KEY } }),
@@ -638,9 +642,9 @@ export function createSyncService(
       changes++;
     }
 
-    if (!metadataOnly) {
+    if (!metadataOnly && !scoped) {
       await sidecar.setLastPulledAt(pullStartTime);
-      if (!scoped) await sidecar.setLazyPullActive(false);
+      await sidecar.setLazyPullActive(false);
     }
 
     return changes;

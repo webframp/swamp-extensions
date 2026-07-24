@@ -21,6 +21,4 @@ item count. Scoped pull/push read only the affected model's GSI partition
 **Changed:**
 - Raise `DIRTY_PATHS_CAP` from 200 to 1000, deferring the `bulkInvalidated`
   full-scan trigger for repos with many models.
-- Scoped pulls now update `lastPulledAt`, enabling the time-range optimization
-  for clients that only do scoped syncs.
 - Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).
