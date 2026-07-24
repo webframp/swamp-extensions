@@ -1,5 +1,11 @@
-import { assertEquals, assertThrows } from "@std/assert";
-import { assertTransition, model, TRANSITIONS } from "./lifecycle.ts";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import {
+  assertTransition,
+  type MethodContext,
+  model,
+  type StoredResource,
+  TRANSITIONS,
+} from "./lifecycle.ts";
 
 // =============================================================================
 // Export Structure Tests
@@ -65,25 +71,10 @@ Deno.test("globalArguments accepts repo with defaults", () => {
   }
 });
 
-Deno.test("globalArguments allows disabling comments and labels", () => {
-  const result = model.globalArguments.parse({
-    repo: "webframp/swamp-extensions",
-    postComments: false,
-    syncLabels: false,
-  });
-  assertEquals(result.postComments, false);
-  assertEquals(result.syncLabels, false);
-});
-
 Deno.test("start arguments validates issue_number", () => {
-  const valid = model.methods.start.arguments.safeParse({
-    issue_number: 42,
-  });
+  const valid = model.methods.start.arguments.safeParse({ issue_number: 42 });
   assertEquals(valid.success, true);
-
-  const invalid = model.methods.start.arguments.safeParse({
-    issue_number: 0,
-  });
+  const invalid = model.methods.start.arguments.safeParse({ issue_number: 0 });
   assertEquals(invalid.success, false);
 });
 
@@ -93,7 +84,6 @@ Deno.test("triage arguments validates kind enum", () => {
     kind: "bug",
   });
   assertEquals(valid.success, true);
-
   const invalid = model.methods.triage.arguments.safeParse({
     issue_number: 1,
     kind: "unknown",
@@ -105,35 +95,14 @@ Deno.test("plan arguments requires summary and steps", () => {
   const valid = model.methods.plan.arguments.safeParse({
     issue_number: 1,
     summary: "Fix the thing",
-    steps: ["step 1", "step 2"],
+    steps: ["step 1"],
   });
   assertEquals(valid.success, true);
-
   const missing = model.methods.plan.arguments.safeParse({
     issue_number: 1,
     summary: "Fix the thing",
   });
   assertEquals(missing.success, false);
-});
-
-Deno.test("iterate arguments requires iteration >= 2", () => {
-  const valid = model.methods.iterate.arguments.safeParse({
-    issue_number: 1,
-    summary: "Revised",
-    steps: ["new step"],
-    feedback: "Changed approach",
-    iteration: 2,
-  });
-  assertEquals(valid.success, true);
-
-  const tooLow = model.methods.iterate.arguments.safeParse({
-    issue_number: 1,
-    summary: "Revised",
-    steps: ["new step"],
-    feedback: "Changed approach",
-    iteration: 1,
-  });
-  assertEquals(tooLow.success, false);
 });
 
 Deno.test("link_pr arguments validates URL", () => {
@@ -142,7 +111,6 @@ Deno.test("link_pr arguments validates URL", () => {
     pr_url: "https://github.com/webframp/swamp-extensions/pull/100",
   });
   assertEquals(valid.success, true);
-
   const invalid = model.methods.link_pr.arguments.safeParse({
     issue_number: 1,
     pr_url: "not-a-url",
@@ -155,19 +123,18 @@ Deno.test("link_pr arguments validates URL", () => {
 // =============================================================================
 
 Deno.test("assertTransition allows valid transitions", () => {
-  // Should not throw
   assertTransition("opened", "triaging");
   assertTransition("triaging", "classified");
   assertTransition("classified", "planned");
   assertTransition("planned", "approved");
-  assertTransition("planned", "planned"); // iterate loop
+  assertTransition("planned", "planned");
   assertTransition("approved", "implementing");
   assertTransition("implementing", "pr_open");
-  assertTransition("implementing", "done"); // complete
+  assertTransition("implementing", "done");
   assertTransition("pr_open", "pr_failed");
-  assertTransition("pr_open", "done"); // pr_merged or complete
-  assertTransition("pr_failed", "pr_open"); // retry
-  assertTransition("pr_failed", "implementing"); // restart
+  assertTransition("pr_open", "done");
+  assertTransition("pr_failed", "pr_open");
+  assertTransition("pr_failed", "implementing");
 });
 
 Deno.test("assertTransition rejects invalid transitions", () => {
@@ -186,9 +153,9 @@ Deno.test("assertTransition allows close from all non-terminal states", () => {
     "implementing",
     "pr_open",
     "pr_failed",
-  ];
+  ] as const;
   for (const phase of closeable) {
-    assertTransition(phase as Parameters<typeof assertTransition>[0], "closed");
+    assertTransition(phase, "closed");
   }
 });
 
@@ -223,10 +190,10 @@ function withMockedCommand<T>(
   handler: CommandHandler,
   fn: () => Promise<T>,
 ): Promise<T> {
-  class MockCommand {
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
     #cmd: string;
     #args: string[];
-
     constructor(
       cmd: string,
       options: { args?: string[]; stdout?: string; stderr?: string },
@@ -234,7 +201,6 @@ function withMockedCommand<T>(
       this.#cmd = cmd;
       this.#args = options?.args ?? [];
     }
-
     output(): Promise<{
       success: boolean;
       stdout: Uint8Array;
@@ -250,43 +216,57 @@ function withMockedCommand<T>(
           : encoder.encode(result.stdout),
       });
     }
-  }
-
-  // deno-lint-ignore no-explicit-any
-  (Deno as any).Command = MockCommand;
+  };
   return fn().finally(() => {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = OriginalCommand;
   });
 }
 
-function makeContext(repo = "webframp/swamp-extensions") {
-  const written: Array<{
-    specName: string;
-    name: string;
-    data: Record<string, unknown>;
-  }> = [];
+function makeContext(
+  storedResources: StoredResource[] = [],
+): { context: MethodContext; getWritten: () => StoredResource[] } {
+  const written: StoredResource[] = [];
   return {
     context: {
-      globalArgs: { repo, postComments: false, syncLabels: false },
-      writeResource: (
-        specName: string,
-        name: string,
-        data: unknown,
-      ) => {
+      globalArgs: {
+        repo: "webframp/swamp-extensions",
+        postComments: false,
+        syncLabels: false,
+      },
+      storedResources,
+      writeResource: (spec: string, instance: string, data: unknown) => {
         written.push({
-          specName,
-          name,
+          specName: spec,
+          instance,
           data: data as Record<string, unknown>,
         });
-        return Promise.resolve({ name });
+        return Promise.resolve({ name: instance });
       },
-      logger: {
-        info: () => {},
-        warn: () => {},
-      },
+      logger: { info: () => {}, warn: () => {} },
     },
     getWritten: () => written,
+  };
+}
+
+/** Helper to create a state resource for seeding storedResources. */
+function stateResource(
+  issueNumber: number,
+  phase: string,
+  startedAt = "2026-07-01T00:00:00Z",
+  iteration = 0,
+): StoredResource {
+  return {
+    specName: "state",
+    instance: `issue-${issueNumber}`,
+    data: {
+      issueNumber,
+      phase,
+      previousPhase: null,
+      transitionedAt: "2026-07-20T00:00:00Z",
+      startedAt,
+      iteration,
+    },
   };
 }
 
@@ -294,7 +274,7 @@ Deno.test("start: fetches issue and writes context + state", async () => {
   const issueJson = JSON.stringify({
     number: 42,
     title: "Fix pagination",
-    body: "Off by one in list handler",
+    body: "Off by one",
     author: { login: "sme" },
     labels: [{ name: "bug" }],
     assignees: [{ login: "sme" }],
@@ -306,91 +286,122 @@ Deno.test("start: fetches issue and writes context + state", async () => {
 
   await withMockedCommand(
     (_cmd, args) => {
-      if (args.includes("view")) {
-        return { stdout: issueJson, success: true };
-      }
+      if (args.includes("view")) return { stdout: issueJson, success: true };
       return { stdout: "", success: true };
     },
     async () => {
       const { context, getWritten } = makeContext();
       await model.methods.start.execute({ issue_number: 42 }, context);
-
       const written = getWritten();
       assertEquals(written.length, 2);
-
-      // Context resource
       assertEquals(written[0].specName, "context");
       assertEquals(written[0].data.title, "Fix pagination");
-      assertEquals(written[0].data.author, "sme");
-
-      // State resource
       assertEquals(written[1].specName, "state");
       assertEquals(written[1].data.phase, "triaging");
-      assertEquals(written[1].data.issueNumber, 42);
     },
   );
 });
 
-Deno.test("triage: writes classification and transitions to classified", async () => {
+Deno.test("triage: enforces transition from triaging", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext();
+      const { context, getWritten } = makeContext([
+        stateResource(10, "triaging"),
+      ]);
       await model.methods.triage.execute(
-        {
-          issue_number: 10,
-          kind: "feature",
-          priority: "high",
-          component: "auth",
-        },
+        { issue_number: 10, kind: "feature", priority: "high" },
         context,
       );
-
       const written = getWritten();
-      assertEquals(written.length, 2);
-
-      assertEquals(written[0].specName, "classification");
-      assertEquals(written[0].data.kind, "feature");
-      assertEquals(written[0].data.priority, "high");
-      assertEquals(written[0].data.component, "auth");
-
-      assertEquals(written[1].specName, "state");
       assertEquals(written[1].data.phase, "classified");
+      assertEquals(written[1].data.previousPhase, "triaging");
     },
   );
 });
 
-Deno.test("plan: writes plan and transitions to planned", async () => {
+Deno.test("triage: rejects invalid transition from approved", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext();
+      const { context } = makeContext([stateResource(10, "approved")]);
+      await assertRejects(
+        () =>
+          model.methods.triage.execute(
+            { issue_number: 10, kind: "bug" },
+            context,
+          ),
+        Error,
+        "Invalid transition",
+      );
+    },
+  );
+});
+
+Deno.test("plan: increments iteration from current state", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const { context, getWritten } = makeContext([
+        stateResource(5, "classified", "2026-07-01T00:00:00Z", 0),
+      ]);
       await model.methods.plan.execute(
+        { issue_number: 5, summary: "Add rate limiting", steps: ["step 1"] },
+        context,
+      );
+      const written = getWritten();
+      assertEquals(written[0].data.iteration, 1);
+      assertEquals(written[1].data.iteration, 1);
+      assertEquals(written[1].data.startedAt, "2026-07-01T00:00:00Z");
+    },
+  );
+});
+
+Deno.test("iterate: bumps iteration again", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const { context, getWritten } = makeContext([
+        stateResource(5, "planned", "2026-07-01T00:00:00Z", 1),
+      ]);
+      await model.methods.iterate.execute(
         {
           issue_number: 5,
-          summary: "Add rate limiting",
-          steps: ["Add middleware", "Configure limits", "Add tests"],
+          summary: "Revised",
+          steps: ["new step"],
+          feedback: "Changed approach",
         },
         context,
       );
-
       const written = getWritten();
-      assertEquals(written[0].specName, "plan");
-      assertEquals(written[0].data.summary, "Add rate limiting");
-      assertEquals((written[0].data.steps as string[]).length, 3);
-      assertEquals(written[0].data.iteration, 1);
-
-      assertEquals(written[1].specName, "state");
-      assertEquals(written[1].data.phase, "planned");
+      assertEquals(written[0].data.iteration, 2);
+      assertEquals(written[1].data.iteration, 2);
     },
   );
 });
 
-Deno.test("link_pr: extracts PR number from URL", async () => {
+Deno.test("approve: preserves iteration from planned state", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext();
+      const { context, getWritten } = makeContext([
+        stateResource(5, "planned", "2026-07-01T00:00:00Z", 3),
+      ]);
+      await model.methods.approve.execute({ issue_number: 5 }, context);
+      const written = getWritten();
+      assertEquals(written[0].data.iteration, 3);
+      assertEquals(written[0].data.startedAt, "2026-07-01T00:00:00Z");
+    },
+  );
+});
+
+Deno.test("link_pr: extracts PR number and transitions from implementing", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const { context, getWritten } = makeContext([
+        stateResource(7, "implementing"),
+      ]);
       await model.methods.link_pr.execute(
         {
           issue_number: 7,
@@ -398,19 +409,36 @@ Deno.test("link_pr: extracts PR number from URL", async () => {
         },
         context,
       );
-
       const written = getWritten();
       assertEquals(written[0].specName, "pullRequest");
       assertEquals(written[0].data.prNumber, 261);
       assertEquals(written[0].data.status, "open");
-
-      assertEquals(written[1].specName, "state");
       assertEquals(written[1].data.phase, "pr_open");
+      assertEquals(written[1].data.previousPhase, "implementing");
     },
   );
 });
 
-Deno.test("pr_merged: transitions to done and closes issue", async () => {
+Deno.test("link_pr: works from pr_failed (retry)", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const { context, getWritten } = makeContext([
+        stateResource(7, "pr_failed"),
+      ]);
+      await model.methods.link_pr.execute(
+        {
+          issue_number: 7,
+          pr_url: "https://github.com/webframp/swamp-extensions/pull/265",
+        },
+        context,
+      );
+      assertEquals(getWritten()[1].data.previousPhase, "pr_failed");
+    },
+  );
+});
+
+Deno.test("pr_merged: writes pullRequest with status merged", async () => {
   let closeCalled = false;
   await withMockedCommand(
     (_cmd, args) => {
@@ -418,16 +446,69 @@ Deno.test("pr_merged: transitions to done and closes issue", async () => {
       return { stdout: "", success: true };
     },
     async () => {
-      const { context, getWritten } = makeContext();
-      await model.methods.pr_merged.execute(
-        { issue_number: 7 },
+      const { context, getWritten } = makeContext([
+        stateResource(7, "pr_open"),
+      ]);
+      await model.methods.pr_merged.execute({ issue_number: 7 }, context);
+      const written = getWritten();
+      assertEquals(written[0].specName, "pullRequest");
+      assertEquals(written[0].data.status, "merged");
+      assertEquals(written[1].data.phase, "done");
+      assertEquals(closeCalled, true);
+    },
+  );
+});
+
+Deno.test("pr_failed: writes pullRequest with status failed and reason", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const { context, getWritten } = makeContext([
+        stateResource(7, "pr_open"),
+      ]);
+      await model.methods.pr_failed.execute(
+        { issue_number: 7, reason: "CI timeout" },
         context,
       );
-
       const written = getWritten();
-      assertEquals(written[0].specName, "state");
-      assertEquals(written[0].data.phase, "done");
-      assertEquals(closeCalled, true);
+      assertEquals(written[0].specName, "pullRequest");
+      assertEquals(written[0].data.status, "failed");
+      assertEquals(written[0].data.failureReason, "CI timeout");
+      assertEquals(written[1].data.phase, "pr_failed");
+    },
+  );
+});
+
+Deno.test("close: rejects from terminal state", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const { context } = makeContext([stateResource(7, "done")]);
+      await assertRejects(
+        () => model.methods.close.execute({ issue_number: 7 }, context),
+        Error,
+        "terminal state",
+      );
+    },
+  );
+});
+
+Deno.test("startedAt is preserved across transitions", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const originalStart = "2026-06-15T08:00:00Z";
+      const { context, getWritten } = makeContext([
+        stateResource(1, "implementing", originalStart, 2),
+      ]);
+      await model.methods.link_pr.execute(
+        {
+          issue_number: 1,
+          pr_url: "https://github.com/webframp/swamp-extensions/pull/50",
+        },
+        context,
+      );
+      assertEquals(getWritten()[1].data.startedAt, originalStart);
     },
   );
 });

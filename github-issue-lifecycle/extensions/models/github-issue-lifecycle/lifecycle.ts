@@ -32,6 +32,7 @@ import { z } from "npm:zod@4.4.3";
 // Constants
 // =============================================================================
 
+/** Valid lifecycle phases. */
 const PHASES = [
   "opened",
   "triaging",
@@ -45,6 +46,7 @@ const PHASES = [
   "closed",
 ] as const;
 
+/** Lifecycle phase type — one of the valid phases in the state machine. */
 type Phase = typeof PHASES[number];
 
 /** Valid transitions: from → allowed targets */
@@ -63,6 +65,7 @@ const TRANSITIONS: Record<string, Phase[]> = {
 // Schemas
 // =============================================================================
 
+/** Schema for global arguments: repo, comment/label preferences. */
 const GlobalArgsSchema = z.object({
   repo: z.string()
     .describe(
@@ -74,10 +77,13 @@ const GlobalArgsSchema = z.object({
     .describe("Sync lifecycle phase as a GitHub label (lifecycle:<phase>)"),
 });
 
+/** Parsed global args type. */
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
+/** Zod schema for validating phase enum values. */
 const PhaseSchema = z.enum(PHASES);
 
+/** Schema for lifecycle state tracking. */
 const StateSchema = z.object({
   issueNumber: z.number().describe("GitHub issue number"),
   phase: PhaseSchema.describe("Current lifecycle phase"),
@@ -87,6 +93,10 @@ const StateSchema = z.object({
   iteration: z.number().describe("Plan iteration count"),
 });
 
+/** Parsed state data type. */
+type StateData = z.infer<typeof StateSchema>;
+
+/** Schema for issue context fetched from GitHub. */
 const ContextSchema = z.object({
   issueNumber: z.number(),
   title: z.string(),
@@ -102,6 +112,7 @@ const ContextSchema = z.object({
   fetchedAt: z.string(),
 });
 
+/** Schema for issue classification after triage. */
 const ClassificationSchema = z.object({
   issueNumber: z.number(),
   kind: z.enum(["bug", "feature", "chore", "security", "docs"]),
@@ -111,6 +122,7 @@ const ClassificationSchema = z.object({
   classifiedAt: z.string(),
 });
 
+/** Schema for implementation plans (versioned). */
 const PlanSchema = z.object({
   issueNumber: z.number(),
   iteration: z.number().describe("Plan version (increments on iterate)"),
@@ -121,6 +133,7 @@ const PlanSchema = z.object({
   createdAt: z.string(),
 });
 
+/** Schema for linked pull request metadata. */
 const PullRequestSchema = z.object({
   issueNumber: z.number(),
   prNumber: z.number().nullable().describe("PR number if parseable from URL"),
@@ -135,8 +148,17 @@ const PullRequestSchema = z.object({
 // Helpers
 // =============================================================================
 
+/** A single stored resource from the model's data. */
+interface StoredResource {
+  specName: string;
+  instance: string;
+  data: Record<string, unknown>;
+}
+
+/** Context provided to each method by the swamp runtime. */
 interface MethodContext {
   globalArgs: GlobalArgs;
+  storedResources: StoredResource[];
   writeResource: (
     spec: string,
     instance: string,
@@ -178,6 +200,39 @@ function assertTransition(current: Phase, target: Phase): void {
         `Allowed from ${current}: ${allowed?.join(", ") ?? "none"}`,
     );
   }
+}
+
+/** Read current state for an issue from stored resources. */
+function readCurrentState(
+  storedResources: StoredResource[],
+  issueNumber: number,
+): StateData | null {
+  const stateResources = storedResources.filter(
+    (r) =>
+      r.specName === "state" &&
+      (r.data as Record<string, unknown>).issueNumber === issueNumber,
+  );
+  if (stateResources.length === 0) return null;
+  return stateResources[stateResources.length - 1].data as StateData;
+}
+
+/**
+ * Require current state and validate transition. Returns the current state
+ * for propagating startedAt, iteration, etc.
+ */
+function requireStateAndTransition(
+  ctx: MethodContext,
+  issueNumber: number,
+  targetPhase: Phase,
+): StateData {
+  const current = readCurrentState(ctx.storedResources, issueNumber);
+  if (!current) {
+    throw new Error(
+      `No lifecycle state found for issue #${issueNumber}. Run 'start' first.`,
+    );
+  }
+  assertTransition(current.phase, targetPhase);
+  return current;
 }
 
 /** Post a comment on the GitHub issue if configured. */
@@ -224,28 +279,8 @@ async function syncLabel(
   try {
     await runGh(addArgs);
   } catch {
-    // Label operations are best-effort — don't fail the transition
+    // Label operations are best-effort
   }
-}
-
-/**
- * Read current state from the model's stored resources. Returns null if
- * no lifecycle has been started for this issue yet.
- */
-function readCurrentState(
-  storedResources: Array<{ specName: string; data: unknown }>,
-  issueNumber: number,
-): z.infer<typeof StateSchema> | null {
-  const stateResources = storedResources.filter(
-    (r) =>
-      r.specName === "state" &&
-      (r.data as Record<string, unknown>).issueNumber === issueNumber,
-  );
-  if (stateResources.length === 0) return null;
-  // Most recent (last written) wins
-  return stateResources[stateResources.length - 1].data as z.infer<
-    typeof StateSchema
-  >;
 }
 
 // =============================================================================
@@ -259,7 +294,15 @@ async function start(
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
 
-  // Fetch issue from GitHub
+  // start is special: it creates the initial state. If state already exists,
+  // we allow re-start only if not in terminal state.
+  const existing = readCurrentState(ctx.storedResources, args.issue_number);
+  if (existing && (existing.phase === "done" || existing.phase === "closed")) {
+    throw new Error(
+      `Issue #${args.issue_number} is already in terminal state: ${existing.phase}`,
+    );
+  }
+
   const issueData = await runGhJson([
     "issue",
     "view",
@@ -272,7 +315,6 @@ async function start(
 
   const now = new Date().toISOString();
 
-  // Store context
   const contextHandle = await ctx.writeResource(
     "context",
     `issue-${args.issue_number}`,
@@ -296,7 +338,6 @@ async function start(
     },
   );
 
-  // Store initial state
   const stateHandle = await ctx.writeResource(
     "state",
     `issue-${args.issue_number}`,
@@ -305,8 +346,8 @@ async function start(
       phase: "triaging",
       previousPhase: "opened",
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: existing?.startedAt ?? now,
+      iteration: existing?.iteration ?? 0,
     },
   );
 
@@ -336,9 +377,13 @@ async function triage(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "classified",
+  );
   const now = new Date().toISOString();
 
-  // Store classification
   const classHandle = await ctx.writeResource(
     "classification",
     `issue-${args.issue_number}`,
@@ -352,21 +397,19 @@ async function triage(
     },
   );
 
-  // Transition state
   const stateHandle = await ctx.writeResource(
     "state",
     `issue-${args.issue_number}`,
     {
       issueNumber: args.issue_number,
       phase: "classified",
-      previousPhase: "triaging",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
-  // Add kind label to the issue
   try {
     await runGh([
       "issue",
@@ -383,7 +426,7 @@ async function triage(
     repo,
     args.issue_number,
     "classified",
-    "triaging",
+    current.phase,
     syncLabels,
   );
   await postComment(
@@ -414,9 +457,9 @@ async function plan(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(ctx, args.issue_number, "planned");
   const now = new Date().toISOString();
-  // Iteration is tracked: first plan = 1, each iterate bumps it
-  const iteration = 1;
+  const iteration = current.iteration + 1;
 
   const planHandle = await ctx.writeResource(
     "plan",
@@ -438,9 +481,9 @@ async function plan(
     {
       issueNumber: args.issue_number,
       phase: "planned",
-      previousPhase: "classified",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
+      startedAt: current.startedAt,
       iteration,
     },
   );
@@ -449,7 +492,7 @@ async function plan(
     repo,
     args.issue_number,
     "planned",
-    "classified",
+    current.phase,
     syncLabels,
   );
   await postComment(
@@ -461,7 +504,8 @@ async function plan(
     postComments,
   );
 
-  ctx.logger.info("Plan created for issue #{num}", {
+  ctx.logger.info("Plan v{iter} created for issue #{num}", {
+    iter: iteration,
     num: args.issue_number,
   });
   return { dataHandles: [planHandle, stateHandle] };
@@ -475,19 +519,20 @@ async function iterate(
     steps: string[];
     risks?: string[];
     feedback: string;
-    iteration: number;
   },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments } = ctx.globalArgs;
+  const current = requireStateAndTransition(ctx, args.issue_number, "planned");
   const now = new Date().toISOString();
+  const iteration = current.iteration + 1;
 
   const planHandle = await ctx.writeResource(
     "plan",
-    `issue-${args.issue_number}-v${args.iteration}`,
+    `issue-${args.issue_number}-v${iteration}`,
     {
       issueNumber: args.issue_number,
-      iteration: args.iteration,
+      iteration,
       summary: args.summary,
       steps: args.steps,
       risks: args.risks,
@@ -502,22 +547,22 @@ async function iterate(
     {
       issueNumber: args.issue_number,
       phase: "planned",
-      previousPhase: "planned",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: args.iteration,
+      startedAt: current.startedAt,
+      iteration,
     },
   );
 
   await postComment(
     repo,
     args.issue_number,
-    `🔁 **Plan revised (v${args.iteration}):** ${args.summary}\n\nFeedback: ${args.feedback}`,
+    `🔁 **Plan revised (v${iteration}):** ${args.summary}\n\nFeedback: ${args.feedback}`,
     postComments,
   );
 
   ctx.logger.info("Plan iterated to v{iter} for issue #{num}", {
-    iter: args.iteration,
+    iter: iteration,
     num: args.issue_number,
   });
   return { dataHandles: [planHandle, stateHandle] };
@@ -529,6 +574,7 @@ async function approve(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(ctx, args.issue_number, "approved");
   const now = new Date().toISOString();
 
   const stateHandle = await ctx.writeResource(
@@ -537,10 +583,10 @@ async function approve(
     {
       issueNumber: args.issue_number,
       phase: "approved",
-      previousPhase: "planned",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
@@ -548,7 +594,7 @@ async function approve(
     repo,
     args.issue_number,
     "approved",
-    "planned",
+    current.phase,
     syncLabels,
   );
   await postComment(
@@ -570,6 +616,11 @@ async function implement(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "implementing",
+  );
   const now = new Date().toISOString();
 
   const stateHandle = await ctx.writeResource(
@@ -578,10 +629,10 @@ async function implement(
     {
       issueNumber: args.issue_number,
       phase: "implementing",
-      previousPhase: "approved",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
@@ -589,7 +640,7 @@ async function implement(
     repo,
     args.issue_number,
     "implementing",
-    "approved",
+    current.phase,
     syncLabels,
   );
   const branchNote = args.branch ? ` on branch \`${args.branch}\`` : "";
@@ -612,9 +663,13 @@ async function linkPr(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "pr_open",
+  );
   const now = new Date().toISOString();
 
-  // Try to extract PR number from URL
   const prMatch = args.pr_url.match(/\/pull\/(\d+)/);
   const prNumber = prMatch ? parseInt(prMatch[1], 10) : null;
 
@@ -637,10 +692,10 @@ async function linkPr(
     {
       issueNumber: args.issue_number,
       phase: "pr_open",
-      previousPhase: "implementing",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
@@ -648,7 +703,7 @@ async function linkPr(
     repo,
     args.issue_number,
     "pr_open",
-    "implementing",
+    current.phase,
     syncLabels,
   );
   await postComment(
@@ -668,7 +723,21 @@ async function prMerged(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(ctx, args.issue_number, "done");
   const now = new Date().toISOString();
+
+  // Update the pullRequest resource with merged status
+  const prHandle = await ctx.writeResource(
+    "pullRequest",
+    `issue-${args.issue_number}`,
+    {
+      issueNumber: args.issue_number,
+      prNumber: null,
+      prUrl: "",
+      linkedAt: now,
+      status: "merged",
+    },
+  );
 
   const stateHandle = await ctx.writeResource(
     "state",
@@ -676,14 +745,14 @@ async function prMerged(
     {
       issueNumber: args.issue_number,
       phase: "done",
-      previousPhase: "pr_open",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
-  await syncLabel(repo, args.issue_number, "done", "pr_open", syncLabels);
+  await syncLabel(repo, args.issue_number, "done", current.phase, syncLabels);
   await postComment(
     repo,
     args.issue_number,
@@ -691,7 +760,6 @@ async function prMerged(
     postComments,
   );
 
-  // Close the issue
   try {
     await runGh([
       "issue",
@@ -702,10 +770,10 @@ async function prMerged(
       "--reason",
       "completed",
     ]);
-  } catch { /* best-effort — may already be closed */ }
+  } catch { /* best-effort */ }
 
   ctx.logger.info("PR merged, issue #{num} done", { num: args.issue_number });
-  return { dataHandles: [stateHandle] };
+  return { dataHandles: [prHandle, stateHandle] };
 }
 
 /** pr_failed — record that the PR failed CI or review. */
@@ -714,7 +782,26 @@ async function prFailed(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "pr_failed",
+  );
   const now = new Date().toISOString();
+
+  // Update pullRequest resource with failed status
+  const prHandle = await ctx.writeResource(
+    "pullRequest",
+    `issue-${args.issue_number}`,
+    {
+      issueNumber: args.issue_number,
+      prNumber: null,
+      prUrl: "",
+      linkedAt: now,
+      status: "failed",
+      failureReason: args.reason,
+    },
+  );
 
   const stateHandle = await ctx.writeResource(
     "state",
@@ -722,10 +809,10 @@ async function prFailed(
     {
       issueNumber: args.issue_number,
       phase: "pr_failed",
-      previousPhase: "pr_open",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
@@ -733,7 +820,7 @@ async function prFailed(
     repo,
     args.issue_number,
     "pr_failed",
-    "pr_open",
+    current.phase,
     syncLabels,
   );
   const reason = args.reason ? `: ${args.reason}` : "";
@@ -745,7 +832,7 @@ async function prFailed(
   );
 
   ctx.logger.info("PR failed for issue #{num}", { num: args.issue_number });
-  return { dataHandles: [stateHandle] };
+  return { dataHandles: [prHandle, stateHandle] };
 }
 
 /** complete — mark done without the full PR ceremony. */
@@ -754,6 +841,7 @@ async function complete(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
+  const current = requireStateAndTransition(ctx, args.issue_number, "done");
   const now = new Date().toISOString();
 
   const stateHandle = await ctx.writeResource(
@@ -762,26 +850,15 @@ async function complete(
     {
       issueNumber: args.issue_number,
       phase: "done",
-      previousPhase: "implementing",
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
-  await syncLabel(
-    repo,
-    args.issue_number,
-    "done",
-    "implementing",
-    syncLabels,
-  );
-  await postComment(
-    repo,
-    args.issue_number,
-    `✅ **Complete.**`,
-    postComments,
-  );
+  await syncLabel(repo, args.issue_number, "done", current.phase, syncLabels);
+  await postComment(repo, args.issue_number, `✅ **Complete.**`, postComments);
 
   if (args.close_issue !== false) {
     try {
@@ -809,20 +886,36 @@ async function close(
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const now = new Date().toISOString();
 
+  // close is special: allowed from any non-terminal state
+  const current = readCurrentState(ctx.storedResources, args.issue_number);
+  if (current) {
+    if (current.phase === "done" || current.phase === "closed") {
+      throw new Error(
+        `Issue #${args.issue_number} is already in terminal state: ${current.phase}`,
+      );
+    }
+  }
+
   const stateHandle = await ctx.writeResource(
     "state",
     `issue-${args.issue_number}`,
     {
       issueNumber: args.issue_number,
       phase: "closed",
-      previousPhase: null,
+      previousPhase: current?.phase ?? null,
       transitionedAt: now,
-      startedAt: now,
-      iteration: 0,
+      startedAt: current?.startedAt ?? now,
+      iteration: current?.iteration ?? 0,
     },
   );
 
-  await syncLabel(repo, args.issue_number, "closed", null, syncLabels);
+  await syncLabel(
+    repo,
+    args.issue_number,
+    "closed",
+    current?.phase ?? null,
+    syncLabels,
+  );
   const reason = args.reason ? `: ${args.reason}` : "";
   await postComment(
     repo,
@@ -854,7 +947,6 @@ async function status(
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo } = ctx.globalArgs;
 
-  // Refresh issue from GitHub
   const issueData = await runGhJson([
     "issue",
     "view",
@@ -862,16 +954,16 @@ async function status(
     "--repo",
     repo,
     "--json",
-    "number,title,state,labels,assignees,updatedAt,url",
+    "number,title,body,state,labels,assignees,createdAt,updatedAt,url",
   ]) as Record<string, unknown>;
 
   const handle = await ctx.writeResource(
     "context",
-    `issue-${args.issue_number}-status`,
+    `issue-${args.issue_number}`,
     {
       issueNumber: args.issue_number,
       title: issueData.title ?? "",
-      body: "",
+      body: issueData.body ?? "",
       author: "",
       labels: ((issueData.labels as Array<{ name: string }>) ?? []).map(
         (l) => l.name,
@@ -880,10 +972,10 @@ async function status(
         (a) => a.login,
       ),
       state: issueData.state ?? "OPEN",
-      createdAt: "",
-      updatedAt: issueData.updatedAt ?? "",
+      createdAt: (issueData.createdAt as string) ?? "",
+      updatedAt: (issueData.updatedAt as string) ?? "",
       repo,
-      url: issueData.url ?? "",
+      url: (issueData.url as string) ?? "",
       fetchedAt: new Date().toISOString(),
     },
   );
@@ -898,7 +990,6 @@ async function status(
 // Model Export
 // =============================================================================
 
-/** GitHub Issue Lifecycle model. */
 export const model = {
   type: "@webframp/github-issue-lifecycle" as const,
   version: "2026.07.24.1",
@@ -975,7 +1066,6 @@ export const model = {
         steps: z.array(z.string()),
         risks: z.array(z.string()).optional(),
         feedback: z.string().describe("What changed and why"),
-        iteration: z.number().int().min(2),
       }),
       execute: iterate,
     },
@@ -1046,8 +1136,16 @@ export const model = {
   },
 };
 
-// Re-export helpers for testing
-export { assertTransition, TRANSITIONS };
-// Re-export unused helpers to avoid lint warnings
-export type { Phase };
+// Re-export for testing
+/** Validates a transition is allowed in the state machine. */
+export { assertTransition };
+/** Read current state for an issue from stored resources. */
 export { readCurrentState };
+/** Valid transition map. */
+export { TRANSITIONS };
+/** Method context interface for consumers. */
+export type { MethodContext };
+/** Lifecycle phase type. */
+export type { Phase };
+/** Stored resource shape. */
+export type { StoredResource };
