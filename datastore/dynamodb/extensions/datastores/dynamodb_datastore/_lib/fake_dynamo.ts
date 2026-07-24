@@ -149,6 +149,11 @@ export class FakeDynamoTable {
         candidates = candidates.filter((it) =>
           (it.gsi1sk as string).startsWith(values[":prefix"] as string)
         );
+      } else if (values[":since"] !== undefined) {
+        // Range condition: gsi1sk > :since
+        candidates = candidates.filter((it) =>
+          (it.gsi1sk as string) > (values[":since"] as string)
+        );
       }
       candidates.sort((a, b) => (a.gsi1sk as string).localeCompare(b.gsi1sk));
     } else {
