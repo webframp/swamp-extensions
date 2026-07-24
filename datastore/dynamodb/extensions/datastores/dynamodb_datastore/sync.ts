@@ -299,11 +299,20 @@ export function createSyncService(
   }
 
   /** Registers a GSI partition key in the PARTITIONS registry so that
-   * full-sync pulls can discover all model partitions without a table scan. */
+   * full-sync pulls can discover all model partitions without a table scan.
+   * Uses an in-memory set to skip redundant DynamoDB reads for partitions
+   * already registered in this process lifetime. */
+  const knownRegisteredPartitions = new Set<string>();
+
+  /** Max partitions tracked in the registry. At ~50 bytes per partition key,
+   * 4000 entries stays well under DynamoDB's 400KB item limit. */
+  const MAX_REGISTRY_PARTITIONS = 4000;
+
   async function registerPartition(partition: string): Promise<void> {
-    // Read-modify-write the partition registry. In high-concurrency scenarios
-    // this could race, but duplicates are harmless (Set-based dedup on read)
-    // and the registry is only consulted during rare full syncs.
+    // Fast path: skip the DynamoDB read if we've already registered this
+    // partition in the current process.
+    if (knownRegisteredPartitions.has(partition)) return;
+
     const result = await retryable(() =>
       doc.send(
         new GetCommand({
@@ -314,7 +323,16 @@ export function createSyncService(
     );
     const existing: string[] = (result.Item?.partitions as string[]) ?? [];
     const partitionSet = new Set(existing);
-    if (partitionSet.has(partition)) return;
+    if (partitionSet.has(partition)) {
+      knownRegisteredPartitions.add(partition);
+      return;
+    }
+    if (partitionSet.size >= MAX_REGISTRY_PARTITIONS) {
+      // Registry full — skip. Scoped pulls still work; only full-sync misses
+      // this partition until old entries are pruned.
+      knownRegisteredPartitions.add(partition);
+      return;
+    }
     partitionSet.add(partition);
     await retryable(() =>
       doc.send(
@@ -328,6 +346,7 @@ export function createSyncService(
         }),
       )
     );
+    knownRegisteredPartitions.add(partition);
   }
 
   /** Sends a BatchWriteCommand and retries any UnprocessedItems with backoff —
@@ -546,7 +565,9 @@ export function createSyncService(
     if (metadataOnly) await sidecar.setLazyPullActive(true);
     const state = await sidecar.read();
 
-    if (!scoped && state.lastPulledAt !== null) {
+    // Watermark fast-path: if nothing has been pushed since our last pull,
+    // skip the partition queries entirely — applies to both scoped and unscoped.
+    if (state.lastPulledAt !== null) {
       const watermark = await retryable(() =>
         doc.send(
           new GetCommand({ TableName: tableName, Key: { ...SYNC_STATE_KEY } }),
@@ -587,12 +608,6 @@ export function createSyncService(
         } catch (err) {
           if (!(err instanceof Deno.errors.NotFound)) throw err;
         }
-        continue;
-      }
-      if (
-        !scoped && state.lastPulledAt !== null &&
-        meta.updatedAt < new Date(state.lastPulledAt)
-      ) {
         continue;
       }
       const localPath = `${cachePath}/${relPath}`;

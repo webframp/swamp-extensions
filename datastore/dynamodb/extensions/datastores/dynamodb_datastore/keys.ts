@@ -73,15 +73,16 @@ const GSI_SK_SEP = "|";
  * Model data (`data/<modelType>/<modelId>/...`) maps to `FILE#<modelType>/<modelId>`.
  * System data (other DATASTORE_SUBDIRS) maps to `FILE#_system/<subdir>`.
  *
- * This partitioning ensures pull/push operations for a single model only read
- * that model's GSI partition — O(items changed) instead of O(total items). */
+ * Invariant: paths under `data/` MUST have at least 3 segments
+ * (`data/<modelType>/<modelId>`). Paths with fewer segments are treated as
+ * system data to avoid silent mis-routing. */
 export function gsiFilePartition(relPath: string): string {
   const parts = relPath.split("/");
   if (parts[0] === "data" && parts.length >= 3) {
     // data/<modelType>/<modelId>/... → FILE#<modelType>/<modelId>
     return `FILE#${parts[1]}/${parts[2]}`;
   }
-  // System subdirs (definitions-evaluated, workflows-evaluated, etc.)
+  // System subdirs, or malformed data/ paths with < 3 segments
   return `FILE#_system/${parts[0]}`;
 }
 
