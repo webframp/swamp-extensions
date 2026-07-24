@@ -68,6 +68,7 @@ const TRANSITIONS: Record<string, Phase[]> = {
 /** Schema for global arguments: repo, comment/label preferences. */
 const GlobalArgsSchema = z.object({
   repo: z.string()
+    .regex(/^[\w.-]+\/[\w.-]+$/, "repo must be in owner/name format")
     .describe(
       "GitHub repo in owner/name format (e.g., webframp/swamp-extensions)",
     ),
@@ -351,7 +352,13 @@ async function start(
     },
   );
 
-  await syncLabel(repo, args.issue_number, "triaging", null, syncLabels);
+  await syncLabel(
+    repo,
+    args.issue_number,
+    "triaging",
+    existing?.phase ?? null,
+    syncLabels,
+  );
   await postComment(
     repo,
     args.issue_number,
@@ -726,15 +733,21 @@ async function prMerged(
   const current = requireStateAndTransition(ctx, args.issue_number, "done");
   const now = new Date().toISOString();
 
-  // Update the pullRequest resource with merged status
+  // Update the pullRequest resource with merged status, carrying forward URL/number
+  const existingPr = ctx.storedResources.findLast(
+    (r) =>
+      r.specName === "pullRequest" &&
+      (r.data as Record<string, unknown>).issueNumber === args.issue_number,
+  );
   const prHandle = await ctx.writeResource(
     "pullRequest",
     `issue-${args.issue_number}`,
     {
       issueNumber: args.issue_number,
-      prNumber: null,
-      prUrl: "",
-      linkedAt: now,
+      prNumber: (existingPr?.data?.prNumber as number | null) ?? null,
+      prUrl: (existingPr?.data?.prUrl as string) ?? "",
+      branch: existingPr?.data?.branch as string | undefined,
+      linkedAt: (existingPr?.data?.linkedAt as string) ?? now,
       status: "merged",
     },
   );
@@ -789,15 +802,21 @@ async function prFailed(
   );
   const now = new Date().toISOString();
 
-  // Update pullRequest resource with failed status
+  // Update pullRequest resource with failed status, carrying forward URL/number
+  const existingPr = ctx.storedResources.findLast(
+    (r) =>
+      r.specName === "pullRequest" &&
+      (r.data as Record<string, unknown>).issueNumber === args.issue_number,
+  );
   const prHandle = await ctx.writeResource(
     "pullRequest",
     `issue-${args.issue_number}`,
     {
       issueNumber: args.issue_number,
-      prNumber: null,
-      prUrl: "",
-      linkedAt: now,
+      prNumber: (existingPr?.data?.prNumber as number | null) ?? null,
+      prUrl: (existingPr?.data?.prUrl as string) ?? "",
+      branch: existingPr?.data?.branch as string | undefined,
+      linkedAt: (existingPr?.data?.linkedAt as string) ?? now,
       status: "failed",
       failureReason: args.reason,
     },
@@ -886,14 +905,18 @@ async function close(
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const now = new Date().toISOString();
 
-  // close is special: allowed from any non-terminal state
+  // close is special: allowed from any non-terminal state, but requires
+  // that a lifecycle has been started.
   const current = readCurrentState(ctx.storedResources, args.issue_number);
-  if (current) {
-    if (current.phase === "done" || current.phase === "closed") {
-      throw new Error(
-        `Issue #${args.issue_number} is already in terminal state: ${current.phase}`,
-      );
-    }
+  if (!current) {
+    throw new Error(
+      `No lifecycle state found for issue #${args.issue_number}. Run 'start' first.`,
+    );
+  }
+  if (current.phase === "done" || current.phase === "closed") {
+    throw new Error(
+      `Issue #${args.issue_number} is already in terminal state: ${current.phase}`,
+    );
   }
 
   const stateHandle = await ctx.writeResource(
@@ -902,10 +925,10 @@ async function close(
     {
       issueNumber: args.issue_number,
       phase: "closed",
-      previousPhase: current?.phase ?? null,
+      previousPhase: current.phase,
       transitionedAt: now,
-      startedAt: current?.startedAt ?? now,
-      iteration: current?.iteration ?? 0,
+      startedAt: current.startedAt,
+      iteration: current.iteration,
     },
   );
 
@@ -913,7 +936,7 @@ async function close(
     repo,
     args.issue_number,
     "closed",
-    current?.phase ?? null,
+    current.phase,
     syncLabels,
   );
   const reason = args.reason ? `: ${args.reason}` : "";
@@ -954,7 +977,7 @@ async function status(
     "--repo",
     repo,
     "--json",
-    "number,title,body,state,labels,assignees,createdAt,updatedAt,url",
+    "number,title,body,author,state,labels,assignees,createdAt,updatedAt,url",
   ]) as Record<string, unknown>;
 
   const handle = await ctx.writeResource(
@@ -964,7 +987,7 @@ async function status(
       issueNumber: args.issue_number,
       title: issueData.title ?? "",
       body: issueData.body ?? "",
-      author: "",
+      author: (issueData.author as Record<string, string>)?.login ?? "",
       labels: ((issueData.labels as Array<{ name: string }>) ?? []).map(
         (l) => l.name,
       ),

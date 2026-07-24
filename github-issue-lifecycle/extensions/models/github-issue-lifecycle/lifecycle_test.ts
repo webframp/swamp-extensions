@@ -438,7 +438,7 @@ Deno.test("link_pr: works from pr_failed (retry)", async () => {
   );
 });
 
-Deno.test("pr_merged: writes pullRequest with status merged", async () => {
+Deno.test("pr_merged: writes pullRequest with status merged, preserves URL", async () => {
   let closeCalled = false;
   await withMockedCommand(
     (_cmd, args) => {
@@ -446,13 +446,31 @@ Deno.test("pr_merged: writes pullRequest with status merged", async () => {
       return { stdout: "", success: true };
     },
     async () => {
+      const prResource: StoredResource = {
+        specName: "pullRequest",
+        instance: "issue-7",
+        data: {
+          issueNumber: 7,
+          prNumber: 261,
+          prUrl: "https://github.com/webframp/swamp-extensions/pull/261",
+          branch: "fix/thing",
+          linkedAt: "2026-07-20T00:00:00Z",
+          status: "open",
+        },
+      };
       const { context, getWritten } = makeContext([
         stateResource(7, "pr_open"),
+        prResource,
       ]);
       await model.methods.pr_merged.execute({ issue_number: 7 }, context);
       const written = getWritten();
       assertEquals(written[0].specName, "pullRequest");
       assertEquals(written[0].data.status, "merged");
+      assertEquals(written[0].data.prNumber, 261);
+      assertEquals(
+        written[0].data.prUrl,
+        "https://github.com/webframp/swamp-extensions/pull/261",
+      );
       assertEquals(written[1].data.phase, "done");
       assertEquals(closeCalled, true);
     },
@@ -488,6 +506,20 @@ Deno.test("close: rejects from terminal state", async () => {
         () => model.methods.close.execute({ issue_number: 7 }, context),
         Error,
         "terminal state",
+      );
+    },
+  );
+});
+
+Deno.test("close: rejects when no lifecycle started", async () => {
+  await withMockedCommand(
+    () => ({ stdout: "", success: true }),
+    async () => {
+      const { context } = makeContext([]);
+      await assertRejects(
+        () => model.methods.close.execute({ issue_number: 99 }, context),
+        Error,
+        "No lifecycle state found",
       );
     },
   );
