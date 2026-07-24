@@ -7,7 +7,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
-} from "npm:@aws-sdk/lib-dynamodb@3.1091.0";
+} from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 import { Sidecar } from "./sidecar.ts";
 import { retryable } from "./_lib/retry.ts";
 import { reassembleChunks, splitIntoChunks } from "./chunking.ts";

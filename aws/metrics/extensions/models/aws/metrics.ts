@@ -18,7 +18,7 @@ import {
   GetMetricDataCommand,
   GetMetricStatisticsCommand,
   ListMetricsCommand,
-} from "npm:@aws-sdk/client-cloudwatch@3.1091.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1094.0";
 
 /** Local type for SDK dimension responses where Name and Value are optional in list responses. */
 interface AwsDimension {
@@ -253,7 +253,7 @@ function findAnomalies(
  */
 export const model = {
   type: "@webframp/aws/metrics",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

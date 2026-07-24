@@ -5,7 +5,9 @@
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@systeminit/swamp-testing@0.20260504.10": "0.20260504.10",
     "npm:@aws-sdk/client-dynamodb@3.1091.0": "3.1091.0",
-    "npm:@aws-sdk/lib-dynamodb@3.1091.0": "3.1091.0_@aws-sdk+client-dynamodb@3.1091.0",
+    "npm:@aws-sdk/client-dynamodb@3.1094.0": "3.1094.0",
+    "npm:@aws-sdk/lib-dynamodb@3.1091.0": "3.1091.0_@aws-sdk+client-dynamodb@3.1094.0",
+    "npm:@aws-sdk/lib-dynamodb@3.1094.0": "3.1094.0_@aws-sdk+client-dynamodb@3.1094.0",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
   },
@@ -43,8 +45,23 @@
         "tslib"
       ]
     },
-    "@aws-sdk/core@3.975.3": {
-      "integrity": "sha512-7ur3kCKuvPLqlsZ2XlvnNBVQ7KkpSu6Y6dOTwSPHLrFpTEfZM8isLBJc4cgv96WB7GifeVM436mpycwxBd2vEA==",
+    "@aws-sdk/client-dynamodb@3.1094.0": {
+      "integrity": "sha512-1tziKiymJs/MOOTcIIoNRO2o3EuwhXstc8K05QHf7DtdSlJz8gedxWgyXGINqcp8bWaNjGnoYZIA35yf66I0EA==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/dynamodb-codec",
+        "@aws-sdk/middleware-endpoint-discovery",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/core@3.976.0": {
+      "integrity": "sha512-0cjRaEdlVoOrsNb9pP5q1Syyc8pXw5xSj2Np2ryReRTr9FppIIRVSdZK4lbnfmc2Hvgux/xBOUU6baB7z8//uA==",
       "dependencies": [
         "@aws-sdk/types",
         "@aws-sdk/xml-builder",
@@ -56,8 +73,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-env@3.972.59": {
-      "integrity": "sha512-Ny5e4Mfh3QPmiAc0AiUe+cbTXDlxkU3Rc+EpWOfyWeWEy6yp7Fa1KmfNeCc+1a8by9zQ9gtohmiQUkMPScF3ng==",
+    "@aws-sdk/credential-provider-env@3.972.60": {
+      "integrity": "sha512-BAkxdoe7tpDDqCghGpuOeHQRbm/2znVvOQm0AvpQbA2tbfMN46doN4zx65fv85ImP3KADwc2zQPmbrlI9MPfMg==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/types",
@@ -66,8 +83,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-http@3.972.61": {
-      "integrity": "sha512-8jAjgStl5Ytq4+HF3X/9f+EmRinaRbGRRtQGktlPfBRVx73H+R1y48vIeXerQtYGFaUqkEp3fT6jP854rVO2yQ==",
+    "@aws-sdk/credential-provider-http@3.972.62": {
+      "integrity": "sha512-g/0fGqKTb9xpKdd9AtpmV5Eo3DFKbnkpA2+w0peISSlu7NfAoWOuYBFxsu+yWBtxU89ka55ezoZBCbFaS8pjYQ==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/types",
@@ -78,8 +95,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-ini@3.973.4": {
-      "integrity": "sha512-e6ZvVsj90aRALf1kHP+J4iqC1496ZpVgqI/+u0LJ5HL7q7ATauGy4gdDvRCP13L1pN/fMiZLah162PGIYkbUVQ==",
+    "@aws-sdk/credential-provider-ini@3.973.5": {
+      "integrity": "sha512-ylubazcRfq2TVus/qXucSXeC42Qdjp5HQxTu68K/BsdMiZlcSLD1zkpoCgApXZX1Y6YJhtGGs7ZHhO/GuIgBlw==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-env",
@@ -96,8 +113,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-login@3.972.66": {
-      "integrity": "sha512-g2fsqm87r/nKthLZ0VkkDBElkGg0PvSa8d97HQ6EilMbJTZ6hxa8FxkSZyJfgPfFdZn0TTmkOffQmTSUcAHIng==",
+    "@aws-sdk/credential-provider-login@3.972.67": {
+      "integrity": "sha512-CCygIKJ9YbI3n84OClSaSppkgKKHVj2TGT33c6FRORZrYNZQ1POmD+ip0FLYokiJAK7sSdc3YVkOsBm90oxWMQ==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/nested-clients",
@@ -107,8 +124,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-node@3.972.70": {
-      "integrity": "sha512-3xzvkGdykBunxqh8WudmUpSyLWvIhfI6aBQo1b5rb3mDO5mNLadK+0hiI0qBQBMVynJbfLO+Ajy9dztMwy9O8w==",
+    "@aws-sdk/credential-provider-node@3.972.71": {
+      "integrity": "sha512-HIg7Q2osBzajQwL+1Vkyh2E7Gim3eTNb9RHIsOxDGjW0eZg4oEKtRs5sioCnc73ilhaOm4gX2lHVF8J7+nt2rg==",
       "dependencies": [
         "@aws-sdk/credential-provider-env",
         "@aws-sdk/credential-provider-http",
@@ -123,8 +140,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-process@3.972.59": {
-      "integrity": "sha512-DlZF2/MhLlatDdlrIy3CUCpfdbLrKx+3SMjVo+WyHnPpwzkc/M3vwAHw4OVJf7DMvO+4vfRqSCMc/E9I1auN0g==",
+    "@aws-sdk/credential-provider-process@3.972.60": {
+      "integrity": "sha512-YIo3f99hM43QdYG8hDzwGemnR/pU95b0kramqSJUTleCqaB7+HwKf7YZFHqvOgTqZTPx/mRmNIqoDRr3U0Z3Tw==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/types",
@@ -133,8 +150,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-sso@3.973.3": {
-      "integrity": "sha512-hmdDHoy2G5Es2e8IgelNMYUuSQI6uCIAKZMJ2u2PdKDhxvbk1uWD/g4+R7R5c/tJfKEB1+KjjWiaoCr/S+ZTiQ==",
+    "@aws-sdk/credential-provider-sso@3.973.4": {
+      "integrity": "sha512-BPdmL8sSBOCv4ngZ+3LHxyc3CNqDCEK37CHioCk7zGrTMY5sUtkH8q+o6qA80nn6w3/fyBPGNE7OIRlmoOxRQA==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/nested-clients",
@@ -145,8 +162,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-web-identity@3.972.65": {
-      "integrity": "sha512-gHQb/Kt0chjk/JQDa/GJDqmAvEuVn8n7z10wK2h0LFM9TUDRkohgOO4aEF+s2sBLM0br7Cl5W6P7phgjrrJvLQ==",
+    "@aws-sdk/credential-provider-web-identity@3.972.66": {
+      "integrity": "sha512-kSAziJboOmZmsR9/MTbiNjowl2BPes1bQuJpne4qAZ62ubi8fjfr/aupJSQje6udBoYxXTQbsL0e0kby2la3ng==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/nested-clients",
@@ -156,8 +173,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/dynamodb-codec@3.973.33": {
-      "integrity": "sha512-/awY2mG1zvTy22j4ryZL8jfWQdcuppsw17Mxw1tjG92hO+52JoFZaaTWrJIQp066t/aj4JC4II29UJb6g644vA==",
+    "@aws-sdk/dynamodb-codec@3.973.34": {
+      "integrity": "sha512-/7kfOufSN9t/g7OR6gNpCsSj/4nR7WdRnd54qSlnRuzQN7JmOz6ulJSwrUpqkDk/mkFgQqUIFBfnAZ0OTw2pxw==",
       "dependencies": [
         "@aws-sdk/core",
         "@smithy/core",
@@ -172,10 +189,21 @@
         "tslib"
       ]
     },
-    "@aws-sdk/lib-dynamodb@3.1091.0_@aws-sdk+client-dynamodb@3.1091.0": {
+    "@aws-sdk/lib-dynamodb@3.1091.0_@aws-sdk+client-dynamodb@3.1094.0": {
       "integrity": "sha512-PV9SKp5Kwi/IaqejwPcJXBaY3A13g7XX4IYTNzVuq44wB2ffHw7VrarugLCaQSPFGbIlEmfkZNbcLrU3sv9MKA==",
       "dependencies": [
-        "@aws-sdk/client-dynamodb",
+        "@aws-sdk/client-dynamodb@3.1094.0",
+        "@aws-sdk/core",
+        "@aws-sdk/util-dynamodb",
+        "@smithy/core",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/lib-dynamodb@3.1094.0_@aws-sdk+client-dynamodb@3.1094.0": {
+      "integrity": "sha512-9/qH4PLnzE/83h7mM3DXwfktB6PxcWdrciqkBCABA8QMQUz2AC/lOCuehakDCFciDQz2RehC6hZT5DK8SSDqmA==",
+      "dependencies": [
+        "@aws-sdk/client-dynamodb@3.1094.0",
         "@aws-sdk/core",
         "@aws-sdk/util-dynamodb",
         "@smithy/core",
@@ -193,8 +221,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/nested-clients@3.997.33": {
-      "integrity": "sha512-dVZOroI/r3/ENvqNGgjMPul+jjlz9GddfVusgTXlVjfZj5isibOxecLkGQbRPp8XOuX+RAfjXLFgPkD1JS5xrw==",
+    "@aws-sdk/nested-clients@3.997.34": {
+      "integrity": "sha512-Y9REVrSwmLM+Qy6sZJ7ofMC2S3Hr3tPP/4CzL5U1olPP7OGoF+6+Px0E49cVQBtSxJtyeLJMf0UaBErfeSahAA==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/signature-v4-multi-region",
@@ -215,8 +243,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/token-providers@3.1088.0": {
-      "integrity": "sha512-4ObatWt2qpJg5FBk4LOOKrTQYzaqeewAtdO3r9ZO8lH9YqLtpTzLyIdy0mJ+nVdfYOnqISkKNfmzP22bNDhwyw==",
+    "@aws-sdk/token-providers@3.1092.0": {
+      "integrity": "sha512-hBYUAr6iBLNFcsiWTgtBb0stdSw39VOUq4Sp4A5caCNf66BAZplWN4FleKrVpJx5li2YgdnK2DqoFSMWC642FQ==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/nested-clients",
@@ -233,10 +261,10 @@
         "tslib"
       ]
     },
-    "@aws-sdk/util-dynamodb@3.996.7_@aws-sdk+client-dynamodb@3.1091.0": {
+    "@aws-sdk/util-dynamodb@3.996.7_@aws-sdk+client-dynamodb@3.1094.0": {
       "integrity": "sha512-v+WJASG9yaW8qNM7pNSgH1PBYz5mVTf7gzKPi0NqGjLlaCtPdk6EjM1lmv03egA07iXUw6OToGYfW2w8D3kBrg==",
       "dependencies": [
-        "@aws-sdk/client-dynamodb",
+        "@aws-sdk/client-dynamodb@3.1094.0",
         "tslib"
       ]
     },

@@ -1,10 +1,12 @@
-## 2026.07.20.1
+## 2026.07.24.1
 
-**Changed:** Refreshed dependency pins to the latest published releases. No
-behavioral changes to the incident-investigation or morning-pulse workflows and
-reports.
-
-**Upgrade note:** Bumps the eight `@webframp/aws/*` model dependencies (logs,
-metrics, alarms, traces, inventory, networking, alarm-investigation,
-cost-explorer) 2026.05.20.1 → 2026.07.18.1, and `@webframp/github` 2026.05.14.1 →
-2026.07.16.1, pulled automatically with this extension.
+**Changed:** Bump dependency pins to latest published versions:
+- @webframp/aws/logs 2026.07.18.1 → 2026.07.21.1
+- @webframp/aws/metrics 2026.07.18.1 → 2026.07.21.1
+- @webframp/aws/alarms 2026.07.18.1 → 2026.07.21.1
+- @webframp/aws/traces 2026.07.18.1 → 2026.07.21.1
+- @webframp/aws/inventory 2026.07.18.1 → 2026.07.21.1
+- @webframp/aws/networking 2026.07.18.1 → 2026.07.21.1
+- @webframp/aws/alarm-investigation 2026.07.18.1 → 2026.07.21.1
+- @webframp/aws/cost-explorer 2026.07.18.1 → 2026.07.21.1
+- @webframp/github 2026.07.16.1 → 2026.07.18.1

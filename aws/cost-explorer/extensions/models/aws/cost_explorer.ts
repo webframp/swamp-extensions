@@ -13,7 +13,7 @@ import { z } from "npm:zod@4.4.3";
 import {
   CostExplorerClient,
   GetCostAndUsageCommand,
-} from "npm:@aws-sdk/client-cost-explorer@3.1091.0";
+} from "npm:@aws-sdk/client-cost-explorer@3.1094.0";
 
 // =============================================================================
 // Schemas
@@ -110,7 +110,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

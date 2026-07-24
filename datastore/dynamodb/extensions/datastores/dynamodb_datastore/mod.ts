@@ -8,8 +8,8 @@ import {
   type DynamoDBClient,
   ResourceNotFoundException,
   UpdateTimeToLiveCommand,
-} from "npm:@aws-sdk/client-dynamodb@3.1091.0";
-import type { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1091.0";
+} from "npm:@aws-sdk/client-dynamodb@3.1094.0";
+import type { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 import { createClients } from "./client.ts";
 import {
   createDynamoLock,

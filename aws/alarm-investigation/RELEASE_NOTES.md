@@ -1,5 +1,3 @@
-## 2026.07.21.1
+## 2026.07.24.1
 
-**Changed:** Bumped AWS SDK dependencies to 3.1091.0 (from 3.1090.0).
-
-**Upgrade note:** No behavioral changes. Routine dependency maintenance.
+**Changed:** Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).

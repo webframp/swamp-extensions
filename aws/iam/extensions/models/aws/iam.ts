@@ -22,12 +22,12 @@ import {
   ListRolesCommand,
   ListUserPoliciesCommand,
   ListUsersCommand,
-} from "npm:@aws-sdk/client-iam@3.1091.0";
+} from "npm:@aws-sdk/client-iam@3.1094.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1091.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1091.0";
+} from "npm:@aws-sdk/client-sts@3.1094.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1094.0";
 
 // =============================================================================
 // Schemas
@@ -313,7 +313,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

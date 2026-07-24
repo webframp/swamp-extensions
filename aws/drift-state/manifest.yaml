@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/drift-state"
-version: "2026.07.20.1"
+version: "2026.07.24.1"
 description: |
   Unified drift detection surface that composes observations from existing
   models (adopt, inventory, terraform, config, dns) into queryable versioned
@@ -81,5 +81,5 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/aws/adopt@2026.07.18.1"
-  - "@webframp/aws/inventory@2026.07.18.1"
+  - "@webframp/aws/adopt@2026.07.21.1"
+  - "@webframp/aws/inventory@2026.07.21.1"
