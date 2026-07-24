@@ -1,0 +1,65 @@
+id: a9b8c7d6-e5f4-3210-fedc-ba0987654321
+name: "@webframp/bench-write-stress"
+description: |
+  Single iteration of the write-stress benchmark. Writes a payload of
+  configured size to the worker's model, then reads it back to verify.
+  Designed to be called in a tight loop with no sleep between iterations.
+
+  Payload sizes rotate: small (100B), medium (10KB), large (500KB+).
+  Large payloads exercise the chunked storage path.
+
+  Each worker must have its own harness instance (bench-harness-w{NNN}) and
+  read probe (bench-probe-w{NNN}) created via the harness setup method.
+
+  Measures: write throughput, chunk handling, version accumulation,
+  read-after-write latency, sustained single-writer performance.
+version: 1
+tags:
+  extension: "@webframp/bench-datastore"
+  category: "benchmark"
+inputs:
+  properties:
+    harness_model:
+      type: string
+      description: "Harness model instance name (e.g., bench-harness-w001)."
+    probe_model:
+      type: string
+      description: "Read probe model instance name (e.g., bench-probe-w001)."
+    iteration:
+      type: number
+      description: Iteration counter.
+    payload_size:
+      type: string
+      description: "Payload size class: small, medium, or large. Defaults to rotating."
+      enum: ["small", "medium", "large"]
+  required:
+    - harness_model
+    - probe_model
+    - iteration
+jobs:
+  - name: write
+    description: Write a payload to the worker's single model.
+    steps:
+      - name: execute-write
+        description: Run the harness execute method for one write-stress iteration.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.harness_model }}
+          methodName: execute
+          inputs:
+            iteration: ${{ inputs.iteration }}
+            payload_size: ${{ inputs.payload_size }}
+
+  - name: verify
+    description: Read back the written data to confirm integrity.
+    needs:
+      - write
+    steps:
+      - name: read-back
+        description: Fetch latest data for the harness.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.probe_model }}
+          methodName: execute
+          inputs:
+            run: "swamp data search --since 1m --limit 1 --json 2>/dev/null | wc -c"
