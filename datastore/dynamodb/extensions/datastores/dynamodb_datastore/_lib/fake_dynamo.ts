@@ -91,6 +91,27 @@ export class FakeDynamoTable {
         ) {
           throw new ConditionalCheckFailedError("Conditional check failed");
         }
+        // Handle ADD expression for StringSet (partition registry)
+        const updateExpr = params.UpdateExpression as string | undefined;
+        if (updateExpr?.startsWith("ADD ")) {
+          const values = params.ExpressionAttributeValues ?? {};
+          const next: Item = existing ? { ...existing } : { pk, sk };
+          const match = updateExpr.match(/^ADD (\w+) :(\w+)$/);
+          if (match) {
+            const attr = match[1];
+            const valKey = `:${match[2]}`;
+            const toAdd = values[valKey] as Set<string>;
+            const current = next[attr] instanceof Set
+              ? next[attr] as Set<string>
+              : new Set<string>(
+                Array.isArray(next[attr]) ? next[attr] as string[] : [],
+              );
+            for (const v of toAdd) current.add(v);
+            next[attr] = current;
+          }
+          this.items.set(key, next);
+          return {};
+        }
         this.items.set(key, this.applyUpdate(existing, params));
         return {};
       }
@@ -132,6 +153,19 @@ export class FakeDynamoTable {
         }
         return {};
       }
+      case "BatchGetCommand": {
+        const responses: Record<string, Item[]> = {};
+        for (const [table, request] of Object.entries(params.RequestItems)) {
+          const items: Item[] = [];
+          const keys = (request as Item).Keys as Item[];
+          for (const key of keys) {
+            const item = this.items.get(itemKey(key.pk, key.sk));
+            if (item) items.push({ ...item });
+          }
+          responses[table] = items;
+        }
+        return { Responses: responses, UnprocessedKeys: {} };
+      }
       default:
         throw new Error(`fake_dynamo: unsupported command ${name}`);
     }
@@ -148,6 +182,11 @@ export class FakeDynamoTable {
       if (values[":prefix"] !== undefined) {
         candidates = candidates.filter((it) =>
           (it.gsi1sk as string).startsWith(values[":prefix"] as string)
+        );
+      } else if (values[":since"] !== undefined) {
+        // Range condition: gsi1sk > :since
+        candidates = candidates.filter((it) =>
+          (it.gsi1sk as string) > (values[":since"] as string)
         );
       }
       candidates.sort((a, b) => (a.gsi1sk as string).localeCompare(b.gsi1sk));

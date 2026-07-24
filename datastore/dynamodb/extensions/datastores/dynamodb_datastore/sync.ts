@@ -1,12 +1,15 @@
-// ABOUTME: DynamoDB sync service — chunked push/pull via the gsi1 sparse index,
+// ABOUTME: DynamoDB sync service — per-model GSI partitions with time-ordered
+// ABOUTME: sort keys for O(changed items) sync, partition registry for discovery,
 // ABOUTME: team-safe watermarking via a SYNCSTATE item, retry on throttling.
 
 import {
+  BatchGetCommand,
   BatchWriteCommand,
   type DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
   QueryCommand,
+  UpdateCommand,
 } from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 import { Sidecar } from "./sidecar.ts";
 import { retryable } from "./_lib/retry.ts";
@@ -15,9 +18,13 @@ import {
   fileChunkKey,
   fileChunkPrefix,
   fileMetaKey,
-  GSI_FILE_PARTITION,
   GSI_NAME,
+  gsiFilePartition,
+  gsiFileSortKey,
+  gsiPartitionsForModels,
+  gsiSystemPartitions,
   parseChunkIndex,
+  parseGsiFileSortKey,
   SYNC_STATE_KEY,
 } from "./keys.ts";
 
@@ -107,13 +114,6 @@ function isTraversal(p: string): boolean {
   return !p || p.split("/").some((s) => s === "..");
 }
 
-function modelPrefixes(
-  models: ReadonlyArray<{ modelType: string; modelId: string }> | undefined,
-): string[] {
-  if (!models || models.length === 0) return [];
-  return models.map((m) => `data/${m.modelType}/${m.modelId}/`);
-}
-
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const buf = new Uint8Array(bytes).buffer as ArrayBuffer;
   const digest = await crypto.subtle.digest("SHA-256", buf);
@@ -177,16 +177,6 @@ function batchesOf<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** True when `candidate` is `boundary` itself, or nested under it as a path
- * segment — never a mere string prefix (so "report.json" doesn't also match
- * "report.json.bak"). Directory-style boundaries already ending in "/" behave
- * exactly like a plain begins_with, preserving existing scoped-pull behavior. */
-function matchesPathBoundary(candidate: string, boundary: string): boolean {
-  if (candidate === boundary) return true;
-  const dirBoundary = boundary.endsWith("/") ? boundary : `${boundary}/`;
-  return candidate.startsWith(dirBoundary);
-}
-
 export function createSyncService(
   doc: DynamoDBDocumentClient,
   tableName: string,
@@ -196,33 +186,37 @@ export function createSyncService(
 ): TwoPhaseSyncService {
   const sidecar = new Sidecar(cachePath);
 
-  async function queryAllFileMeta(
-    prefix?: string,
+  async function queryPartitionMeta(
+    partition: string,
+    sinceTimestamp?: string | null,
   ): Promise<Map<string, RemoteFileMeta>> {
     const out = new Map<string, RemoteFileMeta>();
     let exclusiveStartKey: Record<string, unknown> | undefined;
+
+    // When sinceTimestamp is provided, use a key condition range query on
+    // gsi1sk > :since — DynamoDB evaluates this at the storage layer, reading
+    // only items updated after the timestamp. This is the core performance win:
+    // O(items changed since last pull) instead of O(total items in partition).
+    const useTimeRange = sinceTimestamp != null && sinceTimestamp.length > 0;
+
     do {
       const result = await retryable(() =>
         doc.send(
           new QueryCommand({
             TableName: tableName,
             IndexName: GSI_NAME,
-            KeyConditionExpression: prefix
-              ? "gsi1pk = :fp AND begins_with(gsi1sk, :prefix)"
+            KeyConditionExpression: useTimeRange
+              ? "gsi1pk = :fp AND gsi1sk > :since"
               : "gsi1pk = :fp",
-            ExpressionAttributeValues: prefix
-              ? { ":fp": GSI_FILE_PARTITION, ":prefix": prefix }
-              : { ":fp": GSI_FILE_PARTITION },
+            ExpressionAttributeValues: useTimeRange
+              ? { ":fp": partition, ":since": sinceTimestamp }
+              : { ":fp": partition },
             ExclusiveStartKey: exclusiveStartKey,
           }),
         )
       );
       for (const item of result.Items ?? []) {
-        const relPath = item.gsi1sk as string;
-        // begins_with alone would also match unrelated siblings sharing a
-        // string prefix (e.g. "report.json" matching "report.json.bak") —
-        // require an exact match or a real path-segment boundary.
-        if (prefix && !matchesPathBoundary(relPath, prefix)) continue;
+        const { relPath } = parseGsiFileSortKey(item.gsi1sk as string);
         out.set(relPath, {
           hash: item.hash,
           deletedAt: item.deletedAt ?? null,
@@ -236,6 +230,131 @@ export function createSyncService(
         | undefined;
     } while (exclusiveStartKey);
     return out;
+  }
+
+  /** Queries metadata for specific relPaths using BatchGetItem — O(k/100)
+   * DynamoDB calls where k is the path count. Each batch request fetches up
+   * to 100 keys in parallel at the DynamoDB layer. */
+  async function querySpecificPaths(
+    relPaths: string[],
+  ): Promise<Map<string, RemoteFileMeta>> {
+    const out = new Map<string, RemoteFileMeta>();
+    if (relPaths.length === 0) return out;
+
+    // BatchGetItem supports max 100 keys per request
+    for (const batch of batchesOf(relPaths, 100)) {
+      const keys = batch.map((relPath) => {
+        const { pk, sk } = fileMetaKey(relPath);
+        return { pk, sk };
+      });
+
+      let unprocessed = keys;
+      for (let attempt = 0; unprocessed.length > 0 && attempt < 8; attempt++) {
+        if (attempt > 0) {
+          const delay = Math.min(500 * 2 ** attempt, 5_000);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        const result = await retryable(() =>
+          doc.send(
+            new BatchGetCommand({
+              RequestItems: {
+                [tableName]: { Keys: unprocessed },
+              },
+            }),
+          )
+        );
+        for (const item of result.Responses?.[tableName] ?? []) {
+          // Primary key is FILE#<relPath>, extract relPath from pk
+          const relPath = (item.pk as string).slice("FILE#".length);
+          out.set(relPath, {
+            hash: item.hash,
+            deletedAt: item.deletedAt ?? null,
+            updatedAt: new Date(item.updatedAt),
+            chunkCount: item.chunkCount ?? 0,
+            chunkVersion: item.chunkVersion ?? 0,
+          });
+        }
+        unprocessed =
+          (result.UnprocessedKeys?.[tableName]?.Keys as typeof keys) ?? [];
+      }
+    }
+    return out;
+  }
+
+  /** Queries all file metadata across all known partitions. Used only as a
+   * fallback for full-sync scenarios (bulkInvalidated, initial clone). Fans
+   * out one query per partition concurrently for parallelism. */
+  async function queryAllPartitions(
+    sinceTimestamp?: string | null,
+  ): Promise<Map<string, RemoteFileMeta>> {
+    const systemPartitions = gsiSystemPartitions(DATASTORE_SUBDIRS);
+    const allMeta = new Map<string, RemoteFileMeta>();
+
+    // Query system partitions concurrently
+    const systemResults = await Promise.all(
+      systemPartitions.map((p) => queryPartitionMeta(p, sinceTimestamp)),
+    );
+    for (const map of systemResults) {
+      for (const [k, v] of map) allMeta.set(k, v);
+    }
+
+    // Query the PARTITIONS registry to discover all model partitions,
+    // then fan out queries to each concurrently. The registry stores partitions
+    // as a DynamoDB StringSet (via ADD), which the DocumentClient returns as
+    // a Set<string> or an array depending on marshalling config.
+    const registryResult = await retryable(() =>
+      doc.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { pk: "PARTITIONS#registry", sk: "LIST" },
+        }),
+      )
+    );
+    const rawPartitions = registryResult.Item?.partitions;
+    const knownPartitions: string[] = rawPartitions instanceof Set
+      ? [...rawPartitions]
+      : Array.isArray(rawPartitions)
+      ? rawPartitions
+      : [];
+    if (knownPartitions.length > 0) {
+      const modelResults = await Promise.all(
+        knownPartitions.map((p) => queryPartitionMeta(p, sinceTimestamp)),
+      );
+      for (const map of modelResults) {
+        for (const [k, v] of map) allMeta.set(k, v);
+      }
+    }
+
+    return allMeta;
+  }
+
+  /** Registers a GSI partition key in the PARTITIONS registry so that
+   * full-sync pulls can discover all model partitions without a table scan.
+   * Uses an in-memory set to skip redundant DynamoDB calls for partitions
+   * already registered in this process lifetime. Registration uses an atomic
+   * ADD operation on a StringSet — safe under concurrent cross-process writes. */
+  const knownRegisteredPartitions = new Set<string>();
+
+  async function registerPartition(partition: string): Promise<void> {
+    // Fast path: skip the DynamoDB call if we've already registered this
+    // partition in the current process.
+    if (knownRegisteredPartitions.has(partition)) return;
+
+    // Atomic ADD to a StringSet — DynamoDB handles concurrent writes without
+    // read-modify-write races. If the item doesn't exist, UpdateItem creates it.
+    await retryable(() =>
+      doc.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: { pk: "PARTITIONS#registry", sk: "LIST" },
+          UpdateExpression: "ADD partitions :p",
+          ExpressionAttributeValues: {
+            ":p": new Set([partition]),
+          },
+        }),
+      )
+    );
+    knownRegisteredPartitions.add(partition);
   }
 
   /** Sends a BatchWriteCommand and retries any UnprocessedItems with backoff —
@@ -346,6 +465,12 @@ export function createSyncService(
       await sendBatchWrite(batch);
     }
 
+    // Register the partition before the metadata write — a phantom registry
+    // entry for an empty partition is harmless, but a populated partition
+    // missing from the registry would be invisible to full-sync pulls.
+    const partition = gsiFilePartition(entry.relPath);
+    await registerPartition(partition);
+
     // Metadata written last — readers discover newVersion only after all
     // chunks for that version exist in the table.
     await retryable(() =>
@@ -361,8 +486,8 @@ export function createSyncService(
             chunkVersion: newVersion,
             updatedAt: now,
             deletedAt: null,
-            gsi1pk: GSI_FILE_PARTITION,
-            gsi1sk: entry.relPath,
+            gsi1pk: partition,
+            gsi1sk: gsiFileSortKey(now, entry.relPath),
           },
         }),
       )
@@ -403,6 +528,8 @@ export function createSyncService(
 
   async function tombstonePath(relPath: string): Promise<void> {
     const { pk, sk } = fileMetaKey(relPath);
+    const now = new Date().toISOString();
+    const partition = gsiFilePartition(relPath);
     await retryable(() =>
       doc.send(
         new PutCommand({
@@ -413,10 +540,10 @@ export function createSyncService(
             hash: "",
             size: 0,
             chunkCount: 0,
-            updatedAt: new Date().toISOString(),
-            deletedAt: new Date().toISOString(),
-            gsi1pk: GSI_FILE_PARTITION,
-            gsi1sk: relPath,
+            updatedAt: now,
+            deletedAt: now,
+            gsi1pk: partition,
+            gsi1sk: gsiFileSortKey(now, relPath),
           },
         }),
       )
@@ -435,19 +562,23 @@ export function createSyncService(
   }
 
   async function pull(opts?: {
-    prefixes?: string[];
+    context?: SyncContext;
     metadataOnly?: boolean;
     signal?: AbortSignal;
   }): Promise<number> {
     await ensureInfrastructure();
-    const prefixes = opts?.prefixes;
+    const models = opts?.context?.models;
     const metadataOnly = opts?.metadataOnly === true;
-    const scoped = prefixes !== undefined && prefixes.length > 0;
+    const scoped = models !== undefined && models.length > 0;
     const signal = opts?.signal;
 
     if (metadataOnly) await sidecar.setLazyPullActive(true);
     const state = await sidecar.read();
 
+    // Watermark fast-path: if nothing has been pushed since our last pull,
+    // skip the partition queries entirely. Only applies to unscoped pulls
+    // because lastPulledAt certifies "all partitions seen up to this time" —
+    // a scoped pull for partition A cannot certify partition B is current.
     if (!scoped && state.lastPulledAt !== null) {
       const watermark = await retryable(() =>
         doc.send(
@@ -465,12 +596,15 @@ export function createSyncService(
     const pullStartTime = new Date().toISOString();
     const entries: Array<[string, RemoteFileMeta]> = [];
     if (scoped) {
-      for (const prefix of prefixes!) {
-        const map = await queryAllFileMeta(prefix);
-        entries.push(...map.entries());
-      }
+      // Scoped pull: query exactly the model partitions requested
+      const partitions = gsiPartitionsForModels(models!);
+      const results = await Promise.all(
+        partitions.map((p) => queryPartitionMeta(p, state.lastPulledAt)),
+      );
+      for (const map of results) entries.push(...map.entries());
     } else {
-      const map = await queryAllFileMeta();
+      // Unscoped pull: query all known partitions
+      const map = await queryAllPartitions(state.lastPulledAt);
       entries.push(...map.entries());
     }
 
@@ -486,12 +620,6 @@ export function createSyncService(
         } catch (err) {
           if (!(err instanceof Deno.errors.NotFound)) throw err;
         }
-        continue;
-      }
-      if (
-        !scoped && state.lastPulledAt !== null &&
-        meta.updatedAt < new Date(state.lastPulledAt)
-      ) {
         continue;
       }
       const localPath = `${cachePath}/${relPath}`;
@@ -514,7 +642,7 @@ export function createSyncService(
       changes++;
     }
 
-    if (!scoped && !metadataOnly) {
+    if (!metadataOnly && !scoped) {
       await sidecar.setLastPulledAt(pullStartTime);
       await sidecar.setLazyPullActive(false);
     }
@@ -534,15 +662,12 @@ export function createSyncService(
       remoteChunkCounts: Map<string, { count: number; version: number }>;
     }
   > {
+    // When relPaths is provided, use direct item lookups — O(k) where k is
+    // the number of dirty paths. This avoids partition scans entirely for the
+    // common scoped-push case.
     const remotePaths = relPaths === null
-      ? await queryAllFileMeta()
-      : (await Promise.all(relPaths.map((p) => queryAllFileMeta(p)))).reduce(
-        (acc, m) => {
-          for (const [k, v] of m) acc.set(k, v);
-          return acc;
-        },
-        new Map<string, RemoteFileMeta>(),
-      );
+      ? await queryAllPartitions(null)
+      : await querySpecificPaths(relPaths);
 
     const localFiles: FileEntry[] = [];
     if (relPaths === null) {
@@ -650,9 +775,8 @@ export function createSyncService(
     },
 
     async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
-      const prefixes = modelPrefixes(options?.context?.models);
       return await pull({
-        prefixes: prefixes.length > 0 ? prefixes : undefined,
+        context: options?.context,
         metadataOnly: options?.metadataOnly,
         signal: options?.signal,
       });
@@ -703,7 +827,7 @@ export function createSyncService(
     ): Promise<boolean> {
       if (isTraversal(relPath)) return false;
       await ensureInfrastructure();
-      const map = await queryAllFileMeta(relPath);
+      const map = await querySpecificPaths([relPath]);
       const meta = map.get(relPath);
       if (!meta || meta.deletedAt !== null) return false;
       const bytes = await fetchChunks(

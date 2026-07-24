@@ -56,4 +56,68 @@ export function parseChunkIndex(sk: string): number {
 export const SYNC_STATE_KEY = { pk: "SYNCSTATE#global", sk: "STATE" } as const;
 
 export const GSI_NAME = "gsi1";
+
+/**
+ * @deprecated Retained only for reference. The new per-model partition scheme
+ * uses `gsiFilePartition(relPath)` to derive model-scoped partition keys.
+ */
 export const GSI_FILE_PARTITION = "FILE";
+
+/** Separator between timestamp and relPath in gsi1sk. Using a character that
+ * sorts after digits in ISO-8601 timestamps ensures key-condition range queries
+ * (`gsi1sk > :since`) correctly include all items updated after that timestamp. */
+const GSI_SK_SEP = "|";
+
+/** Derives the GSI partition key for a given relPath.
+ *
+ * Model data (`data/<modelType>/<modelId>/...`) maps to `FILE#<modelType>/<modelId>`.
+ * System data (other DATASTORE_SUBDIRS) maps to `FILE#_system/<subdir>`.
+ *
+ * Invariant: paths under `data/` MUST have at least 3 segments
+ * (`data/<modelType>/<modelId>`). Paths with fewer segments are treated as
+ * system data to avoid silent mis-routing. */
+export function gsiFilePartition(relPath: string): string {
+  const parts = relPath.split("/");
+  if (parts[0] === "data" && parts.length >= 3) {
+    // data/<modelType>/<modelId>/... → FILE#<modelType>/<modelId>
+    return `FILE#${parts[1]}/${parts[2]}`;
+  }
+  // System subdirs, or malformed data/ paths with < 3 segments
+  return `FILE#_system/${parts[0]}`;
+}
+
+/** Builds the composite gsi1sk value: `<updatedAt>|<relPath>`.
+ * ISO-8601 timestamp prefix enables time-range key conditions. */
+export function gsiFileSortKey(updatedAt: string, relPath: string): string {
+  return `${updatedAt}${GSI_SK_SEP}${relPath}`;
+}
+
+/** Parses a composite gsi1sk back into its updatedAt and relPath components. */
+export function parseGsiFileSortKey(
+  gsi1sk: string,
+): { updatedAt: string; relPath: string } {
+  const sepIdx = gsi1sk.indexOf(GSI_SK_SEP);
+  if (sepIdx === -1) {
+    // Fallback for any legacy items that use bare relPath as gsi1sk
+    return { updatedAt: "", relPath: gsi1sk };
+  }
+  return {
+    updatedAt: gsi1sk.slice(0, sepIdx),
+    relPath: gsi1sk.slice(sepIdx + 1),
+  };
+}
+
+/** Returns all distinct GSI partition keys needed to cover a set of model
+ * prefixes (as produced by `modelPrefixes()`). Used for scoped pull. */
+export function gsiPartitionsForModels(
+  models: ReadonlyArray<{ modelType: string; modelId: string }>,
+): string[] {
+  return models.map((m) => `FILE#${m.modelType}/${m.modelId}`);
+}
+
+/** Returns all GSI partition keys for system (non-model) data subdirs. */
+export function gsiSystemPartitions(subdirs: readonly string[]): string[] {
+  return subdirs
+    .filter((s) => s !== "data")
+    .map((s) => `FILE#_system/${s}`);
+}

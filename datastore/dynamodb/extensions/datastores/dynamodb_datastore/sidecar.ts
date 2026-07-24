@@ -3,7 +3,7 @@
 
 const SIDECAR_FILENAME = ".datastore-sync-state.json";
 const SCHEMA_VERSION = 1;
-const DIRTY_PATHS_CAP = 200;
+const DIRTY_PATHS_CAP = 1000;
 
 export interface SidecarState {
   version: number;
