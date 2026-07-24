@@ -16,7 +16,7 @@ import {
   DescribeAlarmHistoryCommand,
   DescribeAlarmsCommand,
   type MetricAlarm,
-} from "npm:@aws-sdk/client-cloudwatch@3.1091.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1094.0";
 
 const MAX_PAGES = 10;
 
@@ -140,7 +140,7 @@ interface AwsDimension {
  */
 export const model = {
   type: "@webframp/aws/alarms",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

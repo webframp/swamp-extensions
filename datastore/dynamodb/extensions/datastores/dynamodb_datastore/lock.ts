@@ -7,7 +7,7 @@ import {
   GetCommand,
   PutCommand,
   UpdateCommand,
-} from "npm:@aws-sdk/lib-dynamodb@3.1091.0";
+} from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 import { lockKey } from "./keys.ts";
 
 export interface LockInfo {

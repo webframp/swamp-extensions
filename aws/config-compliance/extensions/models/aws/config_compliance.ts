@@ -15,11 +15,11 @@ import {
   DescribeComplianceByConfigRuleCommand,
   DescribeConfigRulesCommand,
   GetComplianceDetailsByConfigRuleCommand,
-} from "npm:@aws-sdk/client-config-service@3.1091.0";
+} from "npm:@aws-sdk/client-config-service@3.1094.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1091.0";
+} from "npm:@aws-sdk/client-sts@3.1094.0";
 
 const MAX_PAGES = 20;
 
@@ -119,7 +119,7 @@ async function getAccountId(region: string): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",

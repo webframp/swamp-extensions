@@ -14,7 +14,7 @@ import { z } from "npm:zod@4.4.3";
 import {
   GetProductsCommand,
   PricingClient,
-} from "npm:@aws-sdk/client-pricing@3.1091.0";
+} from "npm:@aws-sdk/client-pricing@3.1094.0";
 
 // =============================================================================
 // Schemas
@@ -205,7 +205,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 

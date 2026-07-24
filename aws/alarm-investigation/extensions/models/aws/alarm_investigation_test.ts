@@ -7,8 +7,8 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1091.0";
-import { SNSClient } from "npm:@aws-sdk/client-sns@3.1091.0";
+import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1094.0";
+import { SNSClient } from "npm:@aws-sdk/client-sns@3.1094.0";
 import { model } from "./alarm_investigation.ts";
 
 // =============================================================================

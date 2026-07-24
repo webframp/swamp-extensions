@@ -17,11 +17,11 @@ import {
   ListResourceRecordSetsCommand,
   Route53Client,
   type RRType,
-} from "npm:@aws-sdk/client-route-53@3.1091.0";
+} from "npm:@aws-sdk/client-route-53@3.1094.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1091.0";
+} from "npm:@aws-sdk/client-sts@3.1094.0";
 
 const MAX_PAGES = 50;
 
@@ -445,7 +445,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",

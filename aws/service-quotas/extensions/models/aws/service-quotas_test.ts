@@ -5,10 +5,10 @@ import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import {
   ServiceQuotasClient,
-} from "npm:@aws-sdk/client-service-quotas@3.1091.0";
-import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1091.0";
-import { STSClient } from "npm:@aws-sdk/client-sts@3.1091.0";
-import { SupportClient } from "npm:@aws-sdk/client-support@3.1091.0";
+} from "npm:@aws-sdk/client-service-quotas@3.1094.0";
+import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1094.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1094.0";
+import { SupportClient } from "npm:@aws-sdk/client-support@3.1094.0";
 import { model } from "./service-quotas.ts";
 
 // =============================================================================

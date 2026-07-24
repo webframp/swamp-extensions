@@ -13,13 +13,13 @@
 import {
   BedrockAgentCoreClient,
   InvokeAgentRuntimeCommand,
-} from "npm:@aws-sdk/client-bedrock-agentcore@3.1091.0";
+} from "npm:@aws-sdk/client-bedrock-agentcore@3.1094.0";
 import {
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
-} from "npm:@aws-sdk/client-s3@3.1091.0";
-import { fromNodeProviderChain } from "npm:@aws-sdk/credential-providers@3.1091.0";
+} from "npm:@aws-sdk/client-s3@3.1094.0";
+import { fromNodeProviderChain } from "npm:@aws-sdk/credential-providers@3.1094.0";
 
 const DEFAULT_TIMEOUT_MS = 900_000; // 15 minutes
 const DEFAULT_POLL_INTERVAL_MS = 5_000;

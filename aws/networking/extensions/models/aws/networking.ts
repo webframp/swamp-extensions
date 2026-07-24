@@ -13,17 +13,17 @@ import {
   DescribeAddressesCommand,
   DescribeNatGatewaysCommand,
   EC2Client,
-} from "npm:@aws-sdk/client-ec2@3.1091.0";
+} from "npm:@aws-sdk/client-ec2@3.1094.0";
 import {
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeTargetHealthCommand,
   ElasticLoadBalancingV2Client,
-} from "npm:@aws-sdk/client-elastic-load-balancing-v2@3.1091.0";
+} from "npm:@aws-sdk/client-elastic-load-balancing-v2@3.1094.0";
 import {
   CloudWatchClient,
   GetMetricStatisticsCommand,
-} from "npm:@aws-sdk/client-cloudwatch@3.1091.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1094.0";
 
 const MAX_PAGES = 10;
 
@@ -114,7 +114,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/networking",
-  version: "2026.07.21.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

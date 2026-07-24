@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/dynamodb-datastore"
-version: "2026.07.23.1"
+version: "2026.07.24.1"
 description: >
   Stores swamp runtime data in AWS DynamoDB with conditional-write distributed
   locking (fencing tokens + TTL-as-defense-in-depth) and chunked blob storage

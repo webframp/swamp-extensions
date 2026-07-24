@@ -2,9 +2,9 @@
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1091.0";
-import { RDSClient } from "npm:@aws-sdk/client-rds@3.1091.0";
-import { SecretsManagerClient } from "npm:@aws-sdk/client-secrets-manager@3.1091.0";
+import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1094.0";
+import { RDSClient } from "npm:@aws-sdk/client-rds@3.1094.0";
+import { SecretsManagerClient } from "npm:@aws-sdk/client-secrets-manager@3.1094.0";
 import { model } from "./adopt.ts";
 
 // =============================================================================
@@ -723,7 +723,7 @@ Deno.test({
 // CloudFormation Stack Adoption Tests
 // =============================================================================
 
-import { CloudFormationClient } from "npm:@aws-sdk/client-cloudformation@3.1091.0";
+import { CloudFormationClient } from "npm:@aws-sdk/client-cloudformation@3.1094.0";
 import { CFN_TO_SWAMP_TYPE_MAP, model as modelForCfn } from "./adopt.ts";
 
 /**
