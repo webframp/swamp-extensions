@@ -1,0 +1,134 @@
+id: f7a1b2c3-d4e5-6789-abcd-0123456789ab
+name: "@webframp/issue-lifecycle-drive"
+description: |
+  Drives a GitHub issue through the full lifecycle: start → triage → plan →
+  approve → implement. Each job calls the corresponding lifecycle model
+  method sequentially, with the agent providing classification and plan
+  content as inputs.
+
+  This workflow handles the pre-PR phases. Once implementation starts, the
+  pr-fix-loop skill takes over and calls link_pr / pr_merged / pr_failed
+  as the PR progresses through CI.
+
+  Designed to be called once per issue when you want the agent to drive
+  the full triage-to-implementation sequence without manual method calls.
+version: 1
+tags:
+  extension: "@webframp/github-issue-lifecycle"
+  category: "sdlc"
+inputs:
+  properties:
+    lifecycle_model:
+      type: string
+      description: "Lifecycle model instance name (e.g., tracker)."
+    issue_number:
+      type: number
+      description: "GitHub issue number to drive."
+    kind:
+      type: string
+      description: "Issue classification: bug, feature, chore, security, or docs."
+    priority:
+      type: string
+      description: "Priority: critical, high, medium, or low."
+    component:
+      type: string
+      description: "Affected component or area (optional)."
+    plan_summary:
+      type: string
+      description: "One-line summary of the implementation approach."
+    plan_steps:
+      type: array
+      items:
+        type: string
+      description: "Ordered list of implementation steps."
+    branch:
+      type: string
+      description: "Branch name to work on (optional)."
+  required:
+    - lifecycle_model
+    - issue_number
+    - kind
+    - plan_summary
+    - plan_steps
+jobs:
+  - name: start
+    description: Fetch issue context from GitHub and begin lifecycle tracking.
+    steps:
+      - name: start-lifecycle
+        description: Transition issue to triaging phase.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.lifecycle_model }}
+          methodName: start
+          inputs:
+            issue_number: ${{ inputs.issue_number }}
+
+  - name: triage
+    description: Classify the issue.
+    dependsOn:
+      - job: start
+        condition:
+          type: succeeded
+    steps:
+      - name: classify
+        description: Apply classification and priority labels.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.lifecycle_model }}
+          methodName: triage
+          inputs:
+            issue_number: ${{ inputs.issue_number }}
+            kind: ${{ inputs.kind }}
+            priority: ${{ inputs.priority }}
+            component: ${{ inputs.component }}
+
+  - name: plan
+    description: Record the implementation plan.
+    dependsOn:
+      - job: triage
+        condition:
+          type: succeeded
+    steps:
+      - name: create-plan
+        description: Write plan with summary and steps.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.lifecycle_model }}
+          methodName: plan
+          inputs:
+            issue_number: ${{ inputs.issue_number }}
+            summary: ${{ inputs.plan_summary }}
+            steps: ${{ inputs.plan_steps }}
+
+  - name: approve
+    description: Lock the plan — transition to approved.
+    dependsOn:
+      - job: plan
+        condition:
+          type: succeeded
+    steps:
+      - name: approve-plan
+        description: Approve the plan for implementation.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.lifecycle_model }}
+          methodName: approve
+          inputs:
+            issue_number: ${{ inputs.issue_number }}
+
+  - name: implement
+    description: Signal implementation has started.
+    dependsOn:
+      - job: approve
+        condition:
+          type: succeeded
+    steps:
+      - name: start-implementation
+        description: Transition to implementing phase.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.lifecycle_model }}
+          methodName: implement
+          inputs:
+            issue_number: ${{ inputs.issue_number }}
+            branch: ${{ inputs.branch }}

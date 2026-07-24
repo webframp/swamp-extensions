@@ -68,6 +68,10 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - github-issue-lifecycle/lifecycle.ts
+workflows:
+  - issue-lifecycle-drive.yaml
+reports:
+  - lifecycle_metrics.ts
 platforms:
   - linux-x86_64
   - linux-aarch64

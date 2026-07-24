@@ -7,8 +7,8 @@
 - State machine with enforced valid transitions
 - Optional lifecycle comment posting to the GitHub issue thread
 - Optional `lifecycle:<phase>` label sync on the issue
-- All state stored as versioned swamp resources (state, context,
-  classification, plan, pullRequest) — queryable via CEL
+- All state stored as versioned swamp resources (state, context, classification,
+  plan, pullRequest) — queryable via CEL
 - PR number auto-extraction from URL
 - Idempotent link_pr (safe to re-link after retry)
 - Configurable via globalArgs: repo, postComments, syncLabels
