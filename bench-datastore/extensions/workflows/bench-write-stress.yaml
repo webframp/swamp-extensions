@@ -25,6 +25,9 @@ inputs:
     iteration:
       type: number
       description: Iteration counter.
+    payload_size:
+      type: string
+      description: "Payload size override (small, medium, large). Default: auto-rotates."
   required:
     - harness_model
     - probe_model
@@ -41,6 +44,7 @@ jobs:
           methodName: execute
           inputs:
             iteration: ${{ inputs.iteration }}
+            payload_size: ${{ inputs.payload_size }}
 
   - name: verify
     description: Read back the written data to confirm integrity.
@@ -50,10 +54,10 @@ jobs:
           type: succeeded
     steps:
       - name: read-back
-        description: Search recent data to verify write.
+        description: Search recent data scoped to the harness model to verify write.
         task:
           type: model_method
           modelIdOrName: ${{ inputs.probe_model }}
           methodName: execute
           inputs:
-            run: "swamp data search --since 1m --limit 1 --json 2>/dev/null | wc -c"
+            run: "swamp data search --model ${{ inputs.harness_model }} --since 1m --limit 1 --json | wc -c"

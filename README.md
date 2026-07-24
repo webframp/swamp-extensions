@@ -105,6 +105,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/agentcore-bootstrap`](agentcore-bootstrap/) | One-shot bootstrap workflow — builds/pushes the AgentCore worker image, provisions ECR and a Bedrock AgentCore runtime, and outputs the runtimeArn for driver configuration | `@webframp/container-image`, `@webframp/agentcore` |
 | [`@webframp/redmine-kanban`](redmine-kanban/) | Kanban flow-metrics and sprint-summary reports plus a scaffold-story workflow, built on top of `@webframp/redmine` | `@webframp/redmine` |
 | [`@webframp/twitch`](twitch/) | Twitch cross-channel moderation audit — gathers chatters, bans, and mod events across channels, then generates a report highlighting ban overlap and suspicious users | None (uses fetch) |
+| [`@webframp/bench-datastore`](bench-datastore/) | Datastore benchmarking harness — two workflow-based scenarios (throughput breadth and write-stress depth) exercising any datastore backend under sustained load without lock contention | None |
 
 ## Vault Extensions
 
@@ -175,6 +176,7 @@ swamp extension pull @webframp/aws/securityhub-findings
 swamp extension pull @webframp/ai-usage
 swamp extension pull @webframp/agentcore-bootstrap
 swamp extension pull @webframp/redmine-kanban
+swamp extension pull @webframp/bench-datastore
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing

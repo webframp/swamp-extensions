@@ -38,7 +38,7 @@ type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 const SetupResultSchema = z.object({
   scenario: z.string().describe("Scenario configured"),
   workerId: z.number().describe("Worker ID"),
-  modelsCreated: z.number().describe("Number of models created"),
+  modelsCreated: z.number().describe("Total models created (worker + probe)"),
   modelPrefix: z.string().describe("Model name prefix for this worker"),
   readProbeName: z.string().describe("Read probe model name for this worker"),
   setupAt: z.string().describe("ISO 8601 timestamp"),
@@ -76,7 +76,7 @@ function readProbeName(workerId: number): string {
 
 /**
  * Generate a payload of a given size class. Uses only safe ASCII characters
- * (hex digits) to avoid shell-quoting issues entirely.
+ * (hex digits) to avoid encoding issues.
  */
 function generatePayload(
   size: "small" | "medium" | "large",
@@ -86,21 +86,15 @@ function generatePayload(
   const header =
     `{"ts":"${timestamp}","iter":${iteration},"sz":"${size}","d":"`;
   const footer = '"}';
-  // Fill with hex characters (safe for any shell context)
   const fillChar = (iteration % 16).toString(16);
+  const overhead = header.length + footer.length;
   switch (size) {
     case "small":
-      // ~100 bytes total
-      return header + fillChar.repeat(100 - header.length - footer.length) +
-        footer;
+      return header + fillChar.repeat(Math.max(0, 100 - overhead)) + footer;
     case "medium":
-      // ~10KB total
-      return header + fillChar.repeat(10_000 - header.length - footer.length) +
-        footer;
+      return header + fillChar.repeat(Math.max(0, 10_000 - overhead)) + footer;
     case "large":
-      // ~500KB total (exercises chunked storage at default 256KB maxChunkBytes)
-      return header +
-        fillChar.repeat(500_000 - header.length - footer.length) + footer;
+      return header + fillChar.repeat(Math.max(0, 500_000 - overhead)) + footer;
   }
 }
 
@@ -118,38 +112,60 @@ const PAYLOAD_SIZES = ["small", "medium", "large"] as const;
 
 /**
  * Run a model method with payload delivered via stdin to avoid Linux
- * MAX_ARG_STRLEN (131072 bytes per argument). Uses `--stdin` which accepts
- * a JSON object of inputs piped to the process.
+ * MAX_ARG_STRLEN (131072 bytes per argument). The target model is a
+ * `command/shell` model whose `execute` method accepts `{ run: <cmd> }`
+ * via `--stdin`. We write the payload to a temp file and have the shell
+ * command cat it, storing the result as swamp data on the target model.
+ *
+ * For benchmarking purposes, the goal is to exercise the datastore write
+ * path. We use `swamp model method run <target> execute --stdin` with a
+ * JSON payload that tells the command/shell model what to run.
  */
 async function runModelMethod(
   target: string,
   payload: string,
 ): Promise<void> {
-  const stdinPayload = JSON.stringify({ run: payload });
-  const cmd = new Deno.Command("swamp", {
-    args: [
-      "model",
-      "method",
-      "run",
-      target,
-      "execute",
-      "--stdin",
-      "--skip-checks",
-      "--skip-reports",
-      "--json",
-    ],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const child = cmd.spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(stdinPayload));
-  await writer.close();
-  const output = await child.output();
-  if (!output.success) {
-    const stderr = new TextDecoder().decode(output.stderr);
-    throw new Error(stderr.trim());
+  // Write payload to a temp file to avoid any argument-length or
+  // stdin-nesting issues with the inner command/shell model.
+  const tmpFile = await Deno.makeTempFile({ prefix: "bench-payload-" });
+  try {
+    await Deno.writeTextFile(tmpFile, payload);
+    // The command/shell model executes a shell command. We store the file
+    // content as a resource on the target model via `swamp data write`.
+    const shellCmd =
+      `cat '${tmpFile}' | swamp data write ${target} --stdin --json`;
+    const stdinPayload = JSON.stringify({ run: shellCmd });
+    const cmd = new Deno.Command("swamp", {
+      args: [
+        "model",
+        "method",
+        "run",
+        target,
+        "execute",
+        "--stdin",
+        "--skip-checks",
+        "--skip-reports",
+        "--json",
+      ],
+      stdin: "piped",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    const child = cmd.spawn();
+    const writer = child.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(stdinPayload));
+    await writer.close();
+    const output = await child.output();
+    if (!output.success) {
+      const stderr = new TextDecoder().decode(output.stderr);
+      throw new Error(stderr.trim());
+    }
+  } finally {
+    try {
+      await Deno.remove(tmpFile);
+    } catch {
+      // Best-effort cleanup
+    }
   }
 }
 
@@ -237,7 +253,7 @@ export const model = {
           {
             scenario,
             workerId: worker_id,
-            modelsCreated: count,
+            modelsCreated: count + 1,
             modelPrefix: prefix,
             readProbeName: probeName,
             setupAt: new Date().toISOString(),

@@ -23,20 +23,24 @@ description: |
   ```bash
   swamp extension pull @webframp/bench-datastore
 
-  # Create harness model
-  swamp model create @webframp/bench-datastore/harness bench-harness
+  # Create harness instance for worker 1 (throughput scenario)
+  swamp model create @webframp/bench-datastore/harness bench-harness-w001 \
+    --global scenario=throughput --global worker_id=1 --global models_per_worker=50
 
-  # Setup for worker 1 (creates its models)
-  swamp model method run bench-harness setup \
-    --input worker_id=1 --input scenario=throughput --input models_per_worker=50
+  # Setup (creates worker-owned models)
+  swamp model method run bench-harness-w001 setup
 
-  # Run scenario A once
+  # Run throughput cycle once
   swamp workflow run @webframp/bench-throughput-cycle \
-    --input worker_id=1 --input iteration=1
+    --input harness_model=bench-harness-w001 \
+    --input probe_model=bench-probe-w001 \
+    --input iteration=1
 
-  # Run scenario B once
+  # Run write-stress once
   swamp workflow run @webframp/bench-write-stress \
-    --input worker_id=1 --input iteration=1 --input payload_size=medium
+    --input harness_model=bench-harness-w001 \
+    --input probe_model=bench-probe-w001 \
+    --input iteration=1
   ```
 
   Both workflows are designed to be called in a tight loop by an ECS

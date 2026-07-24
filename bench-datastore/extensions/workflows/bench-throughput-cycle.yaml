@@ -47,13 +47,13 @@ jobs:
           type: succeeded
     steps:
       - name: data-search
-        description: Search recent data.
+        description: Search recent data scoped to the harness model.
         task:
           type: model_method
           modelIdOrName: ${{ inputs.probe_model }}
           methodName: execute
           inputs:
-            run: "swamp data search --since 5m --limit 5 --json 2>/dev/null | wc -c"
+            run: "swamp data search --model ${{ inputs.harness_model }} --since 5m --limit 5 --json | wc -c"
 
   - name: health
     description: Datastore health check (round-trip latency).

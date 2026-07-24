@@ -9,10 +9,9 @@
 - Configurable at runtime via workflow inputs (scenario, worker count, duration
   controlled by caller)
 - Deployable on ECS Fargate or runnable locally
-
-**Fixed:** Payload delivery uses stdin streaming instead of CLI arguments to
-avoid Linux MAX_ARG_STRLEN (131072 bytes) limit on large (500KB) write-stress
-payloads.
-
-**Fixed:** Probe measurements in workflows are scoped to the worker's own model
-to prevent cross-worker data inflation under concurrent load.
+- Payload delivery uses stdin streaming via temp files to avoid Linux
+  MAX_ARG_STRLEN (131072 bytes) limit on large (500KB) write-stress payloads
+- Probe measurements in workflows are scoped to the worker's harness model via
+  `--model` filter to prevent cross-worker data inflation under concurrent load
+- `payload_size` accepted as an optional workflow input on bench-write-stress
+  for controlled single-size runs
