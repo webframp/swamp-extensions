@@ -3,11 +3,13 @@
 // ABOUTME: team-safe watermarking via a SYNCSTATE item, retry on throttling.
 
 import {
+  BatchGetCommand,
   BatchWriteCommand,
   type DynamoDBDocumentClient,
   GetCommand,
   PutCommand,
   QueryCommand,
+  UpdateCommand,
 } from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 import { Sidecar } from "./sidecar.ts";
 import { retryable } from "./_lib/retry.ts";
@@ -230,28 +232,50 @@ export function createSyncService(
     return out;
   }
 
-  /** Queries metadata for specific relPaths by looking up their individual
-   * items via the primary key (not the GSI). This is O(k) where k is the
-   * number of paths — used for scoped push when dirtyPaths is small. */
+  /** Queries metadata for specific relPaths using BatchGetItem — O(k/100)
+   * DynamoDB calls where k is the path count. Each batch request fetches up
+   * to 100 keys in parallel at the DynamoDB layer. */
   async function querySpecificPaths(
     relPaths: string[],
   ): Promise<Map<string, RemoteFileMeta>> {
     const out = new Map<string, RemoteFileMeta>();
-    for (const relPath of relPaths) {
-      const { pk, sk } = fileMetaKey(relPath);
-      const result = await retryable(() =>
-        doc.send(
-          new GetCommand({ TableName: tableName, Key: { pk, sk } }),
-        )
-      );
-      if (result.Item) {
-        out.set(relPath, {
-          hash: result.Item.hash,
-          deletedAt: result.Item.deletedAt ?? null,
-          updatedAt: new Date(result.Item.updatedAt),
-          chunkCount: result.Item.chunkCount ?? 0,
-          chunkVersion: result.Item.chunkVersion ?? 0,
-        });
+    if (relPaths.length === 0) return out;
+
+    // BatchGetItem supports max 100 keys per request
+    for (const batch of batchesOf(relPaths, 100)) {
+      const keys = batch.map((relPath) => {
+        const { pk, sk } = fileMetaKey(relPath);
+        return { pk, sk };
+      });
+
+      let unprocessed = keys;
+      for (let attempt = 0; unprocessed.length > 0 && attempt < 8; attempt++) {
+        if (attempt > 0) {
+          const delay = Math.min(500 * 2 ** attempt, 5_000);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        const result = await retryable(() =>
+          doc.send(
+            new BatchGetCommand({
+              RequestItems: {
+                [tableName]: { Keys: unprocessed },
+              },
+            }),
+          )
+        );
+        for (const item of result.Responses?.[tableName] ?? []) {
+          // Primary key is FILE#<relPath>, extract relPath from pk
+          const relPath = (item.pk as string).slice("FILE#".length);
+          out.set(relPath, {
+            hash: item.hash,
+            deletedAt: item.deletedAt ?? null,
+            updatedAt: new Date(item.updatedAt),
+            chunkCount: item.chunkCount ?? 0,
+            chunkVersion: item.chunkVersion ?? 0,
+          });
+        }
+        unprocessed =
+          (result.UnprocessedKeys?.[tableName]?.Keys as typeof keys) ?? [];
       }
     }
     return out;
@@ -275,7 +299,9 @@ export function createSyncService(
     }
 
     // Query the PARTITIONS registry to discover all model partitions,
-    // then fan out queries to each concurrently.
+    // then fan out queries to each concurrently. The registry stores partitions
+    // as a DynamoDB StringSet (via ADD), which the DocumentClient returns as
+    // a Set<string> or an array depending on marshalling config.
     const registryResult = await retryable(() =>
       doc.send(
         new GetCommand({
@@ -284,8 +310,12 @@ export function createSyncService(
         }),
       )
     );
-    const knownPartitions: string[] =
-      (registryResult.Item?.partitions as string[]) ?? [];
+    const rawPartitions = registryResult.Item?.partitions;
+    const knownPartitions: string[] = rawPartitions instanceof Set
+      ? [...rawPartitions]
+      : Array.isArray(rawPartitions)
+      ? rawPartitions
+      : [];
     if (knownPartitions.length > 0) {
       const modelResults = await Promise.all(
         knownPartitions.map((p) => queryPartitionMeta(p, sinceTimestamp)),
@@ -300,48 +330,26 @@ export function createSyncService(
 
   /** Registers a GSI partition key in the PARTITIONS registry so that
    * full-sync pulls can discover all model partitions without a table scan.
-   * Uses an in-memory set to skip redundant DynamoDB reads for partitions
-   * already registered in this process lifetime. */
+   * Uses an in-memory set to skip redundant DynamoDB calls for partitions
+   * already registered in this process lifetime. Registration uses an atomic
+   * ADD operation on a StringSet — safe under concurrent cross-process writes. */
   const knownRegisteredPartitions = new Set<string>();
 
-  /** Max partitions tracked in the registry. At ~50 bytes per partition key,
-   * 4000 entries stays well under DynamoDB's 400KB item limit. */
-  const MAX_REGISTRY_PARTITIONS = 4000;
-
   async function registerPartition(partition: string): Promise<void> {
-    // Fast path: skip the DynamoDB read if we've already registered this
+    // Fast path: skip the DynamoDB call if we've already registered this
     // partition in the current process.
     if (knownRegisteredPartitions.has(partition)) return;
 
-    const result = await retryable(() =>
-      doc.send(
-        new GetCommand({
-          TableName: tableName,
-          Key: { pk: "PARTITIONS#registry", sk: "LIST" },
-        }),
-      )
-    );
-    const existing: string[] = (result.Item?.partitions as string[]) ?? [];
-    const partitionSet = new Set(existing);
-    if (partitionSet.has(partition)) {
-      knownRegisteredPartitions.add(partition);
-      return;
-    }
-    if (partitionSet.size >= MAX_REGISTRY_PARTITIONS) {
-      // Registry full — skip. Scoped pulls still work; only full-sync misses
-      // this partition until old entries are pruned.
-      knownRegisteredPartitions.add(partition);
-      return;
-    }
-    partitionSet.add(partition);
+    // Atomic ADD to a StringSet — DynamoDB handles concurrent writes without
+    // read-modify-write races. If the item doesn't exist, UpdateItem creates it.
     await retryable(() =>
       doc.send(
-        new PutCommand({
+        new UpdateCommand({
           TableName: tableName,
-          Item: {
-            pk: "PARTITIONS#registry",
-            sk: "LIST",
-            partitions: [...partitionSet],
+          Key: { pk: "PARTITIONS#registry", sk: "LIST" },
+          UpdateExpression: "ADD partitions :p",
+          ExpressionAttributeValues: {
+            ":p": new Set([partition]),
           },
         }),
       )
@@ -630,9 +638,9 @@ export function createSyncService(
       changes++;
     }
 
-    if (!scoped && !metadataOnly) {
+    if (!metadataOnly) {
       await sidecar.setLastPulledAt(pullStartTime);
-      await sidecar.setLazyPullActive(false);
+      if (!scoped) await sidecar.setLazyPullActive(false);
     }
 
     return changes;
