@@ -116,10 +116,47 @@ const THROUGHPUT_OPS = [
 /** Payload size rotation for write-stress scenario. */
 const PAYLOAD_SIZES = ["small", "medium", "large"] as const;
 
+/**
+ * Run a model method with payload delivered via stdin to avoid Linux
+ * MAX_ARG_STRLEN (131072 bytes per argument). Uses `--stdin` which accepts
+ * a JSON object of inputs piped to the process.
+ */
+async function runModelMethod(
+  target: string,
+  payload: string,
+): Promise<void> {
+  const stdinPayload = JSON.stringify({ run: payload });
+  const cmd = new Deno.Command("swamp", {
+    args: [
+      "model",
+      "method",
+      "run",
+      target,
+      "execute",
+      "--stdin",
+      "--skip-checks",
+      "--skip-reports",
+      "--json",
+    ],
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const child = cmd.spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(stdinPayload));
+  await writer.close();
+  const output = await child.output();
+  if (!output.success) {
+    const stderr = new TextDecoder().decode(output.stderr);
+    throw new Error(stderr.trim());
+  }
+}
+
 /** Harness model definition. */
 export const model = {
   type: "@webframp/bench-datastore/harness",
-  version: "2026.07.23.1",
+  version: "2026.07.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     setup: {
@@ -271,27 +308,7 @@ export const model = {
             });
             payloadBytes = new TextEncoder().encode(payload).byteLength;
 
-            const cmd = new Deno.Command("swamp", {
-              args: [
-                "model",
-                "method",
-                "run",
-                targetModel,
-                "execute",
-                "--input",
-                `run=printf '%s' ${JSON.stringify(payload)}`,
-                "--skip-checks",
-                "--skip-reports",
-                "--json",
-              ],
-              stdout: "piped",
-              stderr: "piped",
-            });
-            const output = await cmd.output();
-            if (!output.success) {
-              const stderr = new TextDecoder().decode(output.stderr);
-              throw new Error(stderr.trim());
-            }
+            await runModelMethod(targetModel, payload);
           } else {
             // write-stress: single model, varying payloads
             targetModel = modelName(worker_id, 1);
@@ -304,29 +321,7 @@ export const model = {
             );
             payloadBytes = new TextEncoder().encode(payload).byteLength;
 
-            // Use printf with the payload as a JSON-escaped argument to avoid
-            // shell interpretation of payload content entirely.
-            const cmd = new Deno.Command("swamp", {
-              args: [
-                "model",
-                "method",
-                "run",
-                targetModel,
-                "execute",
-                "--input",
-                `run=printf '%s' ${JSON.stringify(payload)}`,
-                "--skip-checks",
-                "--skip-reports",
-                "--json",
-              ],
-              stdout: "piped",
-              stderr: "piped",
-            });
-            const output = await cmd.output();
-            if (!output.success) {
-              const stderr = new TextDecoder().decode(output.stderr);
-              throw new Error(stderr.trim());
-            }
+            await runModelMethod(targetModel, payload);
           }
         } catch (err: unknown) {
           success = false;

@@ -1,4 +1,4 @@
-id: a9b8c7d6-e5f4-3210-fedc-ba0987654321
+id: a9b8c7d6-e5f4-4210-aedc-ba0987654321
 name: "@webframp/bench-write-stress"
 description: |
   Single iteration of the write-stress benchmark. Writes a payload of
@@ -7,9 +7,6 @@ description: |
 
   Payload sizes rotate: small (100B), medium (10KB), large (500KB+).
   Large payloads exercise the chunked storage path.
-
-  Each worker must have its own harness instance (bench-harness-w{NNN}) and
-  read probe (bench-probe-w{NNN}) created via the harness setup method.
 
   Measures: write throughput, chunk handling, version accumulation,
   read-after-write latency, sustained single-writer performance.
@@ -28,10 +25,6 @@ inputs:
     iteration:
       type: number
       description: Iteration counter.
-    payload_size:
-      type: string
-      description: "Payload size class: small, medium, or large. Defaults to rotating."
-      enum: ["small", "medium", "large"]
   required:
     - harness_model
     - probe_model
@@ -48,15 +41,16 @@ jobs:
           methodName: execute
           inputs:
             iteration: ${{ inputs.iteration }}
-            payload_size: ${{ inputs.payload_size }}
 
   - name: verify
     description: Read back the written data to confirm integrity.
-    needs:
-      - write
+    dependsOn:
+      - job: write
+        condition:
+          type: succeeded
     steps:
       - name: read-back
-        description: Fetch latest data for the harness.
+        description: Search recent data to verify write.
         task:
           type: model_method
           modelIdOrName: ${{ inputs.probe_model }}

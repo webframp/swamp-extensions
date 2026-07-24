@@ -1,15 +1,15 @@
 # @webframp/bench-datastore
 
-Datastore benchmarking harness for swamp. Two workflow-based test scenarios
-that exercise any swamp datastore backend under sustained load without lock
+Datastore benchmarking harness for swamp. Two workflow-based test scenarios that
+exercise any swamp datastore backend under sustained load without lock
 contention.
 
 Designed for ECS Fargate deployment but works locally for quick validation.
 
 ## Architecture
 
-**One harness instance per worker.** Each worker creates its own model
-instances (`bench-harness-w001`, `bench-probe-w001`, `bench-w001-m001` through
+**One harness instance per worker.** Each worker creates its own model instances
+(`bench-harness-w001`, `bench-probe-w001`, `bench-w001-m001` through
 `bench-w001-m050`). Workers never share models — zero lock contention by
 construction, not by luck.
 
@@ -17,8 +17,8 @@ construction, not by luck.
 
 ### A: Throughput (breadth)
 
-Each worker owns 50 `command/shell` models. A workflow cycle performs
-write → read → health-check, measuring per-step latency.
+Each worker owns 50 `command/shell` models. A workflow cycle performs write →
+read → health-check, measuring per-step latency.
 
 - 10 workers × 50 models each = 500 models (completely disjoint)
 - Rotates through operations per iteration
@@ -26,8 +26,8 @@ write → read → health-check, measuring per-step latency.
 
 ### B: Write Stress (depth)
 
-Each worker owns 1 model, writes continuously with rotating payload sizes.
-A workflow performs write → verify, measuring sustained single-writer throughput.
+Each worker owns 1 model, writes continuously with rotating payload sizes. A
+workflow performs write → verify, measuring sustained single-writer throughput.
 
 - 10 workers × 1 model each = 10 models (completely disjoint)
 - Payload rotation: small (100B) → medium (10KB) → large (500KB+)
@@ -86,6 +86,7 @@ done
 
 Each Fargate task gets a `WORKER_ID` environment variable. The entrypoint
 script:
+
 1. Creates the harness instance with `worker_id=$WORKER_ID`
 2. Runs setup
 3. Loops calling `swamp workflow run` with incrementing iteration
@@ -106,8 +107,8 @@ Each iteration produces a `result` resource with timing data:
 }
 ```
 
-Resource instance names include the worker ID (`w1-iter-42`), so results
-from multiple workers never collide.
+Resource instance names include the worker ID (`w1-iter-42`), so results from
+multiple workers never collide.
 
 ## Design Principles
 

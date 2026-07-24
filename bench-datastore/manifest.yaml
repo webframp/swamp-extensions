@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/bench-datastore"
-version: "2026.07.23.1"
+version: "2026.07.24.1"
 description: |
   Datastore benchmarking harness for swamp. Two workflow-based test
   scenarios that exercise any swamp datastore backend under sustained load

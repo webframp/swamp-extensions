@@ -2,13 +2,10 @@ id: d1a2b3c4-e5f6-7890-abcd-ef1234567890
 name: "@webframp/bench-throughput-cycle"
 description: |
   Single iteration of the throughput benchmark. Executes one model method
-  (rotated by iteration), then reads back the data and queries the datastore.
+  (rotated by iteration), then reads back the data and checks datastore health.
   Designed to be called in a tight loop by an ECS worker.
 
-  Each worker must have its own harness instance (bench-harness-w{NNN}) and
-  read probe (bench-probe-w{NNN}) created via the harness setup method.
-
-  Measures: write latency, read latency, query latency, datastore health,
+  Measures: write latency, read latency, datastore health,
   and workflow orchestration overhead.
 version: 1
 tags:
@@ -44,11 +41,13 @@ jobs:
 
   - name: read
     description: Read back data to measure sync pull latency.
-    needs:
-      - write
+    dependsOn:
+      - job: write
+        condition:
+          type: succeeded
     steps:
-      - name: data-list
-        description: List recent data for the harness model.
+      - name: data-search
+        description: Search recent data.
         task:
           type: model_method
           modelIdOrName: ${{ inputs.probe_model }}
@@ -58,8 +57,10 @@ jobs:
 
   - name: health
     description: Datastore health check (round-trip latency).
-    needs:
-      - read
+    dependsOn:
+      - job: read
+        condition:
+          type: succeeded
     steps:
       - name: status
         description: Check datastore connectivity and latency.
