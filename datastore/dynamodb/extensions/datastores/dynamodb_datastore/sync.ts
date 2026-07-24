@@ -347,7 +347,8 @@ export function createSyncService(
         new UpdateCommand({
           TableName: tableName,
           Key: { pk: "PARTITIONS#registry", sk: "LIST" },
-          UpdateExpression: "ADD partitions :p",
+          UpdateExpression: "ADD #parts :p",
+          ExpressionAttributeNames: { "#parts": "partitions" },
           ExpressionAttributeValues: {
             ":p": new Set([partition]),
           },

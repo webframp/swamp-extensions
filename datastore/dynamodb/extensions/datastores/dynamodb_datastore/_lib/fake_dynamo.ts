@@ -95,10 +95,15 @@ export class FakeDynamoTable {
         const updateExpr = params.UpdateExpression as string | undefined;
         if (updateExpr?.startsWith("ADD ")) {
           const values = params.ExpressionAttributeValues ?? {};
+          const names = params.ExpressionAttributeNames ?? {};
           const next: Item = existing ? { ...existing } : { pk, sk };
-          const match = updateExpr.match(/^ADD (\w+) :(\w+)$/);
+          // Match "ADD #alias :val" or "ADD attrName :val"
+          const match = updateExpr.match(/^ADD (#?\w+) :(\w+)$/);
           if (match) {
-            const attr = match[1];
+            const rawAttr = match[1];
+            const attr = rawAttr.startsWith("#")
+              ? (names[rawAttr] as string)
+              : rawAttr;
             const valKey = `:${match[2]}`;
             const toAdd = values[valKey] as Set<string>;
             const current = next[attr] instanceof Set
