@@ -3,7 +3,7 @@ import { model } from "./maintainer.ts";
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/extension-maintenance/maintainer");
-  assertEquals(model.version, "2026.07.25.1");
+  assertEquals(model.version, "2026.07.25.2");
 });
 
 Deno.test("model has all four methods", () => {
