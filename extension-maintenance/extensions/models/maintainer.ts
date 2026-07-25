@@ -150,10 +150,14 @@ async function run(
 }
 
 /** Query npm registry for latest version of a package. */
-async function npmLatest(pkg: string): Promise<string | null> {
+async function npmLatest(
+  pkg: string,
+  timeoutMs: number,
+): Promise<string | null> {
   try {
     const resp = await fetch(
       `https://registry.npmjs.org/${pkg}/latest`,
+      { signal: AbortSignal.timeout(timeoutMs) },
     );
     if (!resp.ok) return null;
     const data = await resp.json();
@@ -164,10 +168,15 @@ async function npmLatest(pkg: string): Promise<string | null> {
 }
 
 /** Query JSR for latest version of a scoped package. */
-async function jsrLatest(scope: string, name: string): Promise<string | null> {
+async function jsrLatest(
+  scope: string,
+  name: string,
+  timeoutMs: number,
+): Promise<string | null> {
   try {
     const resp = await fetch(
       `https://jsr.io/@${scope}/${name}/meta.json`,
+      { signal: AbortSignal.timeout(timeoutMs) },
     );
     if (!resp.ok) return null;
     const data = await resp.json();
@@ -204,7 +213,10 @@ async function discoverExtensions(repoRoot: string): Promise<string[]> {
 }
 
 /** Extract npm import versions from .ts source files in an extension. */
-async function extractNpmImports(extDir: string): Promise<Map<string, string>> {
+async function extractNpmImports(
+  extDir: string,
+  warnings?: string[],
+): Promise<Map<string, string>> {
   const imports = new Map<string, string>();
   const findCmd = await run([
     "find",
@@ -225,7 +237,13 @@ async function extractNpmImports(extDir: string): Promise<Map<string, string>> {
       if (!match) continue;
       // npm:@aws-sdk/client-s3@3.1094.0 → @aws-sdk/client-s3, 3.1094.0
       const atIdx = match.lastIndexOf("@");
-      if (atIdx <= 4) continue; // skip if no version separator
+      if (atIdx <= 4) {
+        // Unversioned import (e.g. npm:zod) — flag it
+        if (warnings) {
+          warnings.push(`Unversioned npm import: ${match} in ${file}`);
+        }
+        continue;
+      }
       const pkg = match.slice(4, atIdx); // strip "npm:"
       const ver = match.slice(atIdx + 1);
       imports.set(pkg, ver);
@@ -265,9 +283,17 @@ async function readManifestDeps(
         continue;
       }
       if (inDeps && line.match(/^\s+-\s+"/)) {
-        const match = line.match(/"([^@]+)@([^"]+)"/);
-        if (match) {
-          deps.push({ name: match[1]!, version: match[2]! });
+        // Extract full "name@version" then split on last @
+        const fullMatch = line.match(/"([^"]+)"/);
+        if (fullMatch) {
+          const full = fullMatch[1]!;
+          const lastAt = full.lastIndexOf("@");
+          if (lastAt > 0) {
+            deps.push({
+              name: full.slice(0, lastAt),
+              version: full.slice(lastAt + 1),
+            });
+          }
         }
       } else if (inDeps && !line.match(/^\s+-/) && !line.match(/^\s*$/)) {
         inDeps = false;
@@ -312,13 +338,19 @@ async function registryLatest(extName: string): Promise<string | null> {
   }
 }
 
-/** Compute next CalVer version for today. */
-function nextCalVer(): string {
+/** Compute next CalVer version, incrementing the sequence if already bumped today. */
+function nextCalVer(currentVersion: string): string {
   const now = new Date();
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
-  return `${y}.${m}.${d}.1`;
+  const todayPrefix = `${y}.${m}.${d}.`;
+
+  if (currentVersion.startsWith(todayPrefix)) {
+    const seq = parseInt(currentVersion.slice(todayPrefix.length), 10);
+    return `${todayPrefix}${(isNaN(seq) ? 0 : seq) + 1}`;
+  }
+  return `${todayPrefix}1`;
 }
 
 /** Read the version field from manifest.yaml. */
@@ -361,7 +393,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.25.1",
+  version: "2026.07.25.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -423,28 +455,39 @@ export const model = {
         const allNpmPkgs = new Set<string>();
         const extNpmMaps: Map<string, Map<string, string>> = new Map();
 
+        const unpinnedWarnings: string[] = [];
+
         for (const dir of extDirs) {
           if (args.filter && !dir.includes(args.filter)) continue;
-          const npmImports = await extractNpmImports(dir);
+          const npmImports = await extractNpmImports(dir, unpinnedWarnings);
           extNpmMaps.set(dir, npmImports);
           for (const pkg of npmImports.keys()) {
             allNpmPkgs.add(pkg);
           }
         }
 
+        for (const w of unpinnedWarnings) {
+          context.log("warning", w);
+        }
+
         // Batch-query npm registry
+        const timeoutMs = context.globalArgs.registry_timeout * 1000;
         context.log(
           "info",
           `Querying npm registry for ${allNpmPkgs.size} packages`,
         );
         const npmLatestVersions = new Map<string, string>();
         for (const pkg of allNpmPkgs) {
-          const latest = await npmLatest(pkg);
+          const latest = await npmLatest(pkg, timeoutMs);
           if (latest) npmLatestVersions.set(pkg, latest);
         }
 
         // Query swamp-testing latest
-        const testingLatest = await jsrLatest("systeminit", "swamp-testing");
+        const testingLatest = await jsrLatest(
+          "systeminit",
+          "swamp-testing",
+          timeoutMs,
+        );
         context.log("info", `swamp-testing latest: ${testingLatest}`);
 
         // Build per-extension status
@@ -458,7 +501,7 @@ export const model = {
 
           const name = await readManifestName(dir);
           const version = await readManifestVersion(dir);
-          const relDir = dir.replace(resolvedRoot + "/", "");
+          const relDir = dir.slice(resolvedRoot.length + 1);
 
           // npm deps
           const npmImports = extNpmMaps.get(dir) ?? new Map();
@@ -595,12 +638,12 @@ export const model = {
           }>;
         }).extensions;
 
-        const nextVer = nextCalVer();
         const entries: z.infer<typeof BumpPlanEntrySchema>[] = [];
 
         for (const ext of extensions) {
           if (!ext.stale) continue;
 
+          const nextVer = nextCalVer(ext.version);
           const changes: z.infer<typeof BumpPlanEntrySchema>["changes"] = [];
           const noteLines: string[] = [];
 
@@ -653,27 +696,27 @@ export const model = {
             );
           }
 
-          // Only produce an entry if there are shipped-file changes
+          // Only produce an entry if there are shipped-file changes.
+          // Test-only changes (swamp-testing bump) do not require a version
+          // bump or RELEASE_NOTES per repo conventions.
           const hasShippedChanges = changes.some(
             (c) => c.category !== "testing",
           );
-          if (!hasShippedChanges && args.skip_testing) continue;
+          if (!hasShippedChanges) continue;
 
           // manifest version bump
-          if (hasShippedChanges) {
-            changes.push({
-              file: "manifest.yaml",
-              find: ext.version,
-              replace: nextVer,
-              category: "manifest-version",
-            });
-            changes.push({
-              file: "extensions/**/*.ts",
-              find: `version: "${ext.version}"`,
-              replace: `version: "${nextVer}"`,
-              category: "source-version",
-            });
-          }
+          changes.push({
+            file: "manifest.yaml",
+            find: `version: "${ext.version}"`,
+            replace: `version: "${nextVer}"`,
+            category: "manifest-version",
+          });
+          changes.push({
+            file: "extensions/**/*.ts",
+            find: `version: "${ext.version}"`,
+            replace: `version: "${nextVer}"`,
+            category: "source-version",
+          });
 
           const releaseNotes = `## ${nextVer}\n\n${noteLines.join("\n\n")}\n`;
 
@@ -681,7 +724,7 @@ export const model = {
             name: ext.name,
             dir: ext.dir,
             currentVersion: ext.version,
-            nextVersion: hasShippedChanges ? nextVer : ext.version,
+            nextVersion: nextVer,
             changes,
             releaseNotes,
           });
@@ -770,45 +813,47 @@ export const model = {
                 if (!findResult.success) continue;
                 for (const file of findResult.stdout.trim().split("\n")) {
                   if (!file) continue;
-                  if (!args.dry_run) {
-                    const content = await Deno.readTextFile(file);
-                    if (content.includes(change.find)) {
+                  const content = await Deno.readTextFile(file);
+                  if (content.includes(change.find)) {
+                    if (!args.dry_run) {
                       const updated = content.replaceAll(
                         change.find,
                         change.replace,
                       );
                       await Deno.writeTextFile(file, updated);
-                      filesModified++;
                     }
+                    filesModified++;
                   }
                 }
               } else {
                 // Specific file
                 const filePath = `${extDir}/${change.file}`;
-                if (!args.dry_run) {
-                  try {
-                    const content = await Deno.readTextFile(filePath);
-                    if (content.includes(change.find)) {
+                try {
+                  const content = await Deno.readTextFile(filePath);
+                  if (content.includes(change.find)) {
+                    if (!args.dry_run) {
                       const updated = content.replaceAll(
                         change.find,
                         change.replace,
                       );
                       await Deno.writeTextFile(filePath, updated);
-                      filesModified++;
                     }
-                  } catch {
-                    // File may not exist for this extension
+                    filesModified++;
                   }
+                } catch {
+                  // File may not exist for this extension
                 }
               }
             }
 
             // Write RELEASE_NOTES.md
-            if (!args.dry_run && entry.releaseNotes) {
-              await Deno.writeTextFile(
-                `${extDir}/RELEASE_NOTES.md`,
-                entry.releaseNotes,
-              );
+            if (entry.releaseNotes) {
+              if (!args.dry_run) {
+                await Deno.writeTextFile(
+                  `${extDir}/RELEASE_NOTES.md`,
+                  entry.releaseNotes,
+                );
+              }
               filesModified++;
             }
           } catch (err: unknown) {
@@ -880,7 +925,7 @@ export const model = {
           }
 
           const name = await readManifestName(dir);
-          const relDir = dir.replace(resolvedRoot + "/", "");
+          const relDir = dir.slice(resolvedRoot.length + 1);
           const errors: string[] = [];
 
           context.log("info", `Quality gate: ${name}`);
