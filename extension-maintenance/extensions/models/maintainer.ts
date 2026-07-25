@@ -668,7 +668,9 @@ export const model = {
             for (const [base, pkgs] of grouped) {
               // Use the version from the first package (all under same
               // namespace typically share a version)
-              const first = staleNpm.find((d) => d.name.startsWith(base))!;
+              const first = staleNpm.find((d) =>
+                d.name === base || d.name.startsWith(base + "/")
+              )!;
               if (pkgs.length === 1) {
                 noteLines.push(
                   `**Changed:** Bump ${first.name} ${first.current} → ${first.latest}`,
