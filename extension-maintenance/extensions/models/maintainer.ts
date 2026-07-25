@@ -501,7 +501,7 @@ export const model = {
 
           const name = await readManifestName(dir);
           const version = await readManifestVersion(dir);
-          const relDir = dir.slice(resolvedRoot.length + 1);
+          const relDir = dir.slice(resolvedRoot.length + 1) || ".";
 
           // npm deps
           const npmImports = extNpmMaps.get(dir) ?? new Map();
@@ -594,7 +594,7 @@ export const model = {
           .boolean()
           .default(false)
           .describe(
-            "Exclude swamp-testing bumps from the plan (test-only, no version bump needed)",
+            "Skip deno.json swamp-testing bump for extensions that also have shipped-file changes. Test-only extensions are always excluded from the plan.",
           ),
       }),
       execute: async (
@@ -663,12 +663,21 @@ export const model = {
               const base = dep.name.split("/").slice(0, -1).join("/") ||
                 dep.name;
               if (!grouped.has(base)) grouped.set(base, []);
-              grouped.get(base)!.push(`${dep.current} → ${dep.latest}`);
+              grouped.get(base)!.push(dep.name.split("/").pop()!);
             }
-            for (const [base, versions] of grouped) {
-              noteLines.push(
-                `**Changed:** Bump ${base} ${versions[0]}`,
-              );
+            for (const [base, pkgs] of grouped) {
+              // Use the version from the first package (all under same
+              // namespace typically share a version)
+              const first = staleNpm.find((d) => d.name.startsWith(base))!;
+              if (pkgs.length === 1) {
+                noteLines.push(
+                  `**Changed:** Bump ${first.name} ${first.current} → ${first.latest}`,
+                );
+              } else {
+                noteLines.push(
+                  `**Changed:** Bump ${base}/* ${first.current} → ${first.latest} (${pkgs.length} packages)`,
+                );
+              }
             }
           }
 
@@ -847,15 +856,13 @@ export const model = {
             }
 
             // Write RELEASE_NOTES.md
-            if (entry.releaseNotes) {
-              if (!args.dry_run) {
-                await Deno.writeTextFile(
-                  `${extDir}/RELEASE_NOTES.md`,
-                  entry.releaseNotes,
-                );
-              }
-              filesModified++;
+            if (!args.dry_run) {
+              await Deno.writeTextFile(
+                `${extDir}/RELEASE_NOTES.md`,
+                entry.releaseNotes,
+              );
             }
+            filesModified++;
           } catch (err: unknown) {
             errors.push({
               extension: entry.name,
@@ -925,7 +932,7 @@ export const model = {
           }
 
           const name = await readManifestName(dir);
-          const relDir = dir.slice(resolvedRoot.length + 1);
+          const relDir = dir.slice(resolvedRoot.length + 1) || ".";
           const errors: string[] = [];
 
           context.log("info", `Quality gate: ${name}`);
