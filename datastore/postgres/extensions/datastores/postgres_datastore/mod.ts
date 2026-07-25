@@ -7,6 +7,7 @@ import {
   createSyncService as createSync,
   type TwoPhaseSyncService,
 } from "./sync.ts";
+import { Attr, recordRetry, sqlSpan, withSpan } from "./_lib/tracing.ts";
 
 interface LockInfo {
   holder: string;
@@ -117,25 +118,39 @@ function createPostgresLock(
   let heartbeatId: ReturnType<typeof setInterval> | undefined;
 
   const acquire = async () => {
-    if (nonce !== undefined) {
-      throw new Error("Lock already acquired; call release() first");
-    }
-    if (ensureInfra) await ensureInfra();
-    const signal = options?.signal;
-    const start = Date.now();
-    nonce = crypto.randomUUID();
-    try {
-      const holder = `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`;
-      const hostname = Deno.hostname();
-      const pid = Deno.pid;
-      let attempt = 0;
+    return await withSpan("postgres-datastore lock acquire", {
+      [Attr.LOCK_KEY]: key,
+      [Attr.LOCK_TIMEOUT_MS]: maxWaitMs,
+      [Attr.LOCK_TTL_MS]: ttlMs,
+    }, async (span) => {
+      if (nonce !== undefined) {
+        throw new Error("Lock already acquired; call release() first");
+      }
+      if (ensureInfra) await ensureInfra();
+      const signal = options?.signal;
+      const start = Date.now();
+      const candidateNonce = crypto.randomUUID();
+      nonce = candidateNonce;
+      let contended = false;
+      try {
+        const holder = `${
+          Deno.env.get("USER") ?? "unknown"
+        }@${Deno.hostname()}`;
+        const hostname = Deno.hostname();
+        const pid = Deno.pid;
+        let attempt = 0;
 
-      while (Date.now() - start < maxWaitMs) {
-        if (signal?.aborted) {
-          throw new DOMException("Lock acquisition aborted", "AbortError");
-        }
-        const rows: postgres.Row[] = await sql.unsafe(
-          `INSERT INTO ${locksTable} (key, holder, hostname, pid, acquired_at, ttl_ms, nonce)
+        while (Date.now() - start < maxWaitMs) {
+          if (signal?.aborted) {
+            throw new DOMException("Lock acquisition aborted", "AbortError");
+          }
+          const rows: postgres.Row[] = await sqlSpan(
+            "acquireLock",
+            "INSERT",
+            locksTable,
+            () =>
+              sql.unsafe(
+                `INSERT INTO ${locksTable} (key, holder, hostname, pid, acquired_at, ttl_ms, nonce)
            VALUES ($1, $2, $3, $4, now(), $5, $6)
            ON CONFLICT (key) DO UPDATE
              SET holder = EXCLUDED.holder,
@@ -146,78 +161,105 @@ function createPostgresLock(
                  nonce = EXCLUDED.nonce
              WHERE ${locksTable}.acquired_at + make_interval(secs => ${locksTable}.ttl_ms / 1000.0) < now()
            RETURNING nonce`,
-          [key, holder, hostname, pid, ttlMs, nonce],
-        );
+                [key, holder, hostname, pid, ttlMs, candidateNonce],
+              ),
+          );
 
-        if (rows.length > 0 && rows[0].nonce === nonce) {
-          const acquiredNonce = nonce;
-          heartbeatId = setInterval(async () => {
-            try {
-              await sql.unsafe(
-                `UPDATE ${locksTable} SET acquired_at = now() WHERE key = $1 AND nonce = $2`,
-                [key, acquiredNonce],
-              );
-            } catch {
-              // Connection lost — lock will expire via TTL
-            }
-          }, ttlMs / 3);
-          // Unref so the timer doesn't prevent process exit if release is never called
-          Deno.unrefTimer(heartbeatId);
-          return;
-        }
-        // Jittered backoff: base interval * (1 + random * 0.5), capped at 2x base
-        const backoff = Math.min(
-          retryIntervalMs * Math.pow(1.5, Math.min(attempt, 4)),
-          retryIntervalMs * 2,
-        );
-        const jitter = backoff * (0.5 + Math.random() * 0.5);
-        const delay = Math.floor(jitter);
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(() => {
-            if (signal) signal.removeEventListener("abort", onAbort);
-            resolve();
-          }, delay);
-          const onAbort = () => {
-            clearTimeout(timer);
-            reject(new DOMException("Lock acquisition aborted", "AbortError"));
-          };
-          if (signal) {
-            if (signal.aborted) {
+          if (rows.length > 0 && rows[0].nonce === candidateNonce) {
+            const acquiredNonce = candidateNonce;
+            heartbeatId = setInterval(async () => {
+              try {
+                await sql.unsafe(
+                  `UPDATE ${locksTable} SET acquired_at = now() WHERE key = $1 AND nonce = $2`,
+                  [key, acquiredNonce],
+                );
+              } catch {
+                // Connection lost — lock will expire via TTL
+              }
+            }, ttlMs / 3);
+            // Unref so the timer doesn't prevent process exit if release is never called
+            Deno.unrefTimer(heartbeatId);
+            span.setAttributes({
+              [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+              [Attr.LOCK_CONTENDED]: contended,
+            });
+            return;
+          }
+          contended = true;
+          // Jittered backoff: base interval * (1 + random * 0.5), capped at 2x base
+          const backoff = Math.min(
+            retryIntervalMs * Math.pow(1.5, Math.min(attempt, 4)),
+            retryIntervalMs * 2,
+          );
+          const jitter = backoff * (0.5 + Math.random() * 0.5);
+          const delay = Math.floor(jitter);
+          recordRetry(attempt + 1, delay, {
+            "retry.reason": "lock_contended",
+          });
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => {
+              if (signal) signal.removeEventListener("abort", onAbort);
+              resolve();
+            }, delay);
+            const onAbort = () => {
               clearTimeout(timer);
               reject(
                 new DOMException("Lock acquisition aborted", "AbortError"),
               );
-              return;
+            };
+            if (signal) {
+              if (signal.aborted) {
+                clearTimeout(timer);
+                reject(
+                  new DOMException("Lock acquisition aborted", "AbortError"),
+                );
+                return;
+              }
+              signal.addEventListener("abort", onAbort, { once: true });
             }
-            signal.addEventListener("abort", onAbort, { once: true });
-          }
-        });
-        attempt++;
+          });
+          attempt++;
+        }
+      } catch (e) {
+        nonce = undefined;
+        throw e;
       }
-    } catch (e) {
       nonce = undefined;
-      throw e;
-    }
-    nonce = undefined;
-    throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
+      span.setAttributes({
+        [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+        [Attr.LOCK_CONTENDED]: contended,
+      });
+      throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
+    });
   };
 
   const release = async () => {
-    if (heartbeatId !== undefined) {
-      clearInterval(heartbeatId);
-      heartbeatId = undefined;
-    }
-    if (nonce) {
-      try {
-        await sql.unsafe(
-          `DELETE FROM ${locksTable} WHERE key = $1 AND nonce = $2`,
-          [key, nonce],
-        );
-      } catch {
-        // Connection may be dead — lock will expire via TTL
+    return await withSpan("postgres-datastore lock release", {
+      [Attr.LOCK_KEY]: key,
+    }, async () => {
+      if (heartbeatId !== undefined) {
+        clearInterval(heartbeatId);
+        heartbeatId = undefined;
       }
-      nonce = undefined;
-    }
+      if (nonce) {
+        const releaseNonce = nonce;
+        try {
+          await sqlSpan(
+            "releaseLock",
+            "DELETE",
+            locksTable,
+            () =>
+              sql.unsafe(
+                `DELETE FROM ${locksTable} WHERE key = $1 AND nonce = $2`,
+                [key, releaseNonce],
+              ),
+          );
+        } catch {
+          // Connection may be dead — lock will expire via TTL
+        }
+        nonce = undefined;
+      }
+    });
   };
 
   return {
@@ -234,37 +276,67 @@ function createPostgresLock(
     },
 
     withLock: async <T>(fn: () => Promise<T>): Promise<T> => {
-      await acquire();
-      try {
-        return await fn();
-      } finally {
-        await release();
-      }
+      return await withSpan("postgres-datastore lock withLock", {
+        [Attr.LOCK_KEY]: key,
+      }, async () => {
+        await acquire();
+        try {
+          return await fn();
+        } finally {
+          await release();
+        }
+      });
     },
 
     inspect: async () => {
-      const rows: postgres.Row[] = await sql.unsafe(
-        `SELECT holder, hostname, pid, acquired_at, ttl_ms, nonce FROM ${locksTable} WHERE key = $1`,
-        [key],
-      );
-      if (rows.length === 0) return null;
-      const row = rows[0];
-      return {
-        holder: row.holder,
-        hostname: row.hostname,
-        pid: row.pid,
-        acquiredAt: String(row.acquired_at),
-        ttlMs: row.ttl_ms,
-        nonce: row.nonce,
-      };
+      return await withSpan("postgres-datastore lock inspect", {
+        [Attr.LOCK_KEY]: key,
+      }, async (span) => {
+        const rows: postgres.Row[] = await sqlSpan(
+          "inspectLock",
+          "SELECT",
+          locksTable,
+          () =>
+            sql.unsafe(
+              `SELECT holder, hostname, pid, acquired_at, ttl_ms, nonce FROM ${locksTable} WHERE key = $1`,
+              [key],
+            ),
+        );
+        if (rows.length === 0) return null;
+        const row = rows[0];
+        if (row.holder) {
+          span.setAttribute(
+            Attr.LOCK_HOLDER,
+            `${row.holder} (pid ${row.pid})`,
+          );
+        }
+        return {
+          holder: row.holder,
+          hostname: row.hostname,
+          pid: row.pid,
+          acquiredAt: String(row.acquired_at),
+          ttlMs: row.ttl_ms,
+          nonce: row.nonce,
+        };
+      });
     },
 
     forceRelease: async (expectedNonce: string) => {
-      const result = await sql.unsafe(
-        `DELETE FROM ${locksTable} WHERE key = $1 AND nonce = $2`,
-        [key, expectedNonce],
-      );
-      return Number(result.count) > 0;
+      return await withSpan("postgres-datastore lock forceRelease", {
+        [Attr.LOCK_KEY]: key,
+      }, async () => {
+        const result = await sqlSpan(
+          "forceReleaseLock",
+          "DELETE",
+          locksTable,
+          () =>
+            sql.unsafe(
+              `DELETE FROM ${locksTable} WHERE key = $1 AND nonce = $2`,
+              [key, expectedNonce],
+            ),
+        );
+        return Number(result.count) > 0;
+      });
     },
   };
 }
@@ -307,10 +379,25 @@ export const datastore = {
     function ensureInfrastructure(): Promise<void> {
       if (!infraPromise) {
         infraPromise = (async () => {
-          await sql.unsafe(
-            `CREATE SCHEMA IF NOT EXISTS ${parsed.schema}`,
-          );
-          await sql.unsafe(`
+          await withSpan("postgres-datastore ensureInfrastructure", {
+            [Attr.DB_SYSTEM]: "postgresql",
+            [Attr.DB_COLLECTION]: locksTable,
+          }, async () => {
+            await sqlSpan(
+              "createSchema",
+              "CREATE SCHEMA",
+              parsed.schema,
+              () =>
+                sql.unsafe(
+                  `CREATE SCHEMA IF NOT EXISTS ${parsed.schema}`,
+                ),
+            );
+            await sqlSpan(
+              "createLocksTable",
+              "CREATE TABLE",
+              locksTable,
+              () =>
+                sql.unsafe(`
             CREATE TABLE IF NOT EXISTS ${locksTable} (
               key         TEXT PRIMARY KEY,
               holder      TEXT NOT NULL,
@@ -320,7 +407,9 @@ export const datastore = {
               ttl_ms      INTEGER NOT NULL DEFAULT 30000,
               nonce       TEXT NOT NULL
             )
-          `);
+          `),
+            );
+          });
         })().catch((e) => {
           infraPromise = undefined;
           throw e;
@@ -348,11 +437,17 @@ export const datastore = {
           const start = performance.now();
           try {
             await ensureInfrastructure();
-            const [row] = await sql`
+            const [row] = await sqlSpan(
+              "serverVersion",
+              "SELECT",
+              "pg_catalog",
+              () =>
+                sql`
               SELECT version() AS v,
                      current_setting('server_version') AS sv,
                      pg_is_in_recovery() AS is_replica
-            `;
+            `,
+            );
             if (row.is_replica) {
               return {
                 healthy: false,

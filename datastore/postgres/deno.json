@@ -20,6 +20,9 @@
   "imports": {
     "zod": "npm:zod@4",
     "postgres": "npm:postgres@3.4.7",
+    "@opentelemetry/api": "npm:@opentelemetry/api@1.9.0",
+    "@opentelemetry/sdk-trace-base": "npm:@opentelemetry/sdk-trace-base@2.10.0",
+    "@opentelemetry/context-async-hooks": "npm:@opentelemetry/context-async-hooks@2.10.0",
     "@std/assert": "jsr:@std/assert@1.0.19",
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260504.10"
   },

@@ -73,6 +73,45 @@ curl -o /etc/ssl/certs/rds-global-bundle.pem \
 - Lock state survives failover (stored in WAL-replicated table)
 - Fencing tokens prevent split-brain during promotion events
 
+## Observability
+
+The extension emits [OpenTelemetry](https://opentelemetry.io/) spans for SQL
+operations, lock acquisition/release, and push/pull sync. It depends on
+`@opentelemetry/api` only — the host process owns the `TracerProvider`, so every
+span is a no-op when none is registered. When swamp runs with OTel enabled,
+datastore activity appears in traces nested under swamp's own
+`swamp.datastore.*` spans.
+
+Three layers are instrumented:
+
+- **SQL** — one span per round trip, named for what the statement does
+  (`PostgreSQL acquireLock`, `PostgreSQL scanFileMetadata`,
+  `PostgreSQL fetchRemoteManifest`, …) with `db.system.name`,
+  `db.operation.name`, `db.collection.name`, and
+  `db.response.returned_rows`. Push transactions get a single span rather than
+  one per statement, so a thousand-file push produces one span and not a
+  thousand.
+- **Lock** — `postgres-datastore lock acquire` / `release` / `withLock` /
+  `inspect` / `forceRelease`. Acquire records `lock.wait_duration_ms` and
+  `lock.contended`; inspect records `lock.holder`. Heartbeat renewals are
+  deliberately not given their own span — a lock held for minutes would
+  otherwise bury the trace in periodic noise.
+- **Sync** — `postgres-datastore pullChanged` / `pushChanged` / `hydrateFile` /
+  `preparePush` / `commitPush`, with `datastore.files_pulled`,
+  `datastore.files_pushed`, `datastore.files_deleted`, and
+  `datastore.fast_path_hit`.
+
+Retries appear as `retry` events on the enclosing span, with `retry.attempt`,
+`retry.delay_ms`, and `retry.reason` — `retryable_error` for transient
+PostgreSQL failures and `lock_contended` for the acquisition backoff.
+
+Statement text and bound parameters are never recorded. Parameters carry file
+content and the connection string carries a password, so span attributes hold
+only hand-written operation labels, table names, and counts.
+
+This is independent of `SWAMP_PG_SYNC_TRACE=1`, which writes phase timings to
+stderr and remains available whether or not OTel is configured.
+
 ## Development
 
 ```bash
