@@ -13,6 +13,12 @@ import {
 } from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 import { Sidecar } from "./sidecar.ts";
 import { retryable } from "./_lib/retry.ts";
+import {
+  Attr,
+  instrumentClient,
+  recordRetry,
+  withSpan,
+} from "./_lib/tracing.ts";
 import { reassembleChunks, splitIntoChunks } from "./chunking.ts";
 import {
   fileChunkKey,
@@ -178,12 +184,15 @@ function batchesOf<T>(items: T[], size: number): T[][] {
 }
 
 export function createSyncService(
-  doc: DynamoDBDocumentClient,
+  rawDoc: DynamoDBDocumentClient,
   tableName: string,
   cachePath: string,
   maxChunkBytes: number,
   ensureInfrastructure: () => Promise<void>,
 ): TwoPhaseSyncService {
+  // Wrapped here rather than in createClients() so the spans are emitted no
+  // matter how the caller obtained the client.
+  const doc = instrumentClient(rawDoc);
   const sidecar = new Sidecar(cachePath);
 
   async function queryPartitionMeta(
@@ -252,6 +261,12 @@ export function createSyncService(
       for (let attempt = 0; unprocessed.length > 0 && attempt < 8; attempt++) {
         if (attempt > 0) {
           const delay = Math.min(500 * 2 ** attempt, 5_000);
+          // This loop retries independently of retryable(), so it records its
+          // own event — otherwise UnprocessedKeys churn would be invisible.
+          recordRetry(attempt, delay, {
+            "retry.reason": "unprocessed_keys",
+            "retry.unprocessed": unprocessed.length,
+          });
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
         const result = await retryable(() =>
@@ -367,6 +382,12 @@ export function createSyncService(
     for (let attempt = 0; pending.length > 0 && attempt < 8; attempt++) {
       if (attempt > 0) {
         const delay = Math.min(500 * 2 ** attempt, 5_000);
+        // This loop retries independently of retryable(), so it records its
+        // own event — otherwise UnprocessedItems churn would be invisible.
+        recordRetry(attempt, delay, {
+          "retry.reason": "unprocessed_items",
+          "retry.unprocessed": pending.length,
+        });
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
       const result = await retryable(() =>
@@ -565,7 +586,7 @@ export function createSyncService(
     context?: SyncContext;
     metadataOnly?: boolean;
     signal?: AbortSignal;
-  }): Promise<number> {
+  }): Promise<{ changes: number; fastPath: boolean }> {
     await ensureInfrastructure();
     const models = opts?.context?.models;
     const metadataOnly = opts?.metadataOnly === true;
@@ -589,7 +610,7 @@ export function createSyncService(
       if (
         lastPushedAt && new Date(lastPushedAt) <= new Date(state.lastPulledAt)
       ) {
-        return 0;
+        return { changes: 0, fastPath: true };
       }
     }
 
@@ -647,7 +668,7 @@ export function createSyncService(
       await sidecar.setLazyPullActive(false);
     }
 
-    return changes;
+    return { changes, fastPath: false };
   }
 
   async function collectDiff(
@@ -775,116 +796,167 @@ export function createSyncService(
     },
 
     async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
-      return await pull({
-        context: options?.context,
-        metadataOnly: options?.metadataOnly,
-        signal: options?.signal,
+      const models = options?.context?.models;
+      const scoped = models !== undefined && models.length > 0;
+      return await withSpan("dynamodb-datastore pullChanged", {
+        [Attr.DATASTORE_SCOPED]: scoped,
+        [Attr.DATASTORE_METADATA_ONLY]: options?.metadataOnly === true,
+      }, async (span) => {
+        const { changes, fastPath } = await pull({
+          context: options?.context,
+          metadataOnly: options?.metadataOnly,
+          signal: options?.signal,
+        });
+        span.setAttributes({
+          [Attr.DATASTORE_FILES_PULLED]: changes,
+          [Attr.DATASTORE_FAST_PATH_HIT]: fastPath,
+        });
+        return changes;
       });
     },
 
     async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
-      await ensureInfrastructure();
-      const signal = options?.signal;
+      return await withSpan(
+        "dynamodb-datastore pushChanged",
+        {},
+        async (span) => {
+          await ensureInfrastructure();
+          const signal = options?.signal;
 
-      let snapshot!: {
-        dirtyPaths: string[];
-        bulkInvalidated: boolean;
-        lastPulledAt: string | null;
-        lazyPullActive: boolean;
-      };
-      await sidecar.update((state) => {
-        snapshot = {
-          dirtyPaths: [...state.dirtyPaths],
-          bulkInvalidated: state.bulkInvalidated,
-          lastPulledAt: state.lastPulledAt,
-          lazyPullActive: state.lazyPullActive,
-        };
-      });
+          let snapshot!: {
+            dirtyPaths: string[];
+            bulkInvalidated: boolean;
+            lastPulledAt: string | null;
+            lazyPullActive: boolean;
+          };
+          await sidecar.update((state) => {
+            snapshot = {
+              dirtyPaths: [...state.dirtyPaths],
+              bulkInvalidated: state.bulkInvalidated,
+              lastPulledAt: state.lastPulledAt,
+              lazyPullActive: state.lazyPullActive,
+            };
+          });
 
-      if (!snapshot.bulkInvalidated && snapshot.dirtyPaths.length === 0) {
-        return 0;
-      }
+          if (!snapshot.bulkInvalidated && snapshot.dirtyPaths.length === 0) {
+            span.setAttributes({
+              [Attr.DATASTORE_FAST_PATH_HIT]: true,
+              [Attr.DATASTORE_FILES_PUSHED]: 0,
+              [Attr.DATASTORE_FILES_DELETED]: 0,
+            });
+            return 0;
+          }
 
-      const { toPush, toTombstone, remoteChunkCounts } = await collectDiff(
-        snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
-        snapshot.lastPulledAt,
-        snapshot.lazyPullActive,
-        signal,
+          const { toPush, toTombstone, remoteChunkCounts } = await collectDiff(
+            snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
+            snapshot.lastPulledAt,
+            snapshot.lazyPullActive,
+            signal,
+          );
+          const changes = await applyDiff(
+            toPush,
+            toTombstone,
+            remoteChunkCounts,
+            signal,
+          );
+          await sidecar.clearPushed(snapshot);
+          span.setAttributes({
+            [Attr.DATASTORE_FAST_PATH_HIT]: false,
+            [Attr.DATASTORE_FILES_PUSHED]: toPush.length,
+            [Attr.DATASTORE_FILES_DELETED]: toTombstone.length,
+          });
+          return changes;
+        },
       );
-      const changes = await applyDiff(
-        toPush,
-        toTombstone,
-        remoteChunkCounts,
-        signal,
-      );
-      await sidecar.clearPushed(snapshot);
-      return changes;
     },
 
     async hydrateFile(
       relPath: string,
       _options?: DatastoreSyncOptions,
     ): Promise<boolean> {
-      if (isTraversal(relPath)) return false;
-      await ensureInfrastructure();
-      const map = await querySpecificPaths([relPath]);
-      const meta = map.get(relPath);
-      if (!meta || meta.deletedAt !== null) return false;
-      const bytes = await fetchChunks(
-        relPath,
-        meta.chunkCount,
-        meta.hash,
-        meta.chunkVersion,
-      );
-      await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
-      return true;
+      return await withSpan("dynamodb-datastore hydrateFile", {
+        [Attr.DATASTORE_FILE]: relPath,
+      }, async (span) => {
+        if (isTraversal(relPath)) {
+          span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+          return false;
+        }
+        await ensureInfrastructure();
+        const map = await querySpecificPaths([relPath]);
+        const meta = map.get(relPath);
+        if (!meta || meta.deletedAt !== null) {
+          span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+          return false;
+        }
+        span.setAttribute(Attr.DATASTORE_CHUNKS, meta.chunkCount);
+        const bytes = await fetchChunks(
+          relPath,
+          meta.chunkCount,
+          meta.hash,
+          meta.chunkVersion,
+        );
+        await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
+        span.setAttribute(Attr.DATASTORE_HYDRATED, true);
+        return true;
+      });
     },
 
     async preparePush(options?: DatastoreSyncOptions): Promise<PushManifest> {
-      await ensureInfrastructure();
-      const signal = options?.signal;
+      return await withSpan(
+        "dynamodb-datastore preparePush",
+        {},
+        async (span) => {
+          await ensureInfrastructure();
+          const signal = options?.signal;
 
-      let snapshot!: {
-        dirtyPaths: string[];
-        bulkInvalidated: boolean;
-        lastPulledAt: string | null;
-        lazyPullActive: boolean;
-      };
-      await sidecar.update((state) => {
-        snapshot = {
-          dirtyPaths: [...state.dirtyPaths],
-          bulkInvalidated: state.bulkInvalidated,
-          lastPulledAt: state.lastPulledAt,
-          lazyPullActive: state.lazyPullActive,
-        };
-      });
+          let snapshot!: {
+            dirtyPaths: string[];
+            bulkInvalidated: boolean;
+            lastPulledAt: string | null;
+            lazyPullActive: boolean;
+          };
+          await sidecar.update((state) => {
+            snapshot = {
+              dirtyPaths: [...state.dirtyPaths],
+              bulkInvalidated: state.bulkInvalidated,
+              lastPulledAt: state.lastPulledAt,
+              lazyPullActive: state.lazyPullActive,
+            };
+          });
 
-      let toPush: FileEntry[] = [];
-      let toTombstone: string[] = [];
-      let remoteChunkCounts = new Map<
-        string,
-        { count: number; version: number }
-      >();
+          let toPush: FileEntry[] = [];
+          let toTombstone: string[] = [];
+          let remoteChunkCounts = new Map<
+            string,
+            { count: number; version: number }
+          >();
 
-      if (snapshot.bulkInvalidated || snapshot.dirtyPaths.length > 0) {
-        const result = await collectDiff(
-          snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
-          snapshot.lastPulledAt,
-          snapshot.lazyPullActive,
-          signal,
-        );
-        toPush = result.toPush;
-        toTombstone = result.toTombstone;
-        remoteChunkCounts = result.remoteChunkCounts;
-      }
+          if (snapshot.bulkInvalidated || snapshot.dirtyPaths.length > 0) {
+            const result = await collectDiff(
+              snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
+              snapshot.lastPulledAt,
+              snapshot.lazyPullActive,
+              signal,
+            );
+            toPush = result.toPush;
+            toTombstone = result.toTombstone;
+            remoteChunkCounts = result.remoteChunkCounts;
+          }
 
-      const internal: InternalPushManifest = {
-        toPush,
-        toTombstone,
-        remoteChunkCounts,
-        snapshot,
-      };
-      return internal as unknown as PushManifest;
+          span.setAttributes({
+            [Attr.DATASTORE_FILES_PLANNED_PUSH]: toPush.length,
+            [Attr.DATASTORE_FILES_PLANNED_DELETE]: toTombstone.length,
+          });
+
+          const internal: InternalPushManifest = {
+            toPush,
+            toTombstone,
+            remoteChunkCounts,
+            snapshot,
+          };
+          return internal as unknown as PushManifest;
+        },
+      );
     },
 
     async commitPush(
@@ -892,22 +964,37 @@ export function createSyncService(
       options?: DatastoreSyncOptions,
     ): Promise<number> {
       const internal = manifest as unknown as InternalPushManifest;
-      const signal = options?.signal;
+      return await withSpan("dynamodb-datastore commitPush", {
+        [Attr.DATASTORE_FILES_PLANNED_PUSH]: internal.toPush.length,
+        [Attr.DATASTORE_FILES_PLANNED_DELETE]: internal.toTombstone.length,
+      }, async (span) => {
+        const signal = options?.signal;
 
-      if (internal.toPush.length === 0 && internal.toTombstone.length === 0) {
+        if (internal.toPush.length === 0 && internal.toTombstone.length === 0) {
+          await sidecar.clearPushed(internal.snapshot);
+          span.setAttributes({
+            [Attr.DATASTORE_FAST_PATH_HIT]: true,
+            [Attr.DATASTORE_FILES_PUSHED]: 0,
+            [Attr.DATASTORE_FILES_DELETED]: 0,
+          });
+          return 0;
+        }
+
+        await ensureInfrastructure();
+        const changes = await applyDiff(
+          internal.toPush,
+          internal.toTombstone,
+          internal.remoteChunkCounts,
+          signal,
+        );
         await sidecar.clearPushed(internal.snapshot);
-        return 0;
-      }
-
-      await ensureInfrastructure();
-      const changes = await applyDiff(
-        internal.toPush,
-        internal.toTombstone,
-        internal.remoteChunkCounts,
-        signal,
-      );
-      await sidecar.clearPushed(internal.snapshot);
-      return changes;
+        span.setAttributes({
+          [Attr.DATASTORE_FAST_PATH_HIT]: false,
+          [Attr.DATASTORE_FILES_PUSHED]: internal.toPush.length,
+          [Attr.DATASTORE_FILES_DELETED]: internal.toTombstone.length,
+        });
+        return changes;
+      });
     },
   };
 }

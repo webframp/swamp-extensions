@@ -1,24 +1,31 @@
-## 2026.07.24.1
+## 2026.07.25.1
 
-**Breaking (schema):** GSI key structure redesigned for per-model partitioning.
+**Added:** OpenTelemetry spans for every layer of the datastore. Each SDK call
+emits one span named for the wire operation (`DynamoDB PutItem`,
+`DynamoDB Query`, `DynamoDB BatchWriteItem`, …) carrying
+`aws.dynamodb.table_names`, the GSI name when one is used, consumed capacity,
+returned and scanned counts, HTTP status, and the AWS request ID. The lock
+emits `dynamodb-datastore lock acquire` / `release` / `withLock` / `inspect` /
+`forceRelease`, with acquire recording wait duration and whether it contended.
+The sync service emits `dynamodb-datastore pullChanged` / `pushChanged` /
+`hydrateFile` / `preparePush` / `commitPush` with file counts, chunk counts,
+and fast-path indicators.
 
-- `gsi1pk` changes from the constant `"FILE"` to `"FILE#<modelType>/<modelId>"`
-  for model data and `"FILE#_system/<subdir>"` for system data.
-- `gsi1sk` changes from bare `relPath` to `"<updatedAt>|<relPath>"` enabling
-  time-range key conditions at the DynamoDB storage layer.
-- A `PARTITIONS#registry` item (StringSet) tracks all known model partitions
-  for full-sync discovery.
+**Added:** Control-plane calls are covered too. `DescribeTable`, `CreateTable`,
+and `UpdateTimeToLive` go through the low-level client rather than the document
+client, so both clients are instrumented — table creation and health checks are
+no longer invisible.
 
-**This is a schema-breaking change.** Existing DynamoDB tables with items written
-under the old `gsi1pk = "FILE"` format will not be visible to the new query
-logic. Since no production users exist on the old schema, no migration path is
-provided. New tables work out of the box.
+**Added:** Retries are recorded as `retry` span events on the enclosing
+operation. This covers the throttling backoff in `retryable`, the
+`UnprocessedKeys` loop in `BatchGetItem`, and the `UnprocessedItems` loop in
+`BatchWriteItem` — the latter two retry independently of the shared helper and
+previously left no trace of partial throttling at all.
 
-**Performance:** Sync operations now scale with change volume rather than total
-item count. Scoped pull/push read only the affected model's GSI partition
-(O(changed items)) instead of scanning all items (O(total items)).
+**Changed:** Nothing observable without tracing configured. The extension
+depends on `@opentelemetry/api` only; the host process owns the
+TracerProvider, and every span is a no-op when none is registered. Existing
+behaviour, return values, and log output are unchanged.
 
-**Changed:**
-- Raise `DIRTY_PATHS_CAP` from 200 to 1000, deferring the `bulkInvalidated`
-  full-scan trigger for repos with many models.
-- Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).
+**Note:** Item content is never recorded as a span attribute — only counts,
+key names, and table/index names.

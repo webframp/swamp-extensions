@@ -104,6 +104,45 @@ datastore:
     autoCreateTable: true
 ```
 
+## Observability
+
+The extension emits [OpenTelemetry](https://opentelemetry.io/) spans for
+DynamoDB operations, lock acquisition/release, and push/pull sync. It depends on
+`@opentelemetry/api` only — the host process owns the `TracerProvider`, so every
+span is a no-op when none is registered. When swamp runs with OTel enabled,
+datastore activity appears in traces nested under swamp's own
+`swamp.datastore.*` spans.
+
+Three layers are instrumented:
+
+- **SDK calls** — one span per request, named for the wire operation
+  (`DynamoDB PutItem`, `DynamoDB Query`, `DynamoDB BatchWriteItem`, …) with
+  `aws.dynamodb.table_names`, `aws.dynamodb.index_name`,
+  `aws.dynamodb.consumed_capacity.total`, `aws.dynamodb.count`,
+  `aws.dynamodb.scanned_count`, `http.response.status_code`, and
+  `aws.request_id`. Both the document client and the low-level client are
+  wrapped, so control-plane calls (`DescribeTable`, `CreateTable`,
+  `UpdateTimeToLive`) are covered as well.
+- **Lock** — `dynamodb-datastore lock acquire` / `release` / `withLock` /
+  `inspect` / `forceRelease`. Acquire records `lock.wait_duration_ms` and
+  `lock.contended`; inspect records `lock.holder`. Heartbeat renewals are
+  deliberately not given their own span — a lock held for minutes would
+  otherwise bury the trace in periodic noise.
+- **Sync** — `dynamodb-datastore pullChanged` / `pushChanged` / `hydrateFile` /
+  `preparePush` / `commitPush`, with `datastore.files_pulled`,
+  `datastore.files_pushed`, `datastore.files_deleted`, `datastore.chunks`, and
+  `datastore.fast_path_hit`.
+
+Retries appear as `retry` events on the enclosing span, with `retry.attempt`,
+`retry.delay_ms`, and `retry.reason` — `retryable_error` for throttling
+backoff, `unprocessed_keys` for `BatchGetItem` partial results, and
+`unprocessed_items` for `BatchWriteItem` partial writes. The last two matter
+because `BatchWriteItem` does not throw on partial throttling; it silently
+returns the items it skipped.
+
+Item content is never recorded. Span attributes carry counts, key names, and
+table or index names only.
+
 ## Development
 
 ```bash
