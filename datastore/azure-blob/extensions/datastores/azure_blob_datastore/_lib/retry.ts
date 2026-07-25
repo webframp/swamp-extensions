@@ -1,6 +1,8 @@
 // ABOUTME: Retryable HTTP wrapper with exponential backoff, jitter, and abort
 // ABOUTME: signal support for transient Azure Blob Storage errors (429/5xx).
 
+import { recordRetry } from "./tracing.ts";
+
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 
 const JITTER_FRACTION = 0.25;
@@ -80,6 +82,10 @@ export async function retryableRequest<T extends { status: number }>(
     const raw = baseDelayMs * Math.pow(3, attempt);
     const jitter = raw * JITTER_FRACTION * (Math.random() * 2 - 1);
     const delay = Math.max(0, Math.floor(raw + jitter));
+    recordRetry(attempt + 1, delay, {
+      "retry.reason": "retryable_status",
+      "http.response.status_code": result.status,
+    });
     await abortableSleep(delay, signal);
     attempt++;
   }

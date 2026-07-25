@@ -4,6 +4,7 @@
 
 import type { BlobClient, BlobResponse } from "./rest_client.ts";
 import { retryableRequest } from "./_lib/retry.ts";
+import { Attr, recordRetry, withSpan } from "./_lib/tracing.ts";
 import { Sidecar } from "./sidecar.ts";
 
 export interface SyncContext {
@@ -196,39 +197,47 @@ export function createSyncService(
   }
 
   async function listIndexShards(): Promise<string[]> {
-    const names: string[] = [];
-    let marker: string | undefined;
-    const listPrefix = `${prefix}/_index/`;
-    do {
-      const resp = await retryableRequest(() =>
-        client.request({
-          method: "GET",
-          path: `/${container}`,
-          query: {
-            restype: "container",
-            comp: "list",
-            prefix: listPrefix,
-            ...(marker ? { marker } : {}),
-          },
-        })
-      );
-      if (resp.status !== 200) {
-        throw new Error(`List blobs failed (${resp.status})`);
-      }
-      const { names: pageNames, nextMarker } = parseListBlobsResponse(
-        new TextDecoder().decode(resp.body),
-      );
-      names.push(...pageNames);
-      marker = nextMarker ?? undefined;
-    } while (marker);
-    return names;
+    return await withSpan(
+      "azure-blob-datastore listIndexShards",
+      {},
+      async (span) => {
+        const names: string[] = [];
+        let marker: string | undefined;
+        const listPrefix = `${prefix}/_index/`;
+        do {
+          const resp = await retryableRequest(() =>
+            client.request({
+              op: "listBlobs",
+              method: "GET",
+              path: `/${container}`,
+              query: {
+                restype: "container",
+                comp: "list",
+                prefix: listPrefix,
+                ...(marker ? { marker } : {}),
+              },
+            })
+          );
+          if (resp.status !== 200) {
+            throw new Error(`List blobs failed (${resp.status})`);
+          }
+          const { names: pageNames, nextMarker } = parseListBlobsResponse(
+            new TextDecoder().decode(resp.body),
+          );
+          names.push(...pageNames);
+          marker = nextMarker ?? undefined;
+        } while (marker);
+        span.setAttribute(Attr.DATASTORE_SHARDS, names.length);
+        return names;
+      },
+    );
   }
 
   async function getShard(
     shard: string,
   ): Promise<{ map: ShardMap; etag: string | null }> {
     const resp = await retryableRequest(() =>
-      client.request({ method: "GET", path: shardPath(shard) })
+      client.request({ op: "getShard", method: "GET", path: shardPath(shard) })
     );
     if (resp.status === 404) return { map: {}, etag: null };
     if (resp.status !== 200) {
@@ -242,51 +251,76 @@ export function createSyncService(
     shard: string,
     mutator: (map: ShardMap) => ShardMap,
   ): Promise<void> {
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const { map, etag } = await getShard(shard);
-      const updated = mutator(map);
-      const body = new TextEncoder().encode(JSON.stringify(updated));
-      const resp: BlobResponse = await retryableRequest(() =>
-        client.request({
-          method: "PUT",
-          path: shardPath(shard),
-          headers: {
-            "x-ms-blob-type": "BlockBlob",
-            ...(etag ? { "If-Match": etag } : { "If-None-Match": "*" }),
-          },
-          body,
-        })
+    return await withSpan("azure-blob-datastore updateShard", {
+      [Attr.DATASTORE_SHARD]: shard,
+    }, async () => {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const { map, etag } = await getShard(shard);
+        const updated = mutator(map);
+        const body = new TextEncoder().encode(JSON.stringify(updated));
+        const resp: BlobResponse = await retryableRequest(() =>
+          client.request({
+            op: "putShard",
+            method: "PUT",
+            path: shardPath(shard),
+            headers: {
+              "x-ms-blob-type": "BlockBlob",
+              ...(etag ? { "If-Match": etag } : { "If-None-Match": "*" }),
+            },
+            body,
+          })
+        );
+        if (resp.status === 201 || resp.status === 200) return;
+        if (resp.status === 412) {
+          // ETag conflict — re-read and retry. This loop is separate from
+          // retryableRequest, so the retry event is recorded here too.
+          recordRetry(attempt + 1, 0, {
+            "retry.reason": "etag_conflict",
+            "http.response.status_code": resp.status,
+          });
+          continue;
+        }
+        throw new Error(`Update shard ${shard} failed (${resp.status})`);
+      }
+      throw new Error(
+        `Update shard ${shard} exhausted retries on ETag conflict`,
       );
-      if (resp.status === 201 || resp.status === 200) return;
-      if (resp.status === 412) continue; // ETag conflict — re-read and retry
-      throw new Error(`Update shard ${shard} failed (${resp.status})`);
-    }
-    throw new Error(`Update shard ${shard} exhausted retries on ETag conflict`);
+    });
   }
 
   async function queryAllFileMeta(
     prefixFilter?: string,
   ): Promise<Map<string, ShardEntry>> {
-    const shardBlobNames = await listIndexShards();
-    const shards = shardBlobNames.map((name) =>
-      name.slice(`${prefix}/_index/`.length, -".json".length)
+    return await withSpan(
+      "azure-blob-datastore queryAllFileMeta",
+      {},
+      async (span) => {
+        const shardBlobNames = await listIndexShards();
+        const shards = shardBlobNames.map((name) =>
+          name.slice(`${prefix}/_index/`.length, -".json".length)
+        );
+        // Shard fetches are independent — run them concurrently instead of one
+        // round trip at a time, since every sync operation is on this hot path.
+        const maps = await Promise.all(shards.map((shard) => getShard(shard)));
+        const out = new Map<string, ShardEntry>();
+        for (const { map } of maps) {
+          for (const [relPath, entry] of Object.entries(map)) {
+            if (prefixFilter && !relPath.startsWith(prefixFilter)) continue;
+            out.set(relPath, entry);
+          }
+        }
+        span.setAttributes({
+          [Attr.DATASTORE_SHARDS]: shards.length,
+          [Attr.DATASTORE_ENTRIES]: out.size,
+        });
+        return out;
+      },
     );
-    // Shard fetches are independent — run them concurrently instead of one
-    // round trip at a time, since every sync operation is on this hot path.
-    const maps = await Promise.all(shards.map((shard) => getShard(shard)));
-    const out = new Map<string, ShardEntry>();
-    for (const { map } of maps) {
-      for (const [relPath, entry] of Object.entries(map)) {
-        if (prefixFilter && !relPath.startsWith(prefixFilter)) continue;
-        out.set(relPath, entry);
-      }
-    }
-    return out;
   }
 
   async function fetchContent(relPath: string): Promise<Uint8Array> {
     const resp = await retryableRequest(() =>
-      client.request({ method: "GET", path: blobPath(relPath) })
+      client.request({ op: "getBlob", method: "GET", path: blobPath(relPath) })
     );
     if (resp.status !== 200) {
       throw new Error(`Get blob ${relPath} failed (${resp.status})`);
@@ -297,6 +331,7 @@ export function createSyncService(
   async function writeFileEntry(entry: FileEntry): Promise<void> {
     const putResp = await retryableRequest(() =>
       client.request({
+        op: "putBlob",
         method: "PUT",
         path: blobPath(entry.relPath),
         headers: { "x-ms-blob-type": "BlockBlob" },
@@ -334,6 +369,7 @@ export function createSyncService(
   async function writeWatermark(): Promise<void> {
     await retryableRequest(() =>
       client.request({
+        op: "putWatermark",
         method: "PUT",
         path: watermarkPath(),
         headers: { "x-ms-blob-type": "BlockBlob" },
@@ -344,7 +380,11 @@ export function createSyncService(
 
   async function readWatermark(): Promise<string | null> {
     const resp = await retryableRequest(() =>
-      client.request({ method: "GET", path: watermarkPath() })
+      client.request({
+        op: "getWatermark",
+        method: "GET",
+        path: watermarkPath(),
+      })
     );
     if (resp.status !== 200) return null;
     return new TextDecoder().decode(resp.body);
@@ -354,7 +394,7 @@ export function createSyncService(
     prefixes?: string[];
     metadataOnly?: boolean;
     signal?: AbortSignal;
-  }): Promise<number> {
+  }): Promise<{ changes: number; fastPath: boolean }> {
     const prefixes = opts?.prefixes;
     const metadataOnly = opts?.metadataOnly === true;
     const scoped = prefixes !== undefined && prefixes.length > 0;
@@ -368,7 +408,7 @@ export function createSyncService(
       if (
         lastPushedAt && new Date(lastPushedAt) <= new Date(state.lastPulledAt)
       ) {
-        return 0;
+        return { changes: 0, fastPath: true };
       }
     }
 
@@ -421,7 +461,7 @@ export function createSyncService(
       await sidecar.setLazyPullActive(false);
     }
 
-    return changes;
+    return { changes, fastPath: false };
   }
 
   async function collectDiff(
@@ -539,96 +579,150 @@ export function createSyncService(
 
     async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
       const prefixes = modelPrefixes(options?.context?.models);
-      return await pull({
-        prefixes: prefixes.length > 0 ? prefixes : undefined,
-        metadataOnly: options?.metadataOnly,
-        signal: options?.signal,
+      const scoped = prefixes.length > 0;
+      return await withSpan("azure-blob-datastore pullChanged", {
+        [Attr.DATASTORE_SCOPED]: scoped,
+        [Attr.DATASTORE_METADATA_ONLY]: options?.metadataOnly === true,
+      }, async (span) => {
+        const { changes, fastPath } = await pull({
+          prefixes: scoped ? prefixes : undefined,
+          metadataOnly: options?.metadataOnly,
+          signal: options?.signal,
+        });
+        span.setAttributes({
+          [Attr.DATASTORE_FILES_PULLED]: changes,
+          [Attr.DATASTORE_FAST_PATH_HIT]: fastPath,
+        });
+        return changes;
       });
     },
 
     async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
-      const signal = options?.signal;
+      return await withSpan(
+        "azure-blob-datastore pushChanged",
+        {},
+        async (span) => {
+          const signal = options?.signal;
 
-      let snapshot!: {
-        dirtyPaths: string[];
-        bulkInvalidated: boolean;
-        lastPulledAt: string | null;
-        lazyPullActive: boolean;
-      };
-      await sidecar.update((state) => {
-        snapshot = {
-          dirtyPaths: [...state.dirtyPaths],
-          bulkInvalidated: state.bulkInvalidated,
-          lastPulledAt: state.lastPulledAt,
-          lazyPullActive: state.lazyPullActive,
-        };
-      });
+          let snapshot!: {
+            dirtyPaths: string[];
+            bulkInvalidated: boolean;
+            lastPulledAt: string | null;
+            lazyPullActive: boolean;
+          };
+          await sidecar.update((state) => {
+            snapshot = {
+              dirtyPaths: [...state.dirtyPaths],
+              bulkInvalidated: state.bulkInvalidated,
+              lastPulledAt: state.lastPulledAt,
+              lazyPullActive: state.lazyPullActive,
+            };
+          });
 
-      if (!snapshot.bulkInvalidated && snapshot.dirtyPaths.length === 0) {
-        return 0;
-      }
+          if (!snapshot.bulkInvalidated && snapshot.dirtyPaths.length === 0) {
+            span.setAttributes({
+              [Attr.DATASTORE_FAST_PATH_HIT]: true,
+              [Attr.DATASTORE_FILES_PUSHED]: 0,
+              [Attr.DATASTORE_FILES_DELETED]: 0,
+            });
+            return 0;
+          }
 
-      const { toPush, toTombstone } = await collectDiff(
-        snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
-        snapshot.lastPulledAt,
-        snapshot.lazyPullActive,
-        signal,
+          const { toPush, toTombstone } = await collectDiff(
+            snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
+            snapshot.lastPulledAt,
+            snapshot.lazyPullActive,
+            signal,
+          );
+          const changes = await applyDiff(toPush, toTombstone, signal);
+          await sidecar.clearPushed(snapshot);
+          span.setAttributes({
+            [Attr.DATASTORE_FAST_PATH_HIT]: false,
+            [Attr.DATASTORE_FILES_PUSHED]: toPush.length,
+            [Attr.DATASTORE_FILES_DELETED]: toTombstone.length,
+          });
+          return changes;
+        },
       );
-      const changes = await applyDiff(toPush, toTombstone, signal);
-      await sidecar.clearPushed(snapshot);
-      return changes;
     },
 
     async hydrateFile(
       relPath: string,
       _options?: DatastoreSyncOptions,
     ): Promise<boolean> {
-      if (isTraversal(relPath)) return false;
-      // Jump straight to the one shard that owns this path instead of
-      // listing+fetching every shard in the index — that's the whole point
-      // of the shard-first design, and this is the path meant to be cheap.
-      const shard = await shardKey(relPath);
-      const { map } = await getShard(shard);
-      const meta = map[relPath];
-      if (!meta || meta.deletedAt !== null) return false;
-      const bytes = await fetchContent(relPath);
-      await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
-      return true;
+      return await withSpan("azure-blob-datastore hydrateFile", {
+        [Attr.DATASTORE_FILE]: relPath,
+      }, async (span) => {
+        if (isTraversal(relPath)) {
+          span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+          return false;
+        }
+        // Jump straight to the one shard that owns this path instead of
+        // listing+fetching every shard in the index — that's the whole point
+        // of the shard-first design, and this is the path meant to be cheap.
+        const shard = await shardKey(relPath);
+        span.setAttribute(Attr.DATASTORE_SHARD, shard);
+        const { map } = await getShard(shard);
+        const meta = map[relPath];
+        if (!meta || meta.deletedAt !== null) {
+          span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+          return false;
+        }
+        const bytes = await fetchContent(relPath);
+        await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
+        span.setAttribute(Attr.DATASTORE_HYDRATED, true);
+        return true;
+      });
     },
 
     async preparePush(options?: DatastoreSyncOptions): Promise<PushManifest> {
-      const signal = options?.signal;
+      return await withSpan(
+        "azure-blob-datastore preparePush",
+        {},
+        async (span) => {
+          const signal = options?.signal;
 
-      let snapshot!: {
-        dirtyPaths: string[];
-        bulkInvalidated: boolean;
-        lastPulledAt: string | null;
-        lazyPullActive: boolean;
-      };
-      await sidecar.update((state) => {
-        snapshot = {
-          dirtyPaths: [...state.dirtyPaths],
-          bulkInvalidated: state.bulkInvalidated,
-          lastPulledAt: state.lastPulledAt,
-          lazyPullActive: state.lazyPullActive,
-        };
-      });
+          let snapshot!: {
+            dirtyPaths: string[];
+            bulkInvalidated: boolean;
+            lastPulledAt: string | null;
+            lazyPullActive: boolean;
+          };
+          await sidecar.update((state) => {
+            snapshot = {
+              dirtyPaths: [...state.dirtyPaths],
+              bulkInvalidated: state.bulkInvalidated,
+              lastPulledAt: state.lastPulledAt,
+              lazyPullActive: state.lazyPullActive,
+            };
+          });
 
-      let toPush: FileEntry[] = [];
-      let toTombstone: string[] = [];
-      if (snapshot.bulkInvalidated || snapshot.dirtyPaths.length > 0) {
-        const result = await collectDiff(
-          snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
-          snapshot.lastPulledAt,
-          snapshot.lazyPullActive,
-          signal,
-        );
-        toPush = result.toPush;
-        toTombstone = result.toTombstone;
-      }
+          let toPush: FileEntry[] = [];
+          let toTombstone: string[] = [];
+          if (snapshot.bulkInvalidated || snapshot.dirtyPaths.length > 0) {
+            const result = await collectDiff(
+              snapshot.bulkInvalidated ? null : snapshot.dirtyPaths,
+              snapshot.lastPulledAt,
+              snapshot.lazyPullActive,
+              signal,
+            );
+            toPush = result.toPush;
+            toTombstone = result.toTombstone;
+          }
 
-      const internal: InternalPushManifest = { toPush, toTombstone, snapshot };
-      return internal as unknown as PushManifest;
+          span.setAttributes({
+            [Attr.DATASTORE_FILES_PLANNED_PUSH]: toPush.length,
+            [Attr.DATASTORE_FILES_PLANNED_DELETE]: toTombstone.length,
+          });
+
+          const internal: InternalPushManifest = {
+            toPush,
+            toTombstone,
+            snapshot,
+          };
+          return internal as unknown as PushManifest;
+        },
+      );
     },
 
     async commitPush(
@@ -636,20 +730,35 @@ export function createSyncService(
       options?: DatastoreSyncOptions,
     ): Promise<number> {
       const internal = manifest as unknown as InternalPushManifest;
-      const signal = options?.signal;
+      return await withSpan("azure-blob-datastore commitPush", {
+        [Attr.DATASTORE_FILES_PLANNED_PUSH]: internal.toPush.length,
+        [Attr.DATASTORE_FILES_PLANNED_DELETE]: internal.toTombstone.length,
+      }, async (span) => {
+        const signal = options?.signal;
 
-      if (internal.toPush.length === 0 && internal.toTombstone.length === 0) {
+        if (internal.toPush.length === 0 && internal.toTombstone.length === 0) {
+          await sidecar.clearPushed(internal.snapshot);
+          span.setAttributes({
+            [Attr.DATASTORE_FAST_PATH_HIT]: true,
+            [Attr.DATASTORE_FILES_PUSHED]: 0,
+            [Attr.DATASTORE_FILES_DELETED]: 0,
+          });
+          return 0;
+        }
+
+        const changes = await applyDiff(
+          internal.toPush,
+          internal.toTombstone,
+          signal,
+        );
         await sidecar.clearPushed(internal.snapshot);
-        return 0;
-      }
-
-      const changes = await applyDiff(
-        internal.toPush,
-        internal.toTombstone,
-        signal,
-      );
-      await sidecar.clearPushed(internal.snapshot);
-      return changes;
+        span.setAttributes({
+          [Attr.DATASTORE_FAST_PATH_HIT]: false,
+          [Attr.DATASTORE_FILES_PUSHED]: internal.toPush.length,
+          [Attr.DATASTORE_FILES_DELETED]: internal.toTombstone.length,
+        });
+        return changes;
+      });
     },
   };
 }

@@ -159,6 +159,7 @@ export const datastore = {
           const start = performance.now();
           try {
             const resp = await client.request({
+              op: "getContainerProperties",
               method: "GET",
               path: `/${parsed.container}`,
               query: { restype: "container" },
