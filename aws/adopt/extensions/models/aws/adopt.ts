@@ -1144,13 +1144,24 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.07.24.1",
+  version: "2026.07.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.24.1",
+      description:
+        "Added plan_stack_adoption method, no schema migration needed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.26.1",
+      description: "No schema changes — upgrade chain fix",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
