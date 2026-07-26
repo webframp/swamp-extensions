@@ -3,7 +3,7 @@ import { model } from "./maintainer.ts";
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/extension-maintenance/maintainer");
-  assertEquals(model.version, "2026.07.25.2");
+  assertEquals(model.version, "2026.07.26.2");
 });
 
 Deno.test("model has all four methods", () => {
@@ -63,4 +63,101 @@ Deno.test("quality-gate arguments accepts optional filter and stop_on_failure", 
     stop_on_failure: true,
   });
   assertEquals(valid.success, true);
+});
+
+// ---------------------------------------------------------------------------
+// Schema validation for new audit fields
+// ---------------------------------------------------------------------------
+
+Deno.test("ExtensionStatusSchema accepts lockfileSync and directSpecifiers", () => {
+  const input = {
+    name: "@webframp/test",
+    dir: "test",
+    version: "2026.01.01.1",
+    qualityScore: 100,
+    npmDeps: [],
+    testingDep: null,
+    manifestDeps: [],
+    lockfileSync: {
+      hasDeno: true,
+      hasLock: true,
+      inSync: false,
+      staleEntries: [
+        {
+          specifier: "jsr:@systeminit/swamp-testing@0.20260604.20",
+          jsonVersion: "0.20260604.20",
+          lockVersion: null,
+        },
+      ],
+    },
+    directSpecifiers: [
+      {
+        file: "extensions/models/mod_test.ts",
+        specifier: "jsr:@systeminit/swamp-testing@0.20260504.10",
+        alias: "@systeminit/swamp-testing",
+      },
+    ],
+    stale: false,
+    lockDrifted: true,
+  };
+
+  // The schema is internal, so we validate through the model's resource schema.
+  const auditSchema = model.resources.audit.schema;
+  const result = auditSchema.safeParse({
+    scannedAt: "2026-07-26T00:00:00Z",
+    repoRoot: "/tmp",
+    totalExtensions: 1,
+    staleCount: 0,
+    categories: {
+      npm: 0,
+      testing: 0,
+      manifest: 0,
+      lockDrifted: 1,
+      directSpecifiers: 1,
+    },
+    extensions: [input],
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("BumpPlanSchema accepts a skipped array", () => {
+  const planSchema = model.resources.plan.schema;
+  const result = planSchema.safeParse({
+    plannedAt: "2026-07-26T00:00:00Z",
+    totalEntries: 0,
+    entries: [],
+    skipped: [
+      {
+        name: "@webframp/test",
+        dir: "test",
+        reason: "stale dependency is test-only",
+      },
+    ],
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("BumpPlanSchema rejects missing skipped field", () => {
+  const planSchema = model.resources.plan.schema;
+  const result = planSchema.safeParse({
+    plannedAt: "2026-07-26T00:00:00Z",
+    totalEntries: 0,
+    entries: [],
+    // skipped is now required by the schema
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("AuditSummarySchema requires new category counts", () => {
+  const auditSchema = model.resources.audit.schema;
+  // Missing the new lockDrifted and directSpecifiers counts
+  const result = auditSchema.safeParse({
+    scannedAt: "2026-07-26T00:00:00Z",
+    repoRoot: "/tmp",
+    totalExtensions: 0,
+    staleCount: 0,
+    categories: { npm: 0, testing: 0, manifest: 0 },
+    extensions: [],
+  });
+  assertEquals(result.success, false);
 });
