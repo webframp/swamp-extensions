@@ -3,7 +3,6 @@
   "specifiers": {
     "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
-    "jsr:@systeminit/swamp-testing@0.20260504.10": "0.20260504.10",
     "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20",
     "npm:@aws-sdk/client-dynamodb@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-dynamodb@3.1094.0": "3.1094.0",
@@ -25,13 +24,6 @@
     },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
-    },
-    "@systeminit/swamp-testing@0.20260504.10": {
-      "integrity": "f7047edc8089811bdd2c91bf30d7f203bb5bc4b84c4d227a79c29c7910ed655a",
-      "dependencies": [
-        "jsr:@std/assert",
-        "npm:zod@^4.3.6"
-      ]
     },
     "@systeminit/swamp-testing@0.20260604.20": {
       "integrity": "643f4bbc7752a46e0188e21fea0b2907c2d333a4edfb61e4bd47ffae6286a29a",
