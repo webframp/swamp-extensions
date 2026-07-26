@@ -1,25 +1,36 @@
-## 2026.07.25.2
+## 2026.07.26.2
 
-**Fixed:** Scoped extension names (`@webframp/...`) in manifest dependency pins
-are now parsed correctly. Previous regex silently failed on the leading `@`,
-causing all manifest deps to be reported as up-to-date.
+**Added:** Three new observations in the `audit` method:
 
-**Fixed:** `nextCalVer()` increments the sequence number when an extension was
-already bumped today, preventing no-op replacements or version field corruption
-on same-day re-runs.
+1. **Lockfile-sync validation.** For each extension with both a `deno.json` and a
+   `deno.lock`, the audit now checks whether the lock resolves every pin in
+   `deno.json`. If not, the extension is flagged as `lockDrifted: true`, with
+   the specific stale entries listed. This catches the exact state that caused
+   the lockfile-consistency cleanup in #278: a `deno.json` pin changes, nobody
+   runs `deno install`, and the lock silently drifts.
 
-**Fixed:** `registry_timeout` global argument is now applied to all fetch calls
-via `AbortSignal.timeout()`. Previously validated but never used.
+2. **Direct-specifier detection.** Finds `.ts` source files that import a
+   versioned `jsr:` or `npm:` specifier directly instead of using the
+   `deno.json` import map alias. These bypass any pin change made to
+   `deno.json`, which is how `datastore/azure-blob` and `datastore/dynamodb`
+   kept re-introducing the old `swamp-testing` version in their locks even after
+   the pin was updated.
 
-**Fixed:** Test-only stale entries (swamp-testing bump) no longer emit plan
-entries or overwrite existing RELEASE_NOTES.md with empty content.
+3. **Audit summary categories** now include `lockDrifted` (extensions with
+   deno.lock out of sync) and `directSpecifiers` (extensions with imports
+   bypassing the import map).
 
-**Fixed:** Manifest version replacement uses the full `version: "X.Y.Z.N"` field
-string instead of the bare version, preventing accidental substitution in
-manifest description blocks.
+**Changed:** `plan-bump` now reports a `skipped` array alongside `entries`. Each
+entry names the extension, its directory, and the reason it was excluded. Before
+this, "stale but test-only, correctly skipped" was indistinguishable from
+"nothing stale" in the plan output.
 
-**Changed:** Unversioned npm imports (e.g. `npm:zod` without a pinned version)
-are now logged as warnings during audit instead of being silently skipped.
+**Changed:** `apply-bump` now runs `deno install` in each affected extension
+directory after writing pin changes. Without this, `apply-bump` creates the exact
+lockfile-drift state that the new audit check is designed to catch.
 
-**Changed:** `apply-bump` dry-run mode now reads files and counts matches,
-producing accurate `filesModified` counts that match what a real run would do.
+**Upgrade note:** The `audit` resource schema has new required fields
+(`lockfileSync`, `directSpecifiers`, `lockDrifted` per extension, and
+`lockDrifted`/`directSpecifiers` in the categories object). The `plan` resource
+schema now requires a `skipped` array. CEL queries against older audit or plan
+data will need to account for missing fields.

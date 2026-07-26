@@ -52,7 +52,29 @@ const ExtensionStatusSchema = z.object({
   npmDeps: z.array(DepStatusSchema).describe("npm dependency status"),
   testingDep: DepStatusSchema.nullable().describe("swamp-testing status"),
   manifestDeps: z.array(DepStatusSchema).describe("Manifest pin status"),
+  lockfileSync: z.object({
+    hasDeno: z.boolean().describe("Extension has a deno.json"),
+    hasLock: z.boolean().describe("Extension has a deno.lock"),
+    inSync: z.boolean().describe("Lock resolves every pin in deno.json"),
+    staleEntries: z.array(z.object({
+      specifier: z.string().describe("The import specifier from deno.json"),
+      jsonVersion: z.string().describe("Version declared in deno.json"),
+      lockVersion: z.string().nullable().describe(
+        "Version resolved in deno.lock, null if missing",
+      ),
+    })).describe("Specifiers where the lock disagrees with deno.json"),
+  }).describe("Whether deno.lock agrees with deno.json"),
+  directSpecifiers: z.array(z.object({
+    file: z.string().describe("File path relative to extension dir"),
+    specifier: z.string().describe("The fully-qualified import specifier"),
+    alias: z.string().nullable().describe(
+      "Import map alias that should have been used, or null if unmapped",
+    ),
+  })).describe(
+    "Imports that bypass the deno.json import map by naming a version directly",
+  ),
   stale: z.boolean().describe("Any dependency is stale"),
+  lockDrifted: z.boolean().describe("Lock does not match deno.json"),
 });
 
 /** Schema for the complete audit summary resource. */
@@ -65,6 +87,10 @@ const AuditSummarySchema = z.object({
     npm: z.number().describe("Extensions with stale npm deps"),
     testing: z.number().describe("Extensions with stale test framework"),
     manifest: z.number().describe("Extensions with stale manifest pins"),
+    lockDrifted: z.number().describe("Extensions with deno.lock out of sync"),
+    directSpecifiers: z.number().describe(
+      "Extensions with imports bypassing the import map",
+    ),
   }),
   extensions: z.array(ExtensionStatusSchema),
 });
@@ -95,6 +121,13 @@ const BumpPlanSchema = z.object({
   plannedAt: z.string().describe("ISO 8601 plan timestamp"),
   totalEntries: z.number().describe("Extensions to bump"),
   entries: z.array(BumpPlanEntrySchema),
+  skipped: z.array(z.object({
+    name: z.string().describe("Extension manifest name"),
+    dir: z.string().describe("Directory relative to repo root"),
+    reason: z.string().describe("Why the extension was not planned for a bump"),
+  })).describe(
+    "Extensions that are stale but excluded from the plan (e.g. test-only changes)",
+  ),
 });
 
 /** Schema for the apply-bump result resource. */
@@ -268,6 +301,173 @@ async function readTestingVersion(extDir: string): Promise<string | null> {
   }
 }
 
+/**
+ * Check whether deno.lock agrees with deno.json.
+ *
+ * For each specifier in deno.json's `imports`, verifies that deno.lock has a
+ * matching resolution at the same version. A missing entry or a version
+ * mismatch means the lock will rewrite itself the moment anyone runs a deno
+ * command.
+ */
+async function checkLockfileSync(extDir: string): Promise<{
+  hasDeno: boolean;
+  hasLock: boolean;
+  inSync: boolean;
+  staleEntries: Array<{
+    specifier: string;
+    jsonVersion: string;
+    lockVersion: string | null;
+  }>;
+}> {
+  let denoJson: { imports?: Record<string, string> };
+  try {
+    denoJson = JSON.parse(await Deno.readTextFile(`${extDir}/deno.json`));
+  } catch {
+    return { hasDeno: false, hasLock: false, inSync: true, staleEntries: [] };
+  }
+
+  let lockContent: string;
+  try {
+    lockContent = await Deno.readTextFile(`${extDir}/deno.lock`);
+  } catch {
+    return { hasDeno: true, hasLock: false, inSync: true, staleEntries: [] };
+  }
+
+  const imports = denoJson.imports ?? {};
+  const staleEntries: Array<{
+    specifier: string;
+    jsonVersion: string;
+    lockVersion: string | null;
+  }> = [];
+
+  for (const [_alias, specifier] of Object.entries(imports)) {
+    if (!specifier) continue;
+    // Extract the version from specifiers like "npm:zod@4.4.3" or
+    // "jsr:@systeminit/swamp-testing@0.20260604.20"
+    const versionMatch = specifier.match(/@([\d][^"]*)$/);
+    if (!versionMatch) continue;
+    const jsonVersion = versionMatch[1]!;
+
+    // Look for this specifier in the lock's specifiers section.
+    // The lock records lines like: "npm:zod@4.4.3": "4.4.3" or
+    // "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20"
+    // Also check workspace.dependencies for the bare specifier.
+    const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const specRegex = new RegExp(`"${escaped}"\\s*:\\s*"([^"]+)"`);
+    const specMatch = lockContent.match(specRegex);
+
+    if (specMatch) {
+      // Found, check version matches
+      if (specMatch[1] !== jsonVersion) {
+        staleEntries.push({
+          specifier,
+          jsonVersion,
+          lockVersion: specMatch[1]!,
+        });
+      }
+    } else {
+      // Not found in specifiers at all — check workspace.dependencies
+      if (!lockContent.includes(`"${specifier}"`)) {
+        staleEntries.push({ specifier, jsonVersion, lockVersion: null });
+      }
+    }
+  }
+
+  return {
+    hasDeno: true,
+    hasLock: true,
+    inSync: staleEntries.length === 0,
+    staleEntries,
+  };
+}
+
+/**
+ * Find source files that import versioned specifiers directly instead of using
+ * the deno.json import map alias.
+ *
+ * A direct `jsr:@systeminit/swamp-testing@0.20260504.10` import bypasses the
+ * alias, so a pin change in deno.json does not reach it. This also catches
+ * config files that *generate* a specifier string, since the grep pattern
+ * matches any occurrence of a versioned jsr:/npm: specifier.
+ */
+async function findDirectSpecifiers(
+  extDir: string,
+): Promise<
+  Array<{ file: string; specifier: string; alias: string | null }>
+> {
+  // Read deno.json import map to know which specifiers have aliases
+  let imports: Record<string, string> = {};
+  try {
+    const dj = JSON.parse(await Deno.readTextFile(`${extDir}/deno.json`));
+    imports = dj.imports ?? {};
+  } catch {
+    // No deno.json — no aliases to compare against
+  }
+
+  // Build a reverse map: specifier-prefix → alias name
+  const aliasFor = new Map<string, string>();
+  for (const [alias, spec] of Object.entries(imports)) {
+    if (!spec) continue;
+    // Strip the version to match against the prefix:
+    // "jsr:@systeminit/swamp-testing@0.20260604.20" → "jsr:@systeminit/swamp-testing@"
+    const atIdx = spec.lastIndexOf("@");
+    if (atIdx > 4) {
+      aliasFor.set(spec.slice(0, atIdx + 1), alias);
+    }
+  }
+
+  const results: Array<
+    { file: string; specifier: string; alias: string | null }
+  > = [];
+  const seen = new Set<string>();
+
+  // Scan all .ts files (including tests, configs, and codegen)
+  const findCmd = await run([
+    "find",
+    extDir,
+    "-name",
+    "*.ts",
+    "-not",
+    "-path",
+    "*/.swamp/*",
+  ]);
+  if (!findCmd.success) return results;
+
+  for (const file of findCmd.stdout.trim().split("\n")) {
+    if (!file) continue;
+    const relFile = file.slice(extDir.length + 1);
+    // Skip deno.json itself (imports there are declarations, not bypasses)
+    if (relFile === "deno.json") continue;
+
+    const grepCmd = await run([
+      "grep",
+      "-ohE",
+      '(jsr:|npm:)(@[^"@/]+/)?[^"@]+@[0-9][^"\'` ]*',
+      file,
+    ]);
+    if (!grepCmd.success) continue;
+
+    for (const match of grepCmd.stdout.trim().split("\n")) {
+      if (!match) continue;
+      // Find the alias this should have used
+      const atIdx = match.lastIndexOf("@");
+      if (atIdx <= 4) continue;
+      const prefix = match.slice(0, atIdx + 1);
+      const alias = aliasFor.get(prefix) ?? null;
+
+      // Deduplicate: the same specifier appearing multiple times in one file is
+      // one bypass site, not many.
+      const key = `${relFile}|${match}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      results.push({ file: relFile, specifier: match, alias });
+    }
+  }
+
+  return results;
+}
+
 /** Read manifest dependency pins. */
 async function readManifestDeps(
   extDir: string,
@@ -393,7 +593,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.25.2",
+  version: "2026.07.26.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -551,6 +751,13 @@ export const model = {
           // quality
           const qualityScore = await getQualityScore(dir);
 
+          // lockfile sync
+          const lockfileSync = await checkLockfileSync(dir);
+          const lockDrifted = !lockfileSync.inSync;
+
+          // direct specifiers (bypass the import map)
+          const directSpecifiers = await findDirectSpecifiers(dir);
+
           const isStale = hasStaleNpm || hasStaleTesting || hasStaleManifest;
           extensions.push({
             name,
@@ -560,14 +767,20 @@ export const model = {
             npmDeps,
             testingDep,
             manifestDeps,
+            lockfileSync,
+            directSpecifiers,
             stale: isStale,
+            lockDrifted,
           });
         }
 
         const staleCount = extensions.filter((e) => e.stale).length;
+        const lockDriftedCount = extensions.filter((e) => e.lockDrifted).length;
+        const directSpecCount =
+          extensions.filter((e) => e.directSpecifiers.length > 0).length;
         context.log(
           "info",
-          `Audit complete: ${staleCount}/${extensions.length} stale`,
+          `Audit complete: ${staleCount}/${extensions.length} stale, ${lockDriftedCount} lock-drifted, ${directSpecCount} with direct specifiers`,
         );
 
         const handle = await context.writeResource("audit", "latest", {
@@ -579,6 +792,8 @@ export const model = {
             npm: staleNpm,
             testing: staleTesting,
             manifest: staleManifest,
+            lockDrifted: lockDriftedCount,
+            directSpecifiers: directSpecCount,
           },
           extensions,
         });
@@ -639,6 +854,8 @@ export const model = {
         }).extensions;
 
         const entries: z.infer<typeof BumpPlanEntrySchema>[] = [];
+        const skipped: Array<{ name: string; dir: string; reason: string }> =
+          [];
 
         for (const ext of extensions) {
           if (!ext.stale) continue;
@@ -713,7 +930,15 @@ export const model = {
           const hasShippedChanges = changes.some(
             (c) => c.category !== "testing",
           );
-          if (!hasShippedChanges) continue;
+          if (!hasShippedChanges) {
+            skipped.push({
+              name: ext.name,
+              dir: ext.dir,
+              reason:
+                "stale dependency is test-only (swamp-testing); no published output changes",
+            });
+            continue;
+          }
 
           // manifest version bump
           changes.push({
@@ -741,12 +966,16 @@ export const model = {
           });
         }
 
-        context.log("info", `Plan: ${entries.length} extensions to bump`);
+        context.log(
+          "info",
+          `Plan: ${entries.length} extensions to bump, ${skipped.length} skipped (test-only)`,
+        );
 
         const handle = await context.writeResource("plan", "latest", {
           plannedAt: new Date().toISOString(),
           totalEntries: entries.length,
           entries,
+          skipped,
         });
         return { dataHandles: [handle] };
       },
@@ -865,6 +1094,31 @@ export const model = {
               );
             }
             filesModified++;
+
+            // Regenerate deno.lock after pin changes so the lock reflects what
+            // deno.json now declares. Without this, apply-bump creates the exact
+            // state the lockfile-sync check is designed to catch: deno.json says
+            // one version, deno.lock records another, and the first developer to
+            // run a task gets an unwanted diff.
+            if (!args.dry_run) {
+              const lockResult = await run(["deno", "install"], extDir);
+              if (lockResult.success) {
+                context.log(
+                  "info",
+                  `  ↳ deno.lock regenerated for ${entry.name}`,
+                );
+              } else {
+                context.log(
+                  "warning",
+                  `  ↳ deno install failed for ${entry.name}`,
+                );
+                errors.push({
+                  extension: entry.name,
+                  error:
+                    "deno install failed after writing pin changes; deno.lock may be out of sync",
+                });
+              }
+            }
           } catch (err: unknown) {
             errors.push({
               extension: entry.name,

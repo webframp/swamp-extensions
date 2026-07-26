@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/extension-maintenance"
-version: "2026.07.25.2"
+version: "2026.07.26.2"
 description: |
   Extension repository maintenance model. Observes a multi-extension repo,
   audits dependency freshness (npm, swamp-testing, manifest pins), computes
