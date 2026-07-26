@@ -33,6 +33,11 @@ async function withSpans(
   try {
     await fn(() => exporter.getFinishedSpans());
   } finally {
+    // InMemorySpanExporter.export defers its result callback with a zero-delay
+    // setTimeout. Draining those before the test ends keeps Deno's test
+    // sanitizer from reporting them as leaked timers.
+    await provider.forceFlush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     trace.disable();
     context.disable();
     ctxManager.disable();
@@ -576,6 +581,9 @@ Deno.test({
         assertExists(inspect.attributes[Attr.LOCK_HOLDER]);
         findSpan(spans(), "GitLab getLockInfo");
         findSpan(spans(), "gitlab-datastore lock forceRelease");
+        // forceRelease on this object's own lock must stop its heartbeat too,
+        // or the interval outlives a lock it no longer holds.
+        assertEquals(await lock.inspect(), null);
       });
     });
   },

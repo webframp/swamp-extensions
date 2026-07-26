@@ -43,6 +43,11 @@ async function withSpans(
   try {
     await fn(() => exporter.getFinishedSpans());
   } finally {
+    // InMemorySpanExporter.export defers its result callback with a zero-delay
+    // setTimeout. Draining those before the test ends keeps Deno's test
+    // sanitizer from reporting them as leaked timers.
+    await provider.forceFlush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     trace.disable();
     context.disable();
     ctxManager.disable();

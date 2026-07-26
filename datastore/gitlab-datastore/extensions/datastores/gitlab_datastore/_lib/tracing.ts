@@ -31,6 +31,7 @@ export const Attr = {
   GITLAB_STATE_NAME: "gitlab.state_name",
   HTTP_REQUEST_METHOD: "http.request.method",
   HTTP_RESPONSE_STATUS_CODE: "http.response.status_code",
+  HTTP_RESPONSE_BODY_SIZE: "http.response.body.size",
   SERVER_ADDRESS: "server.address",
   ERROR_TYPE: "error.type",
   LOCK_KEY: "lock.key",

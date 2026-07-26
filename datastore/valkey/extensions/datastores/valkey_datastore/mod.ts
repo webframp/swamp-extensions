@@ -15,6 +15,7 @@
 
 import { z } from "npm:zod@4.4.3";
 import { Redis } from "npm:ioredis@5.11.1";
+import { Buffer } from "node:buffer";
 import { Sidecar } from "./sidecar.ts";
 import type { SidecarState } from "./sidecar.ts";
 import {
@@ -324,6 +325,10 @@ function createValkeyLock(
               // Connection lost — lock will expire via TTL
             }
           }, ttlMs / 3);
+          // Unref so a held lock doesn't keep the process alive if release is
+          // never called — the same convention the other datastore locks
+          // follow.
+          Deno.unrefTimer(heartbeatId);
           span.setAttributes({
             [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
             [Attr.LOCK_CONTENDED]: contended,
@@ -432,7 +437,19 @@ function createValkeyLock(
               expectedNonce,
             ),
         );
-        return result === 1;
+        const released = result === 1;
+        // If this instance itself held that lock, drop its local state too.
+        // Leaving the heartbeat running would keep extending the TTL of a key
+        // this object no longer owns, and keeps the interval alive for the
+        // lifetime of the process.
+        if (released && nonce === expectedNonce) {
+          if (heartbeatId !== undefined) {
+            clearInterval(heartbeatId);
+            heartbeatId = undefined;
+          }
+          nonce = undefined;
+        }
+        return released;
       });
     },
   };

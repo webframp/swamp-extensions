@@ -203,6 +203,14 @@ function getStateSerial(stateJson: string): number {
   }
 }
 
+/** A GitLab API response with its body already drained. */
+interface GitLabResponse {
+  status: number;
+  statusText: string;
+  ok: boolean;
+  body: string;
+}
+
 /**
  * GitLab Terraform State API client
  */
@@ -260,7 +268,7 @@ class GitLabStateClient {
     url: string,
     init: RequestInit,
     opts?: { stateName?: string; expected?: number[] },
-  ): Promise<Response> {
+  ): Promise<GitLabResponse> {
     return withSpan(`GitLab ${op}`, {
       [Attr.RPC_SYSTEM]: "gitlab",
       [Attr.RPC_SERVICE]: "GitLab",
@@ -271,7 +279,13 @@ class GitLabStateClient {
       ...(opts?.stateName ? { [Attr.GITLAB_STATE_NAME]: opts.stateName } : {}),
     }, async (span) => {
       const response = await fetch(url, init);
+      // The body is always read, even when the caller ignores it: an unread
+      // response body holds its connection open, and several call sites decide
+      // purely on the status. Reading it here also means the span covers the
+      // transfer rather than just the headers.
+      const body = await response.text();
       span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, response.status);
+      span.setAttribute(Attr.HTTP_RESPONSE_BODY_SIZE, body.length);
       if (!response.ok && !(opts?.expected ?? []).includes(response.status)) {
         span.setStatus({
           code: SpanStatusCode.ERROR,
@@ -279,7 +293,12 @@ class GitLabStateClient {
         });
         span.setAttribute(Attr.ERROR_TYPE, String(response.status));
       }
-      return response;
+      return {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        body,
+      };
     });
   }
 
@@ -307,7 +326,7 @@ class GitLabStateClient {
       );
     }
 
-    const stateJson = await response.text();
+    const stateJson = response.body;
     return unwrapFromTerraformState(stateJson);
   }
 
@@ -337,7 +356,7 @@ class GitLabStateClient {
         { stateName, expected: [404] },
       );
       if (existingResponse.ok) {
-        const existingState = await existingResponse.text();
+        const existingState = existingResponse.body;
         serial = getStateSerial(existingState) + 1;
         // Preserve lineage if it exists
         try {
@@ -360,7 +379,7 @@ class GitLabStateClient {
     }, { stateName });
 
     if (!response.ok) {
-      const body = await response.text();
+      const body = response.body;
       throw new Error(
         `GitLab API error: ${response.status} ${response.statusText}: ${body}`,
       );
@@ -400,7 +419,7 @@ class GitLabStateClient {
         signal,
       });
       if (projectResponse.ok) {
-        const project = (await projectResponse.json()) as {
+        const project = JSON.parse(projectResponse.body) as {
           path_with_namespace: string;
         };
         projectPath = project.path_with_namespace;
@@ -435,7 +454,7 @@ class GitLabStateClient {
       return [];
     }
 
-    const result = (await response.json()) as {
+    const result = JSON.parse(response.body) as {
       data?: {
         project?: {
           terraformStates?: {
@@ -527,7 +546,7 @@ class GitLabStateClient {
       return null;
     }
 
-    return await response.json() as GitLabLockInfo;
+    return JSON.parse(response.body) as GitLabLockInfo;
   }
 
   /**
@@ -743,7 +762,16 @@ class GitLabLock implements DistributedLock {
         return false;
       }
 
-      return await this.client.unlock(this.stateName, gitlabInfo);
+      const released = await this.client.unlock(this.stateName, gitlabInfo);
+      // If this instance itself held that lock, drop its local state too.
+      // Leaving the heartbeat running would keep refreshing the timestamp of a
+      // lock this object no longer owns, and would keep the interval alive for
+      // the lifetime of the process.
+      if (released && this.lockInfo?.nonce === expectedNonce) {
+        this.stopHeartbeat();
+        this.lockInfo = null;
+      }
+      return released;
     });
   }
 
@@ -756,6 +784,9 @@ class GitLabLock implements DistributedLock {
         // Note: GitLab doesn't support lock refresh, so we just track locally
       }
     }, this.ttlMs / 3);
+    // Unref so a held lock doesn't keep the process alive if release is never
+    // called — the same convention the other datastore locks follow.
+    Deno.unrefTimer(this.heartbeatId);
   }
 
   private stopHeartbeat(): void {

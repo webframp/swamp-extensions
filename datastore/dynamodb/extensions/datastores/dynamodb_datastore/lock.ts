@@ -304,6 +304,17 @@ export function createDynamoLock(
               ExpressionAttributeValues: { ":nonce": expectedNonce },
             }),
           );
+          // If this instance itself held that lock, drop its local state too.
+          // Leaving the heartbeat running would keep renewing a lock this
+          // object no longer owns, and keeps the interval alive for the
+          // lifetime of the process.
+          if (nonce === expectedNonce) {
+            if (heartbeatId !== undefined) {
+              clearInterval(heartbeatId);
+              heartbeatId = undefined;
+            }
+            nonce = undefined;
+          }
           return true;
         } catch (err) {
           if (isConditionalCheckFailed(err)) return false;
