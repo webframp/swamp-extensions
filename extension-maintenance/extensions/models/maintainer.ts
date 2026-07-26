@@ -419,6 +419,7 @@ async function findDirectSpecifiers(
   const results: Array<
     { file: string; specifier: string; alias: string | null }
   > = [];
+  const seen = new Set<string>();
 
   // Scan all .ts files (including tests, configs, and codegen)
   const findCmd = await run([
@@ -441,7 +442,7 @@ async function findDirectSpecifiers(
     const grepCmd = await run([
       "grep",
       "-ohE",
-      '(jsr:|npm:)(@[^"@/]+/)?[^"@]+@[0-9][^"]*',
+      '(jsr:|npm:)(@[^"@/]+/)?[^"@]+@[0-9][^"\'` ]*',
       file,
     ]);
     if (!grepCmd.success) continue;
@@ -453,6 +454,12 @@ async function findDirectSpecifiers(
       if (atIdx <= 4) continue;
       const prefix = match.slice(0, atIdx + 1);
       const alias = aliasFor.get(prefix) ?? null;
+
+      // Deduplicate: the same specifier appearing multiple times in one file is
+      // one bypass site, not many.
+      const key = `${relFile}|${match}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
 
       results.push({ file: relFile, specifier: match, alias });
     }
