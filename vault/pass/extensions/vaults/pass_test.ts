@@ -3,6 +3,7 @@
 
 import {
   assertEquals,
+  assertExists,
   assertRejects,
   assertThrows,
 } from "jsr:@std/assert@1.0.19";
@@ -60,6 +61,8 @@ Deno.test("createProvider throws on invalid storeDir type", () => {
 
 const mockSecrets = new Map<string, string>();
 const OriginalCommand = Deno.Command;
+/** Environment handed to the most recent subprocess, for allowlist assertions. */
+let lastEnv: Record<string, string> | undefined;
 
 class MockCommand {
   #command: string;
@@ -78,6 +81,7 @@ class MockCommand {
   ) {
     this.#command = command;
     this.#args = options.args ?? [];
+    if (options.env) lastEnv = options.env;
   }
 
   #resolve(): { code: number; stdout: Uint8Array; stderr: Uint8Array } {
@@ -323,3 +327,112 @@ Deno.test("pass vault: full VaultProvider conformance", async () => {
     await assertVaultConformance(provider);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hardening: byte fidelity, key validation, and subprocess environment
+// ---------------------------------------------------------------------------
+
+Deno.test("get preserves leading and trailing whitespace in a secret", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    // A secret whose padding is significant. The old `.trim()` returned
+    // "padded" for all three of these.
+    for (const secret of ["  padded  ", "\tleading tab", "trailing space "]) {
+      await provider.put("ws", secret);
+      assertEquals(await provider.get("ws"), secret);
+    }
+  });
+});
+
+Deno.test("get strips exactly one trailing newline, not a run of them", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    // The CLI adds one line terminator when printing; anything beyond that
+    // belongs to the secret.
+    mockSecrets.set("swamp/nl", "line\n\n");
+    assertEquals(await provider.get("nl"), "line\n");
+    mockSecrets.set("swamp/crlf", "line\r\n");
+    assertEquals(await provider.get("crlf"), "line");
+    mockSecrets.set("swamp/none", "line");
+    assertEquals(await provider.get("none"), "line");
+  });
+});
+
+Deno.test("keys containing .. are rejected before reaching the CLI", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    for (const key of ["../escape", "a/../../b", ".."]) {
+      await assertRejects(
+        () => provider.get(key),
+        Error,
+        "path segments",
+      );
+      await assertRejects(
+        () => provider.put(key, "x"),
+        Error,
+        "path segments",
+      );
+    }
+  });
+});
+
+Deno.test("absolute, empty, and flag-like keys are rejected", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    await assertRejects(() => provider.get("/etc/passwd"), Error, "relative");
+    await assertRejects(() => provider.get(""), Error, "empty");
+    // A leading dash would be read as a flag by pass itself.
+    await assertRejects(() => provider.get("-c"), Error, "must not start with");
+  });
+});
+
+Deno.test("the subprocess environment is an allowlist, not the whole parent", async () => {
+  const marker = "SWAMP_PASS_TEST_UNRELATED_SECRET";
+  Deno.env.set(marker, "must-not-be-forwarded");
+  try {
+    await withMockedPass(async () => {
+      lastEnv = undefined;
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      await provider.put("env-probe", "value");
+
+      assertExists(lastEnv);
+      const env: Record<string, string> = lastEnv;
+      assertEquals(env[marker], undefined);
+      assertEquals(env.PASSWORD_STORE_DIR, "/tmp/store");
+      // Everything forwarded must be something pass or GPG needs.
+      for (const name of Object.keys(env)) {
+        assertEquals(
+          name === "PASSWORD_STORE_DIR" || ENV_ALLOWLIST_FOR_TEST.has(name),
+          true,
+          `unexpected variable forwarded to the subprocess: ${name}`,
+        );
+      }
+    });
+  } finally {
+    Deno.env.delete(marker);
+  }
+});
+
+/** Mirror of the allowlist in pass.ts, so a change there fails this test. */
+const ENV_ALLOWLIST_FOR_TEST = new Set([
+  "HOME",
+  "PATH",
+  "USER",
+  "LOGNAME",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "GNUPGHOME",
+  "GPG_AGENT_INFO",
+  "GPG_TTY",
+  "DISPLAY",
+  "WAYLAND_DISPLAY",
+  "XDG_RUNTIME_DIR",
+  "SSH_AUTH_SOCK",
+  "TERM",
+  "PASSWORD_STORE_KEY",
+  "PASSWORD_STORE_GPG_OPTS",
+  "PASSWORD_STORE_UMASK",
+  "PASSWORD_STORE_SIGNING_KEY",
+]);

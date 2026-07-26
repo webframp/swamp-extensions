@@ -514,3 +514,81 @@ Deno.test({
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Hardening: key validation and path encoding
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "hashicorp vault: keys containing .. are rejected",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+
+      // Without validation these reach a different mount, or a different
+      // Vault API entirely: secret/data/../../sys is not a secret.
+      for (const key of ["../../sys/health", "a/../../b", ".."]) {
+        await assertRejects(() => provider.get(key), Error, "path segments");
+        await assertRejects(
+          () => provider.put(key, "x"),
+          Error,
+          "path segments",
+        );
+      }
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "hashicorp vault: absolute and empty keys are rejected",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+      await assertRejects(() => provider.get("/absolute"), Error, "relative");
+      await assertRejects(() => provider.get(""), Error, "empty");
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "hashicorp vault: key segments are percent-encoded, separators kept",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, secrets } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+
+      // A space and a question mark would otherwise change the request path
+      // or start a query string. The nested path must still nest.
+      const key = "team a/db?prod";
+      await provider.put(key, "encoded-secret");
+      assertEquals(await provider.get(key), "encoded-secret");
+      // The mock keys off the raw request path, so this shows the segments
+      // were percent-encoded while the separator stayed a separator.
+      assertEquals(secrets.has("team%20a/db%3Fprod"), true);
+      assertEquals(secrets.has(key), false);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});

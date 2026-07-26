@@ -11,6 +11,98 @@
 
 import { z } from "npm:zod@4.4.3";
 
+/**
+ * Environment variables forwarded to the `pass` subprocess.
+ *
+ * The whole parent environment used to be copied in, which handed `pass` — and
+ * every GPG agent hook it invokes — any AWS key, database URL, or API token
+ * that happened to be set. Only the variables pass and GPG actually need are
+ * forwarded now.
+ */
+const ENV_ALLOWLIST = [
+  "HOME",
+  "PATH",
+  "USER",
+  "LOGNAME",
+  "TMPDIR",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  // GPG needs these to find its home, reach its agent, and prompt correctly.
+  "GNUPGHOME",
+  "GPG_AGENT_INFO",
+  "GPG_TTY",
+  "DISPLAY",
+  "WAYLAND_DISPLAY",
+  "XDG_RUNTIME_DIR",
+  "SSH_AUTH_SOCK",
+  "TERM",
+  // pass's own configuration, other than PASSWORD_STORE_DIR which is set
+  // explicitly from config.
+  "PASSWORD_STORE_KEY",
+  "PASSWORD_STORE_GPG_OPTS",
+  "PASSWORD_STORE_UMASK",
+  "PASSWORD_STORE_SIGNING_KEY",
+] as const;
+
+function allowlistedEnv(storeDir: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const name of ENV_ALLOWLIST) {
+    const value = Deno.env.get(name);
+    if (value !== undefined) env[name] = value;
+  }
+  env.PASSWORD_STORE_DIR = storeDir;
+  return env;
+}
+
+/**
+ * Removes the single trailing newline a CLI adds when it prints a value.
+ *
+ * Deliberately not `trim()`: a secret may legitimately begin or end with
+ * spaces or tabs, and trimming silently returned different bytes than were
+ * stored. Only one line terminator is removed, and only from the end.
+ *
+ * A secret whose own final character is a newline is indistinguishable from
+ * the terminator the CLI adds, so that one byte cannot be recovered — a limit
+ * of line-oriented CLIs, not something this can work around.
+ */
+function stripTrailingNewline(text: string): string {
+  if (text.endsWith("\r\n")) return text.slice(0, -2);
+  if (text.endsWith("\n")) return text.slice(0, -1);
+  return text;
+}
+
+/**
+ * Rejects keys that would escape the configured prefix.
+ *
+ * Keys become path segments under the store directory, so `..` in one lets a
+ * caller read or overwrite a secret outside the namespace the config pinned
+ * them to.
+ */
+function assertSafeKey(key: string): void {
+  if (key.length === 0) {
+    throw new Error("pass key must not be empty");
+  }
+  if (key.startsWith("/")) {
+    throw new Error(`pass key must be relative, got "${key}"`);
+  }
+  if (key.includes("\0")) {
+    throw new Error("pass key must not contain a null byte");
+  }
+  if (key.startsWith("-")) {
+    // Keys are passed as CLI arguments. A leading dash would be parsed as a
+    // flag by the CLI itself, whatever Deno.Command does with argv.
+    throw new Error(`pass key must not start with "-", got "${key}"`);
+  }
+  for (const segment of key.split("/")) {
+    if (segment === "." || segment === "..") {
+      throw new Error(
+        `pass key must not contain "." or ".." path segments, got "${key}"`,
+      );
+    }
+  }
+}
+
 const ConfigSchema = z.object({
   storeDir: z.string().optional().describe(
     "PASSWORD_STORE_DIR override (defaults to ~/.password-store)",
@@ -44,10 +136,7 @@ export const vault = {
       args: string[],
       stdin?: string,
     ): Promise<string> => {
-      const env: Record<string, string> = {
-        ...Deno.env.toObject(),
-        PASSWORD_STORE_DIR: storeDir,
-      };
+      const env = allowlistedEnv(storeDir);
 
       const cmd = new Deno.Command("pass", {
         args,
@@ -72,11 +161,13 @@ export const vault = {
         throw new Error(errMsg || `pass command failed with code ${code}`);
       }
 
-      return new TextDecoder().decode(stdout).trim();
+      return stripTrailingNewline(new TextDecoder().decode(stdout));
     };
 
-    const prefixKey = (key: string): string =>
-      prefix ? `${prefix}/${key}` : key;
+    const prefixKey = (key: string): string => {
+      assertSafeKey(key);
+      return prefix ? `${prefix}/${key}` : key;
+    };
 
     return {
       get: async (key: string): Promise<string> => {
