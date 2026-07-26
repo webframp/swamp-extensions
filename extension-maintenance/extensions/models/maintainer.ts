@@ -441,7 +441,7 @@ async function findDirectSpecifiers(
     const grepCmd = await run([
       "grep",
       "-ohE",
-      '(jsr:|npm:)[^"@]+@[0-9][^"]*',
+      '(jsr:|npm:)(@[^"@/]+/)?[^"@]+@[0-9][^"]*',
       file,
     ]);
     if (!grepCmd.success) continue;
@@ -1105,6 +1105,11 @@ export const model = {
                   "warning",
                   `  ↳ deno install failed for ${entry.name}`,
                 );
+                errors.push({
+                  extension: entry.name,
+                  error:
+                    "deno install failed after writing pin changes; deno.lock may be out of sync",
+                });
               }
             }
           } catch (err: unknown) {
