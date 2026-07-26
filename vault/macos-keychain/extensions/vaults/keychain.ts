@@ -9,6 +9,12 @@
  */
 
 import { z } from "npm:zod@4.4.3";
+import {
+  Attr,
+  redactSecret,
+  type VaultSpanAttributes,
+  withVaultSpan,
+} from "./_lib/tracing.ts";
 
 /**
  * Removes the single trailing newline the `security` CLI adds when it prints a
@@ -72,7 +78,10 @@ export const vault = {
   ): KeychainVaultProvider => {
     const parsed = ConfigSchema.parse(config);
 
-    const runSecurity = async (args: string[]): Promise<string> => {
+    const runSecurity = async (
+      args: string[],
+      submittedSecret?: string,
+    ): Promise<string> => {
       const cmd = new Deno.Command("security", {
         args,
         stdin: "null",
@@ -84,7 +93,14 @@ export const vault = {
       const { code, stdout, stderr } = await proc.output();
 
       if (code !== 0) {
-        const errMsg = new TextDecoder().decode(stderr).trim();
+        let errMsg = new TextDecoder().decode(stderr).trim();
+        // `put` passes the secret as the `-w` argument, and a CLI that rejects
+        // an argument commonly quotes it back. The swamp host publishes thrown
+        // error messages to the trace backend as a span status and an
+        // exception, so strip the value we know we passed.
+        if (submittedSecret) {
+          errMsg = redactSecret(errMsg, submittedSecret);
+        }
         throw new Error(
           errMsg || `security command failed with code ${code}`,
         );
@@ -93,38 +109,74 @@ export const vault = {
       return stripTrailingNewline(new TextDecoder().decode(stdout));
     };
 
+    const spanAttributes = (
+      method: string,
+      key?: string,
+    ): VaultSpanAttributes => {
+      const attrs: VaultSpanAttributes = {
+        [Attr.VAULT_NAME]: name,
+        [Attr.RPC_SYSTEM]: "keychain",
+        [Attr.RPC_SERVICE]: "@webframp/macos-keychain",
+        [Attr.RPC_METHOD]: method,
+        [Attr.VAULT_SERVICE]: parsed.service,
+      };
+      if (key !== undefined) attrs[Attr.VAULT_SECRET_KEY] = key;
+      return attrs;
+    };
+
     return {
-      get: async (key: string): Promise<string> => {
-        assertSafeKey(key);
-        return await runSecurity([
-          "find-generic-password",
-          "-s",
-          parsed.service,
-          "-a",
-          key,
-          "-w",
-        ]);
+      get: (key: string): Promise<string> => {
+        return withVaultSpan(
+          "Keychain get",
+          spanAttributes("get", key),
+          async () => {
+            assertSafeKey(key);
+            return await runSecurity([
+              "find-generic-password",
+              "-s",
+              parsed.service,
+              "-a",
+              key,
+              "-w",
+            ]);
+          },
+        );
       },
 
-      put: async (key: string, value: string): Promise<void> => {
-        assertSafeKey(key);
-        await runSecurity([
-          "add-generic-password",
-          "-s",
-          parsed.service,
-          "-a",
-          key,
-          "-w",
-          value,
-          "-U",
-        ]);
+      put: (key: string, value: string): Promise<void> => {
+        return withVaultSpan(
+          "Keychain put",
+          spanAttributes("put", key),
+          async () => {
+            assertSafeKey(key);
+            await runSecurity([
+              "add-generic-password",
+              "-s",
+              parsed.service,
+              "-a",
+              key,
+              "-w",
+              value,
+              "-U",
+            ], value);
+          },
+        );
       },
 
       list: (): Promise<string[]> => {
-        return Promise.reject(
-          new Error(
-            "Listing keychain items is not supported by this vault provider",
-          ),
+        // `security` has no way to enumerate accounts for a service, so this is
+        // unsupported rather than empty. The span records the failure like any
+        // other, which is honest: a caller did ask for a listing and did not
+        // get one.
+        return withVaultSpan(
+          "Keychain list",
+          spanAttributes("list"),
+          () =>
+            Promise.reject(
+              new Error(
+                "Listing keychain items is not supported by this vault provider",
+              ),
+            ),
         );
       },
 

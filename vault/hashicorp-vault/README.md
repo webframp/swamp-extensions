@@ -71,6 +71,44 @@ The provider communicates with the Vault HTTP API. For KV v2 engines it uses the
 uses `/v1/<mount>/<key>` directly. Secrets with a single `value` field are
 returned as plain strings; multi-field secrets are returned as JSON.
 
+## Observability
+
+The provider emits OpenTelemetry spans for every vault operation. It uses
+`@opentelemetry/api` only and never configures a TracerProvider — the swamp host
+does that. With no provider configured the tracer is a no-op.
+
+| Span         | When                                          |
+| ------------ | --------------------------------------------- |
+| `Vault get`  | reading a secret                              |
+| `Vault put`  | writing a secret                              |
+| `Vault list` | enumerating keys                              |
+| `Vault LIST` | one per HTTP request in the recursive walk     |
+
+Attributes: `vault.name`, `vault.secret_key`, `vault.kv_version`, `rpc.system`,
+`rpc.service`, `rpc.method`, `vault.keys_returned` on `list`, `vault.truncated`
+on `list`, and `vault.list_depth` on each child request.
+
+`list` walks the metadata tree with a depth cap of 10 and a key cap of 10000.
+`vault.truncated` is true when a cap stopped the walk, so a listing that gave up
+can be told apart from an empty mount.
+
+These spans cover a case the host does not. swamp emits its own `swamp.vault.*`
+spans when you run a `swamp vault` subcommand, but they carry no attributes, and
+when a model or workflow resolves a vault expression the host emits no vault span
+at all — the read is invisible. The extension's spans appear on both paths and
+nest under whatever the host is doing.
+
+**What is never recorded:** secret values, the Vault token, request and response
+bodies, and error messages. On failure a span carries `error.type` and an ERROR
+status, nothing more. `recordException` is not used, because it publishes the
+message and stack of an error whose text comes from Vault rather than from this
+extension — and the host already publishes that text once.
+
+**Key names are recorded.** `vault.secret_key` holds the key, because a vault
+span without it is close to useless for debugging. Treat key names as visible to
+anyone with access to your trace backend, and do not encode sensitive
+information in them.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.

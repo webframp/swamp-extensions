@@ -10,6 +10,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
+import {
+  Attr,
+  recordCount,
+  redactSecret,
+  type VaultSpanAttributes,
+  withVaultSpan,
+} from "./_lib/tracing.ts";
 
 /** Shape returned by {@link vault.createProvider}. */
 interface VaultProviderInstance {
@@ -148,6 +155,7 @@ export const vault = {
       response: Response,
       operation: string,
       key?: string,
+      submittedSecrets?: readonly string[],
     ): Promise<unknown> => {
       if (!response.ok) {
         const body = await response.text();
@@ -164,119 +172,188 @@ export const vault = {
         if (key) {
           message += ` (key: ${key})`;
         }
+        // Vault echoing a rejected value back in its error list would put the
+        // secret in this message, and the host publishes thrown messages to the
+        // trace backend. Strip everything we know we sent — for a JSON secret
+        // that means each field value, not just the string the caller passed.
+        if (submittedSecrets?.length) {
+          message = redactSecret(message, submittedSecrets);
+        }
         throw new Error(message);
       }
       return response.json();
     };
 
+    const spanAttributes = (
+      method: string,
+      key?: string,
+    ): VaultSpanAttributes => {
+      const attrs: VaultSpanAttributes = {
+        [Attr.VAULT_NAME]: name,
+        [Attr.RPC_SYSTEM]: "vault",
+        [Attr.RPC_SERVICE]: "@webframp/hashicorp-vault",
+        [Attr.RPC_METHOD]: method,
+        [Attr.VAULT_KV_VERSION]: parsed.kvVersion,
+      };
+      if (key !== undefined) attrs[Attr.VAULT_SECRET_KEY] = key;
+      return attrs;
+    };
+
     return {
-      get: async (key: string): Promise<string> => {
-        const url = buildPath(key, "data");
-        const response = await fetch(url, { headers: headers() });
-        const data = (await handleResponse(response, "get", key)) as {
-          data: { data?: Record<string, unknown>; value?: string };
-        };
+      get: (key: string): Promise<string> => {
+        return withVaultSpan(
+          "Vault get",
+          spanAttributes("get", key),
+          async () => {
+            const url = buildPath(key, "data");
+            const response = await fetch(url, { headers: headers() });
+            const data = (await handleResponse(response, "get", key)) as {
+              data: { data?: Record<string, unknown>; value?: string };
+            };
 
-        // KV v2 nests data under data.data, KV v1 under data
-        const secretData = parsed.kvVersion === "2"
-          ? data.data.data
-          : data.data;
+            // KV v2 nests data under data.data, KV v1 under data
+            const secretData = parsed.kvVersion === "2"
+              ? data.data.data
+              : data.data;
 
-        if (!secretData) {
-          throw new Error(`Secret '${key}' not found or has no data`);
-        }
+            if (!secretData) {
+              throw new Error(`Secret '${key}' not found or has no data`);
+            }
 
-        // If there's a single 'value' key, return it directly
-        if ("value" in secretData && typeof secretData.value === "string") {
-          return secretData.value;
-        }
+            // If there's a single 'value' key, return it directly
+            if ("value" in secretData && typeof secretData.value === "string") {
+              return secretData.value;
+            }
 
-        // Otherwise return JSON of all key-value pairs
-        return JSON.stringify(secretData);
+            // Otherwise return JSON of all key-value pairs
+            return JSON.stringify(secretData);
+          },
+        );
       },
 
-      put: async (key: string, value: string): Promise<void> => {
-        const url = buildPath(key, "data");
+      put: (key: string, value: string): Promise<void> => {
+        return withVaultSpan(
+          "Vault put",
+          spanAttributes("put", key),
+          async () => {
+            const url = buildPath(key, "data");
 
-        // Try to parse value as JSON, otherwise store as { value: ... }
-        let secretData: Record<string, unknown>;
-        try {
-          secretData = JSON.parse(value);
-          if (typeof secretData !== "object" || secretData === null) {
-            secretData = { value };
-          }
-        } catch {
-          secretData = { value };
-        }
+            // Try to parse value as JSON, otherwise store as { value: ... }
+            let secretData: Record<string, unknown>;
+            try {
+              secretData = JSON.parse(value);
+              if (typeof secretData !== "object" || secretData === null) {
+                secretData = { value };
+              }
+            } catch {
+              secretData = { value };
+            }
 
-        const body = parsed.kvVersion === "2"
-          ? { data: secretData }
-          : secretData;
+            const body = parsed.kvVersion === "2"
+              ? { data: secretData }
+              : secretData;
 
-        const response = await fetch(url, {
-          method: "POST",
-          headers: headers(),
-          body: JSON.stringify(body),
-        });
+            // Everything leaving here as secret material: the value as given,
+            // plus each string field if it parsed as an object. A JSON secret's
+            // fields are what Vault would quote back, not the wrapper.
+            const submitted = [
+              value,
+              ...Object.values(secretData).filter((v): v is string =>
+                typeof v === "string"
+              ),
+            ];
 
-        await handleResponse(response, "put", key);
+            const response = await fetch(url, {
+              method: "POST",
+              headers: headers(),
+              body: JSON.stringify(body),
+            });
+
+            await handleResponse(response, "put", key, submitted);
+          },
+        );
       },
 
-      list: async (): Promise<string[]> => {
-        const MAX_DEPTH = 10;
-        const MAX_KEYS = 10000;
-        const listPath = parsed.kvVersion === "2"
-          ? `${baseUrl}/v1/${parsed.mount}/metadata`
-          : `${baseUrl}/v1/${parsed.mount}`;
+      list: (): Promise<string[]> => {
+        return withVaultSpan("Vault list", spanAttributes("list"), async () => {
+          const MAX_DEPTH = 10;
+          const MAX_KEYS = 10000;
+          const listPath = parsed.kvVersion === "2"
+            ? `${baseUrl}/v1/${parsed.mount}/metadata`
+            : `${baseUrl}/v1/${parsed.mount}`;
 
-        const allKeys: string[] = [];
+          const allKeys: string[] = [];
+          // Set when a cap stopped the walk, so a listing that looks complete
+          // can be told apart from one that was cut short.
+          let truncated = false;
 
-        const collectKeys = async (
-          path: string,
-          prefix: string = "",
-          depth: number = 0,
-        ): Promise<void> => {
-          if (depth >= MAX_DEPTH || allKeys.length >= MAX_KEYS) return;
+          const collectKeys = async (
+            path: string,
+            prefix: string = "",
+            depth: number = 0,
+          ): Promise<void> => {
+            if (depth >= MAX_DEPTH || allKeys.length >= MAX_KEYS) {
+              truncated = true;
+              return;
+            }
 
-          const response = await fetch(`${path}?list=true`, {
-            method: "LIST",
-            headers: headers(),
-          });
+            // One span per request: `list` is the only operation that fans out,
+            // and a slow or failing branch is otherwise invisible inside the
+            // parent's total duration.
+            const data = await withVaultSpan(
+              "Vault LIST",
+              { ...spanAttributes("list"), [Attr.VAULT_LIST_DEPTH]: depth },
+              async () => {
+                const response = await fetch(`${path}?list=true`, {
+                  method: "LIST",
+                  headers: headers(),
+                });
 
-          if (response.status === 404) {
-            return;
-          }
+                if (response.status === 404) {
+                  // A missing path means an empty listing, not a failure. The
+                  // body still has to be read or the connection leaks.
+                  await response.body?.cancel();
+                  return undefined;
+                }
 
-          const data = (await handleResponse(response, "list")) as {
-            data: { keys?: string[] };
+                return (await handleResponse(response, "list")) as {
+                  data: { keys?: string[] };
+                };
+              },
+            );
+
+            if (!data?.data?.keys) {
+              return;
+            }
+
+            for (const key of data.data.keys) {
+              if (allKeys.length >= MAX_KEYS) {
+                truncated = true;
+                break;
+              }
+              const fullKey = prefix ? `${prefix}${key}` : key;
+              if (key.endsWith("/")) {
+                // The directory name comes back from Vault and goes straight
+                // into the next request path, so it needs the same encoding a
+                // caller-supplied key gets. A directory containing `?` would
+                // otherwise start a query string.
+                const dir = encodeURIComponent(key.slice(0, -1));
+                await collectKeys(
+                  `${path}/${dir}`,
+                  fullKey,
+                  depth + 1,
+                );
+              } else {
+                allKeys.push(fullKey);
+              }
+            }
           };
 
-          if (!data.data?.keys) {
-            return;
-          }
-
-          for (const key of data.data.keys) {
-            if (allKeys.length >= MAX_KEYS) break;
-            const fullKey = prefix ? `${prefix}${key}` : key;
-            if (key.endsWith("/")) {
-              // The directory name comes back from Vault and goes straight into
-              // the next request path, so it needs the same encoding a
-              // caller-supplied key gets. A directory containing `?` would
-              // otherwise start a query string.
-              const dir = encodeURIComponent(key.slice(0, -1));
-              await collectKeys(
-                `${path}/${dir}`,
-                fullKey,
-                depth + 1,
-              );
-            } else {
-              allKeys.push(fullKey);
-            }
-          }
-        };
-
-        await collectKeys(listPath);
-        return allKeys.sort();
+          await collectKeys(listPath);
+          recordCount(Attr.VAULT_KEYS_RETURNED, allKeys.length);
+          recordCount(Attr.VAULT_TRUNCATED, truncated);
+          return allKeys.sort();
+        });
       },
 
       getName: (): string => name,
