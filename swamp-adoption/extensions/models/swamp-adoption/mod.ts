@@ -452,7 +452,7 @@ Each generated file includes TODO comments marking where the user adds real logi
             lint: { rules: { exclude: ["no-import-prefix"] } },
             imports: {
               "@systeminit/swamp-testing":
-                "jsr:@systeminit/swamp-testing@0.20260504.10",
+                "jsr:@systeminit/swamp-testing@0.20260604.20",
             },
           },
           null,

@@ -3,7 +3,7 @@ import {
   assertExists,
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
-import { assertDatastoreExportConformance } from "jsr:@systeminit/swamp-testing@0.20260504.10";
+import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
 import { createBlobLock } from "./lock.ts";
 import { BlobClient } from "./rest_client.ts";
 import { datastore } from "./mod.ts";

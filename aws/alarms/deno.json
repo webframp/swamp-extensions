@@ -12,6 +12,6 @@
     }
   },
   "imports": {
-    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260504.10"
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
   }
 }

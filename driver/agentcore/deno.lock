@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20",
     "npm:@aws-sdk/client-bedrock-agentcore@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/client-bedrock-agentcore@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-bedrock-agentcore@3.1094.0": "3.1094.0",
@@ -12,7 +13,9 @@
     "npm:@aws-sdk/credential-providers@3.1066.0": "3.1066.0",
     "npm:@aws-sdk/credential-providers@3.1069.0": "3.1069.0",
     "npm:@aws-sdk/credential-providers@3.1091.0": "3.1091.0",
-    "npm:@aws-sdk/credential-providers@3.1094.0": "3.1094.0"
+    "npm:@aws-sdk/credential-providers@3.1094.0": "3.1094.0",
+    "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
+    "npm:zod@^4.3.6": "4.4.3"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -23,6 +26,14 @@
     },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@systeminit/swamp-testing@0.20260604.20": {
+      "integrity": "643f4bbc7752a46e0188e21fea0b2907c2d333a4edfb61e4bd47ffae6286a29a",
+      "dependencies": [
+        "jsr:@std/assert",
+        "npm:@marcbachmann/cel-js",
+        "npm:zod"
+      ]
     }
   },
   "npm": {
@@ -486,6 +497,10 @@
     "@aws/lambda-invoke-store@0.3.0": {
       "integrity": "sha512-sl4Bm6yiMNYrZKkqqDFWN0UfnWhlS8ivKxrYl+6t0gCLrqr8y3B2IqZZbFRkfaVVp7C/baApyh71P+LeE1A2sQ=="
     },
+    "@marcbachmann/cel-js@7.6.1": {
+      "integrity": "sha512-YyY8yiDU07ByKb2rJUoNgMAkYeeDvkdrONBREV2MP9siAW7yNft0KfbIoonWTIMY0fGtv8og0EhzKx3Xsi1Nmg==",
+      "bin": true
+    },
     "@smithy/core@3.29.6": {
       "integrity": "sha512-TO3w25cdGWBeYqKNDaqH3v4O3jjMPpKwf39YlG5X5xhqWfpOWJbi5gQi1lrllukuwohdhY0TPB8jBEv6UC50Vg==",
       "dependencies": [
@@ -556,12 +571,15 @@
     },
     "tslib@2.8.1": {
       "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="
+    },
+    "zod@4.4.3": {
+      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
     }
   },
   "workspace": {
     "dependencies": [
       "jsr:@std/assert@1.0.19",
-      "jsr:@systeminit/swamp-testing@0.20260504.10",
+      "jsr:@systeminit/swamp-testing@0.20260604.20",
       "npm:@aws-sdk/client-bedrock-agentcore@3.1091.0",
       "npm:@aws-sdk/client-s3@3.1091.0"
     ]

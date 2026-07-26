@@ -3,7 +3,7 @@ import {
   assertExists,
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
-import { assertDatastoreExportConformance } from "jsr:@systeminit/swamp-testing@0.20260504.10";
+import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
 import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1094.0";
 import { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 import { datastore } from "./mod.ts";

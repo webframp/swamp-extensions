@@ -16,7 +16,7 @@ export const OUTPUT_BASE = "../../datadog";
 export const ZOD_VERSION = "4.4.3";
 
 /** swamp-testing version */
-export const SWAMP_TESTING_VERSION = "0.20260504.10";
+export const SWAMP_TESTING_VERSION = "0.20260604.20";
 
 /** Max pagination pages (safety cap) */
 export const MAX_PAGES = 20;
