@@ -1,8 +1,12 @@
-## 2026.07.24.1
+## 2026.07.26.1
 
-**Changed:** Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).
+**Fixed:** Model failed to load because the upgrades array's last `toVersion`
+("2026.07.18.2") did not match the model's current version ("2026.07.24.1").
+Swamp's model loader enforces this invariant, causing the extension to be
+rejected at load time before any AWS API calls could execute. This manifested
+as silent failures in ECS Fargate environments where the error was not surfaced
+to the operator.
 
-**Changed:** Bump dependency pins to latest published versions:
-- @swamp/aws/ec2 2026.04.03.2 → 2026.07.20.1
-- @swamp/aws/rds 2026.04.23.2 → 2026.07.20.1
-- @swamp/aws/secretsmanager 2026.06.15.1 → 2026.07.20.1
+**Upgrade note:** Users on 2026.07.24.1 can upgrade in place. The upgrade chain
+now covers all published versions (2026.07.18.2 → 2026.07.24.1 → 2026.07.26.1)
+with no schema changes at any step.
