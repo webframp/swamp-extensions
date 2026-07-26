@@ -1,10 +1,12 @@
 manifestVersion: 1
 name: "@webframp/gitlab-datastore"
-version: "2026.07.18.1"
+version: "2026.07.25.1"
 description: >
   Stores swamp runtime data in GitLab using the Terraform state HTTP API.
   Provides distributed locking via GitLab's native state locking mechanism
-  and bidirectional sync between local cache and GitLab.
+  and bidirectional sync between local cache and GitLab. Emits OpenTelemetry
+  spans for GitLab API calls, lock acquisition/release, and push/pull sync so
+  datastore activity is visible in traces when a TracerProvider is configured.
 license: Apache-2.0
 repository: https://github.com/webframp/swamp-extensions
 platforms:
@@ -12,6 +14,7 @@ platforms:
   - linux-aarch64
   - darwin-x86_64
   - darwin-aarch64
+labels: [gitlab, terraform-state, datastore, opentelemetry]
 datastores:
   - gitlab_datastore/mod.ts
 additionalFiles:
