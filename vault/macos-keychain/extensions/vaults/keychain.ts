@@ -10,6 +10,41 @@
 
 import { z } from "npm:zod@4.4.3";
 
+/**
+ * Removes the single trailing newline the `security` CLI adds when it prints a
+ * password.
+ *
+ * Deliberately not `trim()`: a secret may legitimately begin or end with
+ * spaces or tabs, and trimming silently returned different bytes than were
+ * stored. Only one line terminator is removed, and only from the end.
+ *
+ * A secret whose own final character is a newline is indistinguishable from
+ * the terminator the CLI adds, so that one byte cannot be recovered.
+ */
+function stripTrailingNewline(text: string): string {
+  if (text.endsWith("\r\n")) return text.slice(0, -2);
+  if (text.endsWith("\n")) return text.slice(0, -1);
+  return text;
+}
+
+/**
+ * Rejects keys the `security` CLI would misread.
+ *
+ * The key becomes the `-a` account argument, so a leading dash would be parsed
+ * as a flag regardless of argv being passed as an array.
+ */
+function assertSafeKey(key: string): void {
+  if (key.length === 0) {
+    throw new Error("keychain key must not be empty");
+  }
+  if (key.includes("\0")) {
+    throw new Error("keychain key must not contain a null byte");
+  }
+  if (key.startsWith("-")) {
+    throw new Error(`keychain key must not start with "-", got "${key}"`);
+  }
+}
+
 /** The shape returned by {@linkcode vault.createProvider}. */
 export interface KeychainVaultProvider {
   get(key: string): Promise<string>;
@@ -55,11 +90,12 @@ export const vault = {
         );
       }
 
-      return new TextDecoder().decode(stdout).trim();
+      return stripTrailingNewline(new TextDecoder().decode(stdout));
     };
 
     return {
       get: async (key: string): Promise<string> => {
+        assertSafeKey(key);
         return await runSecurity([
           "find-generic-password",
           "-s",
@@ -71,6 +107,7 @@ export const vault = {
       },
 
       put: async (key: string, value: string): Promise<void> => {
+        assertSafeKey(key);
         await runSecurity([
           "add-generic-password",
           "-s",

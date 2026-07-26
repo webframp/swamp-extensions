@@ -136,12 +136,22 @@ function startMockVaultServer(kvVersion: "1" | "2" = "2"): MockVaultServer {
     if (kvVersion === "2" && metadataMatch && req.method === "LIST") {
       const prefix = metadataMatch[1] || "";
       const keys: string[] = [];
+      // Real Vault returns decoded names in a LIST response while matching on
+      // the request path, which is encoded. Mirroring that is what makes the
+      // recursion-encoding test meaningful.
+      const decodeSegment = (segment: string): string => {
+        try {
+          return decodeURIComponent(segment);
+        } catch {
+          return segment;
+        }
+      };
 
       for (const key of secrets.keys()) {
         if (prefix) {
           if (key.startsWith(prefix + "/")) {
             const remainder = key.slice(prefix.length + 1);
-            const parts = remainder.split("/");
+            const parts = remainder.split("/").map(decodeSegment);
             if (parts.length > 1) {
               const folder = parts[0] + "/";
               if (!keys.includes(folder)) keys.push(folder);
@@ -150,7 +160,7 @@ function startMockVaultServer(kvVersion: "1" | "2" = "2"): MockVaultServer {
             }
           }
         } else {
-          const parts = key.split("/");
+          const parts = key.split("/").map(decodeSegment);
           if (parts.length > 1) {
             const folder = parts[0] + "/";
             if (!keys.includes(folder)) keys.push(folder);
@@ -509,6 +519,114 @@ Deno.test({
 
       await provider.put("v1-key", "v1-value");
       assertEquals(secrets.get("v1-key"), { value: "v1-value" });
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Hardening: key validation and path encoding
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "hashicorp vault: keys containing .. are rejected",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+
+      // Without validation these reach a different mount, or a different
+      // Vault API entirely: secret/data/../../sys is not a secret.
+      for (const key of ["../../sys/health", "a/../../b", ".."]) {
+        await assertRejects(() => provider.get(key), Error, "path segments");
+        await assertRejects(
+          () => provider.put(key, "x"),
+          Error,
+          "path segments",
+        );
+      }
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "hashicorp vault: absolute and empty keys are rejected",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+      await assertRejects(() => provider.get("/absolute"), Error, "relative");
+      await assertRejects(() => provider.get(""), Error, "empty");
+      for (const key of ["a//b", "trailing/"]) {
+        await assertRejects(
+          () => provider.get(key),
+          Error,
+          "empty path segment",
+        );
+      }
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "hashicorp vault: list encodes directory names when recursing",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+
+      // A `?` in a directory name ends the path and starts a query string when
+      // it is interpolated raw, so everything under that directory goes
+      // missing from the listing.
+      await provider.put("dir?x/inner", "v");
+      assertEquals(await provider.list(), ["dir?x/inner"]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "hashicorp vault: key segments are percent-encoded, separators kept",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, secrets } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+
+      // A space and a question mark would otherwise change the request path
+      // or start a query string. The nested path must still nest.
+      const key = "team a/db?prod";
+      await provider.put(key, "encoded-secret");
+      assertEquals(await provider.get(key), "encoded-secret");
+      // The mock keys off the raw request path, so this shows the segments
+      // were percent-encoded while the separator stayed a separator.
+      assertEquals(secrets.has("team%20a/db%3Fprod"), true);
+      assertEquals(secrets.has(key), false);
     } finally {
       await server.shutdown();
     }

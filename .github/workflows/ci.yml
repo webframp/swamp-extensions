@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vault: [pass, gopass, hashicorp-vault]
+        vault: [pass, gopass, hashicorp-vault, macos-keychain]
         task: [check, lint, fmt, test]
     defaults:
       run:
@@ -31,9 +31,11 @@ jobs:
           elif [ "${{ matrix.task }}" = "lint" ]; then
             deno lint extensions/vaults/
           elif [ "${{ matrix.task }}" = "test" ]; then
-            # Run tests if any exist
+            # Run tests if any exist. Use the extension's own task so the
+            # permission set lives in one place: a hardcoded set here drifts
+            # from deno.json and fails only in CI.
             if ls extensions/vaults/*_test.ts 1> /dev/null 2>&1; then
-              deno test --allow-env --allow-run --allow-net extensions/vaults/
+              deno task test
             else
               echo "No tests found, skipping"
             fi

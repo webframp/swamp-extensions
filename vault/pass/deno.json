@@ -4,7 +4,7 @@
     "lint": "deno lint extensions/vaults/",
     "fmt": "deno fmt extensions/vaults/",
     "fmt:check": "deno fmt --check extensions/vaults/",
-    "test": "deno test --allow-env --allow-run extensions/vaults/"
+    "test": "deno test --allow-env --allow-run --allow-read --allow-write extensions/vaults/"
   },
   "lint": {
     "rules": {

@@ -328,3 +328,49 @@ Deno.test("keychain vault: custom service is applied to all operations", async (
     assertEquals(result, "val1");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hardening: byte fidelity and key validation
+// ---------------------------------------------------------------------------
+
+Deno.test("get preserves leading and trailing whitespace in a secret", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    // The old `.trim()` returned "padded" for every one of these.
+    for (const secret of ["  padded  ", "\tleading tab", "trailing space "]) {
+      mockKeychain.set("swamp/ws", secret);
+      assertEquals(await provider.get("ws"), secret);
+    }
+  });
+});
+
+Deno.test("get strips exactly one trailing newline, not a run of them", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    mockKeychain.set("swamp/nl", "line\n\n");
+    assertEquals(await provider.get("nl"), "line\n");
+    mockKeychain.set("swamp/crlf", "line\r\n");
+    assertEquals(await provider.get("crlf"), "line");
+    mockKeychain.set("swamp/none", "line");
+    assertEquals(await provider.get("none"), "line");
+  });
+});
+
+Deno.test("empty and flag-like keys are rejected", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    await assertRejects(() => provider.get(""), Error, "empty");
+    await assertRejects(() => provider.put("", "x"), Error, "empty");
+    // A leading dash becomes a flag to `security`, not an account name.
+    await assertRejects(
+      () => provider.get("-w"),
+      Error,
+      "must not start with",
+    );
+    await assertRejects(
+      () => provider.put("-U", "x"),
+      Error,
+      "must not start with",
+    );
+  });
+});

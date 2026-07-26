@@ -10,7 +10,7 @@ import {
   assertVaultConformance,
   assertVaultExportConformance,
 } from "@systeminit/swamp-testing";
-import { vault } from "./pass.ts";
+import { ENV_ALLOWLIST, vault } from "./pass.ts";
 
 // ---------------------------------------------------------------------------
 // Export conformance tests
@@ -60,6 +60,26 @@ Deno.test("createProvider throws on invalid storeDir type", () => {
 
 const mockSecrets = new Map<string, string>();
 const OriginalCommand = Deno.Command;
+/** Options handed to the most recent subprocess, for environment assertions. */
+interface CapturedOptions {
+  command: string;
+  env?: Record<string, string>;
+  clearEnv?: boolean;
+}
+let lastOptions: CapturedOptions | undefined;
+
+/**
+ * Returns the captured options, throwing if nothing was spawned.
+ *
+ * Reading through a function keeps the declared type: assigning `undefined` to
+ * the variable inside a test body narrows it to `undefined` for the rest of
+ * that body, and an assertion on top of that narrows to `never`.
+ */
+function captured(): CapturedOptions {
+  const opts = lastOptions;
+  if (!opts) throw new Error("no subprocess was spawned");
+  return opts;
+}
 
 class MockCommand {
   #command: string;
@@ -71,6 +91,7 @@ class MockCommand {
     options: {
       args?: string[];
       env?: Record<string, string>;
+      clearEnv?: boolean;
       stdin?: string;
       stdout?: string;
       stderr?: string;
@@ -78,6 +99,11 @@ class MockCommand {
   ) {
     this.#command = command;
     this.#args = options.args ?? [];
+    lastOptions = {
+      command,
+      env: options.env,
+      clearEnv: options.clearEnv,
+    };
   }
 
   #resolve(): { code: number; stdout: Uint8Array; stderr: Uint8Array } {
@@ -322,4 +348,196 @@ Deno.test("pass vault: full VaultProvider conformance", async () => {
     });
     await assertVaultConformance(provider);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Hardening: byte fidelity, key validation, and subprocess environment
+// ---------------------------------------------------------------------------
+
+Deno.test("get preserves leading and trailing whitespace in a secret", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    // A secret whose padding is significant. The old `.trim()` returned
+    // "padded" for all three of these.
+    for (const secret of ["  padded  ", "\tleading tab", "trailing space "]) {
+      await provider.put("ws", secret);
+      assertEquals(await provider.get("ws"), secret);
+    }
+  });
+});
+
+Deno.test("get strips exactly one trailing newline, not a run of them", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    // The CLI adds one line terminator when printing; anything beyond that
+    // belongs to the secret.
+    mockSecrets.set("swamp/nl", "line\n\n");
+    assertEquals(await provider.get("nl"), "line\n");
+    mockSecrets.set("swamp/crlf", "line\r\n");
+    assertEquals(await provider.get("crlf"), "line");
+    mockSecrets.set("swamp/none", "line");
+    assertEquals(await provider.get("none"), "line");
+  });
+});
+
+Deno.test("keys containing .. are rejected before reaching the CLI", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    for (const key of ["../escape", "a/../../b", ".."]) {
+      await assertRejects(
+        () => provider.get(key),
+        Error,
+        "path segments",
+      );
+      await assertRejects(
+        () => provider.put(key, "x"),
+        Error,
+        "path segments",
+      );
+    }
+  });
+});
+
+Deno.test("absolute, empty, and flag-like keys are rejected", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    await assertRejects(() => provider.get("/etc/passwd"), Error, "relative");
+    await assertRejects(() => provider.get(""), Error, "empty");
+    // A leading dash would be read as a flag by pass itself.
+    await assertRejects(() => provider.get("-c"), Error, "must not start with");
+  });
+});
+
+Deno.test("keys with empty path segments are rejected", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    for (const key of ["a//b", "trailing/"]) {
+      await assertRejects(() => provider.get(key), Error, "empty path segment");
+    }
+  });
+});
+
+Deno.test("the subprocess environment is an allowlist, not the whole parent", async () => {
+  const marker = "SWAMP_PASS_TEST_UNRELATED_SECRET";
+  Deno.env.set(marker, "must-not-be-forwarded");
+  try {
+    await withMockedPass(async () => {
+      lastOptions = undefined;
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      await provider.put("env-probe", "value");
+
+      const opts = captured();
+      // Deno merges `env` into the parent environment unless clearEnv is set,
+      // so without this flag the allowlist below would filter nothing.
+      assertEquals(opts.clearEnv, true);
+      const env = opts.env ?? {};
+      assertEquals(env[marker], undefined);
+      assertEquals(env.PASSWORD_STORE_DIR, "/tmp/store");
+      // Everything forwarded must be something pass or GPG needs.
+      const allowed = new Set<string>(ENV_ALLOWLIST);
+      for (const name of Object.keys(env)) {
+        assertEquals(
+          name === "PASSWORD_STORE_DIR" || allowed.has(name),
+          true,
+          `unexpected variable forwarded to the subprocess: ${name}`,
+        );
+      }
+    });
+  } finally {
+    Deno.env.delete(marker);
+  }
+});
+
+Deno.test("the find subprocess gets the same narrowed environment", async () => {
+  const marker = "SWAMP_PASS_TEST_UNRELATED_SECRET_LIST";
+  Deno.env.set(marker, "must-not-be-forwarded");
+  try {
+    await withMockedPass(async () => {
+      lastOptions = undefined;
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      await provider.list();
+
+      const findOpts = captured();
+      assertEquals(findOpts.command, "find");
+      assertEquals(findOpts.clearEnv, true);
+      assertEquals((findOpts.env ?? {})[marker], undefined);
+    });
+  } finally {
+    Deno.env.delete(marker);
+  }
+});
+
+Deno.test("extraEnv forwards additional named variables", async () => {
+  const extra = "SWAMP_PASS_TEST_EXOTIC_PINENTRY_VAR";
+  Deno.env.set(extra, "needed");
+  try {
+    await withMockedPass(async () => {
+      lastOptions = undefined;
+      const provider = vault.createProvider("v", {
+        storeDir: "/tmp/store",
+        extraEnv: [extra],
+      });
+      await provider.put("env-probe", "value");
+
+      assertEquals((captured().env ?? {})[extra], "needed");
+    });
+  } finally {
+    Deno.env.delete(extra);
+  }
+});
+
+/**
+ * Proves the narrowing end to end rather than through the mock.
+ *
+ * The mock can only show which options the provider passed; it cannot show
+ * what the operating system handed the child process. This test puts a fake
+ * `pass` on PATH that dumps its own environment to a file, then asserts a
+ * variable set in this process did not reach it. An allowlist without
+ * `clearEnv: true` passes every mock-level assertion above and still fails
+ * this one, because Deno merges `env` into the parent environment.
+ */
+Deno.test({
+  name: "a real subprocess does not receive unrelated parent variables",
+  ignore: Deno.build.os === "windows",
+  fn: async () => {
+    const marker = "SWAMP_PASS_TEST_REAL_SUBPROCESS_SECRET";
+    const tmp = await Deno.makeTempDir({ prefix: "swamp-pass-env-" });
+    const originalPath = Deno.env.get("PATH") ?? "";
+    const dumpFile = `${tmp}/env.txt`;
+
+    await Deno.writeTextFile(
+      `${tmp}/pass`,
+      `#!/bin/sh\nenv > ${dumpFile}\ncat > /dev/null\nexit 0\n`,
+    );
+    await Deno.chmod(`${tmp}/pass`, 0o755);
+    Deno.env.set(marker, "must-not-be-forwarded");
+    Deno.env.set("PATH", `${tmp}:${originalPath}`);
+
+    try {
+      const provider = vault.createProvider("v", { storeDir: tmp });
+      await provider.put("real-env-probe", "value");
+
+      const dumped = await Deno.readTextFile(dumpFile);
+      const names = new Set(
+        dumped.split("\n").filter(Boolean).map((line) =>
+          line.slice(0, line.indexOf("="))
+        ),
+      );
+
+      assertEquals(
+        names.has(marker),
+        false,
+        "the parent variable reached the subprocess",
+      );
+      assertEquals(
+        dumped.includes(`PASSWORD_STORE_DIR=${tmp}`),
+        true,
+        "PASSWORD_STORE_DIR did not reach the subprocess",
+      );
+    } finally {
+      Deno.env.set("PATH", originalPath);
+      Deno.env.delete(marker);
+      await Deno.remove(tmp, { recursive: true });
+    }
+  },
 });

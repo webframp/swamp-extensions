@@ -11,6 +11,58 @@
 
 import { z } from "npm:zod@4.4.3";
 
+/**
+ * Removes the single trailing newline a CLI adds when it prints a value.
+ *
+ * Deliberately not `trim()`: a secret may legitimately begin or end with
+ * spaces or tabs, and trimming silently returned different bytes than were
+ * stored. Only one line terminator is removed, and only from the end.
+ *
+ * A secret whose own final character is a newline is indistinguishable from
+ * the terminator the CLI adds, so that one byte cannot be recovered — a limit
+ * of line-oriented CLIs, not something this can work around.
+ */
+function stripTrailingNewline(text: string): string {
+  if (text.endsWith("\r\n")) return text.slice(0, -2);
+  if (text.endsWith("\n")) return text.slice(0, -1);
+  return text;
+}
+
+/**
+ * Rejects keys that would escape the configured store or mount.
+ *
+ * Keys become path segments, so `..` in one lets a caller read or overwrite a
+ * secret outside the namespace the config pinned them to.
+ */
+function assertSafeKey(key: string): void {
+  if (key.length === 0) {
+    throw new Error("gopass key must not be empty");
+  }
+  if (key.startsWith("/")) {
+    throw new Error(`gopass key must be relative, got "${key}"`);
+  }
+  if (key.includes("\0")) {
+    throw new Error("gopass key must not contain a null byte");
+  }
+  if (key.startsWith("-")) {
+    // Keys are passed as CLI arguments. A leading dash would be parsed as a
+    // flag by the CLI itself, whatever Deno.Command does with argv.
+    throw new Error(`gopass key must not start with "-", got "${key}"`);
+  }
+  for (const segment of key.split("/")) {
+    if (segment === "." || segment === "..") {
+      throw new Error(
+        `gopass key must not contain "." or ".." path segments, got "${key}"`,
+      );
+    }
+    if (segment === "") {
+      throw new Error(
+        `gopass key must not contain an empty path segment, got "${key}"`,
+      );
+    }
+  }
+}
+
 /** The shape returned by {@linkcode vault.createProvider}. */
 interface GopassVaultProvider {
   get(key: string): Promise<string>;
@@ -44,6 +96,7 @@ export const vault = {
 
     // Build secret path with optional store prefix
     const secretPath = (key: string): string => {
+      assertSafeKey(key);
       if (parsed.store) {
         return `${parsed.store}/${key}`;
       }
@@ -76,13 +129,16 @@ export const vault = {
         throw new Error(errMsg || `gopass command failed with code ${code}`);
       }
 
-      return new TextDecoder().decode(stdout).trim();
+      return stripTrailingNewline(new TextDecoder().decode(stdout));
     };
 
     return {
       get: async (key: string): Promise<string> => {
         const path = secretPath(key);
-        // Use -o to get only the password (first line), or -n for no newline
+        // -o returns only the password (first line); -n is --noparsing, which
+        // stops gopass from interpreting the secret as YAML or key-value pairs.
+        // Neither flag suppresses the trailing newline, which is why the output
+        // still goes through stripTrailingNewline.
         const args = parsed.passwordOnly
           ? ["show", "-o", "-n", path]
           : ["show", "-n", path];

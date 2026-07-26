@@ -68,6 +68,42 @@ function resolveToken(configToken: string | undefined): string {
 }
 
 /**
+ * Rejects keys that would escape the configured mount.
+ *
+ * The key is interpolated into the request path, so a `..` segment reaches a
+ * different mount or a different Vault API entirely — `secret/data/../../sys`
+ * is not the secret the caller thinks they asked for.
+ */
+function assertSafeKey(key: string): void {
+  if (key.length === 0) {
+    throw new Error("Vault key must not be empty");
+  }
+  if (key.startsWith("/")) {
+    throw new Error(`Vault key must be relative, got "${key}"`);
+  }
+  if (key.includes("\0")) {
+    throw new Error("Vault key must not contain a null byte");
+  }
+  for (const segment of key.split("/")) {
+    if (segment === "." || segment === "..") {
+      throw new Error(
+        `Vault key must not contain "." or ".." path segments, got "${key}"`,
+      );
+    }
+    if (segment === "") {
+      throw new Error(
+        `Vault key must not contain an empty path segment, got "${key}"`,
+      );
+    }
+  }
+}
+
+/** Percent-encodes each path segment while leaving the separators intact. */
+function encodeKeyPath(key: string): string {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+/**
  * Vault provider definition for HashiCorp Vault.
  *
  * Implements the swamp `VaultProvider` contract with `get`, `put`, `list`,
@@ -99,11 +135,13 @@ export const vault = {
     };
 
     const buildPath = (key: string, operation: "data" | "metadata"): string => {
+      assertSafeKey(key);
+      const encoded = encodeKeyPath(key);
       if (parsed.kvVersion === "2") {
-        return `${baseUrl}/v1/${parsed.mount}/${operation}/${key}`;
+        return `${baseUrl}/v1/${parsed.mount}/${operation}/${encoded}`;
       }
       // KV v1 doesn't have data/metadata distinction
-      return `${baseUrl}/v1/${parsed.mount}/${key}`;
+      return `${baseUrl}/v1/${parsed.mount}/${encoded}`;
     };
 
     const handleResponse = async (
@@ -221,8 +259,13 @@ export const vault = {
             if (allKeys.length >= MAX_KEYS) break;
             const fullKey = prefix ? `${prefix}${key}` : key;
             if (key.endsWith("/")) {
+              // The directory name comes back from Vault and goes straight into
+              // the next request path, so it needs the same encoding a
+              // caller-supplied key gets. A directory containing `?` would
+              // otherwise start a query string.
+              const dir = encodeURIComponent(key.slice(0, -1));
               await collectKeys(
-                `${path}/${key.slice(0, -1)}`,
+                `${path}/${dir}`,
                 fullKey,
                 depth + 1,
               );

@@ -344,3 +344,57 @@ Deno.test("gopass vault: getName returns vault name", async () => {
     return Promise.resolve();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Hardening: byte fidelity and key validation
+// ---------------------------------------------------------------------------
+
+Deno.test("get preserves leading and trailing whitespace in a secret", async () => {
+  await withMockedGopass(async () => {
+    const provider = vault.createProvider("v", { passwordOnly: false });
+    // The old `.trim()` returned "padded" for every one of these.
+    for (const secret of ["  padded  ", "\tleading tab", "trailing space "]) {
+      mockSecrets.set("ws", secret);
+      assertEquals(await provider.get("ws"), secret);
+    }
+  });
+});
+
+Deno.test("get strips exactly one trailing newline, not a run of them", async () => {
+  await withMockedGopass(async () => {
+    const provider = vault.createProvider("v", { passwordOnly: false });
+    mockSecrets.set("nl", "line\n\n");
+    assertEquals(await provider.get("nl"), "line\n");
+    mockSecrets.set("crlf", "line\r\n");
+    assertEquals(await provider.get("crlf"), "line");
+    mockSecrets.set("none", "line");
+    assertEquals(await provider.get("none"), "line");
+  });
+});
+
+Deno.test("keys containing .. are rejected before reaching the CLI", async () => {
+  await withMockedGopass(async () => {
+    const provider = vault.createProvider("v", { store: "team" });
+    for (const key of ["../escape", "a/../../b", ".."]) {
+      await assertRejects(() => provider.get(key), Error, "path segments");
+      await assertRejects(() => provider.put(key, "x"), Error, "path segments");
+    }
+  });
+});
+
+Deno.test("absolute, empty, and flag-like keys are rejected", async () => {
+  await withMockedGopass(async () => {
+    const provider = vault.createProvider("v", {});
+    await assertRejects(() => provider.get("/etc/passwd"), Error, "relative");
+    await assertRejects(() => provider.get(""), Error, "empty");
+    // A leading dash would be read as a flag by gopass itself.
+    await assertRejects(
+      () => provider.get("-c"),
+      Error,
+      "must not start with",
+    );
+    for (const key of ["a//b", "trailing/"]) {
+      await assertRejects(() => provider.get(key), Error, "empty path segment");
+    }
+  });
+});
