@@ -10,6 +10,7 @@
  */
 
 import { z } from "npm:zod@4.4.3";
+import { Attr, recordRetry, SpanStatusCode, withSpan } from "./_lib/tracing.ts";
 
 /**
  * Domain interfaces mirrored from swamp core.
@@ -202,12 +203,22 @@ function getStateSerial(stateJson: string): number {
   }
 }
 
+/** A GitLab API response with its body already drained. */
+interface GitLabResponse {
+  status: number;
+  statusText: string;
+  ok: boolean;
+  body: string;
+}
+
 /**
  * GitLab Terraform State API client
  */
 class GitLabStateClient {
   private readonly baseUrl: string;
   private readonly token: string;
+  /** Host only — the full URL embeds the encoded state name. */
+  private readonly serverAddress: string;
 
   constructor(
     private readonly config: {
@@ -221,6 +232,13 @@ class GitLabStateClient {
       encodeURIComponent(config.projectId)
     }/terraform/state`;
     this.token = config.token;
+    let host = config.baseUrl;
+    try {
+      host = new URL(config.baseUrl).host;
+    } catch {
+      // Non-absolute base URL (only reachable in tests) — record it verbatim.
+    }
+    this.serverAddress = host;
   }
 
   private headers(): Record<string, string> {
@@ -231,6 +249,60 @@ class GitLabStateClient {
   }
 
   /**
+   * Single choke point for every GitLab API call, so each round trip emits
+   * exactly one span.
+   *
+   * `op` is passed in rather than derived from the URL because several
+   * operations hit the same endpoint with different methods, and because the
+   * URL embeds the encoded state name. Request headers carry a PRIVATE-TOKEN
+   * and request bodies carry file content — neither is ever recorded.
+   *
+   * `expected` lists non-2xx statuses that are normal control flow for the
+   * caller — a 404 meaning "no such state", a 409 meaning "already locked".
+   * Anything else marks the span as an error, because this client inspects
+   * `response.status` by hand instead of throwing, so without this the span
+   * would report success on a 500.
+   */
+  private request(
+    op: string,
+    url: string,
+    init: RequestInit,
+    opts?: { stateName?: string; expected?: number[] },
+  ): Promise<GitLabResponse> {
+    return withSpan(`GitLab ${op}`, {
+      [Attr.RPC_SYSTEM]: "gitlab",
+      [Attr.RPC_SERVICE]: "GitLab",
+      [Attr.RPC_METHOD]: op,
+      [Attr.HTTP_REQUEST_METHOD]: init.method ?? "GET",
+      [Attr.GITLAB_PROJECT_ID]: this.config.projectId,
+      [Attr.SERVER_ADDRESS]: this.serverAddress,
+      ...(opts?.stateName ? { [Attr.GITLAB_STATE_NAME]: opts.stateName } : {}),
+    }, async (span) => {
+      const response = await fetch(url, init);
+      // The body is always read, even when the caller ignores it: an unread
+      // response body holds its connection open, and several call sites decide
+      // purely on the status. Reading it here also means the span covers the
+      // transfer rather than just the headers.
+      const body = await response.text();
+      span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, response.status);
+      span.setAttribute(Attr.HTTP_RESPONSE_BODY_SIZE, body.length);
+      if (!response.ok && !(opts?.expected ?? []).includes(response.status)) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: `${response.status} ${response.statusText}`,
+        });
+        span.setAttribute(Attr.ERROR_TYPE, String(response.status));
+      }
+      return {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        body,
+      };
+    });
+  }
+
+  /**
    * Get state content (unwrapped from Terraform state format)
    */
   async getState(
@@ -238,11 +310,11 @@ class GitLabStateClient {
     signal?: AbortSignal,
   ): Promise<Uint8Array | null> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
-    const response = await fetch(url, {
+    const response = await this.request("getState", url, {
       method: "GET",
       headers: this.headers(),
       signal,
-    });
+    }, { stateName, expected: [404] });
 
     if (response.status === 404) {
       return null;
@@ -254,7 +326,7 @@ class GitLabStateClient {
       );
     }
 
-    const stateJson = await response.text();
+    const stateJson = response.body;
     return unwrapFromTerraformState(stateJson);
   }
 
@@ -276,12 +348,15 @@ class GitLabStateClient {
     let serial = 1;
     let lineage: string | undefined;
     try {
-      const existingResponse = await fetch(
+      const existingResponse = await this.request(
+        "readStateSerial",
         `${this.baseUrl}/${encodeURIComponent(stateName)}`,
         { method: "GET", headers: this.headers(), signal },
+        // A first push has nothing to read a serial from; 404 is expected.
+        { stateName, expected: [404] },
       );
       if (existingResponse.ok) {
-        const existingState = await existingResponse.text();
+        const existingState = existingResponse.body;
         serial = getStateSerial(existingState) + 1;
         // Preserve lineage if it exists
         try {
@@ -293,7 +368,7 @@ class GitLabStateClient {
 
     const wrappedState = wrapInTerraformState(content, serial, lineage);
 
-    const response = await fetch(url, {
+    const response = await this.request("putState", url, {
       method: "POST",
       headers: {
         ...this.headers(),
@@ -301,10 +376,10 @@ class GitLabStateClient {
       },
       body: wrappedState,
       signal,
-    });
+    }, { stateName });
 
     if (!response.ok) {
-      const body = await response.text();
+      const body = response.body;
       throw new Error(
         `GitLab API error: ${response.status} ${response.statusText}: ${body}`,
       );
@@ -316,10 +391,10 @@ class GitLabStateClient {
    */
   async deleteState(stateName: string): Promise<void> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
-    const response = await fetch(url, {
+    const response = await this.request("deleteState", url, {
       method: "DELETE",
       headers: this.headers(),
-    });
+    }, { stateName, expected: [404] });
 
     if (!response.ok && response.status !== 404) {
       throw new Error(
@@ -338,13 +413,13 @@ class GitLabStateClient {
       // Numeric ID - need to get project path from REST API
       const projectUrl =
         `${this.config.baseUrl}/api/v4/projects/${projectPath}`;
-      const projectResponse = await fetch(projectUrl, {
+      const projectResponse = await this.request("getProject", projectUrl, {
         method: "GET",
         headers: this.headers(),
         signal,
       });
       if (projectResponse.ok) {
-        const project = (await projectResponse.json()) as {
+        const project = JSON.parse(projectResponse.body) as {
           path_with_namespace: string;
         };
         projectPath = project.path_with_namespace;
@@ -365,7 +440,7 @@ class GitLabStateClient {
       }
     }`;
 
-    const response = await fetch(graphqlUrl, {
+    const response = await this.request("listStates", graphqlUrl, {
       method: "POST",
       headers: {
         ...this.headers(),
@@ -379,7 +454,7 @@ class GitLabStateClient {
       return [];
     }
 
-    const result = (await response.json()) as {
+    const result = JSON.parse(response.body) as {
       data?: {
         project?: {
           terraformStates?: {
@@ -398,11 +473,13 @@ class GitLabStateClient {
    */
   async lock(stateName: string, lockInfo: GitLabLockInfo): Promise<boolean> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
-    const response = await fetch(url, {
+    const response = await this.request("lock", url, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(lockInfo),
-    });
+      // 409/423 mean another holder has the lock — normal contention, not a
+      // failure.
+    }, { stateName, expected: [409, 423] });
 
     if (response.ok) {
       return true;
@@ -423,11 +500,13 @@ class GitLabStateClient {
    */
   async unlock(stateName: string, lockInfo: GitLabLockInfo): Promise<boolean> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
-    const response = await fetch(url, {
+    const response = await this.request("unlock", url, {
       method: "DELETE",
       headers: this.headers(),
       body: JSON.stringify(lockInfo),
-    });
+      // 409 means the lock ID didn't match, 404 means there was no lock —
+      // both are answers, not failures.
+    }, { stateName, expected: [404, 409] });
 
     if (response.ok) {
       return true;
@@ -453,10 +532,11 @@ class GitLabStateClient {
    */
   async getLockInfo(stateName: string): Promise<GitLabLockInfo | null> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
-    const response = await fetch(url, {
+    const response = await this.request("getLockInfo", url, {
       method: "GET",
       headers: this.headers(),
-    });
+      // 404/204 mean the state is not locked.
+    }, { stateName, expected: [204, 404] });
 
     if (response.status === 404 || response.status === 204) {
       return null;
@@ -466,7 +546,7 @@ class GitLabStateClient {
       return null;
     }
 
-    return await response.json() as GitLabLockInfo;
+    return JSON.parse(response.body) as GitLabLockInfo;
   }
 
   /**
@@ -477,7 +557,7 @@ class GitLabStateClient {
     const url = `${this.config.baseUrl}/api/v4/projects/${
       encodeURIComponent(this.config.projectId)
     }`;
-    const response = await fetch(url, {
+    const response = await this.request("healthCheck", url, {
       method: "GET",
       headers: this.headers(),
     });
@@ -564,84 +644,135 @@ class GitLabLock implements DistributedLock {
   }
 
   async acquire(): Promise<void> {
-    const start = Date.now();
+    return await withSpan("gitlab-datastore lock acquire", {
+      [Attr.LOCK_KEY]: this.stateName,
+      [Attr.LOCK_TIMEOUT_MS]: this.maxWaitMs,
+      [Attr.LOCK_TTL_MS]: this.ttlMs,
+    }, async (span) => {
+      const start = Date.now();
+      let contended = false;
+      let attempt = 0;
 
-    while (Date.now() - start < this.maxWaitMs) {
-      const info: LockInfo = {
-        holder: `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`,
-        hostname: Deno.hostname(),
-        pid: Deno.pid,
-        acquiredAt: new Date().toISOString(),
-        ttlMs: this.ttlMs,
-        nonce: crypto.randomUUID(),
-      };
+      while (Date.now() - start < this.maxWaitMs) {
+        const info: LockInfo = {
+          holder: `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`,
+          hostname: Deno.hostname(),
+          pid: Deno.pid,
+          acquiredAt: new Date().toISOString(),
+          ttlMs: this.ttlMs,
+          nonce: crypto.randomUUID(),
+        };
 
-      const gitlabLockInfo = toGitLabLockInfo(info, this.stateName);
-      const acquired = await this.client.lock(this.stateName, gitlabLockInfo);
+        const gitlabLockInfo = toGitLabLockInfo(info, this.stateName);
+        const acquired = await this.client.lock(this.stateName, gitlabLockInfo);
 
-      if (acquired) {
-        this.lockInfo = info;
-        this.startHeartbeat();
-        return;
-      }
-
-      // Check if existing lock is stale
-      const existing = await this.client.getLockInfo(this.stateName);
-      if (existing) {
-        const createdAt = new Date(existing.Created).getTime();
-        const age = Date.now() - createdAt;
-        // Consider lock stale if older than 2x TTL (GitLab doesn't have TTL, so we use our default)
-        if (age > this.ttlMs * 2) {
-          // Force release stale lock
-          await this.client.unlock(this.stateName, existing);
-          continue;
+        if (acquired) {
+          this.lockInfo = info;
+          this.startHeartbeat();
+          span.setAttributes({
+            [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+            [Attr.LOCK_CONTENDED]: contended,
+          });
+          return;
         }
+
+        contended = true;
+
+        // Check if existing lock is stale
+        const existing = await this.client.getLockInfo(this.stateName);
+        if (existing) {
+          span.setAttribute(Attr.LOCK_HOLDER, existing.Who);
+          const createdAt = new Date(existing.Created).getTime();
+          const age = Date.now() - createdAt;
+          // Consider lock stale if older than 2x TTL (GitLab doesn't have TTL, so we use our default)
+          if (age > this.ttlMs * 2) {
+            // Force release stale lock
+            await this.client.unlock(this.stateName, existing);
+            attempt++;
+            recordRetry(attempt, 0, { "retry.reason": "stale_lock_stolen" });
+            continue;
+          }
+        }
+
+        attempt++;
+        recordRetry(attempt, this.retryIntervalMs, {
+          "retry.reason": "lock_contended",
+        });
+        await new Promise((r) => setTimeout(r, this.retryIntervalMs));
       }
 
-      await new Promise((r) => setTimeout(r, this.retryIntervalMs));
-    }
-
-    throw new Error(`Lock timeout after ${this.maxWaitMs}ms`);
+      span.setAttributes({
+        [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+        [Attr.LOCK_CONTENDED]: contended,
+      });
+      throw new Error(`Lock timeout after ${this.maxWaitMs}ms`);
+    });
   }
 
   async release(): Promise<void> {
-    this.stopHeartbeat();
+    return await withSpan("gitlab-datastore lock release", {
+      [Attr.LOCK_KEY]: this.stateName,
+    }, async () => {
+      this.stopHeartbeat();
 
-    if (this.lockInfo) {
-      const gitlabLockInfo = toGitLabLockInfo(this.lockInfo, this.stateName);
-      await this.client.unlock(this.stateName, gitlabLockInfo);
-      this.lockInfo = null;
-    }
+      if (this.lockInfo) {
+        const gitlabLockInfo = toGitLabLockInfo(this.lockInfo, this.stateName);
+        await this.client.unlock(this.stateName, gitlabLockInfo);
+        this.lockInfo = null;
+      }
+    });
   }
 
   async withLock<T>(fn: () => Promise<T>): Promise<T> {
-    await this.acquire();
-    try {
-      return await fn();
-    } finally {
-      await this.release();
-    }
+    return await withSpan("gitlab-datastore lock withLock", {
+      [Attr.LOCK_KEY]: this.stateName,
+    }, async () => {
+      await this.acquire();
+      try {
+        return await fn();
+      } finally {
+        await this.release();
+      }
+    });
   }
 
   async inspect(): Promise<LockInfo | null> {
-    const gitlabInfo = await this.client.getLockInfo(this.stateName);
-    if (!gitlabInfo) {
-      return null;
-    }
-    return fromGitLabLockInfo(gitlabInfo);
+    return await withSpan("gitlab-datastore lock inspect", {
+      [Attr.LOCK_KEY]: this.stateName,
+    }, async (span) => {
+      const gitlabInfo = await this.client.getLockInfo(this.stateName);
+      if (!gitlabInfo) {
+        return null;
+      }
+      span.setAttribute(Attr.LOCK_HOLDER, gitlabInfo.Who);
+      return fromGitLabLockInfo(gitlabInfo);
+    });
   }
 
   async forceRelease(expectedNonce: string): Promise<boolean> {
-    const gitlabInfo = await this.client.getLockInfo(this.stateName);
-    if (!gitlabInfo) {
-      return false;
-    }
+    return await withSpan("gitlab-datastore lock forceRelease", {
+      [Attr.LOCK_KEY]: this.stateName,
+    }, async () => {
+      const gitlabInfo = await this.client.getLockInfo(this.stateName);
+      if (!gitlabInfo) {
+        return false;
+      }
 
-    if (gitlabInfo.ID !== expectedNonce) {
-      return false;
-    }
+      if (gitlabInfo.ID !== expectedNonce) {
+        return false;
+      }
 
-    return await this.client.unlock(this.stateName, gitlabInfo);
+      const released = await this.client.unlock(this.stateName, gitlabInfo);
+      // If this instance itself held that lock, drop its local state too.
+      // Leaving the heartbeat running would keep refreshing the timestamp of a
+      // lock this object no longer owns, and would keep the interval alive for
+      // the lifetime of the process.
+      if (released && this.lockInfo?.nonce === expectedNonce) {
+        this.stopHeartbeat();
+        this.lockInfo = null;
+      }
+      return released;
+    });
   }
 
   private startHeartbeat(): void {
@@ -653,6 +784,9 @@ class GitLabLock implements DistributedLock {
         // Note: GitLab doesn't support lock refresh, so we just track locally
       }
     }, this.ttlMs / 3);
+    // Unref so a held lock doesn't keep the process alive if release is never
+    // called — the same convention the other datastore locks follow.
+    Deno.unrefTimer(this.heartbeatId);
   }
 
   private stopHeartbeat(): void {
@@ -836,306 +970,358 @@ class GitLabSyncService implements TwoPhaseSyncService {
   }
 
   async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
-    const signal = options?.signal;
-    const metadataOnly = options?.metadataOnly === true;
-    const states = await this.client.listStates(signal);
-    let count = 0;
     const scopeFilter = buildScopeFilter(options?.context);
+    return await withSpan("gitlab-datastore pullChanged", {
+      [Attr.DATASTORE_SCOPED]: scopeFilter !== null,
+      [Attr.DATASTORE_METADATA_ONLY]: options?.metadataOnly === true,
+    }, async (span) => {
+      const signal = options?.signal;
+      const metadataOnly = options?.metadataOnly === true;
+      const states = await this.client.listStates(signal);
+      span.setAttribute(Attr.DATASTORE_STATES, states.length);
+      let count = 0;
 
-    for (const stateName of states) {
-      signal?.throwIfAborted();
-      const relativePath = decodeStateName(this.prefix, stateName);
-      if (!relativePath || relativePath.split("/").some((s) => s === "..")) {
-        continue;
+      for (const stateName of states) {
+        signal?.throwIfAborted();
+        const relativePath = decodeStateName(this.prefix, stateName);
+        if (!relativePath || relativePath.split("/").some((s) => s === "..")) {
+          continue;
+        }
+        if (scopeFilter && !scopeFilter(relativePath)) continue;
+
+        if (metadataOnly && isDataRawFile(relativePath)) {
+          // Skip raw content but create parent directory for catalog walker
+          const localPath = `${this.cachePath}/${relativePath}`;
+          await Deno.mkdir(
+            localPath.substring(0, localPath.lastIndexOf("/")),
+            { recursive: true },
+          );
+          continue;
+        }
+
+        const content = await this.client.getState(stateName, signal);
+        if (content) {
+          const localPath = `${this.cachePath}/${relativePath}`;
+          await Deno.mkdir(
+            localPath.substring(0, localPath.lastIndexOf("/")),
+            { recursive: true },
+          );
+          const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
+          await Deno.writeFile(tmpPath, content);
+          await Deno.rename(tmpPath, localPath);
+          count++;
+        }
       }
-      if (scopeFilter && !scopeFilter(relativePath)) continue;
 
-      if (metadataOnly && isDataRawFile(relativePath)) {
-        // Skip raw content but create parent directory for catalog walker
-        const localPath = `${this.cachePath}/${relativePath}`;
-        await Deno.mkdir(
-          localPath.substring(0, localPath.lastIndexOf("/")),
-          { recursive: true },
-        );
-        continue;
+      // Track lazy hydration state
+      if (metadataOnly) {
+        const state = await readSyncState(this.cachePath);
+        state.lazyPullActive = true;
+        await writeSyncState(this.cachePath, state);
+      } else if (!options?.context) {
+        // Full unscoped pull clears lazy state
+        const state = await readSyncState(this.cachePath);
+        state.lazyPullActive = false;
+        await writeSyncState(this.cachePath, state);
       }
 
-      const content = await this.client.getState(stateName, signal);
-      if (content) {
-        const localPath = `${this.cachePath}/${relativePath}`;
-        await Deno.mkdir(
-          localPath.substring(0, localPath.lastIndexOf("/")),
-          { recursive: true },
-        );
-        const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
-        await Deno.writeFile(tmpPath, content);
-        await Deno.rename(tmpPath, localPath);
-        count++;
-      }
-    }
-
-    // Track lazy hydration state
-    if (metadataOnly) {
-      const state = await readSyncState(this.cachePath);
-      state.lazyPullActive = true;
-      await writeSyncState(this.cachePath, state);
-    } else if (!options?.context) {
-      // Full unscoped pull clears lazy state
-      const state = await readSyncState(this.cachePath);
-      state.lazyPullActive = false;
-      await writeSyncState(this.cachePath, state);
-    }
-
-    return count;
+      span.setAttribute(Attr.DATASTORE_FILES_PULLED, count);
+      return count;
+    });
   }
 
   async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
-    const signal = options?.signal;
     const scopeFilter = buildScopeFilter(options?.context);
-    const syncState = await readSyncState(this.cachePath);
-    let count = 0;
+    return await withSpan("gitlab-datastore pushChanged", {
+      [Attr.DATASTORE_SCOPED]: scopeFilter !== null,
+    }, async (span) => {
+      const signal = options?.signal;
+      const syncState = await readSyncState(this.cachePath);
+      let count = 0;
 
-    const pushFile = async (relativePath: string): Promise<void> => {
-      const fullPath = `${this.cachePath}/${relativePath}`;
-      let content: Uint8Array;
-      try {
-        const stat = await Deno.stat(fullPath);
-        if (stat.isDirectory) return; // markDirty may record directories; skip them
-        content = await Deno.readFile(fullPath);
-      } catch (error) {
-        if (error instanceof Deno.errors.NotFound) return;
-        throw error;
-      }
-
-      // Skip files exceeding GitLab's practical state size limit (4MB).
-      // These are typically binary artifacts that don't need remote sync.
-      const MAX_FILE_SIZE = 4 * 1024 * 1024;
-      if (content.length > MAX_FILE_SIZE) return;
-
-      // Hash-based skip: same hash means no change since last push.
-      const hash = await sha256Hex(content);
-      if (syncState.hashes[relativePath] === hash) return;
-
-      const stateName = encodeStateName(this.prefix, relativePath);
-      await this.client.putState(stateName, content, undefined, signal);
-      syncState.hashes[relativePath] = hash;
-      count++;
-    };
-
-    // Use dirty paths when available and not overflowed
-    const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
-      !syncState.dirtyOverflow;
-
-    if (useDirtyPaths) {
-      const processed: Set<string> = new Set();
-      for (const relPath of syncState.dirtyPaths) {
-        signal?.throwIfAborted();
-        if (scopeFilter && !scopeFilter(relPath)) continue;
-        processed.add(relPath);
-        await pushFile(relPath);
-      }
-      // Only remove paths that were actually processed; keep out-of-scope paths
-      syncState.dirtyPaths = syncState.dirtyPaths.filter((p) =>
-        !processed.has(p)
-      );
-    } else {
-      const queue: Array<{ dir: string; base: string }> = [
-        { dir: this.cachePath, base: "" },
-      ];
-
-      while (queue.length > 0) {
-        signal?.throwIfAborted();
-        const { dir, base } = queue.shift()!;
-
+      const pushFile = async (relativePath: string): Promise<void> => {
+        const fullPath = `${this.cachePath}/${relativePath}`;
+        let content: Uint8Array;
         try {
-          for await (const entry of Deno.readDir(dir)) {
-            const fullPath = `${dir}/${entry.name}`;
-            const relativePath = base ? `${base}/${entry.name}` : entry.name;
-
-            if (entry.isDirectory) {
-              if (EXCLUDED_DIRS.has(entry.name)) continue;
-              if (
-                scopeFilter &&
-                !couldMatchScope(relativePath, options?.context)
-              ) {
-                continue;
-              }
-              queue.push({ dir: fullPath, base: relativePath });
-            } else if (entry.isFile) {
-              if (relativePath === SYNC_STATE_FILE) continue;
-              if (isExcludedFile(entry.name)) continue;
-              if (scopeFilter && !scopeFilter(relativePath)) continue;
-              await pushFile(relativePath);
-            }
-          }
+          const stat = await Deno.stat(fullPath);
+          if (stat.isDirectory) return; // markDirty may record directories; skip them
+          content = await Deno.readFile(fullPath);
         } catch (error) {
-          if (!(error instanceof Deno.errors.NotFound)) {
-            throw error;
+          if (error instanceof Deno.errors.NotFound) return;
+          throw error;
+        }
+
+        // Skip files exceeding GitLab's practical state size limit (4MB).
+        // These are typically binary artifacts that don't need remote sync.
+        const MAX_FILE_SIZE = 4 * 1024 * 1024;
+        if (content.length > MAX_FILE_SIZE) return;
+
+        // Hash-based skip: same hash means no change since last push.
+        const hash = await sha256Hex(content);
+        if (syncState.hashes[relativePath] === hash) return;
+
+        const stateName = encodeStateName(this.prefix, relativePath);
+        await this.client.putState(stateName, content, undefined, signal);
+        syncState.hashes[relativePath] = hash;
+        count++;
+      };
+
+      // Use dirty paths when available and not overflowed
+      const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
+        !syncState.dirtyOverflow;
+
+      if (useDirtyPaths) {
+        const processed: Set<string> = new Set();
+        for (const relPath of syncState.dirtyPaths) {
+          signal?.throwIfAborted();
+          if (scopeFilter && !scopeFilter(relPath)) continue;
+          processed.add(relPath);
+          await pushFile(relPath);
+        }
+        // Only remove paths that were actually processed; keep out-of-scope paths
+        syncState.dirtyPaths = syncState.dirtyPaths.filter((p) =>
+          !processed.has(p)
+        );
+      } else {
+        const queue: Array<{ dir: string; base: string }> = [
+          { dir: this.cachePath, base: "" },
+        ];
+
+        while (queue.length > 0) {
+          signal?.throwIfAborted();
+          const { dir, base } = queue.shift()!;
+
+          try {
+            for await (const entry of Deno.readDir(dir)) {
+              const fullPath = `${dir}/${entry.name}`;
+              const relativePath = base ? `${base}/${entry.name}` : entry.name;
+
+              if (entry.isDirectory) {
+                if (EXCLUDED_DIRS.has(entry.name)) continue;
+                if (
+                  scopeFilter &&
+                  !couldMatchScope(relativePath, options?.context)
+                ) {
+                  continue;
+                }
+                queue.push({ dir: fullPath, base: relativePath });
+              } else if (entry.isFile) {
+                if (relativePath === SYNC_STATE_FILE) continue;
+                if (isExcludedFile(entry.name)) continue;
+                if (scopeFilter && !scopeFilter(relativePath)) continue;
+                await pushFile(relativePath);
+              }
+            }
+          } catch (error) {
+            if (!(error instanceof Deno.errors.NotFound)) {
+              throw error;
+            }
           }
         }
       }
-    }
 
-    // Clear dirty state after successful push.
-    // For full walk: clear everything. For dirty-path mode: already filtered above.
-    if (!useDirtyPaths) {
-      syncState.dirtyPaths = [];
-    }
-    syncState.dirtyOverflow = false;
-    await writeSyncState(this.cachePath, syncState);
+      // Clear dirty state after successful push.
+      // For full walk: clear everything. For dirty-path mode: already filtered above.
+      if (!useDirtyPaths) {
+        syncState.dirtyPaths = [];
+      }
+      syncState.dirtyOverflow = false;
+      await writeSyncState(this.cachePath, syncState);
 
-    return count;
+      // GitLab states have no delete-on-push path, so files_deleted is always
+      // zero here — recorded anyway so the attribute set matches the other
+      // datastore extensions. There is no short-circuit in this method, so
+      // fast_path_hit is deliberately not set: in the sibling extensions it
+      // means "no work was done", and reporting it for a dirty-path push that
+      // uploaded files would make it mean two different things.
+      span.setAttributes({
+        [Attr.DATASTORE_FILES_PUSHED]: count,
+        [Attr.DATASTORE_FILES_DELETED]: 0,
+        [Attr.DATASTORE_DIRTY_PATH_MODE]: useDirtyPaths,
+      });
+      return count;
+    });
   }
 
   async hydrateFile(
     relPath: string,
     options?: DatastoreSyncOptions,
   ): Promise<boolean> {
-    if (relPath.split("/").some((s) => s === "..")) return false;
-    const signal = options?.signal;
-    const stateName = encodeStateName(this.prefix, relPath);
-    const content = await this.client.getState(stateName, signal);
-    if (!content) return false;
+    return await withSpan("gitlab-datastore hydrateFile", {
+      [Attr.DATASTORE_FILE]: relPath,
+    }, async (span) => {
+      if (relPath.split("/").some((s) => s === "..")) {
+        span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+        return false;
+      }
+      const signal = options?.signal;
+      const stateName = encodeStateName(this.prefix, relPath);
+      const content = await this.client.getState(stateName, signal);
+      if (!content) {
+        span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+        return false;
+      }
 
-    const localPath = `${this.cachePath}/${relPath}`;
-    await Deno.mkdir(
-      localPath.substring(0, localPath.lastIndexOf("/")),
-      { recursive: true },
-    );
+      const localPath = `${this.cachePath}/${relPath}`;
+      await Deno.mkdir(
+        localPath.substring(0, localPath.lastIndexOf("/")),
+        { recursive: true },
+      );
 
-    // Atomic write: tmp file + rename
-    const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
-    await Deno.writeFile(tmpPath, content);
-    await Deno.rename(tmpPath, localPath);
+      // Atomic write: tmp file + rename
+      const tmpPath = `${localPath}.${crypto.randomUUID()}.tmp`;
+      await Deno.writeFile(tmpPath, content);
+      await Deno.rename(tmpPath, localPath);
 
-    // Update hash so next pushChanged doesn't re-upload unchanged content
-    const state = await readSyncState(this.cachePath);
-    state.hashes[relPath] = await sha256Hex(content);
-    await writeSyncState(this.cachePath, state);
+      // Update hash so next pushChanged doesn't re-upload unchanged content
+      const state = await readSyncState(this.cachePath);
+      state.hashes[relPath] = await sha256Hex(content);
+      await writeSyncState(this.cachePath, state);
 
-    return true;
+      span.setAttribute(Attr.DATASTORE_HYDRATED, true);
+      return true;
+    });
   }
 
   async preparePush(options?: DatastoreSyncOptions): Promise<PushManifest> {
-    const signal = options?.signal;
     const scopeFilter = buildScopeFilter(options?.context);
-    const syncState = await readSyncState(this.cachePath);
-    const entries: Array<
-      { relPath: string; hash: string; content: Uint8Array }
-    > = [];
+    return await withSpan("gitlab-datastore preparePush", {
+      [Attr.DATASTORE_SCOPED]: scopeFilter !== null,
+    }, async (span) => {
+      const signal = options?.signal;
+      const syncState = await readSyncState(this.cachePath);
+      const entries: Array<
+        { relPath: string; hash: string; content: Uint8Array }
+      > = [];
 
-    const collectFile = async (relativePath: string): Promise<void> => {
-      const fullPath = `${this.cachePath}/${relativePath}`;
-      let content: Uint8Array;
-      try {
-        const stat = await Deno.stat(fullPath);
-        if (stat.isDirectory) return;
-        content = await Deno.readFile(fullPath);
-      } catch (error) {
-        if (error instanceof Deno.errors.NotFound) return;
-        throw error;
-      }
-
-      const MAX_FILE_SIZE = 4 * 1024 * 1024;
-      if (content.length > MAX_FILE_SIZE) return;
-
-      const hash = await sha256Hex(content);
-      if (syncState.hashes[relativePath] === hash) return;
-
-      entries.push({ relPath: relativePath, hash, content });
-    };
-
-    const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
-      !syncState.dirtyOverflow;
-    const processedDirtyPaths: Set<string> = new Set();
-
-    if (useDirtyPaths) {
-      for (const relPath of syncState.dirtyPaths) {
-        signal?.throwIfAborted();
-        if (scopeFilter && !scopeFilter(relPath)) continue;
-        processedDirtyPaths.add(relPath);
-        await collectFile(relPath);
-      }
-    } else {
-      const queue: Array<{ dir: string; base: string }> = [
-        { dir: this.cachePath, base: "" },
-      ];
-
-      while (queue.length > 0) {
-        signal?.throwIfAborted();
-        const { dir, base } = queue.shift()!;
-
+      const collectFile = async (relativePath: string): Promise<void> => {
+        const fullPath = `${this.cachePath}/${relativePath}`;
+        let content: Uint8Array;
         try {
-          for await (const entry of Deno.readDir(dir)) {
-            const fullPath = `${dir}/${entry.name}`;
-            const relativePath = base ? `${base}/${entry.name}` : entry.name;
-
-            if (entry.isDirectory) {
-              if (EXCLUDED_DIRS.has(entry.name)) continue;
-              if (
-                scopeFilter &&
-                !couldMatchScope(relativePath, options?.context)
-              ) {
-                continue;
-              }
-              queue.push({ dir: fullPath, base: relativePath });
-            } else if (entry.isFile) {
-              if (relativePath === SYNC_STATE_FILE) continue;
-              if (isExcludedFile(entry.name)) continue;
-              if (scopeFilter && !scopeFilter(relativePath)) continue;
-              await collectFile(relativePath);
-            }
-          }
+          const stat = await Deno.stat(fullPath);
+          if (stat.isDirectory) return;
+          content = await Deno.readFile(fullPath);
         } catch (error) {
-          if (!(error instanceof Deno.errors.NotFound)) {
-            throw error;
+          if (error instanceof Deno.errors.NotFound) return;
+          throw error;
+        }
+
+        const MAX_FILE_SIZE = 4 * 1024 * 1024;
+        if (content.length > MAX_FILE_SIZE) return;
+
+        const hash = await sha256Hex(content);
+        if (syncState.hashes[relativePath] === hash) return;
+
+        entries.push({ relPath: relativePath, hash, content });
+      };
+
+      const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
+        !syncState.dirtyOverflow;
+      const processedDirtyPaths: Set<string> = new Set();
+
+      if (useDirtyPaths) {
+        for (const relPath of syncState.dirtyPaths) {
+          signal?.throwIfAborted();
+          if (scopeFilter && !scopeFilter(relPath)) continue;
+          processedDirtyPaths.add(relPath);
+          await collectFile(relPath);
+        }
+      } else {
+        const queue: Array<{ dir: string; base: string }> = [
+          { dir: this.cachePath, base: "" },
+        ];
+
+        while (queue.length > 0) {
+          signal?.throwIfAborted();
+          const { dir, base } = queue.shift()!;
+
+          try {
+            for await (const entry of Deno.readDir(dir)) {
+              const fullPath = `${dir}/${entry.name}`;
+              const relativePath = base ? `${base}/${entry.name}` : entry.name;
+
+              if (entry.isDirectory) {
+                if (EXCLUDED_DIRS.has(entry.name)) continue;
+                if (
+                  scopeFilter &&
+                  !couldMatchScope(relativePath, options?.context)
+                ) {
+                  continue;
+                }
+                queue.push({ dir: fullPath, base: relativePath });
+              } else if (entry.isFile) {
+                if (relativePath === SYNC_STATE_FILE) continue;
+                if (isExcludedFile(entry.name)) continue;
+                if (scopeFilter && !scopeFilter(relativePath)) continue;
+                await collectFile(relativePath);
+              }
+            }
+          } catch (error) {
+            if (!(error instanceof Deno.errors.NotFound)) {
+              throw error;
+            }
           }
         }
       }
-    }
 
-    return {
-      entries,
-      syncState,
-      processedDirtyPaths,
-    } as unknown as PushManifest;
+      span.setAttributes({
+        [Attr.DATASTORE_FILES_PLANNED_PUSH]: entries.length,
+        [Attr.DATASTORE_FILES_PLANNED_DELETE]: 0,
+      });
+
+      return {
+        entries,
+        syncState,
+        processedDirtyPaths,
+      } as unknown as PushManifest;
+    });
   }
 
   async commitPush(
     manifest: PushManifest,
     options?: DatastoreSyncOptions,
   ): Promise<number> {
-    const signal = options?.signal;
     const internal = manifest as unknown as InternalPushManifest;
+    return await withSpan("gitlab-datastore commitPush", {
+      [Attr.DATASTORE_FILES_PLANNED_PUSH]: internal.entries.length,
+      [Attr.DATASTORE_FILES_PLANNED_DELETE]: 0,
+    }, async (span) => {
+      const signal = options?.signal;
 
-    for (const entry of internal.entries) {
-      signal?.throwIfAborted();
-      const stateName = encodeStateName(this.prefix, entry.relPath);
-      await this.client.putState(stateName, entry.content, undefined, signal);
-    }
+      for (const entry of internal.entries) {
+        signal?.throwIfAborted();
+        const stateName = encodeStateName(this.prefix, entry.relPath);
+        await this.client.putState(stateName, entry.content, undefined, signal);
+      }
 
-    // Re-read fresh state to avoid overwriting concurrent updates
-    const freshState = await readSyncState(this.cachePath);
+      // Re-read fresh state to avoid overwriting concurrent updates
+      const freshState = await readSyncState(this.cachePath);
 
-    // Merge manifest hashes into fresh state
-    for (const entry of internal.entries) {
-      freshState.hashes[entry.relPath] = entry.hash;
-    }
+      // Merge manifest hashes into fresh state
+      for (const entry of internal.entries) {
+        freshState.hashes[entry.relPath] = entry.hash;
+      }
 
-    // Clear dirty state after successful commit.
-    if (internal.processedDirtyPaths.size > 0) {
-      // Dirty-path mode: remove only the paths we processed
-      freshState.dirtyPaths = freshState.dirtyPaths.filter((p) =>
-        !internal.processedDirtyPaths.has(p)
-      );
-    } else if (internal.syncState.dirtyOverflow) {
-      // Full-walk mode: clear everything
-      freshState.dirtyPaths = [];
-      freshState.dirtyOverflow = false;
-    }
-    await writeSyncState(this.cachePath, freshState);
+      // Clear dirty state after successful commit.
+      if (internal.processedDirtyPaths.size > 0) {
+        // Dirty-path mode: remove only the paths we processed
+        freshState.dirtyPaths = freshState.dirtyPaths.filter((p) =>
+          !internal.processedDirtyPaths.has(p)
+        );
+      } else if (internal.syncState.dirtyOverflow) {
+        // Full-walk mode: clear everything
+        freshState.dirtyPaths = [];
+        freshState.dirtyOverflow = false;
+      }
+      await writeSyncState(this.cachePath, freshState);
 
-    return internal.entries.length;
+      span.setAttributes({
+        [Attr.DATASTORE_FILES_PUSHED]: internal.entries.length,
+        [Attr.DATASTORE_FILES_DELETED]: 0,
+        [Attr.DATASTORE_FAST_PATH_HIT]: internal.entries.length === 0,
+      });
+      return internal.entries.length;
+    });
   }
 }
 

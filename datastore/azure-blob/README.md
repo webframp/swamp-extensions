@@ -94,6 +94,43 @@ lease duration — the same renewal cadence convention as the postgres/valkey
 datastores, just keyed to Azure's real lease length instead of the raw
 `ttlMs`.
 
+## Observability
+
+The extension emits [OpenTelemetry](https://opentelemetry.io/) spans for blob
+operations, lock acquisition/release, and push/pull sync. It depends on
+`@opentelemetry/api` only — the host process owns the `TracerProvider`, so
+every span is a no-op when none is registered. When swamp runs with OTel
+enabled, datastore activity appears in traces nested under swamp's own
+`swamp.datastore.*` spans.
+
+Three layers are instrumented:
+
+- **Blob REST calls** — one span per request (`Azure Blob putBlob`,
+  `Azure Blob lease.acquire`, `Azure Blob listBlobs`, …) with
+  `azure.blob.container`, `azure.blob.key`, `http.request.method`,
+  `http.response.status_code`, `http.response.body.size`, and
+  `azure.request_id`.
+- **Lock** — `azure-blob-datastore lock acquire` / `release` / `withLock` /
+  `inspect` / `forceRelease`. Acquire records `lock.wait_duration_ms` and
+  `lock.contended`; inspect records `lock.holder`. Heartbeat renewals are
+  deliberately not given their own span — a lock held for minutes would
+  otherwise bury the trace in periodic noise.
+- **Sync** — `azure-blob-datastore pullChanged` / `pushChanged` /
+  `hydrateFile` / `preparePush` / `commitPush`, with `datastore.files_pulled`,
+  `datastore.files_pushed`, `datastore.files_deleted`, and
+  `datastore.fast_path_hit`. The multi-round-trip internals
+  (`listIndexShards`, `queryAllFileMeta`, `updateShard`) get their own spans so
+  a slow index scan is distinguishable from slow content transfer.
+
+Retries appear as `retry` events on the enclosing span, with
+`retry.attempt`, `retry.delay_ms`, and `retry.reason` — either
+`retryable_status` for 429/5xx backoff or `etag_conflict` for the shard index
+CAS loop.
+
+Credential material is never recorded. Shared Key signatures, AAD client
+secrets, and bearer tokens do not appear in any attribute; the AAD token
+exchange span carries only its response status.
+
 ## Development
 
 ```bash

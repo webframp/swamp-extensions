@@ -597,11 +597,53 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        datastore: [gitlab-datastore, postgres]
+        datastore: [azure-blob, dynamodb, gitlab-datastore, postgres]
         task: [check, lint, fmt, test]
     defaults:
       run:
         working-directory: datastore/${{ matrix.datastore }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: "2.7.14"
+      - name: deno ${{ matrix.task }}
+        run: |
+          if [ "${{ matrix.task }}" = "fmt" ]; then
+            deno fmt --check extensions/
+          elif [ "${{ matrix.task }}" = "lint" ]; then
+            deno lint extensions/
+          elif [ "${{ matrix.task }}" = "test" ]; then
+            deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/
+          else
+            deno task check
+          fi
+
+  # Split from datastore-check because the valkey tests need a live server —
+  # they exercise real SET NX locking and pipeline semantics, which a fake
+  # cannot represent faithfully.
+  datastore-valkey:
+    name: datastore/valkey - ${{ matrix.task }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [check, lint, fmt, test]
+    defaults:
+      run:
+        working-directory: datastore/valkey
+    services:
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      VALKEY_TEST_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4

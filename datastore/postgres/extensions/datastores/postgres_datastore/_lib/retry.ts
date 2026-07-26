@@ -1,6 +1,8 @@
 // ABOUTME: Retryable SQL wrapper with exponential backoff, jitter, and abort
 // ABOUTME: signal support for transient PostgreSQL errors.
 
+import { recordRetry } from "./tracing.ts";
+
 const RETRYABLE_PG_CODES = new Set([
   "40001", // serialization_failure
   "40P01", // deadlock_detected
@@ -99,6 +101,10 @@ export async function retryable<T>(
       const raw = baseDelayMs * Math.pow(3, attempt);
       const jitter = raw * JITTER_FRACTION * (Math.random() * 2 - 1);
       const delay = Math.max(0, Math.floor(raw + jitter));
+      recordRetry(attempt + 1, delay, {
+        "retry.reason": "retryable_error",
+        "error.type": err instanceof Error ? err.name : "unknown",
+      });
       await abortableSleep(delay, signal);
       attempt++;
     }

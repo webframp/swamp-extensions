@@ -64,6 +64,42 @@ The extension exposes the standard swamp datastore provider interface:
 - **resolveDatastorePath / resolveCachePath** -- resolve the local cache
   directory
 
+## Observability
+
+The extension emits [OpenTelemetry](https://opentelemetry.io/) spans for GitLab
+API calls, lock acquisition/release, and push/pull sync. It depends on
+`@opentelemetry/api` only — the host process owns the `TracerProvider`, so every
+span is a no-op when none is registered. When swamp runs with OTel enabled,
+datastore activity appears in traces nested under swamp's own
+`swamp.datastore.*` spans.
+
+Three layers are instrumented:
+
+- **API calls** — every request passes through one choke point, so each round
+  trip emits exactly one span (`GitLab getState`, `GitLab putState`,
+  `GitLab readStateSerial`, `GitLab listStates`, `GitLab getProject`,
+  `GitLab lock`, `GitLab unlock`, `GitLab getLockInfo`, `GitLab deleteState`,
+  `GitLab healthCheck`) with `http.request.method`,
+  `http.response.status_code`, `gitlab.project_id`, `gitlab.state_name`, and
+  `server.address`.
+- **Lock** — `gitlab-datastore lock acquire` / `release` / `withLock` /
+  `inspect` / `forceRelease`. Acquire records `lock.wait_duration_ms`,
+  `lock.contended`, and `lock.holder`.
+- **Sync** — `gitlab-datastore pullChanged` / `pushChanged` / `hydrateFile` /
+  `preparePush` / `commitPush`, with `datastore.files_pulled`,
+  `datastore.files_pushed`, `datastore.states`, and
+  `datastore.fast_path_hit`.
+
+Non-2xx responses mark their span as an error, except where the status is normal
+control flow: a 404 from `getState` means the state does not exist, a 409 or 423
+from `lock` means another holder has it, and a 404 or 204 from `getLockInfo`
+means the state is unlocked. Lock retries appear as `retry` events with
+`retry.reason` set to either `lock_contended` or `stale_lock_stolen`.
+
+The access token is never recorded. Every request carries a PRIVATE-TOKEN header
+and bodies carry file content; span attributes hold only the operation name,
+HTTP method, status, project ID, state name, and host.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.

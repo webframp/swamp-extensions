@@ -91,6 +91,40 @@ and moderate data sizes. At 50 models with 10 retained versions averaging 5KB
 each, total memory usage is ~3MB. Repos with large outputs or long retention
 should prefer S3 or PostgreSQL.
 
+## Observability
+
+The extension emits [OpenTelemetry](https://opentelemetry.io/) spans for Valkey
+commands, lock acquisition/release, and push/pull sync. It depends on
+`@opentelemetry/api` only — the host process owns the `TracerProvider`, so every
+span is a no-op when none is registered. When swamp runs with OTel enabled,
+datastore activity appears in traces nested under swamp's own
+`swamp.datastore.*` spans.
+
+Three layers are instrumented:
+
+- **Commands** — one span per round trip (`Valkey SET`, `Valkey GET`,
+  `Valkey ZRANGEBYLEX`, `Valkey ZSCORE`, `Valkey GETBUFFER`, `Valkey EVAL`,
+  `Valkey INCR`, `Valkey PING`, `Valkey INFO`) with `db.system.name`,
+  `db.operation.name`, and `valkey.key`. Pipeline flushes get a single span
+  each — `Valkey pipeline writeFiles`, `deleteFiles`, `fetchMetadata`,
+  `fetchHashes` — carrying `valkey.pipeline.commands`, so a push of a thousand
+  files produces a handful of spans rather than three thousand.
+- **Lock** — `valkey-datastore lock acquire` / `release` / `withLock` /
+  `inspect` / `forceRelease`. Acquire records `lock.wait_duration_ms` and
+  `lock.contended`; inspect records `lock.holder`. Heartbeat renewals are
+  deliberately not instrumented — a lock held for minutes would otherwise bury
+  the trace in periodic `PEXPIRE` spans.
+- **Sync** — `valkey-datastore pullChanged` / `pushChanged` / `hydrateFile` /
+  `preparePush` / `commitPush`, with `datastore.files_pulled`,
+  `datastore.files_pushed`, `datastore.files_deleted`, `datastore.paths`,
+  `datastore.truncated`, `datastore.seq`, and `datastore.fast_path_hit`.
+
+Lock contention retries appear as `retry` events on the acquire span, with
+`retry.attempt`, `retry.delay_ms`, and `retry.reason`.
+
+Blob values are file content and the connection URL embeds a password. Neither
+is recorded; span attributes carry only command names, key names, and counts.
+
 ## Development
 
 ```bash

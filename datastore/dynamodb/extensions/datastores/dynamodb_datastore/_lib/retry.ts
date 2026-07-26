@@ -1,6 +1,8 @@
 // ABOUTME: Retryable DynamoDB wrapper with exponential backoff, jitter, and
 // ABOUTME: abort signal support for transient throttling/connection errors.
 
+import { recordRetry } from "./tracing.ts";
+
 const RETRYABLE_ERROR_NAMES = new Set([
   "ProvisionedThroughputExceededException",
   "ThrottlingException",
@@ -97,6 +99,10 @@ export async function retryable<T>(
       const raw = baseDelayMs * Math.pow(3, attempt);
       const jitter = raw * JITTER_FRACTION * (Math.random() * 2 - 1);
       const delay = Math.max(0, Math.floor(raw + jitter));
+      recordRetry(attempt + 1, delay, {
+        "retry.reason": "retryable_error",
+        "error.type": err instanceof Error ? err.name : "unknown",
+      });
       await abortableSleep(delay, signal);
       attempt++;
     }

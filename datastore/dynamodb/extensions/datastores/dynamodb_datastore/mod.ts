@@ -21,6 +21,7 @@ import {
   type TwoPhaseSyncService,
 } from "./sync.ts";
 import { GSI_NAME } from "./keys.ts";
+import { instrumentClient } from "./_lib/tracing.ts";
 
 interface DatastoreHealthResult {
   readonly healthy: boolean;
@@ -181,10 +182,14 @@ export const datastore = {
   configSchema: ConfigSchema,
   createProvider: (config: Record<string, unknown>): DatastoreProvider => {
     const parsed = ConfigSchema.parse(config);
-    const { base, doc } = createClients({
+    const { base: rawBase, doc } = createClients({
       region: parsed.region,
       endpoint: parsed.endpoint,
     });
+    // The control-plane calls below (DescribeTable, CreateTable,
+    // UpdateTimeToLive) go through `base`, never `doc`, so the base client
+    // needs its own wrapper or those requests emit no spans at all.
+    const base = instrumentClient(rawBase);
     const ensureInfrastructure = createInfrastructureEnsurer(base, parsed);
 
     return {

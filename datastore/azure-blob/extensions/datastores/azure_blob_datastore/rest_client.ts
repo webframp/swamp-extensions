@@ -2,6 +2,8 @@
 // ABOUTME: Shared Key request signing and Azure AD client-credentials OAuth,
 // ABOUTME: matching the fetch-only pattern already used by azure/openai-usage.
 
+import { Attr, withSpan } from "./_lib/tracing.ts";
+
 const STORAGE_API_VERSION = "2021-08-06";
 const STORAGE_SCOPE = "https://storage.azure.com/.default";
 
@@ -203,35 +205,51 @@ async function getServicePrincipalToken(
   const cached = ARM_LIKE_TOKEN_CACHE.get(cacheKey);
   if (cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
 
-  const url =
-    `https://login.microsoftonline.com/${auth.tenantId}/oauth2/v2.0/token`;
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: auth.clientId,
-    client_secret: auth.clientSecret,
-    scope: STORAGE_SCOPE,
+  // Only the response status is recorded. The request body carries
+  // client_secret and the response carries a bearer token — neither may ever
+  // become a span attribute.
+  return await withSpan("Azure Blob tokenExchange", {
+    [Attr.RPC_SYSTEM]: "azure-blob-storage",
+    [Attr.RPC_SERVICE]: "AzureAD",
+    [Attr.RPC_METHOD]: "tokenExchange",
+    [Attr.HTTP_REQUEST_METHOD]: "POST",
+  }, async (span) => {
+    const url =
+      `https://login.microsoftonline.com/${auth.tenantId}/oauth2/v2.0/token`;
+    const body = new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: auth.clientId,
+      client_secret: auth.clientSecret,
+      scope: STORAGE_SCOPE,
+    });
+    const resp = await fetchFn(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, resp.status);
+    if (!resp.ok) {
+      // The response body is deliberately dropped rather than interpolated
+      // into the message. withSpan records error.message via setStatus and
+      // recordException, so anything in the message reaches the trace backend
+      // — and this is the AAD token endpoint's raw response.
+      throw new Error(
+        `Azure token exchange failed (${resp.status} ${resp.statusText})`,
+      );
+    }
+    const data = await resp.json() as {
+      access_token?: string;
+      expires_in?: number;
+    };
+    if (!data.access_token) {
+      throw new Error("Azure token response missing access_token field");
+    }
+    ARM_LIKE_TOKEN_CACHE.set(cacheKey, {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
+    });
+    return data.access_token;
   });
-  const resp = await fetchFn(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!resp.ok) {
-    const errBody = await resp.text();
-    throw new Error(`Azure token exchange failed (${resp.status}): ${errBody}`);
-  }
-  const data = await resp.json() as {
-    access_token?: string;
-    expires_in?: number;
-  };
-  if (!data.access_token) {
-    throw new Error("Azure token response missing access_token field");
-  }
-  ARM_LIKE_TOKEN_CACHE.set(cacheKey, {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
-  });
-  return data.access_token;
 }
 
 export interface BlobRequestOptions {
@@ -240,6 +258,8 @@ export interface BlobRequestOptions {
   query?: Record<string, string>;
   headers?: Record<string, string>;
   body?: Uint8Array;
+  /** Operation name for the emitted span; defaults to the HTTP method. */
+  op?: string;
 }
 
 export interface BlobResponse {
@@ -270,40 +290,63 @@ export class BlobClient {
   }
 
   async request(opts: BlobRequestOptions): Promise<BlobResponse> {
-    const now = new Date().toUTCString();
-    const query = new URLSearchParams(opts.query ?? {});
-    const search = query.toString();
-    const pathAndQuery = search ? `${opts.path}?${search}` : opts.path;
-    const url = `${this.baseUrl}${pathAndQuery}`;
+    const op = opts.op ?? opts.method;
+    // path is always /<container>[/<blob key>] — split so the container and
+    // the blob key land on separate attributes.
+    const trimmed = opts.path.startsWith("/") ? opts.path.slice(1) : opts.path;
+    const slash = trimmed.indexOf("/");
+    const container = slash === -1 ? trimmed : trimmed.slice(0, slash);
+    const blobKey = slash === -1 ? undefined : trimmed.slice(slash + 1);
 
-    const headers = new Headers(opts.headers ?? {});
-    headers.set("x-ms-date", now);
-    headers.set("x-ms-version", STORAGE_API_VERSION);
+    return await withSpan(`Azure Blob ${op}`, {
+      [Attr.RPC_SYSTEM]: "azure-blob-storage",
+      [Attr.RPC_SERVICE]: "Blob",
+      [Attr.RPC_METHOD]: op,
+      [Attr.HTTP_REQUEST_METHOD]: opts.method,
+      [Attr.AZURE_BLOB_CONTAINER]: container,
+      ...(blobKey ? { [Attr.AZURE_BLOB_KEY]: blobKey } : {}),
+    }, async (span) => {
+      const now = new Date().toUTCString();
+      const query = new URLSearchParams(opts.query ?? {});
+      const search = query.toString();
+      const pathAndQuery = search ? `${opts.path}?${search}` : opts.path;
+      const url = `${this.baseUrl}${pathAndQuery}`;
 
-    const sharedKey = resolveSharedKey(this.auth);
-    if (sharedKey) {
-      const signature = await signSharedKey(
-        sharedKey,
-        opts.method,
-        pathAndQuery,
+      const headers = new Headers(opts.headers ?? {});
+      headers.set("x-ms-date", now);
+      headers.set("x-ms-version", STORAGE_API_VERSION);
+
+      const sharedKey = resolveSharedKey(this.auth);
+      if (sharedKey) {
+        const signature = await signSharedKey(
+          sharedKey,
+          opts.method,
+          pathAndQuery,
+          headers,
+          opts.body?.byteLength ?? 0,
+        );
+        headers.set("Authorization", signature);
+      } else if (this.auth.mode === "servicePrincipal") {
+        const token = await getServicePrincipalToken(this.auth, this.fetchFn);
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+
+      const resp = await this.fetchFn(url, {
+        method: opts.method,
         headers,
-        opts.body?.byteLength ?? 0,
-      );
-      headers.set("Authorization", signature);
-    } else if (this.auth.mode === "servicePrincipal") {
-      const token = await getServicePrincipalToken(this.auth, this.fetchFn);
-      headers.set("Authorization", `Bearer ${token}`);
-    }
+        body: opts.body
+          ? (new Uint8Array(opts.body).buffer as ArrayBuffer)
+          : undefined,
+      });
+      const bodyBytes = new Uint8Array(await resp.arrayBuffer());
 
-    const resp = await this.fetchFn(url, {
-      method: opts.method,
-      headers,
-      body: opts.body
-        ? (new Uint8Array(opts.body).buffer as ArrayBuffer)
-        : undefined,
+      span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, resp.status);
+      span.setAttribute(Attr.HTTP_RESPONSE_BODY_SIZE, bodyBytes.byteLength);
+      const requestId = resp.headers.get("x-ms-request-id");
+      if (requestId) span.setAttribute(Attr.AZURE_REQUEST_ID, requestId);
+
+      return { status: resp.status, headers: resp.headers, body: bodyBytes };
     });
-    const bodyBytes = new Uint8Array(await resp.arrayBuffer());
-    return { status: resp.status, headers: resp.headers, body: bodyBytes };
   }
 }
 

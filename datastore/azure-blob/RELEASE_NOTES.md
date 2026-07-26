@@ -1,22 +1,38 @@
-## 2026.07.22.1
+## 2026.07.25.1
 
-**Added:** Initial release of `@webframp/azure-blob-datastore`. Stores swamp
-runtime data in Azure Blob Storage with native blob-lease distributed locking
-(the Azure lease ID doubles as the fencing-token nonce — Azure enforces the
-compare-and-swap server-side, no custom CAS logic needed), ETag-conditional
-writes on a shard-first path index for optimistic concurrency, and two-phase
-sync (`preparePush`/`commitPush`).
+**Added:** OpenTelemetry spans for every layer of the datastore. Blob REST
+calls emit one span each (`Azure Blob putBlob`, `Azure Blob lease.acquire`, …)
+carrying container, blob key, HTTP method, response status, body size, and the
+`x-ms-request-id`. The lock emits `azure-blob-datastore lock acquire` /
+`release` / `withLock` / `inspect` / `forceRelease`, with acquire recording
+wait duration and whether it contended. The sync service emits
+`azure-blob-datastore pullChanged` / `pushChanged` / `hydrateFile` /
+`preparePush` / `commitPush` with file counts and fast-path indicators, plus
+spans on the multi-round-trip internals (`listIndexShards`,
+`queryAllFileMeta`, `updateShard`).
 
-**Added:** Three explicit authentication modes — `connectionString`,
-`sharedKey` (account name/key), and `servicePrincipal` (Azure AD
-client-credentials). `DefaultAzureCredential`/managed-identity chains are
-intentionally not supported, matching this repo's preference for explicit
-config over ambient credential discovery.
+**Added:** Retries are recorded as `retry` span events on the enclosing
+operation — both the 429/5xx backoff in `retryableRequest` and the ETag
+conflict loop in `updateShard`, which retries independently of it.
 
-**Upgrade note:** No `@azure/*` SDK dependency — this extension talks to the
-Blob REST API directly via `fetch`, the same zero-dependency approach already
-used by `@webframp/gitlab-datastore` and `@webframp/azure/openai-usage`.
-Fixed-duration leases (15-60s, clamped from the caller's `ttlMs`) with
-heartbeat renewal are used instead of Azure's infinite-lease option, so a
-crashed holder's lock still self-expires — matching the failure-mode parity
-of the postgres/valkey datastores.
+**Changed:** `pullChanged` reports `datastore.files_pulled` and
+`datastore.files_deleted` separately. The internal pull counter increments for
+both a downloaded file and a local file removed by a remote tombstone, so
+reporting it as a pull count would have overstated downloads whenever
+tombstones were applied.
+
+**Changed:** Nothing observable without tracing configured. The extension
+depends on `@opentelemetry/api` only; the host process owns the
+TracerProvider, and every span is a no-op when none is registered. Existing
+behaviour and return values are unchanged.
+
+**Note on secrets:** Shared Key signatures, AAD client secrets, and bearer
+tokens are never recorded as span attributes. The AAD token exchange emits a
+span carrying only its response status — on failure the response body is
+deliberately dropped from the error message, because `recordException` would
+otherwise put the token endpoint's raw response into the trace.
+
+**Note:** Lock heartbeat renewals run detached from the acquiring span. A span
+created inside the renewal timer would otherwise be parented to an
+already-ended `lock acquire` span, which trace backends render as a broken
+trace.

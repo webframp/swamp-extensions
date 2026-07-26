@@ -15,8 +15,17 @@
 
 import { z } from "npm:zod@4.4.3";
 import { Redis } from "npm:ioredis@5.11.1";
+import { Buffer } from "node:buffer";
 import { Sidecar } from "./sidecar.ts";
 import type { SidecarState } from "./sidecar.ts";
+import {
+  Attr,
+  commandSpan,
+  pipelineSpan,
+  recordPipelineResults,
+  recordRetry,
+  withSpan,
+} from "./_lib/tracing.ts";
 
 interface LockInfo {
   holder: string;
@@ -102,6 +111,17 @@ interface TwoPhaseSyncService extends DatastoreSyncService {
     manifest: PushManifest,
     options?: DatastoreSyncOptions,
   ): Promise<number>;
+}
+
+/**
+ * Outcome of a push. `changes` counts every successful command group (writes
+ * plus deletes) and is what the public API returns; `pushed` and `deleted` are
+ * tracked separately so span attributes report each honestly.
+ */
+interface PushCounts {
+  changes: number;
+  pushed: number;
+  deleted: number;
 }
 
 interface DatastoreProvider {
@@ -249,72 +269,111 @@ function createValkeyLock(
   let heartbeatId: ReturnType<typeof setInterval> | undefined;
 
   const acquire = async () => {
-    if (nonce !== undefined) {
-      throw new Error("Lock already acquired; call release() first");
-    }
-    const start = Date.now();
-    const candidate = crypto.randomUUID();
+    return await withSpan("valkey-datastore lock acquire", {
+      [Attr.LOCK_KEY]: key,
+      [Attr.LOCK_TIMEOUT_MS]: maxWaitMs,
+      [Attr.LOCK_TTL_MS]: ttlMs,
+    }, async (span) => {
+      if (nonce !== undefined) {
+        throw new Error("Lock already acquired; call release() first");
+      }
+      const start = Date.now();
+      const candidate = crypto.randomUUID();
+      let contended = false;
+      let attempt = 0;
 
-    let hostname = "unknown";
-    try {
-      hostname = Deno.hostname();
-    } catch {
-      // --allow-sys not granted; fall back gracefully
-    }
-
-    while (Date.now() - start < maxWaitMs) {
-      const result = await redis.set(
-        key,
-        JSON.stringify({
-          holder: `${Deno.env.get("USER") ?? "unknown"}@${hostname}`,
-          hostname,
-          pid: Deno.pid,
-          acquiredAt: new Date().toISOString(),
-          ttlMs,
-          nonce: candidate,
-        }),
-        "PX",
-        ttlMs,
-        "NX",
-      );
-
-      if (result === "OK") {
-        nonce = candidate;
-        heartbeatId = setInterval(async () => {
-          try {
-            const current = await redis.get(key);
-            if (current) {
-              const parsed = JSON.parse(current);
-              if (parsed.nonce === candidate) {
-                await redis.pexpire(key, ttlMs);
-              }
-            }
-          } catch {
-            // Connection lost — lock will expire via TTL
-          }
-        }, ttlMs / 3);
-        return;
+      let hostname = "unknown";
+      try {
+        hostname = Deno.hostname();
+      } catch {
+        // --allow-sys not granted; fall back gracefully
       }
 
-      await new Promise((r) => setTimeout(r, retryIntervalMs));
-    }
+      while (Date.now() - start < maxWaitMs) {
+        const result = await commandSpan(
+          "SET",
+          key,
+          () =>
+            redis.set(
+              key,
+              JSON.stringify({
+                holder: `${Deno.env.get("USER") ?? "unknown"}@${hostname}`,
+                hostname,
+                pid: Deno.pid,
+                acquiredAt: new Date().toISOString(),
+                ttlMs,
+                nonce: candidate,
+              }),
+              "PX",
+              ttlMs,
+              "NX",
+            ),
+        );
 
-    throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
+        if (result === "OK") {
+          nonce = candidate;
+          heartbeatId = setInterval(async () => {
+            try {
+              const current = await redis.get(key);
+              if (current) {
+                const parsed = JSON.parse(current);
+                if (parsed.nonce === candidate) {
+                  await redis.pexpire(key, ttlMs);
+                }
+              }
+            } catch {
+              // Connection lost — lock will expire via TTL
+            }
+          }, ttlMs / 3);
+          // Unref so a held lock doesn't keep the process alive if release is
+          // never called — the same convention the other datastore locks
+          // follow.
+          Deno.unrefTimer(heartbeatId);
+          span.setAttributes({
+            [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+            [Attr.LOCK_CONTENDED]: contended,
+          });
+          return;
+        }
+
+        contended = true;
+        attempt++;
+        recordRetry(attempt, retryIntervalMs, {
+          "retry.reason": "lock_contended",
+        });
+        await new Promise((r) => setTimeout(r, retryIntervalMs));
+      }
+
+      span.setAttributes({
+        [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+        [Attr.LOCK_CONTENDED]: contended,
+      });
+      throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
+    });
   };
 
   const release = async () => {
-    if (heartbeatId !== undefined) {
-      clearInterval(heartbeatId);
-      heartbeatId = undefined;
-    }
-    if (nonce) {
-      try {
-        await redis.call("EVAL", RELEASE_LOCK_LUA, 1, key, nonce);
-      } catch {
-        // Connection may be dead — lock will expire via TTL
+    return await withSpan("valkey-datastore lock release", {
+      [Attr.LOCK_KEY]: key,
+    }, async () => {
+      if (heartbeatId !== undefined) {
+        clearInterval(heartbeatId);
+        heartbeatId = undefined;
       }
-      nonce = undefined;
-    }
+      if (nonce) {
+        const releaseNonce = nonce;
+        try {
+          await commandSpan(
+            "EVAL",
+            key,
+            () => redis.call("EVAL", RELEASE_LOCK_LUA, 1, key, releaseNonce),
+          );
+        } catch {
+          // Connection may be dead — lock will expire via TTL
+        }
+        nonce = undefined;
+      }
+    });
   };
 
   return {
@@ -322,41 +381,76 @@ function createValkeyLock(
     release,
 
     withLock: async <T>(fn: () => Promise<T>): Promise<T> => {
-      await acquire();
-      try {
-        return await fn();
-      } finally {
-        await release();
-      }
+      return await withSpan("valkey-datastore lock withLock", {
+        [Attr.LOCK_KEY]: key,
+      }, async () => {
+        await acquire();
+        try {
+          return await fn();
+        } finally {
+          await release();
+        }
+      });
     },
 
     inspect: async () => {
-      const raw = await redis.get(key);
-      if (!raw) return null;
-      try {
-        const parsed = JSON.parse(raw);
-        return {
-          holder: parsed.holder,
-          hostname: parsed.hostname,
-          pid: parsed.pid,
-          acquiredAt: parsed.acquiredAt,
-          ttlMs: parsed.ttlMs,
-          nonce: parsed.nonce,
-        };
-      } catch {
-        return null;
-      }
+      return await withSpan("valkey-datastore lock inspect", {
+        [Attr.LOCK_KEY]: key,
+      }, async (span) => {
+        const raw = await commandSpan("GET", key, () => redis.get(key));
+        if (!raw) return null;
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.holder) {
+            span.setAttribute(
+              Attr.LOCK_HOLDER,
+              `${parsed.holder} (pid ${parsed.pid})`,
+            );
+          }
+          return {
+            holder: parsed.holder,
+            hostname: parsed.hostname,
+            pid: parsed.pid,
+            acquiredAt: parsed.acquiredAt,
+            ttlMs: parsed.ttlMs,
+            nonce: parsed.nonce,
+          };
+        } catch {
+          return null;
+        }
+      });
     },
 
     forceRelease: async (expectedNonce: string) => {
-      const result = await redis.call(
-        "EVAL",
-        RELEASE_LOCK_LUA,
-        1,
-        key,
-        expectedNonce,
-      );
-      return result === 1;
+      return await withSpan("valkey-datastore lock forceRelease", {
+        [Attr.LOCK_KEY]: key,
+      }, async () => {
+        const result = await commandSpan(
+          "EVAL",
+          key,
+          () =>
+            redis.call(
+              "EVAL",
+              RELEASE_LOCK_LUA,
+              1,
+              key,
+              expectedNonce,
+            ),
+        );
+        const released = result === 1;
+        // If this instance itself held that lock, drop its local state too.
+        // Leaving the heartbeat running would keep extending the TTL of a key
+        // this object no longer owns, and keeps the interval alive for the
+        // lifetime of the process.
+        if (released && nonce === expectedNonce) {
+          if (heartbeatId !== undefined) {
+            clearInterval(heartbeatId);
+            heartbeatId = undefined;
+          }
+          nonce = undefined;
+        }
+        return released;
+      });
     },
   };
 }
@@ -373,7 +467,7 @@ function createSyncService(
   const seq = seqKey(prefix);
 
   async function getRemoteSeq(): Promise<number> {
-    const val = await redis.get(seq);
+    const val = await commandSpan("GET", seq, () => redis.get(seq));
     return val ? parseInt(val, 10) : 0;
   }
 
@@ -391,13 +485,18 @@ function createSyncService(
         truncated = true;
         break;
       }
-      const members = await redis.zrangebylex(
+      const members = await commandSpan(
+        "ZRANGEBYLEX",
         pathIdx,
-        `[${p}`,
-        `(${end}`,
-        "LIMIT",
-        0,
-        remaining,
+        () =>
+          redis.zrangebylex(
+            pathIdx,
+            `[${p}`,
+            `(${end}`,
+            "LIMIT",
+            0,
+            remaining,
+          ),
       );
       results.push(...members);
       if (results.length >= PATH_LIMIT) truncated = true;
@@ -406,13 +505,18 @@ function createSyncService(
   }
 
   async function allPaths(): Promise<{ paths: string[]; truncated: boolean }> {
-    const paths = await redis.zrangebylex(
+    const paths = await commandSpan(
+      "ZRANGEBYLEX",
       pathIdx,
-      "-",
-      "+",
-      "LIMIT",
-      0,
-      PATH_LIMIT + 1,
+      () =>
+        redis.zrangebylex(
+          pathIdx,
+          "-",
+          "+",
+          "LIMIT",
+          0,
+          PATH_LIMIT + 1,
+        ),
     );
     const truncated = paths.length > PATH_LIMIT;
     if (truncated) paths.length = PATH_LIMIT;
@@ -423,8 +527,9 @@ function createSyncService(
     paths: string[],
     metadataOnly: boolean,
     signal?: AbortSignal,
-  ): Promise<number> {
+  ): Promise<{ changes: number; skipped: number }> {
     let changes = 0;
+    let skipped = 0;
     const BATCH = 100;
 
     for (let i = 0; i < paths.length; i += BATCH) {
@@ -436,14 +541,30 @@ function createSyncService(
       for (const relPath of batch) {
         pipeline.hgetall(metaKey(prefix, relPath));
       }
-      const metaResults = await pipeline.exec();
-      if (!metaResults) continue;
+      const metaResults = await pipelineSpan(
+        "fetchMetadata",
+        batch.length,
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
+      );
+      if (!metaResults) {
+        skipped += batch.length;
+        continue;
+      }
 
       for (let j = 0; j < batch.length; j++) {
         signal?.throwIfAborted();
         const relPath = batch[j];
         const [err, meta] = metaResults[j];
-        if (err || !meta || typeof meta !== "object") continue;
+        if (err || !meta || typeof meta !== "object") {
+          // A metadata read that failed is not a file that was up to date —
+          // count it so pullChanged can report an incomplete pull.
+          skipped++;
+          continue;
+        }
 
         const remoteMeta = meta as Record<string, string>;
 
@@ -465,7 +586,11 @@ function createSyncService(
         } catch { /* file missing — fetch content */ }
 
         // Fetch blob
-        const blobData = await redis.getBuffer(blobKey(prefix, relPath));
+        const blobData = await commandSpan(
+          "GET",
+          blobKey(prefix, relPath),
+          () => redis.getBuffer(blobKey(prefix, relPath)),
+        );
         if (!blobData) continue;
 
         await writeFileAtomic(localPath, new Uint8Array(blobData));
@@ -473,7 +598,7 @@ function createSyncService(
       }
     }
 
-    return changes;
+    return { changes, skipped };
   }
 
   async function collectFullWalkDiff(
@@ -500,7 +625,15 @@ function createSyncService(
         for (const p of batch) {
           pipeline.hget(metaKey(prefix, p), "sha256");
         }
-        const results = await pipeline.exec();
+        const results = await pipelineSpan(
+          "fetchHashes",
+          batch.length,
+          async (span) => {
+            const r = await pipeline.exec();
+            recordPipelineResults(span, r);
+            return r;
+          },
+        );
         if (results) {
           for (let j = 0; j < batch.length; j++) {
             const [err, hash] = results[j];
@@ -580,16 +713,25 @@ function createSyncService(
     let remotePaths: string[];
     if (stat?.isDirectory) {
       const end = relPath + String.fromCharCode(0xff);
-      remotePaths = await redis.zrangebylex(
+      remotePaths = await commandSpan(
+        "ZRANGEBYLEX",
         pathIdx,
-        `[${relPath}`,
-        `(${end}`,
-        "LIMIT",
-        0,
-        PATH_LIMIT,
+        () =>
+          redis.zrangebylex(
+            pathIdx,
+            `[${relPath}`,
+            `(${end}`,
+            "LIMIT",
+            0,
+            PATH_LIMIT,
+          ),
       );
     } else {
-      const score = await redis.zscore(pathIdx, relPath);
+      const score = await commandSpan(
+        "ZSCORE",
+        pathIdx,
+        () => redis.zscore(pathIdx, relPath),
+      );
       remotePaths = score !== null ? [relPath] : [];
     }
 
@@ -599,7 +741,15 @@ function createSyncService(
       for (const p of remotePaths) {
         pipeline.hget(metaKey(prefix, p), "sha256");
       }
-      const results = await pipeline.exec();
+      const results = await pipelineSpan(
+        "fetchHashes",
+        remotePaths.length,
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
+      );
       if (results) {
         for (let i = 0; i < remotePaths.length; i++) {
           const [err, hash] = results[i];
@@ -625,12 +775,16 @@ function createSyncService(
     toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }>,
     toDelete: string[],
     signal?: AbortSignal,
-  ): Promise<number> {
-    if (toPush.length === 0 && toDelete.length === 0) return 0;
+  ): Promise<PushCounts> {
+    if (toPush.length === 0 && toDelete.length === 0) {
+      return { changes: 0, pushed: 0, deleted: 0 };
+    }
 
     // Pipeline all writes for one round trip per batch
     const BATCH = 50;
     let changes = 0;
+    let pushed = 0;
+    let deleted = 0;
 
     const failedPaths: string[] = [];
     const CMDS_PER_FILE = 3;
@@ -650,7 +804,15 @@ function createSyncService(
         pipeline.zadd(pathIdx, 0, f.relPath);
       }
 
-      const results = await pipeline.exec();
+      const results = await pipelineSpan(
+        "writeFiles",
+        batch.length * CMDS_PER_FILE,
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
+      );
       if (results) {
         for (let j = 0; j < batch.length; j++) {
           const base = j * CMDS_PER_FILE;
@@ -658,7 +820,10 @@ function createSyncService(
             ([err]) => err !== null,
           );
           if (hasError) failedPaths.push(batch[j].relPath);
-          else changes++;
+          else {
+            changes++;
+            pushed++;
+          }
         }
       }
     }
@@ -672,7 +837,15 @@ function createSyncService(
         pipeline.del(metaKey(prefix, relPath));
         pipeline.zrem(pathIdx, relPath);
       }
-      const delResults = await pipeline.exec();
+      const delResults = await pipelineSpan(
+        "deleteFiles",
+        toDelete.length * CMDS_PER_FILE,
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
+      );
       if (delResults) {
         for (let j = 0; j < toDelete.length; j++) {
           const base = j * CMDS_PER_FILE;
@@ -680,7 +853,10 @@ function createSyncService(
             ([err]) => err !== null,
           );
           if (hasError) failedPaths.push(toDelete[j]);
-          else changes++;
+          else {
+            changes++;
+            deleted++;
+          }
         }
       }
     }
@@ -694,9 +870,9 @@ function createSyncService(
     }
 
     // Increment sequence counter
-    await redis.incr(seq);
+    await commandSpan("INCR", seq, () => redis.incr(seq));
 
-    return changes;
+    return { changes, pushed, deleted };
   }
 
   return {
@@ -709,125 +885,214 @@ function createSyncService(
     },
 
     async pullChanged(options?: DatastoreSyncOptions): Promise<number> {
-      const signal = options?.signal;
-      const metadataOnly = options?.metadataOnly === true;
-
-      if (metadataOnly) await sidecar.setLazyPullActive(true);
-      const state = await sidecar.read();
-
-      // Fast path: if local seq matches remote, nothing changed
-      const remoteSeq = await getRemoteSeq();
-      if (state.lastPulledSeq > 0 && remoteSeq <= state.lastPulledSeq) {
-        return 0;
-      }
-
-      // Determine which paths to pull
       const scopePrefixes = modelPrefixes(options?.context?.models);
-      const result = scopePrefixes.length > 0
-        ? await pathsForPrefixes(scopePrefixes)
-        : await allPaths();
+      const scoped = scopePrefixes.length > 0;
+      return await withSpan("valkey-datastore pullChanged", {
+        [Attr.DATASTORE_SCOPED]: scoped,
+        [Attr.DATASTORE_METADATA_ONLY]: options?.metadataOnly === true,
+      }, async (span) => {
+        const signal = options?.signal;
+        const metadataOnly = options?.metadataOnly === true;
 
-      const changes = await pullFiles(result.paths, metadataOnly, signal);
+        if (metadataOnly) await sidecar.setLazyPullActive(true);
+        const state = await sidecar.read();
 
-      // Only advance seq on unscoped full pulls. Advancing on scoped pulls
-      // would cause a subsequent full pull to skip changes outside the scope.
-      if (scopePrefixes.length === 0 && !metadataOnly) {
-        await sidecar.setLastPulledSeq(remoteSeq);
-        await sidecar.setLazyPullActive(false);
-      }
+        // Fast path: if local seq matches remote, nothing changed
+        const remoteSeq = await getRemoteSeq();
+        span.setAttribute(Attr.DATASTORE_SEQ, remoteSeq);
+        if (state.lastPulledSeq > 0 && remoteSeq <= state.lastPulledSeq) {
+          span.setAttributes({
+            [Attr.DATASTORE_FAST_PATH_HIT]: true,
+            [Attr.DATASTORE_FILES_PULLED]: 0,
+          });
+          return 0;
+        }
 
-      return changes;
+        // Determine which paths to pull
+        const result = scoped
+          ? await pathsForPrefixes(scopePrefixes)
+          : await allPaths();
+        span.setAttributes({
+          [Attr.DATASTORE_PATHS]: result.paths.length,
+          [Attr.DATASTORE_TRUNCATED]: result.truncated,
+        });
+
+        const { changes, skipped } = await pullFiles(
+          result.paths,
+          metadataOnly,
+          signal,
+        );
+
+        // Only advance seq on unscoped full pulls. Advancing on scoped pulls
+        // would cause a subsequent full pull to skip changes outside the scope.
+        if (!scoped && !metadataOnly) {
+          await sidecar.setLastPulledSeq(remoteSeq);
+          await sidecar.setLazyPullActive(false);
+        }
+
+        span.setAttributes({
+          [Attr.DATASTORE_FAST_PATH_HIT]: false,
+          [Attr.DATASTORE_FILES_PULLED]: changes,
+          [Attr.DATASTORE_FILES_SKIPPED]: skipped,
+        });
+        return changes;
+      });
     },
 
     async pushChanged(options?: DatastoreSyncOptions): Promise<number> {
-      const signal = options?.signal;
+      return await withSpan(
+        "valkey-datastore pushChanged",
+        {},
+        async (span) => {
+          const signal = options?.signal;
 
-      let snapshot!: {
-        dirtyPaths: string[];
-        bulkInvalidated: boolean;
-        lastPulledSeq: number;
-        lazyPullActive: boolean;
-      };
-      await sidecar.update((state: SidecarState) => {
-        snapshot = {
-          dirtyPaths: [...state.dirtyPaths],
-          bulkInvalidated: state.bulkInvalidated,
-          lastPulledSeq: state.lastPulledSeq,
-          lazyPullActive: state.lazyPullActive,
-        };
-      });
+          let snapshot!: {
+            dirtyPaths: string[];
+            bulkInvalidated: boolean;
+            lastPulledSeq: number;
+            lazyPullActive: boolean;
+          };
+          await sidecar.update((state: SidecarState) => {
+            snapshot = {
+              dirtyPaths: [...state.dirtyPaths],
+              bulkInvalidated: state.bulkInvalidated,
+              lastPulledSeq: state.lastPulledSeq,
+              lazyPullActive: state.lazyPullActive,
+            };
+          });
 
-      let changes: number;
-      if (snapshot.bulkInvalidated) {
-        const diff = await collectFullWalkDiff(signal);
-        changes = await applyChanges(diff.toPush, diff.toDelete, signal);
-      } else if (snapshot.dirtyPaths.length === 0) {
-        return 0;
-      } else {
-        changes = 0;
-        for (const relPath of snapshot.dirtyPaths) {
-          signal?.throwIfAborted();
-          const diff = await collectOneRelDiff(relPath, signal);
-          changes += await applyChanges(diff.toPush, diff.toDelete, signal);
-        }
-      }
+          let changes: number;
+          let pushed = 0;
+          let deleted = 0;
+          if (snapshot.bulkInvalidated) {
+            const diff = await collectFullWalkDiff(signal);
+            const counts = await applyChanges(
+              diff.toPush,
+              diff.toDelete,
+              signal,
+            );
+            changes = counts.changes;
+            pushed = counts.pushed;
+            deleted = counts.deleted;
+          } else if (snapshot.dirtyPaths.length === 0) {
+            span.setAttributes({
+              [Attr.DATASTORE_FAST_PATH_HIT]: true,
+              [Attr.DATASTORE_FILES_PUSHED]: 0,
+              [Attr.DATASTORE_FILES_DELETED]: 0,
+            });
+            return 0;
+          } else {
+            changes = 0;
+            for (const relPath of snapshot.dirtyPaths) {
+              signal?.throwIfAborted();
+              const diff = await collectOneRelDiff(relPath, signal);
+              const counts = await applyChanges(
+                diff.toPush,
+                diff.toDelete,
+                signal,
+              );
+              changes += counts.changes;
+              pushed += counts.pushed;
+              deleted += counts.deleted;
+            }
+          }
 
-      await sidecar.clearPushed(snapshot);
-      return changes;
+          await sidecar.clearPushed(snapshot);
+          // `changes` counts writes and deletes together, so the file counts
+          // are tracked separately to keep each attribute honest.
+          span.setAttributes({
+            [Attr.DATASTORE_FAST_PATH_HIT]: false,
+            [Attr.DATASTORE_FILES_PUSHED]: pushed,
+            [Attr.DATASTORE_FILES_DELETED]: deleted,
+          });
+          return changes;
+        },
+      );
     },
 
     async hydrateFile(
       relPath: string,
       _options?: DatastoreSyncOptions,
     ): Promise<boolean> {
-      if (isTraversal(relPath)) return false;
-      const blobData = await redis.getBuffer(blobKey(prefix, relPath));
-      if (!blobData) return false;
+      return await withSpan("valkey-datastore hydrateFile", {
+        [Attr.DATASTORE_FILE]: relPath,
+      }, async (span) => {
+        if (isTraversal(relPath)) {
+          span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+          return false;
+        }
+        const blobData = await commandSpan(
+          "GET",
+          blobKey(prefix, relPath),
+          () => redis.getBuffer(blobKey(prefix, relPath)),
+        );
+        if (!blobData) {
+          span.setAttribute(Attr.DATASTORE_HYDRATED, false);
+          return false;
+        }
 
-      await writeFileAtomic(
-        `${cachePath}/${relPath}`,
-        new Uint8Array(blobData),
-      );
-      return true;
+        await writeFileAtomic(
+          `${cachePath}/${relPath}`,
+          new Uint8Array(blobData),
+        );
+        span.setAttribute(Attr.DATASTORE_HYDRATED, true);
+        return true;
+      });
     },
 
     async preparePush(options?: DatastoreSyncOptions): Promise<PushManifest> {
-      const signal = options?.signal;
+      return await withSpan(
+        "valkey-datastore preparePush",
+        {},
+        async (span) => {
+          const signal = options?.signal;
 
-      let snapshot!: {
-        dirtyPaths: string[];
-        bulkInvalidated: boolean;
-        lastPulledSeq: number;
-        lazyPullActive: boolean;
-      };
-      await sidecar.update((state: SidecarState) => {
-        snapshot = {
-          dirtyPaths: [...state.dirtyPaths],
-          bulkInvalidated: state.bulkInvalidated,
-          lastPulledSeq: state.lastPulledSeq,
-          lazyPullActive: state.lazyPullActive,
-        };
-      });
+          let snapshot!: {
+            dirtyPaths: string[];
+            bulkInvalidated: boolean;
+            lastPulledSeq: number;
+            lazyPullActive: boolean;
+          };
+          await sidecar.update((state: SidecarState) => {
+            snapshot = {
+              dirtyPaths: [...state.dirtyPaths],
+              bulkInvalidated: state.bulkInvalidated,
+              lastPulledSeq: state.lastPulledSeq,
+              lazyPullActive: state.lazyPullActive,
+            };
+          });
 
-      let toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }> =
-        [];
-      let toDelete: string[] = [];
+          let toPush: Array<
+            { relPath: string; hash: string; bytes: Uint8Array }
+          > = [];
+          let toDelete: string[] = [];
 
-      if (snapshot.bulkInvalidated) {
-        const diff = await collectFullWalkDiff(signal);
-        toPush = diff.toPush;
-        toDelete = diff.toDelete;
-      } else if (snapshot.dirtyPaths.length > 0) {
-        for (const relPath of snapshot.dirtyPaths) {
-          signal?.throwIfAborted();
-          const diff = await collectOneRelDiff(relPath, signal);
-          toPush.push(...diff.toPush);
-          toDelete.push(...diff.toDelete);
-        }
-      }
+          if (snapshot.bulkInvalidated) {
+            const diff = await collectFullWalkDiff(signal);
+            toPush = diff.toPush;
+            toDelete = diff.toDelete;
+          } else if (snapshot.dirtyPaths.length > 0) {
+            for (const relPath of snapshot.dirtyPaths) {
+              signal?.throwIfAborted();
+              const diff = await collectOneRelDiff(relPath, signal);
+              toPush.push(...diff.toPush);
+              toDelete.push(...diff.toDelete);
+            }
+          }
 
-      const internal: InternalPushManifest = { toPush, toDelete, snapshot };
-      return internal as unknown as PushManifest;
+          span.setAttributes({
+            [Attr.DATASTORE_FILES_PLANNED_PUSH]: toPush.length,
+            [Attr.DATASTORE_FILES_PLANNED_DELETE]: toDelete.length,
+          });
+
+          const internal: InternalPushManifest = {
+            toPush,
+            toDelete,
+            snapshot,
+          };
+          return internal as unknown as PushManifest;
+        },
+      );
     },
 
     async commitPush(
@@ -835,21 +1100,36 @@ function createSyncService(
       options?: DatastoreSyncOptions,
     ): Promise<number> {
       const internal = manifest as unknown as InternalPushManifest;
-      const signal = options?.signal;
+      return await withSpan("valkey-datastore commitPush", {
+        [Attr.DATASTORE_FILES_PLANNED_PUSH]: internal.toPush.length,
+        [Attr.DATASTORE_FILES_PLANNED_DELETE]: internal.toDelete.length,
+      }, async (span) => {
+        const signal = options?.signal;
 
-      if (internal.toPush.length === 0 && internal.toDelete.length === 0) {
+        if (internal.toPush.length === 0 && internal.toDelete.length === 0) {
+          await sidecar.clearPushed(internal.snapshot);
+          span.setAttributes({
+            [Attr.DATASTORE_FAST_PATH_HIT]: true,
+            [Attr.DATASTORE_FILES_PUSHED]: 0,
+            [Attr.DATASTORE_FILES_DELETED]: 0,
+          });
+          return 0;
+        }
+
+        const counts = await applyChanges(
+          internal.toPush,
+          internal.toDelete,
+          signal,
+        );
+
         await sidecar.clearPushed(internal.snapshot);
-        return 0;
-      }
-
-      const changes = await applyChanges(
-        internal.toPush,
-        internal.toDelete,
-        signal,
-      );
-
-      await sidecar.clearPushed(internal.snapshot);
-      return changes;
+        span.setAttributes({
+          [Attr.DATASTORE_FAST_PATH_HIT]: false,
+          [Attr.DATASTORE_FILES_PUSHED]: counts.pushed,
+          [Attr.DATASTORE_FILES_DELETED]: counts.deleted,
+        });
+        return counts.changes;
+      });
     },
   };
 }
@@ -964,7 +1244,11 @@ export const datastore = {
         verify: async (): Promise<DatastoreHealthResult> => {
           const start = performance.now();
           try {
-            const pong = await redis.ping();
+            const pong = await commandSpan(
+              "PING",
+              undefined,
+              () => redis.ping(),
+            );
             if (pong !== "PONG") {
               return {
                 healthy: false,
@@ -973,7 +1257,11 @@ export const datastore = {
                 datastoreType: "@webframp/valkey-datastore",
               };
             }
-            const info = await redis.info("server");
+            const info = await commandSpan(
+              "INFO",
+              undefined,
+              () => redis.info("server"),
+            );
             const versionMatch = info.match(/(?:redis|valkey)_version:(.+)/);
             const version = versionMatch ? versionMatch[1].trim() : "unknown";
             return {

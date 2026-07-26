@@ -4,6 +4,7 @@
 
 import type { BlobClient, BlobResponse } from "./rest_client.ts";
 import { retryableRequest } from "./_lib/retry.ts";
+import { Attr, detached, recordRetry, withSpan } from "./_lib/tracing.ts";
 
 export interface LockInfo {
   holder: string;
@@ -59,6 +60,7 @@ async function leaseAction(
   }
   return await retryableRequest(() =>
     client.request({
+      op: `lease.${action}`,
       method: "PUT",
       path,
       query: { comp: "lease" },
@@ -73,6 +75,7 @@ async function ensureBlobExists(
 ): Promise<void> {
   const resp = await retryableRequest(() =>
     client.request({
+      op: "createLockBlob",
       method: "PUT",
       path,
       headers: {
@@ -111,6 +114,7 @@ export function createBlobLock(
     const holder = `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`;
     const resp = await retryableRequest(() =>
       client.request({
+        op: "setLockMetadata",
         method: "PUT",
         path,
         query: { comp: "metadata" },
@@ -134,104 +138,131 @@ export function createBlobLock(
   };
 
   const acquire = async () => {
-    if (leaseId !== undefined) {
-      throw new Error("Lock already acquired; call release() first");
-    }
-    await ensureBlobExists(client, path);
-    const signal = options?.signal;
-    const start = Date.now();
-    let attempt = 0;
+    return await withSpan("azure-blob-datastore lock acquire", {
+      [Attr.LOCK_KEY]: key,
+      [Attr.LOCK_TIMEOUT_MS]: maxWaitMs,
+      [Attr.LOCK_TTL_MS]: ttlMs,
+    }, async (span) => {
+      if (leaseId !== undefined) {
+        throw new Error("Lock already acquired; call release() first");
+      }
+      await ensureBlobExists(client, path);
+      const signal = options?.signal;
+      const start = Date.now();
+      let attempt = 0;
+      let contended = false;
 
-    while (Date.now() - start < maxWaitMs) {
-      if (signal?.aborted) {
-        throw new DOMException("Lock acquisition aborted", "AbortError");
-      }
-      const resp = await leaseAction(
-        client,
-        path,
-        "acquire",
-        undefined,
-        leaseSeconds,
-      );
-      if (resp.status === 201) {
-        const acquiredId = resp.headers.get("x-ms-lease-id");
-        if (!acquiredId) {
-          throw new Error("Azure did not return a lease ID on acquire");
+      while (Date.now() - start < maxWaitMs) {
+        if (signal?.aborted) {
+          throw new DOMException("Lock acquisition aborted", "AbortError");
         }
-        try {
-          await stampMetadata(acquiredId);
-        } catch (err) {
-          // Don't leave this instance permanently wedged (leaseId was never
-          // set, so acquire() can be retried) and don't strand the lease we
-          // just took on Azure — best-effort release it back.
-          try {
-            await leaseAction(client, path, "release", acquiredId);
-          } catch {
-            // Ignore — the lease will expire via its fixed duration anyway.
+        const resp = await leaseAction(
+          client,
+          path,
+          "acquire",
+          undefined,
+          leaseSeconds,
+        );
+        if (resp.status === 201) {
+          const acquiredId = resp.headers.get("x-ms-lease-id");
+          if (!acquiredId) {
+            throw new Error("Azure did not return a lease ID on acquire");
           }
-          throw err;
+          try {
+            await stampMetadata(acquiredId);
+          } catch (err) {
+            // Don't leave this instance permanently wedged (leaseId was never
+            // set, so acquire() can be retried) and don't strand the lease we
+            // just took on Azure — best-effort release it back.
+            try {
+              await leaseAction(client, path, "release", acquiredId);
+            } catch {
+              // Ignore — the lease will expire via its fixed duration anyway.
+            }
+            throw err;
+          }
+          leaseId = acquiredId;
+          heartbeatId = setInterval(() => {
+            // Detached so the renewal span is its own trace rather than a
+            // child of this acquire span, which has already ended by then.
+            detached(async () => {
+              try {
+                await leaseAction(client, path, "renew", acquiredId);
+              } catch {
+                // Connection lost or lease lost — lease will expire via its fixed duration
+              }
+            });
+          }, (leaseSeconds * 1000) / 3);
+          Deno.unrefTimer(heartbeatId);
+          span.setAttributes({
+            [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+            [Attr.LOCK_CONTENDED]: contended,
+          });
+          return;
         }
-        leaseId = acquiredId;
-        heartbeatId = setInterval(async () => {
-          try {
-            await leaseAction(client, path, "renew", acquiredId);
-          } catch {
-            // Connection lost or lease lost — lease will expire via its fixed duration
-          }
-        }, (leaseSeconds * 1000) / 3);
-        Deno.unrefTimer(heartbeatId);
-        return;
-      }
-      if (resp.status !== 409) {
-        const message = new TextDecoder().decode(resp.body);
-        throw new Error(`Lease acquire failed (${resp.status}): ${message}`);
-      }
-      // 409 LeaseAlreadyPresent — another holder has a live lease. Backoff and
-      // retry. Cap at 1.5^4 (≈5x) so all 5 graduated tiers are distinct —
-      // capping lower would collapse most of them to the same flat value.
-      const backoff = Math.min(
-        retryIntervalMs * Math.pow(1.5, Math.min(attempt, 4)),
-        retryIntervalMs * Math.pow(1.5, 4),
-      );
-      const jitter = backoff * (0.5 + Math.random() * 0.5);
-      const delay = Math.floor(jitter);
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          if (signal) signal.removeEventListener("abort", onAbort);
-          resolve();
-        }, delay);
-        const onAbort = () => {
-          clearTimeout(timer);
-          reject(new DOMException("Lock acquisition aborted", "AbortError"));
-        };
-        if (signal) {
-          if (signal.aborted) {
+        if (resp.status !== 409) {
+          const message = new TextDecoder().decode(resp.body);
+          throw new Error(`Lease acquire failed (${resp.status}): ${message}`);
+        }
+        contended = true;
+        // 409 LeaseAlreadyPresent — another holder has a live lease. Backoff and
+        // retry. Cap at 1.5^4 (≈5x) so all 5 graduated tiers are distinct —
+        // capping lower would collapse most of them to the same flat value.
+        const backoff = Math.min(
+          retryIntervalMs * Math.pow(1.5, Math.min(attempt, 4)),
+          retryIntervalMs * Math.pow(1.5, 4),
+        );
+        const jitter = backoff * (0.5 + Math.random() * 0.5);
+        const delay = Math.floor(jitter);
+        recordRetry(attempt + 1, delay, { "retry.reason": "lease_conflict" });
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener("abort", onAbort);
+            resolve();
+          }, delay);
+          const onAbort = () => {
             clearTimeout(timer);
             reject(new DOMException("Lock acquisition aborted", "AbortError"));
-            return;
+          };
+          if (signal) {
+            if (signal.aborted) {
+              clearTimeout(timer);
+              reject(
+                new DOMException("Lock acquisition aborted", "AbortError"),
+              );
+              return;
+            }
+            signal.addEventListener("abort", onAbort, { once: true });
           }
-          signal.addEventListener("abort", onAbort, { once: true });
-        }
+        });
+        attempt++;
+      }
+      span.setAttributes({
+        [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+        [Attr.LOCK_CONTENDED]: contended,
       });
-      attempt++;
-    }
-    throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
+      throw new Error(`Lock timeout after ${maxWaitMs}ms on key: ${key}`);
+    });
   };
 
   const release = async () => {
-    if (heartbeatId !== undefined) {
-      clearInterval(heartbeatId);
-      heartbeatId = undefined;
-    }
-    if (leaseId) {
-      const releaseId = leaseId;
-      leaseId = undefined;
-      try {
-        await leaseAction(client, path, "release", releaseId);
-      } catch {
-        // Already released/expired, or connection lost — lease will expire via its fixed duration
+    return await withSpan("azure-blob-datastore lock release", {
+      [Attr.LOCK_KEY]: key,
+    }, async () => {
+      if (heartbeatId !== undefined) {
+        clearInterval(heartbeatId);
+        heartbeatId = undefined;
       }
-    }
+      if (leaseId) {
+        const releaseId = leaseId;
+        leaseId = undefined;
+        try {
+          await leaseAction(client, path, "release", releaseId);
+        } catch {
+          // Already released/expired, or connection lost — lease will expire via its fixed duration
+        }
+      }
+    });
   };
 
   return {
@@ -245,50 +276,70 @@ export function createBlobLock(
     },
 
     withLock: async <T>(fn: () => Promise<T>): Promise<T> => {
-      await acquire();
-      try {
-        return await fn();
-      } finally {
-        await release();
-      }
+      return await withSpan("azure-blob-datastore lock withLock", {
+        [Attr.LOCK_KEY]: key,
+      }, async () => {
+        await acquire();
+        try {
+          return await fn();
+        } finally {
+          await release();
+        }
+      });
     },
 
     inspect: async () => {
-      const resp = await client.request({
-        method: "GET",
-        path,
-        query: { comp: "metadata" },
+      return await withSpan("azure-blob-datastore lock inspect", {
+        [Attr.LOCK_KEY]: key,
+      }, async (span) => {
+        const resp = await client.request({
+          op: "getLockMetadata",
+          method: "GET",
+          path,
+          query: { comp: "metadata" },
+        });
+        if (resp.status === 404) return null;
+        if (resp.status !== 200) return null;
+        const leaseState = resp.headers.get("x-ms-lease-state");
+        if (leaseState !== "leased") return null;
+        const meta = (name: string) =>
+          resp.headers.get(`x-ms-meta-${name}`) ?? "";
+        const info = {
+          holder: meta("holder"),
+          hostname: meta("hostname"),
+          pid: Number(meta("pid")) || 0,
+          acquiredAt: meta("acquiredat"),
+          ttlMs: Number(meta("ttlms")) || ttlMs,
+          nonce: meta("nonce") || undefined,
+        };
+        if (info.holder) {
+          span.setAttribute(
+            Attr.LOCK_HOLDER,
+            `${info.holder} (pid ${info.pid})`,
+          );
+        }
+        return info;
       });
-      if (resp.status === 404) return null;
-      if (resp.status !== 200) return null;
-      const leaseState = resp.headers.get("x-ms-lease-state");
-      if (leaseState !== "leased") return null;
-      const meta = (name: string) =>
-        resp.headers.get(`x-ms-meta-${name}`) ?? "";
-      return {
-        holder: meta("holder"),
-        hostname: meta("hostname"),
-        pid: Number(meta("pid")) || 0,
-        acquiredAt: meta("acquiredat"),
-        ttlMs: Number(meta("ttlms")) || ttlMs,
-        nonce: meta("nonce") || undefined,
-      };
     },
 
     forceRelease: async (expectedNonce: string): Promise<boolean> => {
-      const resp = await leaseAction(client, path, "release", expectedNonce);
-      if (resp.status !== 200) return false;
-      // If this instance itself held that lease, clear its local state too —
-      // otherwise a subsequent acquire() on this same object would wrongly
-      // throw "already acquired" even though the lease is now free on Azure.
-      if (leaseId === expectedNonce) {
-        if (heartbeatId !== undefined) {
-          clearInterval(heartbeatId);
-          heartbeatId = undefined;
+      return await withSpan("azure-blob-datastore lock forceRelease", {
+        [Attr.LOCK_KEY]: key,
+      }, async () => {
+        const resp = await leaseAction(client, path, "release", expectedNonce);
+        if (resp.status !== 200) return false;
+        // If this instance itself held that lease, clear its local state too —
+        // otherwise a subsequent acquire() on this same object would wrongly
+        // throw "already acquired" even though the lease is now free on Azure.
+        if (leaseId === expectedNonce) {
+          if (heartbeatId !== undefined) {
+            clearInterval(heartbeatId);
+            heartbeatId = undefined;
+          }
+          leaseId = undefined;
         }
-        leaseId = undefined;
-      }
-      return true;
+        return true;
+      });
     },
   };
 }
