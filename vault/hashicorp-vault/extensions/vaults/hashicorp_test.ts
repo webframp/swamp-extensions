@@ -136,12 +136,22 @@ function startMockVaultServer(kvVersion: "1" | "2" = "2"): MockVaultServer {
     if (kvVersion === "2" && metadataMatch && req.method === "LIST") {
       const prefix = metadataMatch[1] || "";
       const keys: string[] = [];
+      // Real Vault returns decoded names in a LIST response while matching on
+      // the request path, which is encoded. Mirroring that is what makes the
+      // recursion-encoding test meaningful.
+      const decodeSegment = (segment: string): string => {
+        try {
+          return decodeURIComponent(segment);
+        } catch {
+          return segment;
+        }
+      };
 
       for (const key of secrets.keys()) {
         if (prefix) {
           if (key.startsWith(prefix + "/")) {
             const remainder = key.slice(prefix.length + 1);
-            const parts = remainder.split("/");
+            const parts = remainder.split("/").map(decodeSegment);
             if (parts.length > 1) {
               const folder = parts[0] + "/";
               if (!keys.includes(folder)) keys.push(folder);
@@ -150,7 +160,7 @@ function startMockVaultServer(kvVersion: "1" | "2" = "2"): MockVaultServer {
             }
           }
         } else {
-          const parts = key.split("/");
+          const parts = key.split("/").map(decodeSegment);
           if (parts.length > 1) {
             const folder = parts[0] + "/";
             if (!keys.includes(folder)) keys.push(folder);
@@ -560,6 +570,36 @@ Deno.test({
       });
       await assertRejects(() => provider.get("/absolute"), Error, "relative");
       await assertRejects(() => provider.get(""), Error, "empty");
+      for (const key of ["a//b", "trailing/"]) {
+        await assertRejects(
+          () => provider.get(key),
+          Error,
+          "empty path segment",
+        );
+      }
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "hashicorp vault: list encodes directory names when recursing",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockVaultServer("2");
+    try {
+      const provider = vault.createProvider("test", {
+        address: url,
+        token: "test-token",
+        kvVersion: "2",
+      });
+
+      // A `?` in a directory name ends the path and starts a query string when
+      // it is interpolated raw, so everything under that directory goes
+      // missing from the listing.
+      await provider.put("dir?x/inner", "v");
+      assertEquals(await provider.list(), ["dir?x/inner"]);
     } finally {
       await server.shutdown();
     }

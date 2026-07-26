@@ -55,6 +55,11 @@ function assertSafeKey(key: string): void {
         `gopass key must not contain "." or ".." path segments, got "${key}"`,
       );
     }
+    if (segment === "") {
+      throw new Error(
+        `gopass key must not contain an empty path segment, got "${key}"`,
+      );
+    }
   }
 }
 
@@ -130,7 +135,10 @@ export const vault = {
     return {
       get: async (key: string): Promise<string> => {
         const path = secretPath(key);
-        // Use -o to get only the password (first line), or -n for no newline
+        // -o returns only the password (first line); -n is --noparsing, which
+        // stops gopass from interpreting the secret as YAML or key-value pairs.
+        // Neither flag suppresses the trailing newline, which is why the output
+        // still goes through stripTrailingNewline.
         const args = parsed.passwordOnly
           ? ["show", "-o", "-n", path]
           : ["show", "-n", path];

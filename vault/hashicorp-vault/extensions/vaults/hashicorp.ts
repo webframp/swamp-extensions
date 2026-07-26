@@ -90,6 +90,11 @@ function assertSafeKey(key: string): void {
         `Vault key must not contain "." or ".." path segments, got "${key}"`,
       );
     }
+    if (segment === "") {
+      throw new Error(
+        `Vault key must not contain an empty path segment, got "${key}"`,
+      );
+    }
   }
 }
 
@@ -254,8 +259,13 @@ export const vault = {
             if (allKeys.length >= MAX_KEYS) break;
             const fullKey = prefix ? `${prefix}${key}` : key;
             if (key.endsWith("/")) {
+              // The directory name comes back from Vault and goes straight into
+              // the next request path, so it needs the same encoding a
+              // caller-supplied key gets. A directory containing `?` would
+              // otherwise start a query string.
+              const dir = encodeURIComponent(key.slice(0, -1));
               await collectKeys(
-                `${path}/${key.slice(0, -1)}`,
+                `${path}/${dir}`,
                 fullKey,
                 depth + 1,
               );

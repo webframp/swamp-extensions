@@ -18,40 +18,71 @@ import { z } from "npm:zod@4.4.3";
  * every GPG agent hook it invokes — any AWS key, database URL, or API token
  * that happened to be set. Only the variables pass and GPG actually need are
  * forwarded now.
+ *
+ * This list is only meaningful alongside `clearEnv: true`. Deno merges the
+ * `env` option into the parent environment rather than replacing it, so an
+ * allowlist without `clearEnv` filters nothing at all.
  */
-const ENV_ALLOWLIST = [
+export const ENV_ALLOWLIST = [
   "HOME",
   "PATH",
   "USER",
   "LOGNAME",
   "TMPDIR",
+  "SHELL",
+  // Locale, so error messages and character handling match the user's shell.
   "LANG",
+  "LANGUAGE",
   "LC_ALL",
   "LC_CTYPE",
-  // GPG needs these to find its home, reach its agent, and prompt correctly.
+  "LC_MESSAGES",
+  // GPG needs these to find its home and reach its agent.
   "GNUPGHOME",
   "GPG_AGENT_INFO",
   "GPG_TTY",
-  "DISPLAY",
-  "WAYLAND_DISPLAY",
-  "XDG_RUNTIME_DIR",
   "SSH_AUTH_SOCK",
   "TERM",
+  // pinentry needs these to draw a prompt. Which ones matter depends on which
+  // pinentry is installed: the curses variant needs the TTY, the GTK and Qt
+  // variants need the display, the session bus, and the X authority file.
+  "DISPLAY",
+  "WAYLAND_DISPLAY",
+  "XAUTHORITY",
+  "DBUS_SESSION_BUS_ADDRESS",
+  "PINENTRY_USER_DATA",
+  "XDG_RUNTIME_DIR",
+  "XDG_SESSION_TYPE",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_CACHE_HOME",
   // pass's own configuration, other than PASSWORD_STORE_DIR which is set
   // explicitly from config.
   "PASSWORD_STORE_KEY",
   "PASSWORD_STORE_GPG_OPTS",
   "PASSWORD_STORE_UMASK",
   "PASSWORD_STORE_SIGNING_KEY",
+  "PASSWORD_STORE_CLIP_TIME",
+  "PASSWORD_STORE_CHARACTER_SET",
+  "PASSWORD_STORE_CHARACTER_SET_NO_SYMBOLS",
+  "PASSWORD_STORE_GENERATED_LENGTH",
+  "PASSWORD_STORE_ENABLE_EXTENSIONS",
+  "PASSWORD_STORE_EXTENSIONS_DIR",
 ] as const;
 
-function allowlistedEnv(storeDir: string): Record<string, string> {
+/**
+ * Builds the environment for a subprocess: the allowlist, plus any names the
+ * operator added via `extraEnv`, plus the store directory.
+ */
+function buildEnv(
+  storeDir: string | undefined,
+  extraEnv: readonly string[],
+): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const name of ENV_ALLOWLIST) {
+  for (const name of [...ENV_ALLOWLIST, ...extraEnv]) {
     const value = Deno.env.get(name);
     if (value !== undefined) env[name] = value;
   }
-  env.PASSWORD_STORE_DIR = storeDir;
+  if (storeDir !== undefined) env.PASSWORD_STORE_DIR = storeDir;
   return env;
 }
 
@@ -100,6 +131,11 @@ function assertSafeKey(key: string): void {
         `pass key must not contain "." or ".." path segments, got "${key}"`,
       );
     }
+    if (segment === "") {
+      throw new Error(
+        `pass key must not contain an empty path segment, got "${key}"`,
+      );
+    }
   }
 }
 
@@ -111,6 +147,12 @@ const ConfigSchema = z.object({
     "Key prefix for namespacing secrets (defaults to 'swamp'). " +
       "BREAKING from 2026.04.13.1: prior versions had no prefix. " +
       "Set to '' (empty string) to access keys stored by earlier versions.",
+  ),
+  extraEnv: z.array(z.string().min(1)).default([]).describe(
+    "Additional environment variable names to forward to the pass subprocess. " +
+      "The subprocess otherwise receives only the variables pass and GPG need. " +
+      "Use this if an unusual pinentry or GPG setup requires a variable that " +
+      "is not on the default list.",
   ),
 });
 
@@ -136,11 +178,12 @@ export const vault = {
       args: string[],
       stdin?: string,
     ): Promise<string> => {
-      const env = allowlistedEnv(storeDir);
-
       const cmd = new Deno.Command("pass", {
         args,
-        env,
+        env: buildEnv(storeDir, parsed.extraEnv),
+        // Without this Deno merges `env` into the parent environment instead of
+        // replacing it, and the allowlist filters nothing.
+        clearEnv: true,
         stdin: stdin ? "piped" : "null",
         stdout: "piped",
         stderr: "piped",
@@ -195,6 +238,11 @@ export const vault = {
             "-type",
             "f",
           ],
+          // `find` gets the same narrowed environment as `pass`. It needs none
+          // of it, but leaving one subprocess inheriting the parent env while
+          // narrowing the other defeats the point.
+          env: buildEnv(storeDir, parsed.extraEnv),
+          clearEnv: true,
           stdout: "piped",
           stderr: "piped",
         });

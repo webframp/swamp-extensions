@@ -393,5 +393,8 @@ Deno.test("absolute, empty, and flag-like keys are rejected", async () => {
       Error,
       "must not start with",
     );
+    for (const key of ["a//b", "trailing/"]) {
+      await assertRejects(() => provider.get(key), Error, "empty path segment");
+    }
   });
 });

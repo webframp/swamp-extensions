@@ -31,11 +31,31 @@ vaults:
 # Optional: key prefix for namespacing (defaults to "swamp")
 # Set to "" to disable prefixing
 # prefix: "myproject"
+
+# Optional: extra environment variable names to forward to the pass
+# subprocess, for GPG or pinentry setups that need something unusual
+# extraEnv: ["MY_PINENTRY_SOCKET"]
 ```
 
 With the default `prefix: "swamp"`, a secret named `db/password` is stored as
 `swamp/db/password` in the pass store. Set `prefix: ""` to store keys without a
 namespace.
+
+Keys are validated before the CLI runs. A key must be relative, non-empty, and
+free of `.` or `..` path segments, so it cannot reach a secret outside the
+configured prefix.
+
+## Subprocess environment
+
+The `pass` subprocess receives only the environment variables that pass and GPG
+need — `HOME`, `PATH`, the locale variables, the `GNUPGHOME` and `GPG_*` agent
+variables, the display and session variables pinentry uses, and the
+`PASSWORD_STORE_*` settings. Everything else in the swamp process environment,
+including credentials for unrelated systems, stays out of the subprocess and out
+of any GPG hook it invokes.
+
+If your GPG or pinentry setup needs a variable outside that set, name it in
+`extraEnv` rather than waiting for a release.
 
 ## Usage
 
