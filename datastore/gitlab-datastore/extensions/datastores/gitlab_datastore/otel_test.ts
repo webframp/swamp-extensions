@@ -206,8 +206,6 @@ async function seedFile(
 
 Deno.test({
   name: "API span carries op, method, project, host, and status",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -215,7 +213,7 @@ Deno.test({
         assertEquals(health.healthy, true);
 
         const span = findSpan(spans(), "GitLab healthCheck");
-        assertEquals(span.attributes[Attr.RPC_SYSTEM], "http");
+        assertEquals(span.attributes[Attr.RPC_SYSTEM], "gitlab");
         assertEquals(span.attributes[Attr.RPC_SERVICE], "GitLab");
         assertEquals(span.attributes[Attr.RPC_METHOD], "healthCheck");
         assertEquals(span.attributes[Attr.HTTP_REQUEST_METHOD], "GET");
@@ -234,8 +232,6 @@ Deno.test({
 
 Deno.test({
   name: "API spans never record the access token",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -253,8 +249,6 @@ Deno.test({
 
 Deno.test({
   name: "state operations record the state name",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -282,8 +276,6 @@ Deno.test({
 
 Deno.test({
   name: "API spans nest under the enclosing sync span",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -306,8 +298,6 @@ Deno.test({
 
 Deno.test({
   name: "pullChanged span reports states listed and files pulled",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -339,8 +329,6 @@ Deno.test({
 
 Deno.test({
   name: "scoped pullChanged span records datastore.scoped",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -359,9 +347,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "pushChanged span reports files pushed and the dirty-path path",
-  sanitizeResources: false,
-  sanitizeOps: false,
+  name: "pushChanged span reports files pushed and the dirty-path mode",
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -375,7 +361,16 @@ Deno.test({
           const first = findSpan(spans(), "gitlab-datastore pushChanged");
           assertEquals(first.attributes[Attr.DATASTORE_FILES_PUSHED], 2);
           assertEquals(first.attributes[Attr.DATASTORE_FILES_DELETED], 0);
-          assertEquals(first.attributes[Attr.DATASTORE_FAST_PATH_HIT], false);
+          assertEquals(
+            first.attributes[Attr.DATASTORE_DIRTY_PATH_MODE],
+            false,
+          );
+          // This method has no short-circuit, so it must not claim one — in
+          // the sibling extensions fast_path_hit means "no work was done".
+          assertEquals(
+            first.attributes[Attr.DATASTORE_FAST_PATH_HIT],
+            undefined,
+          );
 
           // Now mark one path dirty so the second push takes the dirty-path
           // route rather than walking the tree.
@@ -388,7 +383,16 @@ Deno.test({
           );
           const second = pushes[pushes.length - 1];
           assertEquals(second.attributes[Attr.DATASTORE_FILES_PUSHED], 1);
-          assertEquals(second.attributes[Attr.DATASTORE_FAST_PATH_HIT], true);
+          // Dirty-path mode still uploaded a file, so this is emphatically not
+          // a fast path.
+          assertEquals(
+            second.attributes[Attr.DATASTORE_DIRTY_PATH_MODE],
+            true,
+          );
+          assertEquals(
+            second.attributes[Attr.DATASTORE_FAST_PATH_HIT],
+            undefined,
+          );
         });
       });
     });
@@ -397,8 +401,6 @@ Deno.test({
 
 Deno.test({
   name: "hydrateFile span records the file and hydration outcome",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -441,8 +443,6 @@ Deno.test({
 
 Deno.test({
   name: "preparePush and commitPush spans report planned work",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -469,8 +469,6 @@ Deno.test({
 
 Deno.test({
   name: "commitPush of an empty manifest reports the fast path",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -495,8 +493,6 @@ Deno.test({
 
 Deno.test({
   name: "lock acquire and release spans",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -524,8 +520,6 @@ Deno.test({
 
 Deno.test({
   name: "lock acquire span records contention, holder, retry, and error",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -568,8 +562,6 @@ Deno.test({
 
 Deno.test({
   name: "inspect and forceRelease spans",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -591,8 +583,6 @@ Deno.test({
 
 Deno.test({
   name: "withLock span wraps acquire and release as children",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -611,8 +601,6 @@ Deno.test({
 
 Deno.test({
   name: "a failing API call marks both the request and the sync span",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -659,8 +647,6 @@ Deno.test({
 
 Deno.test({
   name: "expected non-2xx statuses do not mark the span as an error",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withMock(async (mock) => {
@@ -748,8 +734,6 @@ Deno.test("withSpan wraps a non-Error rejection without losing it", async () => 
 
 Deno.test({
   name: "operations succeed with no TracerProvider registered",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     // withSpans is deliberately not used here: the global API stays in its
     // default no-op state, which is how the extension runs outside a traced

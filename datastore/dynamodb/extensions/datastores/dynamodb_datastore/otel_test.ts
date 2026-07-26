@@ -133,6 +133,17 @@ Deno.test("operationName maps SDK command classes to wire operations", () => {
     operationName(new QueryCommand({ TableName: "t" })),
     "Query",
   );
+  // Class identity is the primary lookup, so a command whose constructor name
+  // has been mangled by a minifier still resolves.
+  const minified = new PutCommand({ TableName: "t", Item: {} });
+  Object.defineProperty(minified.constructor, "name", { value: "e" });
+  try {
+    assertEquals(operationName(minified), "PutItem");
+  } finally {
+    Object.defineProperty(minified.constructor, "name", {
+      value: "PutCommand",
+    });
+  }
   // Unmapped commands fall back to the class name minus the Command suffix.
   class SomethingNewCommand {}
   assertEquals(operationName(new SomethingNewCommand()), "SomethingNew");

@@ -15,11 +15,24 @@ spans on the multi-round-trip internals (`listIndexShards`,
 operation — both the 429/5xx backoff in `retryableRequest` and the ETag
 conflict loop in `updateShard`, which retries independently of it.
 
+**Changed:** `pullChanged` reports `datastore.files_pulled` and
+`datastore.files_deleted` separately. The internal pull counter increments for
+both a downloaded file and a local file removed by a remote tombstone, so
+reporting it as a pull count would have overstated downloads whenever
+tombstones were applied.
+
 **Changed:** Nothing observable without tracing configured. The extension
 depends on `@opentelemetry/api` only; the host process owns the
 TracerProvider, and every span is a no-op when none is registered. Existing
-behaviour, return values, and log output are unchanged.
+behaviour and return values are unchanged.
 
 **Note on secrets:** Shared Key signatures, AAD client secrets, and bearer
 tokens are never recorded as span attributes. The AAD token exchange emits a
-span carrying only the response status.
+span carrying only its response status — on failure the response body is
+deliberately dropped from the error message, because `recordException` would
+otherwise put the token endpoint's raw response into the trace.
+
+**Note:** Lock heartbeat renewals run detached from the acquiring span. A span
+created inside the renewal timer would otherwise be parented to an
+already-ended `lock acquire` span, which trace backends render as a broken
+trace.

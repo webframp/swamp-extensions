@@ -14,7 +14,7 @@ import {
 } from "npm:@opentelemetry/sdk-trace-base@2.10.0";
 
 import { createSyncService } from "./sync.ts";
-import { datastore } from "./mod.ts";
+import { createPostgresLock, datastore } from "./mod.ts";
 import { retryable } from "./_lib/retry.ts";
 import { Attr, sqlSpan, withSpan } from "./_lib/tracing.ts";
 
@@ -65,8 +65,17 @@ function parentIdOf(span: ReadableSpan): string | undefined {
 }
 
 interface FakeSqlOptions {
-  /** Rows returned per statement, matched on a substring of the SQL text. */
-  rows?: Array<{ match: string; rows: Record<string, unknown>[] }>;
+  /**
+   * Rows returned per statement, matched on a substring of the SQL text.
+   * A function receives the bound parameters, which the lock needs — its
+   * INSERT ... RETURNING nonce must echo back the nonce it was given.
+   */
+  rows?: Array<{
+    match: string;
+    rows:
+      | Record<string, unknown>[]
+      | ((params?: unknown[]) => Record<string, unknown>[]);
+  }>;
   /** Statement substring that should throw instead of returning rows. */
   failOn?: { match: string; error: Error };
 }
@@ -86,19 +95,26 @@ interface FakeSql {
 function fakeSql(options: FakeSqlOptions = {}): FakeSql {
   const statements: string[] = [];
 
-  const rowsFor = (text: string): Record<string, unknown>[] => {
+  const rowsFor = (
+    text: string,
+    params?: unknown[],
+  ): Record<string, unknown>[] => {
     if (options.failOn && text.includes(options.failOn.match)) {
       throw options.failOn.error;
     }
     for (const entry of options.rows ?? []) {
-      if (text.includes(entry.match)) return entry.rows;
+      if (text.includes(entry.match)) {
+        return typeof entry.rows === "function"
+          ? entry.rows(params)
+          : entry.rows;
+      }
     }
     return [];
   };
 
-  const unsafe = (text: string, _params?: unknown[]) => {
+  const unsafe = (text: string, params?: unknown[]) => {
     statements.push(text);
-    const rows = rowsFor(text);
+    const rows = rowsFor(text, params);
     // postgres.js exposes `count` on results; the lock reads it.
     return Promise.resolve(
       Object.assign(rows, { count: rows.length }),
@@ -219,8 +235,10 @@ Deno.test("pushChanged span reports files pushed and nests its SQL", async () =>
       // thousand files would otherwise produce a thousand spans.
       const tx = findSpan(spans(), "PostgreSQL fullWalkPushTransaction");
       assertEquals(tx.attributes[Attr.DB_OPERATION], "TRANSACTION");
-      assertEquals(tx.attributes[Attr.DATASTORE_FILES_PUSHED], 2);
-      assertEquals(tx.attributes[Attr.DATASTORE_FILES_DELETED], 0);
+      // File counts belong on the sync span, not the SQL span. Duplicating
+      // them here would double-count any cross-extension query on
+      // datastore.files_pushed.
+      assertEquals(tx.attributes[Attr.DATASTORE_FILES_PUSHED], undefined);
       assertEquals(tx.spanContext().traceId, push.spanContext().traceId);
       assertEquals(parentIdOf(push), undefined);
 
@@ -387,6 +405,186 @@ Deno.test("commitPush of an empty manifest reports the fast path", async () => {
         "an empty manifest must not open a transaction",
       );
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lock spans against the fake client, so they run wherever CI runs. The
+// POSTGRES_TEST_URL-gated tests further down repeat a subset against real
+// PostgreSQL to confirm the fake's ON CONFLICT / RETURNING behaviour matches.
+// ---------------------------------------------------------------------------
+
+const LOCKS_TABLE = "swamp.locks";
+
+/** The lock's INSERT ... RETURNING nonce echoes back the nonce it was given. */
+function lockAcquiredSql() {
+  return fakeSql({
+    rows: [{
+      match: "INSERT INTO swamp.locks",
+      rows: (params) => [{ nonce: params?.[5] }],
+    }],
+  });
+}
+
+Deno.test("lock acquire and release spans", async () => {
+  await withSpans(async (spans) => {
+    const { sql } = lockAcquiredSql();
+    const lock = createPostgresLock(sql, LOCKS_TABLE, "/repo", {
+      lockKey: "uncontended",
+    });
+    await lock.acquire();
+    await lock.release();
+
+    const acquire = findSpan(spans(), "postgres-datastore lock acquire");
+    assertEquals(acquire.attributes[Attr.LOCK_KEY], "uncontended");
+    assertEquals(acquire.attributes[Attr.LOCK_CONTENDED], false);
+    assertEquals(acquire.attributes[Attr.LOCK_TTL_MS], 30_000);
+    assertEquals(acquire.attributes[Attr.LOCK_TIMEOUT_MS], 60_000);
+    assertExists(acquire.attributes[Attr.LOCK_WAIT_DURATION_MS]);
+
+    const insert = findSpan(spans(), "PostgreSQL acquireLock");
+    assertEquals(insert.attributes[Attr.DB_OPERATION], "INSERT");
+    assertEquals(insert.attributes[Attr.DB_COLLECTION], LOCKS_TABLE);
+    assertEquals(parentIdOf(insert), acquire.spanContext().spanId);
+
+    const release = findSpan(spans(), "postgres-datastore lock release");
+    assertEquals(release.attributes[Attr.LOCK_KEY], "uncontended");
+    const del = findSpan(spans(), "PostgreSQL releaseLock");
+    assertEquals(parentIdOf(del), release.spanContext().spanId);
+  });
+});
+
+Deno.test("lock acquire span records contention, retry, and error on timeout", async () => {
+  await withSpans(async (spans) => {
+    // The INSERT returns no rows, which is how the lock sees "someone else
+    // holds it" — so this drives the contention path to its timeout.
+    const { sql } = fakeSql();
+    const lock = createPostgresLock(sql, LOCKS_TABLE, "/repo", {
+      lockKey: "contended",
+      maxWaitMs: 80,
+      retryIntervalMs: 10,
+    });
+    let threw = false;
+    try {
+      await lock.acquire();
+    } catch {
+      threw = true;
+    }
+    assert(threw, "acquire should have timed out");
+
+    const acquire = findSpan(spans(), "postgres-datastore lock acquire");
+    assertEquals(acquire.attributes[Attr.LOCK_CONTENDED], true);
+    assertEquals(acquire.status.code, 2);
+    assertEquals(acquire.attributes[Attr.ERROR_TYPE], "Error");
+    assertEquals(acquire.events.some((e) => e.name === "exception"), true);
+    assertExists(acquire.attributes[Attr.LOCK_WAIT_DURATION_MS]);
+    const retry = acquire.events.find((e) => e.name === "retry");
+    assertExists(retry, "expected a lock_contended retry event");
+    assertEquals(retry.attributes?.["retry.reason"], "lock_contended");
+  });
+});
+
+Deno.test("withLock span wraps acquire and release as children", async () => {
+  await withSpans(async (spans) => {
+    const { sql } = lockAcquiredSql();
+    const lock = createPostgresLock(sql, LOCKS_TABLE, "/repo", {
+      lockKey: "wrapped",
+    });
+    assertEquals(await lock.withLock(() => Promise.resolve("done")), "done");
+
+    const outer = findSpan(spans(), "postgres-datastore lock withLock");
+    const acquire = findSpan(spans(), "postgres-datastore lock acquire");
+    const release = findSpan(spans(), "postgres-datastore lock release");
+    assertEquals(parentIdOf(acquire), outer.spanContext().spanId);
+    assertEquals(parentIdOf(release), outer.spanContext().spanId);
+  });
+});
+
+Deno.test("lock inspect span records the holder", async () => {
+  await withSpans(async (spans) => {
+    const { sql } = fakeSql({
+      rows: [{
+        match: "SELECT holder, hostname, pid",
+        rows: [{
+          holder: "sean@laptop",
+          hostname: "laptop",
+          pid: 4242,
+          acquired_at: "2026-07-25 00:00:00",
+          ttl_ms: 30_000,
+          nonce: "abc",
+        }],
+      }],
+    });
+    const lock = createPostgresLock(sql, LOCKS_TABLE, "/repo", {
+      lockKey: "inspected",
+    });
+    const info = await lock.inspect();
+    assertEquals(info?.nonce, "abc");
+
+    const inspect = findSpan(spans(), "postgres-datastore lock inspect");
+    assertEquals(inspect.attributes[Attr.LOCK_KEY], "inspected");
+    assertEquals(
+      inspect.attributes[Attr.LOCK_HOLDER],
+      "sean@laptop (pid 4242)",
+    );
+    const select = findSpan(spans(), "PostgreSQL inspectLock");
+    assertEquals(select.attributes[Attr.DB_OPERATION], "SELECT");
+  });
+});
+
+Deno.test("lock inspect of an unheld lock records no holder", async () => {
+  await withSpans(async (spans) => {
+    const { sql } = fakeSql();
+    const lock = createPostgresLock(sql, LOCKS_TABLE, "/repo", {
+      lockKey: "absent",
+    });
+    assertEquals(await lock.inspect(), null);
+
+    const inspect = findSpan(spans(), "postgres-datastore lock inspect");
+    assertEquals(inspect.attributes[Attr.LOCK_HOLDER], undefined);
+    assertEquals(inspect.status.code, 0);
+  });
+});
+
+Deno.test("forceRelease span reflects whether a row was deleted", async () => {
+  await withSpans(async (spans) => {
+    const { sql } = fakeSql({
+      rows: [{
+        match: "DELETE FROM swamp.locks",
+        rows: [{ key: "forced" }],
+      }],
+    });
+    const lock = createPostgresLock(sql, LOCKS_TABLE, "/repo", {
+      lockKey: "forced",
+    });
+    assertEquals(await lock.forceRelease("abc"), true);
+
+    const forced = findSpan(spans(), "postgres-datastore lock forceRelease");
+    assertEquals(forced.attributes[Attr.LOCK_KEY], "forced");
+    findSpan(spans(), "PostgreSQL forceReleaseLock");
+  });
+});
+
+Deno.test("heartbeat is deliberately not instrumented", async () => {
+  await withSpans(async (spans) => {
+    const { sql } = lockAcquiredSql();
+    const lock = createPostgresLock(sql, LOCKS_TABLE, "/repo", {
+      lockKey: "beating",
+    });
+    await lock.acquire();
+    try {
+      // The fake reports one affected row for the renewal UPDATE.
+      await lock.heartbeat();
+    } finally {
+      await lock.release();
+    }
+
+    // Periodic renewals would swamp the trace of any long-held lock.
+    assertEquals(
+      spans().some((s) => s.name.includes("heartbeat")),
+      false,
+      `unexpected heartbeat span in [${namesOf(spans())}]`,
+    );
   });
 });
 

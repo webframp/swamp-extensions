@@ -22,6 +22,11 @@ operation. This covers the throttling backoff in `retryable`, the
 `BatchWriteItem` — the latter two retry independently of the shared helper and
 previously left no trace of partial throttling at all.
 
+**Changed:** `pullChanged` reports `datastore.files_pulled` and
+`datastore.files_deleted` separately. The internal pull counter increments for
+both a downloaded file and a local file removed by a remote tombstone, so
+reporting it as a pull count would have overstated downloads.
+
 **Changed:** Nothing observable without tracing configured. The extension
 depends on `@opentelemetry/api` only; the host process owns the
 TracerProvider, and every span is a no-op when none is registered. Existing
@@ -29,3 +34,8 @@ behaviour, return values, and log output are unchanged.
 
 **Note:** Item content is never recorded as a span attribute — only counts,
 key names, and table/index names.
+
+**Note:** Span names are resolved from the SDK command's class identity rather
+than `constructor.name`, so they survive any minification the bundler applies.
+Lock heartbeat renewals run detached from the acquiring span, so a renewal is
+its own trace instead of a child of an already-ended `lock acquire` span.

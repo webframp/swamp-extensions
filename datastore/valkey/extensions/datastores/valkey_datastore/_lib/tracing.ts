@@ -28,6 +28,7 @@ export const Attr = {
   DB_OPERATION: "db.operation.name",
   VALKEY_KEY: "valkey.key",
   VALKEY_PIPELINE_COMMANDS: "valkey.pipeline.commands",
+  VALKEY_PIPELINE_FAILED: "valkey.pipeline.failed_commands",
   ERROR_TYPE: "error.type",
   LOCK_KEY: "lock.key",
   LOCK_TIMEOUT_MS: "lock.timeout_ms",
@@ -37,6 +38,7 @@ export const Attr = {
   LOCK_HOLDER: "lock.holder",
   DATASTORE_FILE: "datastore.file",
   DATASTORE_FILES_PULLED: "datastore.files_pulled",
+  DATASTORE_FILES_SKIPPED: "datastore.files_skipped",
   DATASTORE_FILES_PUSHED: "datastore.files_pushed",
   DATASTORE_FILES_DELETED: "datastore.files_deleted",
   DATASTORE_FILES_PLANNED_PUSH: "datastore.files_planned_push",
@@ -113,6 +115,41 @@ export function pipelineSpan<T>(
     [Attr.DB_OPERATION]: "PIPELINE",
     [Attr.VALKEY_PIPELINE_COMMANDS]: commandCount,
   }, fn);
+}
+
+/**
+ * Marks a pipeline span according to its per-command results.
+ *
+ * `pipeline.exec()` resolves with an array of `[error, result]` pairs; it does
+ * not reject when individual commands fail. Without this the most common real
+ * failure — part of a batch rejected while the rest succeeded — would leave a
+ * green span.
+ */
+export function recordPipelineResults(
+  span: Span,
+  results: Array<[Error | null, unknown]> | null,
+): void {
+  if (!results) {
+    span.setAttribute(Attr.VALKEY_PIPELINE_FAILED, 0);
+    span.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: "pipeline returned no results",
+    });
+    span.setAttribute(Attr.ERROR_TYPE, "PipelineAborted");
+    return;
+  }
+  const failed = results.filter(([err]) => err !== null);
+  span.setAttribute(Attr.VALKEY_PIPELINE_FAILED, failed.length);
+  if (failed.length === 0) return;
+  const first = failed[0][0];
+  span.setStatus({
+    code: SpanStatusCode.ERROR,
+    message: `${failed.length} of ${results.length} commands failed`,
+  });
+  span.setAttribute(
+    Attr.ERROR_TYPE,
+    first instanceof Error ? first.name : "PipelineCommandError",
+  );
 }
 
 /**

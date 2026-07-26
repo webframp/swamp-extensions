@@ -4,6 +4,8 @@
 
 import {
   type Attributes,
+  context,
+  ROOT_CONTEXT,
   type Span,
   SpanStatusCode,
   trace,
@@ -81,6 +83,19 @@ export async function withSpan<T>(
       span.end();
     }
   });
+}
+
+/**
+ * Detaches `fn` from whatever span is currently active.
+ *
+ * Heartbeat renewals fire from a `setInterval` created during `acquire()`. With
+ * a context manager installed, a span created in that callback inherits the
+ * acquire span as its parent and starts after that parent has already ended,
+ * which most trace backends render as a broken trace. Running the callback
+ * under the root context makes each renewal its own trace instead.
+ */
+export function detached<T>(fn: () => T): T {
+  return context.with(ROOT_CONTEXT, fn);
 }
 
 /**

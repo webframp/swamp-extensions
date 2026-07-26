@@ -13,7 +13,13 @@ import {
 } from "npm:@opentelemetry/sdk-trace-base@2.10.0";
 
 import { datastore } from "./mod.ts";
-import { Attr, commandSpan, pipelineSpan, withSpan } from "./_lib/tracing.ts";
+import {
+  Attr,
+  commandSpan,
+  pipelineSpan,
+  recordPipelineResults,
+  withSpan,
+} from "./_lib/tracing.ts";
 
 const VALKEY_URL = Deno.env.get("VALKEY_TEST_URL") ?? "redis://localhost:6380";
 
@@ -154,6 +160,59 @@ Deno.test("pipelineSpan records the batched command count", async () => {
   });
 });
 
+Deno.test("recordPipelineResults marks a partially failed pipeline", async () => {
+  await withSpans(async (spans) => {
+    class ReplyError extends Error {
+      override name = "ReplyError";
+    }
+    await pipelineSpan("writeFiles", 3, (span) => {
+      // exec() resolves with per-command errors; it does not reject.
+      recordPipelineResults(span, [
+        [null, "OK"],
+        [new ReplyError("WRONGTYPE"), null],
+        [null, "OK"],
+      ]);
+      return Promise.resolve();
+    });
+
+    const span = findSpan(spans(), "Valkey pipeline writeFiles");
+    assertEquals(span.attributes[Attr.VALKEY_PIPELINE_FAILED], 1);
+    assertEquals(
+      span.status.code,
+      2,
+      "a batch with a failed command must not report success",
+    );
+    assertEquals(span.attributes[Attr.ERROR_TYPE], "ReplyError");
+  });
+});
+
+Deno.test("recordPipelineResults leaves a fully successful pipeline green", async () => {
+  await withSpans(async (spans) => {
+    await pipelineSpan("writeFiles", 2, (span) => {
+      recordPipelineResults(span, [[null, "OK"], [null, "OK"]]);
+      return Promise.resolve();
+    });
+
+    const span = findSpan(spans(), "Valkey pipeline writeFiles");
+    assertEquals(span.attributes[Attr.VALKEY_PIPELINE_FAILED], 0);
+    assertEquals(span.status.code, 0);
+    assertEquals(span.attributes[Attr.ERROR_TYPE], undefined);
+  });
+});
+
+Deno.test("recordPipelineResults treats a null result as an aborted pipeline", async () => {
+  await withSpans(async (spans) => {
+    await pipelineSpan("fetchMetadata", 5, (span) => {
+      recordPipelineResults(span, null);
+      return Promise.resolve();
+    });
+
+    const span = findSpan(spans(), "Valkey pipeline fetchMetadata");
+    assertEquals(span.status.code, 2);
+    assertEquals(span.attributes[Attr.ERROR_TYPE], "PipelineAborted");
+  });
+});
+
 Deno.test("commandSpan records failures on the span", async () => {
   await withSpans(async (spans) => {
     class ReplyError extends Error {
@@ -223,8 +282,6 @@ Deno.test("withSpan wraps a non-Error rejection without losing it", async () => 
 
 Deno.test({
   name: "lock acquire and release spans",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       const provider = datastore.createProvider(testConfig(uniquePrefix()));
@@ -252,8 +309,6 @@ Deno.test({
 
 Deno.test({
   name: "lock acquire span records contention, retry, and error on timeout",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       const provider = datastore.createProvider(testConfig(uniquePrefix()));
@@ -294,8 +349,6 @@ Deno.test({
 
 Deno.test({
   name: "withLock, inspect, and forceRelease spans",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       const provider = datastore.createProvider(testConfig(uniquePrefix()));
@@ -328,8 +381,6 @@ Deno.test({
 
 Deno.test({
   name: "heartbeat renewal is deliberately not instrumented",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       const provider = datastore.createProvider(testConfig(uniquePrefix()));
@@ -354,8 +405,6 @@ Deno.test({
 
 Deno.test({
   name: "pushChanged span reports files pushed and pipeline batches",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -385,8 +434,6 @@ Deno.test({
 
 Deno.test({
   name: "pushChanged span reports the no-dirty-paths fast path",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -412,8 +459,6 @@ Deno.test({
 
 Deno.test({
   name: "pullChanged span reports the sequence fast path and path count",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -450,8 +495,6 @@ Deno.test({
 
 Deno.test({
   name: "scoped pullChanged span records datastore.scoped",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -470,8 +513,6 @@ Deno.test({
 
 Deno.test({
   name: "hydrateFile span records the file and hydration outcome",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -502,7 +543,7 @@ Deno.test({
           hydrations[2].spanContext().spanId !== "",
           true,
         );
-        findSpan(spans(), "Valkey GETBUFFER");
+        findSpan(spans(), "Valkey GET");
       });
     });
   },
@@ -510,8 +551,6 @@ Deno.test({
 
 Deno.test({
   name: "preparePush and commitPush spans report planned work",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -539,8 +578,6 @@ Deno.test({
 
 Deno.test({
   name: "commitPush of an empty manifest reports the fast path",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -564,8 +601,6 @@ Deno.test({
 
 Deno.test({
   name: "tombstones are reported as files_deleted, not files_pushed",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
@@ -594,8 +629,6 @@ Deno.test({
 
 Deno.test({
   name: "verifier emits PING and INFO spans",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     await withSpans(async (spans) => {
       const provider = datastore.createProvider(testConfig(uniquePrefix()));
@@ -611,8 +644,6 @@ Deno.test({
 
 Deno.test({
   name: "operations succeed with no TracerProvider registered",
-  sanitizeResources: false,
-  sanitizeOps: false,
   fn: async () => {
     // withSpans is deliberately not used here: the global API stays in its
     // default no-op state, which is how the extension runs outside a traced

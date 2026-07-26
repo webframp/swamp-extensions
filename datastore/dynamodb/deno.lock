@@ -397,9 +397,6 @@
       "jsr:@systeminit/swamp-testing@0.20260504.10",
       "npm:@aws-sdk/client-dynamodb@3.1091.0",
       "npm:@aws-sdk/lib-dynamodb@3.1091.0",
-      "npm:@opentelemetry/api@1.9.0",
-      "npm:@opentelemetry/context-async-hooks@2.10.0",
-      "npm:@opentelemetry/sdk-trace-base@2.10.0",
       "npm:zod@4.4.3"
     ]
   }

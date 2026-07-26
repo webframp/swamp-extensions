@@ -15,6 +15,7 @@ import {
 import { BlobClient } from "./rest_client.ts";
 import { createSyncService } from "./sync.ts";
 import { createBlobLock } from "./lock.ts";
+import { datastore } from "./mod.ts";
 import { retryableRequest } from "./_lib/retry.ts";
 import { Attr, withSpan } from "./_lib/tracing.ts";
 import {
@@ -535,6 +536,185 @@ Deno.test("updateShard records an etag_conflict retry event on 412", async () =>
         }
       }
       return undefined;
+    });
+  });
+});
+
+Deno.test("no span records Shared Key, AAD, or blob content material", async () => {
+  await withSpans(async (spans) => {
+    await withHarness(async ({ client, cachePath }) => {
+      const svc = createSyncService(client, CONTAINER, PREFIX, cachePath);
+      const relPath = "data/m/i/a.json";
+      const secretish = "blob-content-that-must-not-be-traced";
+      await seedFile(cachePath, relPath, secretish);
+      await svc.markDirty({ relPath });
+      await svc.pushChanged();
+
+      const lock = createBlobLock(client, CONTAINER, PREFIX, "/repo", {
+        lockKey: "secrets",
+      });
+      await lock.acquire();
+      await lock.release();
+
+      // The harness signs with accountKey "c3VwZXJzZWNyZXQ=" ("supersecret").
+      // Check span names, attributes, status messages, and recorded
+      // exceptions — recordException surfaces error.message and the stack, so
+      // attributes alone are not the whole channel.
+      const haystack = JSON.stringify(
+        spans().map((s) => ({
+          name: s.name,
+          attributes: s.attributes,
+          status: s.status,
+          events: s.events,
+        })),
+      );
+      for (
+        const forbidden of [
+          "supersecret",
+          "c3VwZXJzZWNyZXQ",
+          "SharedKey ",
+          "Authorization",
+          "Bearer ",
+          secretish,
+        ]
+      ) {
+        assertEquals(
+          haystack.includes(forbidden),
+          false,
+          `span data leaked "${forbidden}"`,
+        );
+      }
+    });
+  });
+});
+
+Deno.test("a failed AAD token exchange keeps the response body out of the span", async () => {
+  await withSpans(async (spans) => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      if (url.host === "login.microsoftonline.com") {
+        // A real AAD failure body; none of it may reach the span.
+        return Promise.resolve(
+          new Response(
+            '{"error":"invalid_client","error_description":"secret-echo-7f3a"}',
+            { status: 401 },
+          ),
+        );
+      }
+      return originalFetch(input);
+    }) as typeof fetch;
+
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "servicePrincipal",
+        accountName: "test",
+        tenantId: "tenant-1",
+        clientId: "client-1",
+        clientSecret: "must-not-be-traced",
+        endpointSuffix: "core.windows.net",
+      });
+      let threw = false;
+      try {
+        await client.request({ op: "probe", method: "GET", path: "/c/b" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "the token exchange failure must propagate");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    const exchange = findSpan(spans(), "Azure Blob tokenExchange");
+    assertEquals(exchange.attributes[Attr.HTTP_RESPONSE_STATUS_CODE], 401);
+    assertEquals(exchange.status.code, 2);
+    const haystack = JSON.stringify(
+      spans().map((s) => ({
+        name: s.name,
+        attributes: s.attributes,
+        status: s.status,
+        events: s.events,
+      })),
+    );
+    assertEquals(haystack.includes("secret-echo-7f3a"), false);
+    assertEquals(haystack.includes("invalid_client"), false);
+    assertEquals(haystack.includes("must-not-be-traced"), false);
+  });
+});
+
+Deno.test("every client span name the code can emit is asserted somewhere", async () => {
+  await withSpans(async (spans) => {
+    await withHarness(async ({ client, cachePath }) => {
+      const svc = createSyncService(client, CONTAINER, PREFIX, cachePath);
+      const relPath = "data/m/i/a.json";
+      await seedFile(cachePath, relPath, "a");
+      await svc.markDirty({ relPath });
+      await svc.pushChanged();
+      await svc.pullChanged();
+      // The watermark is only read once a previous pull has recorded one.
+      await svc.pullChanged();
+      await svc.hydrateFile!(relPath);
+
+      const lock = createBlobLock(client, CONTAINER, PREFIX, "/repo", {
+        lockKey: "coverage",
+      });
+      await lock.acquire();
+      await lock.inspect();
+      await lock.release();
+
+      // Named ops are threaded through BlobRequestOptions.op; a typo would
+      // silently fall back to the HTTP verb, so each one is pinned here.
+      for (
+        const name of [
+          "Azure Blob createLockBlob",
+          "Azure Blob setLockMetadata",
+          "Azure Blob lease.acquire",
+          "Azure Blob lease.release",
+          "Azure Blob getLockMetadata",
+          "Azure Blob listBlobs",
+          "Azure Blob getShard",
+          "Azure Blob putShard",
+          "Azure Blob putBlob",
+          "Azure Blob getBlob",
+          "Azure Blob getWatermark",
+          "Azure Blob putWatermark",
+          "azure-blob-datastore queryAllFileMeta",
+          "azure-blob-datastore listIndexShards",
+          "azure-blob-datastore updateShard",
+        ]
+      ) {
+        findSpan(spans(), name);
+      }
+      // Nothing should fall through to the bare-method fallback.
+      for (const verb of ["GET", "PUT", "DELETE", "HEAD"]) {
+        assertEquals(
+          spans().some((s) => s.name === `Azure Blob ${verb}`),
+          false,
+          `an op name is missing — span fell back to "Azure Blob ${verb}"`,
+        );
+      }
+    });
+  });
+});
+
+Deno.test("the container health check emits its own named span", async () => {
+  await withSpans(async (spans) => {
+    await withHarness(async ({ mock }) => {
+      const provider = datastore.createProvider({
+        container: CONTAINER,
+        prefix: PREFIX,
+        auth: {
+          mode: "sharedKey",
+          accountName: "test",
+          accountKey: "c3VwZXJzZWNyZXQ=",
+        },
+      });
+      const health = await provider.createVerifier().verify();
+      assertEquals(health.healthy, true);
+      assertExists(mock.port);
+
+      const check = findSpan(spans(), "Azure Blob getContainerProperties");
+      assertEquals(check.attributes[Attr.AZURE_BLOB_CONTAINER], CONTAINER);
     });
   });
 });

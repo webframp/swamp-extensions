@@ -4,10 +4,27 @@
 
 import {
   type Attributes,
+  context,
+  ROOT_CONTEXT,
   type Span,
   SpanStatusCode,
   trace,
 } from "npm:@opentelemetry/api@1.9.0";
+import {
+  CreateTableCommand,
+  DescribeTableCommand,
+  UpdateTimeToLiveCommand,
+} from "npm:@aws-sdk/client-dynamodb@3.1094.0";
+import {
+  BatchGetCommand,
+  BatchWriteCommand,
+  DeleteCommand,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  ScanCommand,
+  UpdateCommand,
+} from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
 
 /** Instrumentation scope name — matches the extension name in manifest.yaml. */
 const TRACER_NAME = "@webframp/dynamodb-datastore";
@@ -18,6 +35,7 @@ export function getTracer() {
 
 /** Span attribute keys. Item content is never recorded — only counts and keys. */
 export const Attr = {
+  DB_SYSTEM: "db.system.name",
   RPC_SYSTEM: "rpc.system",
   RPC_SERVICE: "rpc.service",
   RPC_METHOD: "rpc.method",
@@ -78,6 +96,19 @@ export async function withSpan<T>(
 }
 
 /**
+ * Detaches `fn` from whatever span is currently active.
+ *
+ * Heartbeat renewals fire from a `setInterval` created during `acquire()`. With
+ * a context manager installed, a span created in that callback inherits the
+ * acquire span as its parent and starts after that parent has already ended,
+ * which most trace backends render as a broken trace. Running the callback
+ * under the root context makes each renewal its own trace instead.
+ */
+export function detached<T>(fn: () => T): T {
+  return context.with(ROOT_CONTEXT, fn);
+}
+
+/**
  * Records a retry as an event on whichever span is currently active.
  *
  * Retry helpers sit below the span-creating layer, so they attach to the
@@ -99,13 +130,37 @@ export function recordRetry(
 }
 
 /**
- * SDK command class name to the DynamoDB API operation it issues.
+ * SDK command class to the DynamoDB API operation it issues.
+ *
+ * Keyed on the class object rather than its name: swamp's bundler inlines npm
+ * packages, and if it ever minifies them `constructor.name` collapses to a
+ * single letter and every span would be named `DynamoDB Unknown`. Identity
+ * comparison cannot be minified away.
  *
  * The document client's classes are named `PutCommand`/`GetCommand` while the
  * wire operations are `PutItem`/`GetItem`, and `rpc.method` should carry the
- * wire name. Anything unmapped falls back to the class name minus `Command`.
+ * wire name.
  */
-const OPERATION_NAMES: Record<string, string> = {
+// deno-lint-ignore ban-types
+const OPERATION_BY_CLASS = new Map<Function, string>([
+  [PutCommand, "PutItem"],
+  [GetCommand, "GetItem"],
+  [UpdateCommand, "UpdateItem"],
+  [DeleteCommand, "DeleteItem"],
+  [QueryCommand, "Query"],
+  [ScanCommand, "Scan"],
+  [BatchGetCommand, "BatchGetItem"],
+  [BatchWriteCommand, "BatchWriteItem"],
+  [DescribeTableCommand, "DescribeTable"],
+  [CreateTableCommand, "CreateTable"],
+  [UpdateTimeToLiveCommand, "UpdateTimeToLive"],
+]);
+
+/**
+ * Name-keyed fallback, for a command built from a different copy of the SDK or
+ * a test double that is not one of the classes above.
+ */
+const OPERATION_BY_NAME: Record<string, string> = {
   PutCommand: "PutItem",
   GetCommand: "GetItem",
   UpdateCommand: "UpdateItem",
@@ -124,9 +179,14 @@ const OPERATION_NAMES: Record<string, string> = {
 };
 
 export function operationName(command: unknown): string {
+  const ctor = (command as { constructor?: unknown })?.constructor;
+  if (typeof ctor === "function") {
+    const byClass = OPERATION_BY_CLASS.get(ctor);
+    if (byClass) return byClass;
+  }
   const className = (command as { constructor?: { name?: string } })
     ?.constructor?.name ?? "Unknown";
-  return OPERATION_NAMES[className] ??
+  return OPERATION_BY_NAME[className] ??
     (className.endsWith("Command")
       ? className.slice(0, -"Command".length)
       : className);
@@ -173,6 +233,7 @@ export function instrumentClient<C extends object>(client: C): C {
           [Attr.RPC_SYSTEM]: "aws-api",
           [Attr.RPC_SERVICE]: "DynamoDB",
           [Attr.RPC_METHOD]: op,
+          [Attr.DB_SYSTEM]: "dynamodb",
           ...(input?.TableName
             ? { [Attr.AWS_DYNAMODB_TABLE_NAMES]: [input.TableName] }
             : {}),

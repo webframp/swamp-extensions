@@ -10,8 +10,7 @@
  */
 
 import { z } from "npm:zod@4.4.3";
-import { Attr, recordRetry, withSpan } from "./_lib/tracing.ts";
-import { SpanStatusCode } from "npm:@opentelemetry/api@1.9.0";
+import { Attr, recordRetry, SpanStatusCode, withSpan } from "./_lib/tracing.ts";
 
 /**
  * Domain interfaces mirrored from swamp core.
@@ -263,7 +262,7 @@ class GitLabStateClient {
     opts?: { stateName?: string; expected?: number[] },
   ): Promise<Response> {
     return withSpan(`GitLab ${op}`, {
-      [Attr.RPC_SYSTEM]: "http",
+      [Attr.RPC_SYSTEM]: "gitlab",
       [Attr.RPC_SERVICE]: "GitLab",
       [Attr.RPC_METHOD]: op,
       [Attr.HTTP_REQUEST_METHOD]: init.method ?? "GET",
@@ -1100,11 +1099,14 @@ class GitLabSyncService implements TwoPhaseSyncService {
 
       // GitLab states have no delete-on-push path, so files_deleted is always
       // zero here — recorded anyway so the attribute set matches the other
-      // datastore extensions.
+      // datastore extensions. There is no short-circuit in this method, so
+      // fast_path_hit is deliberately not set: in the sibling extensions it
+      // means "no work was done", and reporting it for a dirty-path push that
+      // uploaded files would make it mean two different things.
       span.setAttributes({
         [Attr.DATASTORE_FILES_PUSHED]: count,
         [Attr.DATASTORE_FILES_DELETED]: 0,
-        [Attr.DATASTORE_FAST_PATH_HIT]: useDirtyPaths,
+        [Attr.DATASTORE_DIRTY_PATH_MODE]: useDirtyPaths,
       });
       return count;
     });

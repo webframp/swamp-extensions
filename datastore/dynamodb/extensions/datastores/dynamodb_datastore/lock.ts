@@ -11,6 +11,7 @@ import {
 import { lockKey } from "./keys.ts";
 import {
   Attr,
+  detached,
   instrumentClient,
   recordRetry,
   withSpan,
@@ -148,12 +149,16 @@ export function createDynamoLock(
             );
             nonce = candidateNonce;
             const acquiredNonce = candidateNonce;
-            heartbeatId = setInterval(async () => {
-              try {
-                await renewLock(acquiredNonce);
-              } catch {
-                // Connection lost or lock lost — lock will expire via expiresAtMs check
-              }
+            heartbeatId = setInterval(() => {
+              // Detached so the renewal span is its own trace rather than a
+              // child of this acquire span, which has already ended by then.
+              detached(async () => {
+                try {
+                  await renewLock(acquiredNonce);
+                } catch {
+                  // Connection lost or lock lost — lock will expire via expiresAtMs check
+                }
+              });
             }, ttlMs / 3);
             Deno.unrefTimer(heartbeatId);
             span.setAttributes({

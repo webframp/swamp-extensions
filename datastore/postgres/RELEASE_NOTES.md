@@ -16,10 +16,10 @@ operation — both the transient-error backoff in `retryable` and the lock
 contention loop.
 
 **Changed:** `pushChanged` now reports `datastore.files_pushed` and
-`datastore.files_deleted` separately. The internal push helpers previously
-returned a single count covering writes and tombstones together; reporting that
-as a file count would have overstated pushes whenever tombstones were involved.
-The value returned to callers is unchanged.
+`datastore.files_deleted` separately, and `pullChanged` likewise separates
+downloads from local deletions. The internal counters increment for both writes
+and tombstones, so reporting either as a file count would have overstated it.
+The values returned to callers are unchanged.
 
 **Changed:** Nothing else observable without tracing configured. The extension
 depends on `@opentelemetry/api` only; the host process owns the

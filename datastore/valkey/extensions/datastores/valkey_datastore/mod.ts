@@ -21,6 +21,7 @@ import {
   Attr,
   commandSpan,
   pipelineSpan,
+  recordPipelineResults,
   recordRetry,
   withSpan,
 } from "./_lib/tracing.ts";
@@ -509,8 +510,9 @@ function createSyncService(
     paths: string[],
     metadataOnly: boolean,
     signal?: AbortSignal,
-  ): Promise<number> {
+  ): Promise<{ changes: number; skipped: number }> {
     let changes = 0;
+    let skipped = 0;
     const BATCH = 100;
 
     for (let i = 0; i < paths.length; i += BATCH) {
@@ -525,15 +527,27 @@ function createSyncService(
       const metaResults = await pipelineSpan(
         "fetchMetadata",
         batch.length,
-        () => pipeline.exec(),
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
       );
-      if (!metaResults) continue;
+      if (!metaResults) {
+        skipped += batch.length;
+        continue;
+      }
 
       for (let j = 0; j < batch.length; j++) {
         signal?.throwIfAborted();
         const relPath = batch[j];
         const [err, meta] = metaResults[j];
-        if (err || !meta || typeof meta !== "object") continue;
+        if (err || !meta || typeof meta !== "object") {
+          // A metadata read that failed is not a file that was up to date —
+          // count it so pullChanged can report an incomplete pull.
+          skipped++;
+          continue;
+        }
 
         const remoteMeta = meta as Record<string, string>;
 
@@ -556,7 +570,7 @@ function createSyncService(
 
         // Fetch blob
         const blobData = await commandSpan(
-          "GETBUFFER",
+          "GET",
           blobKey(prefix, relPath),
           () => redis.getBuffer(blobKey(prefix, relPath)),
         );
@@ -567,7 +581,7 @@ function createSyncService(
       }
     }
 
-    return changes;
+    return { changes, skipped };
   }
 
   async function collectFullWalkDiff(
@@ -597,7 +611,11 @@ function createSyncService(
         const results = await pipelineSpan(
           "fetchHashes",
           batch.length,
-          () => pipeline.exec(),
+          async (span) => {
+            const r = await pipeline.exec();
+            recordPipelineResults(span, r);
+            return r;
+          },
         );
         if (results) {
           for (let j = 0; j < batch.length; j++) {
@@ -709,7 +727,11 @@ function createSyncService(
       const results = await pipelineSpan(
         "fetchHashes",
         remotePaths.length,
-        () => pipeline.exec(),
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
       );
       if (results) {
         for (let i = 0; i < remotePaths.length; i++) {
@@ -768,7 +790,11 @@ function createSyncService(
       const results = await pipelineSpan(
         "writeFiles",
         batch.length * CMDS_PER_FILE,
-        () => pipeline.exec(),
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
       );
       if (results) {
         for (let j = 0; j < batch.length; j++) {
@@ -797,7 +823,11 @@ function createSyncService(
       const delResults = await pipelineSpan(
         "deleteFiles",
         toDelete.length * CMDS_PER_FILE,
-        () => pipeline.exec(),
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
       );
       if (delResults) {
         for (let j = 0; j < toDelete.length; j++) {
@@ -870,7 +900,11 @@ function createSyncService(
           [Attr.DATASTORE_TRUNCATED]: result.truncated,
         });
 
-        const changes = await pullFiles(result.paths, metadataOnly, signal);
+        const { changes, skipped } = await pullFiles(
+          result.paths,
+          metadataOnly,
+          signal,
+        );
 
         // Only advance seq on unscoped full pulls. Advancing on scoped pulls
         // would cause a subsequent full pull to skip changes outside the scope.
@@ -882,6 +916,7 @@ function createSyncService(
         span.setAttributes({
           [Attr.DATASTORE_FAST_PATH_HIT]: false,
           [Attr.DATASTORE_FILES_PULLED]: changes,
+          [Attr.DATASTORE_FILES_SKIPPED]: skipped,
         });
         return changes;
       });
@@ -970,7 +1005,7 @@ function createSyncService(
           return false;
         }
         const blobData = await commandSpan(
-          "GETBUFFER",
+          "GET",
           blobKey(prefix, relPath),
           () => redis.getBuffer(blobKey(prefix, relPath)),
         );

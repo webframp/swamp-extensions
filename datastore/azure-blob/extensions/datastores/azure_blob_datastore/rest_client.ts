@@ -229,9 +229,12 @@ async function getServicePrincipalToken(
     });
     span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, resp.status);
     if (!resp.ok) {
-      const errBody = await resp.text();
+      // The response body is deliberately dropped rather than interpolated
+      // into the message. withSpan records error.message via setStatus and
+      // recordException, so anything in the message reaches the trace backend
+      // — and this is the AAD token endpoint's raw response.
       throw new Error(
-        `Azure token exchange failed (${resp.status}): ${errBody}`,
+        `Azure token exchange failed (${resp.status} ${resp.statusText})`,
       );
     }
     const data = await resp.json() as {

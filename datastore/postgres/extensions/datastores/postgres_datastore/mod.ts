@@ -103,7 +103,14 @@ function buildSslConfig(
   return "require";
 }
 
-function createPostgresLock(
+/**
+ * Builds a row-based distributed lock over the given connection.
+ *
+ * Exported for tests: the lock is otherwise reachable only through
+ * `createProvider`, which opens its own real connection, so its spans could
+ * not be asserted anywhere a database is unavailable.
+ */
+export function createPostgresLock(
   sql: postgres.Sql,
   locksTable: string,
   datastorePath: string,

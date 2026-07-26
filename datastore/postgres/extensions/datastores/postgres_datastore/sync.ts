@@ -242,7 +242,9 @@ export function createSyncService(
     prefixes?: string[];
     metadataOnly?: boolean;
     signal?: AbortSignal;
-  }): Promise<{ changes: number; fastPath: boolean }> {
+  }): Promise<
+    { changes: number; pulled: number; deleted: number; fastPath: boolean }
+  > {
     const pullStart = performance.now();
     await ready();
     const prefixes = opts?.prefixes;
@@ -286,7 +288,7 @@ export function createSyncService(
           const dbPushedAt = String(stateRow.value);
           if (new Date(dbPushedAt) <= new Date(state.lastPulledAt)) {
             trace.summary("pull", 0, { files: 0, skipped: "no_changes" });
-            return { changes: 0, fastPath: true };
+            return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
           }
         }
       } catch {
@@ -325,6 +327,8 @@ export function createSyncService(
     signal?.throwIfAborted();
 
     let changes = 0;
+    let deleted = 0;
+    let pulled = 0;
     const needContent: string[] = [];
 
     for (const row of metaRows) {
@@ -336,6 +340,7 @@ export function createSyncService(
         try {
           await Deno.remove(`${cachePath}/${relPath}`);
           changes++;
+          deleted++;
         } catch (err) {
           if (!(err instanceof Deno.errors.NotFound)) throw err;
         }
@@ -378,6 +383,7 @@ export function createSyncService(
         const content = row.content as Uint8Array;
         await writeFileAtomic(`${cachePath}/${relPath}`, content);
         changes++;
+        pulled++;
       }
     }
     contentFetchDone();
@@ -393,7 +399,7 @@ export function createSyncService(
       fetched: needContent.length,
     });
 
-    return { changes, fastPath: false };
+    return { changes, pulled, deleted, fastPath: false };
   }
 
   async function collectFullWalkDiff(
@@ -502,7 +508,7 @@ export function createSyncService(
         "fullWalkPushTransaction",
         "TRANSACTION",
         filesTable,
-        async (span) => {
+        async () => {
           let count = 0;
           await sql.begin(async (tx) => {
             // Batch upsert files
@@ -531,10 +537,6 @@ export function createSyncService(
            VALUES ('last_pushed_at', to_jsonb(now()::text), now())
            ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
             );
-          });
-          span.setAttributes({
-            [Attr.DATASTORE_FILES_PUSHED]: toPush.length,
-            [Attr.DATASTORE_FILES_DELETED]: toTombstone.length,
           });
           return count;
         },
@@ -671,7 +673,7 @@ export function createSyncService(
         "scopedPushTransaction",
         "TRANSACTION",
         filesTable,
-        async (span) => {
+        async () => {
           let count = 0;
           await sql.begin(async (tx) => {
             for (const f of toPush) {
@@ -698,10 +700,6 @@ export function createSyncService(
            VALUES ('last_pushed_at', to_jsonb(now()::text), now())
            ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
             );
-          });
-          span.setAttributes({
-            [Attr.DATASTORE_FILES_PUSHED]: toPush.length,
-            [Attr.DATASTORE_FILES_DELETED]: toTombstone.length,
           });
           return count;
         },
@@ -731,13 +729,16 @@ export function createSyncService(
         [Attr.DATASTORE_SCOPED]: scoped,
         [Attr.DATASTORE_METADATA_ONLY]: options?.metadataOnly === true,
       }, async (span) => {
-        const { changes, fastPath } = await pull({
+        const { changes, pulled, deleted, fastPath } = await pull({
           prefixes: scoped ? prefixes : undefined,
           metadataOnly: options?.metadataOnly,
           signal: options?.signal,
         });
+        // `changes` counts local deletions alongside downloads, so the two are
+        // reported separately rather than both landing on files_pulled.
         span.setAttributes({
-          [Attr.DATASTORE_FILES_PULLED]: changes,
+          [Attr.DATASTORE_FILES_PULLED]: pulled,
+          [Attr.DATASTORE_FILES_DELETED]: deleted,
           [Attr.DATASTORE_FAST_PATH_HIT]: fastPath,
         });
         return changes;
@@ -968,7 +969,7 @@ export function createSyncService(
             "commitPushTransaction",
             "TRANSACTION",
             filesTable,
-            async (txSpan) => {
+            async () => {
               let count = 0;
               await sql.begin(async (tx) => {
                 for (const f of internal.toPush) {
@@ -997,10 +998,6 @@ export function createSyncService(
              VALUES ('last_pushed_at', to_jsonb(now()::text), now())
              ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
                 );
-              });
-              txSpan.setAttributes({
-                [Attr.DATASTORE_FILES_PUSHED]: internal.toPush.length,
-                [Attr.DATASTORE_FILES_DELETED]: internal.toTombstone.length,
               });
               return count;
             },

@@ -15,6 +15,13 @@ remote sequence number, and fast-path indicators.
 **Added:** Lock contention retries are recorded as `retry` span events on the
 acquire span.
 
+**Added:** Pipeline spans report `valkey.pipeline.failed_commands` and are
+marked as errors when any command in the batch failed. `pipeline.exec()`
+resolves with per-command errors rather than rejecting, so a partially failed
+batch would otherwise have left a span reporting success. `pullChanged` also
+reports `datastore.files_skipped` for paths whose metadata read failed, which
+were previously dropped silently.
+
 **Changed:** `pushChanged` and `commitPush` now report
 `datastore.files_pushed` and `datastore.files_deleted` separately. `applyChanges`
 returns a single count covering writes and deletes together, and reporting that

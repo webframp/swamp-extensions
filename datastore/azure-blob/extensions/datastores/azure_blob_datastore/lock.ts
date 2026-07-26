@@ -4,7 +4,7 @@
 
 import type { BlobClient, BlobResponse } from "./rest_client.ts";
 import { retryableRequest } from "./_lib/retry.ts";
-import { Attr, recordRetry, withSpan } from "./_lib/tracing.ts";
+import { Attr, detached, recordRetry, withSpan } from "./_lib/tracing.ts";
 
 export interface LockInfo {
   holder: string;
@@ -182,12 +182,16 @@ export function createBlobLock(
             throw err;
           }
           leaseId = acquiredId;
-          heartbeatId = setInterval(async () => {
-            try {
-              await leaseAction(client, path, "renew", acquiredId);
-            } catch {
-              // Connection lost or lease lost — lease will expire via its fixed duration
-            }
+          heartbeatId = setInterval(() => {
+            // Detached so the renewal span is its own trace rather than a
+            // child of this acquire span, which has already ended by then.
+            detached(async () => {
+              try {
+                await leaseAction(client, path, "renew", acquiredId);
+              } catch {
+                // Connection lost or lease lost — lease will expire via its fixed duration
+              }
+            });
           }, (leaseSeconds * 1000) / 3);
           Deno.unrefTimer(heartbeatId);
           span.setAttributes({

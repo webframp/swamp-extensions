@@ -46,6 +46,7 @@ export const Attr = {
   DATASTORE_FILES_PLANNED_PUSH: "datastore.files_planned_push",
   DATASTORE_FILES_PLANNED_DELETE: "datastore.files_planned_delete",
   DATASTORE_FAST_PATH_HIT: "datastore.fast_path_hit",
+  DATASTORE_DIRTY_PATH_MODE: "datastore.dirty_path_mode",
   DATASTORE_SCOPED: "datastore.scoped",
   DATASTORE_METADATA_ONLY: "datastore.metadata_only",
   DATASTORE_HYDRATED: "datastore.hydrated",
@@ -78,6 +79,9 @@ export async function withSpan<T>(
     }
   });
 }
+
+/** Re-exported so call sites need only import from this module. */
+export { SpanStatusCode };
 
 /**
  * Records a retry as an event on whichever span is currently active.

@@ -20,6 +20,11 @@ from `getLockInfo` meaning the state is unlocked. This client inspects
 `response.status` by hand rather than throwing, so without the distinction a
 span would have reported success on a 500.
 
+**Changed:** `pushChanged` records `datastore.dirty_path_mode` rather than
+`datastore.fast_path_hit`. In the sibling extensions `fast_path_hit` means no
+work was done; this method has no short-circuit, and a dirty-path push that
+uploads files is not a fast path.
+
 **Changed:** Nothing observable without tracing configured. The extension
 depends on `@opentelemetry/api` only; the host process owns the
 TracerProvider, and every span is a no-op when none is registered. Existing

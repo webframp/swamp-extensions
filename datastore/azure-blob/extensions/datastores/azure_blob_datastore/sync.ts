@@ -394,7 +394,9 @@ export function createSyncService(
     prefixes?: string[];
     metadataOnly?: boolean;
     signal?: AbortSignal;
-  }): Promise<{ changes: number; fastPath: boolean }> {
+  }): Promise<
+    { changes: number; pulled: number; deleted: number; fastPath: boolean }
+  > {
     const prefixes = opts?.prefixes;
     const metadataOnly = opts?.metadataOnly === true;
     const scoped = prefixes !== undefined && prefixes.length > 0;
@@ -408,7 +410,7 @@ export function createSyncService(
       if (
         lastPushedAt && new Date(lastPushedAt) <= new Date(state.lastPulledAt)
       ) {
-        return { changes: 0, fastPath: true };
+        return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
       }
     }
 
@@ -426,6 +428,8 @@ export function createSyncService(
     }
 
     let changes = 0;
+    let deleted = 0;
+    let pulled = 0;
     const needContent: string[] = [];
     for (const [relPath, meta] of entries) {
       signal?.throwIfAborted();
@@ -434,6 +438,7 @@ export function createSyncService(
         try {
           await Deno.remove(`${cachePath}/${relPath}`);
           changes++;
+          deleted++;
         } catch (err) {
           if (!(err instanceof Deno.errors.NotFound)) throw err;
         }
@@ -453,6 +458,7 @@ export function createSyncService(
         const bytes = await fetchContent(relPath);
         await writeFileAtomic(`${cachePath}/${relPath}`, bytes);
         changes++;
+        pulled++;
       }
     }
 
@@ -461,7 +467,7 @@ export function createSyncService(
       await sidecar.setLazyPullActive(false);
     }
 
-    return { changes, fastPath: false };
+    return { changes, pulled, deleted, fastPath: false };
   }
 
   async function collectDiff(
@@ -584,13 +590,16 @@ export function createSyncService(
         [Attr.DATASTORE_SCOPED]: scoped,
         [Attr.DATASTORE_METADATA_ONLY]: options?.metadataOnly === true,
       }, async (span) => {
-        const { changes, fastPath } = await pull({
+        const { changes, pulled, deleted, fastPath } = await pull({
           prefixes: scoped ? prefixes : undefined,
           metadataOnly: options?.metadataOnly,
           signal: options?.signal,
         });
+        // `changes` counts local deletions alongside downloads, so the two are
+        // reported separately rather than both landing on files_pulled.
         span.setAttributes({
-          [Attr.DATASTORE_FILES_PULLED]: changes,
+          [Attr.DATASTORE_FILES_PULLED]: pulled,
+          [Attr.DATASTORE_FILES_DELETED]: deleted,
           [Attr.DATASTORE_FAST_PATH_HIT]: fastPath,
         });
         return changes;
