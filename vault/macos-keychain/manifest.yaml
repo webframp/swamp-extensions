@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/macos-keychain"
-version: "2026.07.26.1"
-description: "macOS Keychain vault using the security CLI"
+version: "2026.07.26.2"
+description: "macOS Keychain vault using the security CLI. Emits OpenTelemetry spans for get, put, and list so vault reads are visible in traces, including reads during model and workflow runs where the host emits nothing. Span attributes carry the vault name, key name, and keychain service only — never secret values, argv, or error messages."
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:
   - keychain.ts
@@ -18,3 +18,5 @@ labels:
   - macos
   - apple
   - security
+  - opentelemetry
+  - observability

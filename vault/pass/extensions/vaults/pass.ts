@@ -10,6 +10,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
+import {
+  Attr,
+  recordCount,
+  redactSecret,
+  type VaultSpanAttributes,
+  withVaultSpan,
+} from "./_lib/tracing.ts";
 
 /**
  * Environment variables forwarded to the `pass` subprocess.
@@ -200,7 +207,11 @@ export const vault = {
       const { code, stdout, stderr } = await proc.output();
 
       if (code !== 0) {
-        const errMsg = new TextDecoder().decode(stderr).trim();
+        let errMsg = new TextDecoder().decode(stderr).trim();
+        // On `insert` the secret went in on stdin, and a CLI that rejects a
+        // value can quote it back. The host publishes thrown messages to the
+        // trace backend, so strip the value we know we sent.
+        if (stdin) errMsg = redactSecret(errMsg, stdin);
         throw new Error(errMsg || `pass command failed with code ${code}`);
       }
 
@@ -212,62 +223,96 @@ export const vault = {
       return prefix ? `${prefix}/${key}` : key;
     };
 
+    const spanAttributes = (
+      method: string,
+      key?: string,
+    ): VaultSpanAttributes => {
+      const attrs: VaultSpanAttributes = {
+        [Attr.VAULT_NAME]: name,
+        [Attr.RPC_SYSTEM]: "pass",
+        [Attr.RPC_SERVICE]: "@webframp/pass",
+        [Attr.RPC_METHOD]: method,
+      };
+      if (prefix) attrs[Attr.VAULT_PREFIX] = prefix;
+      if (key !== undefined) attrs[Attr.VAULT_SECRET_KEY] = key;
+      return attrs;
+    };
+
     return {
-      get: async (key: string): Promise<string> => {
-        return await runPass(["show", prefixKey(key)]);
+      get: (key: string): Promise<string> => {
+        return withVaultSpan(
+          "pass get",
+          spanAttributes("get", key),
+          async () => await runPass(["show", prefixKey(key)]),
+        );
       },
 
-      put: async (key: string, value: string): Promise<void> => {
-        // Use -m for multiline and -f to force overwrite
-        await runPass(["insert", "-m", "-f", prefixKey(key)], value);
+      put: (key: string, value: string): Promise<void> => {
+        return withVaultSpan(
+          "pass put",
+          spanAttributes("put", key),
+          async () => {
+            // Use -m for multiline and -f to force overwrite
+            await runPass(["insert", "-m", "-f", prefixKey(key)], value);
+          },
+        );
       },
 
-      list: async (): Promise<string[]> => {
-        // Find all .gpg files and convert to key names
-        const cmd = new Deno.Command("find", {
-          args: [
-            storeDir,
-            "-not",
-            "-path",
-            "*/.git/*",
-            "-not",
-            "-path",
-            "*/.extensions/*",
-            "-name",
-            "*.gpg",
-            "-type",
-            "f",
-          ],
-          // `find` gets the same narrowed environment as `pass`. It needs none
-          // of it, but leaving one subprocess inheriting the parent env while
-          // narrowing the other defeats the point.
-          env: buildEnv(storeDir, parsed.extraEnv),
-          clearEnv: true,
-          stdout: "piped",
-          stderr: "piped",
+      list: (): Promise<string[]> => {
+        return withVaultSpan("pass list", spanAttributes("list"), async () => {
+          // Find all .gpg files and convert to key names
+          const cmd = new Deno.Command("find", {
+            args: [
+              storeDir,
+              "-not",
+              "-path",
+              "*/.git/*",
+              "-not",
+              "-path",
+              "*/.extensions/*",
+              "-name",
+              "*.gpg",
+              "-type",
+              "f",
+            ],
+            // `find` gets the same narrowed environment as `pass`. It needs none
+            // of it, but leaving one subprocess inheriting the parent env while
+            // narrowing the other defeats the point.
+            env: buildEnv(storeDir, parsed.extraEnv),
+            clearEnv: true,
+            stdout: "piped",
+            stderr: "piped",
+          });
+
+          const { code, stdout } = await cmd.output();
+
+          if (code !== 0) {
+            recordCount(Attr.VAULT_KEYS_RETURNED, 0);
+            return [];
+          }
+
+          const output = new TextDecoder().decode(stdout).trim();
+          if (!output) {
+            recordCount(Attr.VAULT_KEYS_RETURNED, 0);
+            return [];
+          }
+
+          // Convert file paths to pass key names
+          // e.g., /home/user/.password-store/swamp/foo.gpg -> foo
+          const dirPrefix = storeDir.endsWith("/") ? storeDir : `${storeDir}/`;
+          const keyPrefix = prefix ? `${prefix}/` : "";
+
+          const keys = output
+            .split("\n")
+            .filter(Boolean)
+            .map((path) => path.replace(dirPrefix, "").replace(/\.gpg$/, ""))
+            .filter((key) => key.startsWith(keyPrefix))
+            .map((key) => key.slice(keyPrefix.length))
+            .sort();
+
+          recordCount(Attr.VAULT_KEYS_RETURNED, keys.length);
+          return keys;
         });
-
-        const { code, stdout } = await cmd.output();
-
-        if (code !== 0) {
-          return [];
-        }
-
-        const output = new TextDecoder().decode(stdout).trim();
-        if (!output) return [];
-
-        // Convert file paths to pass key names
-        // e.g., /home/user/.password-store/swamp/foo.gpg -> foo
-        const dirPrefix = storeDir.endsWith("/") ? storeDir : `${storeDir}/`;
-        const keyPrefix = prefix ? `${prefix}/` : "";
-
-        return output
-          .split("\n")
-          .filter(Boolean)
-          .map((path) => path.replace(dirPrefix, "").replace(/\.gpg$/, ""))
-          .filter((key) => key.startsWith(keyPrefix))
-          .map((key) => key.slice(keyPrefix.length))
-          .sort();
       },
 
       getName: (): string => name,

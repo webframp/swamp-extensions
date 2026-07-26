@@ -10,6 +10,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
+import {
+  Attr,
+  recordCount,
+  redactSecret,
+  type VaultSpanAttributes,
+  withVaultSpan,
+} from "./_lib/tracing.ts";
 
 /**
  * Removes the single trailing newline a CLI adds when it prints a value.
@@ -125,53 +132,97 @@ export const vault = {
       const { code, stdout, stderr } = await proc.output();
 
       if (code !== 0) {
-        const errMsg = new TextDecoder().decode(stderr).trim();
+        let errMsg = new TextDecoder().decode(stderr).trim();
+        // On `insert` the secret went in on stdin, and a CLI that rejects a
+        // value can quote it back. The host publishes thrown messages to the
+        // trace backend, so strip the value we know we sent.
+        if (stdin) errMsg = redactSecret(errMsg, stdin);
         throw new Error(errMsg || `gopass command failed with code ${code}`);
       }
 
       return stripTrailingNewline(new TextDecoder().decode(stdout));
     };
 
+    const spanAttributes = (
+      method: string,
+      key?: string,
+    ): VaultSpanAttributes => {
+      const attrs: VaultSpanAttributes = {
+        [Attr.VAULT_NAME]: name,
+        [Attr.RPC_SYSTEM]: "gopass",
+        [Attr.RPC_SERVICE]: "@webframp/gopass",
+        [Attr.RPC_METHOD]: method,
+      };
+      if (parsed.store) attrs[Attr.VAULT_STORE] = parsed.store;
+      if (key !== undefined) attrs[Attr.VAULT_SECRET_KEY] = key;
+      return attrs;
+    };
+
     return {
-      get: async (key: string): Promise<string> => {
-        const path = secretPath(key);
-        // -o returns only the password (first line); -n is --noparsing, which
-        // stops gopass from interpreting the secret as YAML or key-value pairs.
-        // Neither flag suppresses the trailing newline, which is why the output
-        // still goes through stripTrailingNewline.
-        const args = parsed.passwordOnly
-          ? ["show", "-o", "-n", path]
-          : ["show", "-n", path];
-        return await runGopass(args);
+      get: (key: string): Promise<string> => {
+        return withVaultSpan(
+          "gopass get",
+          spanAttributes("get", key),
+          async () => {
+            const path = secretPath(key);
+            // -o returns only the password (first line); -n is --noparsing,
+            // which stops gopass from interpreting the secret as YAML or
+            // key-value pairs. Neither flag suppresses the trailing newline,
+            // which is why the output still goes through stripTrailingNewline.
+            const args = parsed.passwordOnly
+              ? ["show", "-o", "-n", path]
+              : ["show", "-n", path];
+            return await runGopass(args);
+          },
+        );
       },
 
-      put: async (key: string, value: string): Promise<void> => {
-        const path = secretPath(key);
-        // Use --force to overwrite existing secrets
-        await runGopass(["insert", "--force", "--multiline", path], value);
+      put: (key: string, value: string): Promise<void> => {
+        return withVaultSpan(
+          "gopass put",
+          spanAttributes("put", key),
+          async () => {
+            const path = secretPath(key);
+            // Use --force to overwrite existing secrets
+            await runGopass(
+              ["insert", "--force", "--multiline", path],
+              value,
+            );
+          },
+        );
       },
 
-      list: async (): Promise<string[]> => {
-        // gopass list --flat gives us a clean newline-separated list
-        const args = parsed.store
-          ? ["list", "--flat", parsed.store]
-          : ["list", "--flat"];
+      list: (): Promise<string[]> => {
+        return withVaultSpan(
+          "gopass list",
+          spanAttributes("list"),
+          async () => {
+            // gopass list --flat gives us a clean newline-separated list
+            const args = parsed.store
+              ? ["list", "--flat", parsed.store]
+              : ["list", "--flat"];
 
-        const output = await runGopass(args);
+            const output = await runGopass(args);
 
-        if (!output) return [];
+            if (!output) {
+              recordCount(Attr.VAULT_KEYS_RETURNED, 0);
+              return [];
+            }
 
-        let keys = output.split("\n").filter(Boolean);
+            let keys = output.split("\n").filter(Boolean);
 
-        // If using a store prefix, the keys already include it - strip it
-        if (parsed.store) {
-          const prefix = `${parsed.store}/`;
-          keys = keys.map((k) =>
-            k.startsWith(prefix) ? k.slice(prefix.length) : k
-          );
-        }
+            // If using a store prefix, the keys already include it - strip it
+            if (parsed.store) {
+              const prefix = `${parsed.store}/`;
+              keys = keys.map((k) =>
+                k.startsWith(prefix) ? k.slice(prefix.length) : k
+              );
+            }
 
-        return keys.sort();
+            recordCount(Attr.VAULT_KEYS_RETURNED, keys.length);
+            return keys.sort();
+          },
+        );
       },
 
       getName: (): string => name,

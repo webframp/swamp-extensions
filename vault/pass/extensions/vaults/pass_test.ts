@@ -7,6 +7,18 @@ import {
   assertThrows,
 } from "jsr:@std/assert@1.0.19";
 import {
+  context as otelContext,
+  SpanStatusCode,
+  trace as otelTrace,
+} from "npm:@opentelemetry/api@1.9.0";
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  type ReadableSpan,
+  SimpleSpanProcessor,
+} from "npm:@opentelemetry/sdk-trace-base@2.10.0";
+import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.10.0";
+import {
   assertVaultConformance,
   assertVaultExportConformance,
 } from "@systeminit/swamp-testing";
@@ -60,6 +72,14 @@ Deno.test("createProvider throws on invalid storeDir type", () => {
 
 const mockSecrets = new Map<string, string>();
 const OriginalCommand = Deno.Command;
+
+/**
+ * When set, `insert` fails and quotes the submitted value back on stderr.
+ *
+ * That is the shape that turns a CLI error into a secret disclosure, since the
+ * swamp host publishes thrown error messages to the trace backend.
+ */
+let insertEchoesValueOnFailure = false;
 /** Options handed to the most recent subprocess, for environment assertions. */
 interface CapturedOptions {
   command: string;
@@ -127,7 +147,15 @@ class MockCommand {
       }
       if (sub === "insert") {
         const key = this.#args[3]; // ["insert", "-m", "-f", key]
-        mockSecrets.set(key, this.#stdinData ?? "");
+        const value = this.#stdinData ?? "";
+        if (insertEchoesValueOnFailure) {
+          return {
+            code: 1,
+            stdout: new Uint8Array(),
+            stderr: enc.encode(`pass: rejected value: ${value}`),
+          };
+        }
+        mockSecrets.set(key, value);
         return {
           code: 0,
           stdout: new Uint8Array(),
@@ -202,6 +230,7 @@ class MockCommand {
 
 async function withMockedPass<T>(fn: () => Promise<T>): Promise<T> {
   mockSecrets.clear();
+  insertEchoesValueOnFailure = false;
   // deno-lint-ignore no-explicit-any
   (Deno as any).Command = MockCommand;
   try {
@@ -540,4 +569,187 @@ Deno.test({
       await Deno.remove(tmp, { recursive: true });
     }
   },
+});
+
+// ---------------------------------------------------------------------------
+// OpenTelemetry spans
+//
+// The absence assertions matter as much as the presence ones: a span that
+// reports a successful read while carrying the secret it read is worse than no
+// span at all.
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs `fn` with a TracerProvider installed and returns the spans it produced.
+ *
+ * The flush-then-yield before teardown is not decoration: InMemorySpanExporter
+ * defers its export callback through a timer, and Deno's test sanitizer reports
+ * that timer as a leak if the provider is torn down first.
+ */
+async function withSpans(fn: () => Promise<void>): Promise<ReadableSpan[]> {
+  const exporter = new InMemorySpanExporter();
+  const provider = new BasicTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  });
+  const ctxManager = new AsyncLocalStorageContextManager().enable();
+  otelContext.setGlobalContextManager(ctxManager);
+  otelTrace.setGlobalTracerProvider(provider);
+  try {
+    await fn();
+    await provider.forceFlush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return exporter.getFinishedSpans();
+  } finally {
+    await provider.forceFlush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    otelTrace.disable();
+    otelContext.disable();
+    ctxManager.disable();
+    await provider.shutdown();
+  }
+}
+
+function attrKeys(span: ReadableSpan): string[] {
+  return Object.keys(span.attributes).sort();
+}
+
+function spanNamed(spans: ReadableSpan[], name: string): ReadableSpan {
+  const found = spans.find((s) => s.name === name);
+  if (!found) {
+    throw new Error(
+      `no span named "${name}"; got ${spans.map((s) => s.name).join(", ")}`,
+    );
+  }
+  return found;
+}
+
+/** Everything a span could carry, flattened for canary searching. */
+function spanText(span: ReadableSpan): string {
+  return JSON.stringify({
+    name: span.name,
+    attributes: span.attributes,
+    status: span.status,
+    events: span.events,
+    links: span.links,
+  });
+}
+
+Deno.test("otel: get emits a span with the documented attribute set", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("app-secrets", {
+        storeDir: "/tmp/store",
+      });
+      mockSecrets.set("swamp/db/password", "s3cret");
+      assertEquals(await provider.get("db/password"), "s3cret");
+    })
+  );
+
+  const span = spanNamed(spans, "pass get");
+  assertEquals(span.instrumentationScope.name, "@webframp/pass");
+  assertEquals(attrKeys(span), [
+    "rpc.method",
+    "rpc.service",
+    "rpc.system",
+    "vault.name",
+    "vault.prefix",
+    "vault.secret_key",
+  ]);
+  assertEquals(span.attributes["vault.name"], "app-secrets");
+  assertEquals(span.attributes["vault.prefix"], "swamp");
+  assertEquals(span.attributes["vault.secret_key"], "db/password");
+  assertEquals(span.attributes["rpc.system"], "pass");
+  assertEquals(span.status.code, SpanStatusCode.UNSET);
+});
+
+Deno.test("otel: an empty prefix is omitted rather than recorded blank", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("v", {
+        storeDir: "/tmp/store",
+        prefix: "",
+      });
+      mockSecrets.set("k", "v");
+      await provider.get("k");
+    })
+  );
+
+  assertEquals(
+    spanNamed(spans, "pass get").attributes["vault.prefix"],
+    undefined,
+  );
+});
+
+Deno.test("otel: put and list emit spans, list reports the key count", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      await provider.put("a", "SECRET-CANARY-9b31");
+      await provider.put("b", "another");
+      assertEquals(await provider.list(), ["a", "b"]);
+    })
+  );
+
+  assertEquals(spanNamed(spans, "pass put").attributes["rpc.method"], "put");
+  const list = spanNamed(spans, "pass list");
+  assertEquals(list.attributes["vault.keys_returned"], 2);
+  assertEquals(list.attributes["vault.secret_key"], undefined);
+
+  for (const s of spans) {
+    assertEquals(
+      spanText(s).includes("SECRET-CANARY-9b31"),
+      false,
+      `secret value present in span "${s.name}"`,
+    );
+  }
+});
+
+Deno.test("otel: a failed get is marked ERROR with a type and no message", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      await assertRejects(() => provider.get("missing"), Error);
+    })
+  );
+
+  const span = spanNamed(spans, "pass get");
+  assertEquals(span.status.code, SpanStatusCode.ERROR);
+  assertEquals(span.status.message, undefined);
+  assertEquals(span.attributes["error.type"], "Error");
+  assertEquals(span.events.length, 0);
+});
+
+Deno.test("otel: stderr echoing the submitted value does not leak it", async () => {
+  const secret = "SECRET-ECHOED-BY-CLI-7c4d";
+  let thrown: Error | undefined;
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      insertEchoesValueOnFailure = true;
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      thrown = await assertRejects(() => provider.put("k", secret), Error);
+    })
+  );
+
+  assertEquals(thrown?.message.includes(secret), false);
+  assertEquals(thrown?.message.includes("[redacted]"), true);
+  for (const s of spans) {
+    assertEquals(
+      spanText(s).includes(secret),
+      false,
+      `secret present in span "${s.name}"`,
+    );
+  }
+});
+
+Deno.test("otel: a rejected key is still recorded as a failed span", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      await assertRejects(() => provider.get("../escape"), Error);
+    })
+  );
+
+  const span = spanNamed(spans, "pass get");
+  assertEquals(span.status.code, SpanStatusCode.ERROR);
+  assertEquals(span.attributes["vault.secret_key"], "../escape");
 });

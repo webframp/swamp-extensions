@@ -1,20 +1,37 @@
-## 2026.07.26.1
+## 2026.07.26.2
 
-**Fixed:** Keys were interpolated into the request path unvalidated and
-unencoded, so `get("../../sys/health")` left the configured mount and reached a
-different Vault API entirely — `secret/data/../../sys/health` is not the secret
-the caller asked for. Keys containing `.` or `..` path segments, empty path
-segments (`a//b`, `trailing/`), absolute keys, and empty keys are now rejected.
+**Added:** OpenTelemetry spans on `get`, `put`, and `list`, plus one child span
+per HTTP request inside the recursive `list` walk. Span names are `Vault get`,
+`Vault put`, `Vault list`, and `Vault LIST` for the child requests. Attributes:
+`vault.name`, `vault.secret_key`, `vault.kv_version`, `rpc.system`,
+`rpc.service`, `rpc.method`, `vault.keys_returned` on `list`,
+`vault.truncated` on `list` when the depth or key cap stopped the walk, and
+`vault.list_depth` on each child request.
 
-**Fixed:** Key path segments are percent-encoded. A key containing a space, a
-`?`, or a `#` previously changed the request path or started a query string, so
-the secret written and the secret read back could be different entries.
+This closes a real observability gap rather than duplicating the host. swamp
+emits `swamp.vault.*` spans when a human runs a `swamp vault` subcommand, with
+no attributes at all — and emits **nothing** when a model or workflow resolves a
+vault expression. A secret read during a run was invisible in traces. These
+spans appear on both paths.
 
-**Fixed:** `list` built its recursive request paths from Vault's own directory
-names without encoding them, so a directory containing a `?` or `#` truncated
-the path and the keys beneath it were silently missed.
+The extension uses `@opentelemetry/api` only and never constructs a
+TracerProvider. With no provider configured the tracer is a no-op and the cost is
+a few property lookups.
 
-**Upgrade note:** If you store keys containing characters that require encoding
-and have been relying on the previous unencoded behaviour, the encoded path is
-a different Vault path. Read such secrets with the old version and re-write them
-with this one.
+**Changed:** Error messages no longer echo a submitted secret value. If Vault
+rejects a write and quotes the value back in its `errors` array, that value is
+replaced with `[redacted]` before the message is thrown. This matters because
+the swamp host publishes thrown error messages into its own span as a status
+description, an `exception.message`, and a stack trace — so an echoed value
+reached the trace backend regardless of what this extension recorded.
+
+**Changed:** `list` now reads and discards the response body on a 404 instead of
+dropping the `Response` unread, which leaked a connection per missing path.
+
+**Note on what spans deliberately omit:** spans record `error.type` and an ERROR
+status on failure, and never `recordException` and never a status description. A
+vault error message is built from output this extension does not control, and the
+host already publishes it once. Recording key names is intentional — a vault span
+without the key is close to useless for debugging — so treat key names as visible
+to anyone with access to your trace backend and do not encode sensitive
+information in them.

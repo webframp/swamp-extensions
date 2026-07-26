@@ -67,6 +67,37 @@ This extension runs only on macOS:
 - `darwin-x86_64`
 - `darwin-aarch64`
 
+## Observability
+
+The provider emits OpenTelemetry spans for every vault operation — `Keychain
+get`, `Keychain put`, and `Keychain list`. It uses `@opentelemetry/api` only and
+never configures a TracerProvider; the swamp host does that. With no provider
+configured the tracer is a no-op.
+
+Attributes: `vault.name`, `vault.secret_key`, `vault.service`, `rpc.system`,
+`rpc.service`, and `rpc.method`. `list` is unsupported by this provider, so its
+span reports ERROR — a caller asked for a listing and did not get one.
+
+These spans cover a case the host does not. swamp emits its own `swamp.vault.*`
+spans when you run a `swamp vault` subcommand, but they carry no attributes, and
+when a model or workflow resolves a vault expression the host emits no vault span
+at all — the read is invisible. The extension's spans appear on both paths.
+
+There is no span around the `security` invocation itself. `put` passes the secret
+as the `-w` argument, so keeping span code out of the exec helper means argv is
+never in scope where a span could record it. A test asserts the secret really is
+present in argv and absent from every span field.
+
+**What is never recorded:** secret values, argv, and error messages. On failure a
+span carries `error.type` and an ERROR status, nothing more. `recordException` is
+not used, because it publishes the message and stack of an error whose text is
+`security`'s stderr.
+
+**Key names are recorded.** `vault.secret_key` holds the key, because a vault
+span without it is close to useless for debugging. Treat key names as visible to
+anyone with access to your trace backend, and do not encode sensitive
+information in them.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.
