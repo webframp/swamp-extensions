@@ -11,7 +11,15 @@
 import type { ClassifiedMethod } from "./method_classifier.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
-import { SWAMP_TESTING_VERSION, ZOD_VERSION } from "../config.ts";
+
+/**
+ * The value substituted for every path parameter in generated tests.
+ *
+ * Used in three places that must agree: the mock server's registered path, the
+ * path-param values passed as method arguments, and the default delete-response
+ * fixture. Defined once so they cannot drift.
+ */
+export const PATH_PARAM_TEST_VALUE = "test-id-123";
 
 /** Generate a complete test file for a service */
 export function generateTestSource(
@@ -130,7 +138,7 @@ export function generateTestSource(
 }
 
 /** Generate the mock HTTP server helper */
-function generateMockServer(config: ServiceConfig): string {
+function generateMockServer(_config: ServiceConfig): string {
   return `function startMockCfServer(
   responses: Record<string, { result: unknown; isCollection?: boolean }>,
 ): { url: string; server: Deno.HttpServer } {
@@ -266,8 +274,12 @@ function generateExecutionTest(
   }
 
   if (method.type === "create") {
-    // Merge path params into fixture for create methods
-    const createArgs = { ...testArgs, ...fixture };
+    // Path params must win over the fixture. When a request-body property shares
+    // a name with a path param (commonly `id`), letting the fixture's example
+    // value through rewrites the request URL away from the mock's registered
+    // path and the call 404s. The generated model already excludes path-param
+    // names from the body for the same reason.
+    const createArgs = buildFinalTestArgs(method, fixture);
     return `Deno.test({
   name: "${config.name} model: ${method.name} creates and writes resource",
   sanitizeResources: false,
@@ -305,7 +317,7 @@ function generateExecutionTest(
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockCfServer({
-      "${pathPattern}": { result: { id: "test-id-123" } },
+      "${pathPattern}": { result: { id: "${PATH_PARAM_TEST_VALUE}" } },
     });
     const uninstall = installFetchMock(url);
 
@@ -327,8 +339,10 @@ function generateExecutionTest(
 });`;
   }
 
-  // Default: action/update — merge path params with fixture
-  const actionArgs = { ...testArgs, ...fixture };
+  // Default: action/update — path params win over the fixture, so a body
+  // property sharing a path-param name cannot rewrite the request URL away from
+  // the mock's registered path.
+  const actionArgs = buildFinalTestArgs(method, fixture);
   return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
   sanitizeResources: false,
@@ -412,7 +426,7 @@ function synthesizeValue(schema: SchemaObject, depth = 0): unknown {
  * matches what the model actually sends when given test args.
  * The mock server uses path.includes(pattern) for matching.
  */
-function extractPathPattern(path: string, scope: string): string {
+export function extractPathPattern(path: string, scope: string): string {
   // Remove the scope prefix
   let result = path;
   if (scope === "account") {
@@ -421,7 +435,7 @@ function extractPathPattern(path: string, scope: string): string {
     result = result.replace("/zones/{zone_id}", "");
   }
   // Replace remaining path params with a fixed test value
-  result = result.replace(/\{[^}]+\}/g, "test-id-123");
+  result = result.replace(/\{[^}]+\}/g, PATH_PARAM_TEST_VALUE);
   // Remove trailing slash
   result = result.replace(/\/$/, "");
   return result;
@@ -432,7 +446,26 @@ function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
   const args: Record<string, unknown> = {};
   // Add path params with the same test value used in the mock pattern
   for (const p of method.operation.pathParams) {
-    args[p.name.replace(/-/g, "_")] = "test-id-123";
+    args[p.name.replace(/-/g, "_")] = PATH_PARAM_TEST_VALUE;
   }
   return args;
+}
+
+/**
+ * Merge a request-body fixture with the path-param values, path params winning.
+ *
+ * Path params determine the request URL, and the mock server is registered at a
+ * path built from PATH_PARAM_TEST_VALUE. A request-body property sharing a name
+ * with a path param (commonly `id`) would otherwise substitute its own example
+ * value into the URL, which then fails to match the mock and returns 404. The
+ * generated model excludes path-param names from the request body for the same
+ * reason.
+ *
+ * Exported for direct unit testing.
+ */
+export function buildFinalTestArgs(
+  method: ClassifiedMethod,
+  fixture: Record<string, unknown>,
+): Record<string, unknown> {
+  return { ...fixture, ...buildTestArgs(method) };
 }

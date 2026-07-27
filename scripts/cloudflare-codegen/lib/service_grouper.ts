@@ -143,6 +143,52 @@ function findService(
   return null;
 }
 
+/**
+ * Union path-template placeholders into the spec-declared path parameters.
+ *
+ * Two sources describe a path parameter: the OpenAPI `parameters` list, and the
+ * `{placeholder}` tokens in the path template itself. Code generation reads the
+ * template, so any placeholder absent from `parameters` still becomes an
+ * `args.<name>` reference in the generated body — while the arguments schema and
+ * the `args`/`_args` signature decision are both derived from `parameters`.
+ * When they disagree the generated method does not compile.
+ *
+ * Declared parameters win on conflict, so their schema and description survive.
+ * Synthesized ones are required strings, matching how a path segment behaves.
+ *
+ * Only the PRIMARY scope param is skipped. Secondary scope params are
+ * deliberately kept, because buildApiPath() in method_classifier.ts emits
+ * `${args.account_id}` / `${args.zone_id}` for them — they are method arguments,
+ * not globalArgs. Changing this to skip both scope params would reintroduce the
+ * exact signature/body mismatch this function exists to prevent.
+ *
+ * Exported for direct unit testing.
+ */
+export function withTemplatePlaceholders(
+  path: string,
+  declared: ParameterObject[],
+  primaryScopeParam: string,
+): ParameterObject[] {
+  const seen = new Set(declared.map((p) => p.name));
+  const result = [...declared];
+
+  for (const match of path.matchAll(/\{([^}]+)\}/g)) {
+    const name = match[1];
+    // The primary scope param comes from globalArgs, never from method args.
+    if (name === primaryScopeParam) continue;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    result.push({
+      name,
+      in: "path",
+      required: true,
+      schema: { type: "string" },
+    } as ParameterObject);
+  }
+
+  return result;
+}
+
 /** Extract a single operation into our intermediate form */
 function extractOperation(
   spec: OpenAPISpec,
@@ -165,8 +211,20 @@ function extractOperation(
   ] as ParameterObject[];
 
   // Only strip the PRIMARY scope param — secondary scope params become method args
-  const pathParams = allParams.filter(
+  const declaredPathParams = allParams.filter(
     (p) => p.in === "path" && p.name !== primaryScopeParam,
+  );
+  // The Cloudflare spec does not always declare every `{placeholder}` that
+  // appears in a path template. Code generation reads the template directly
+  // (buildApiPath regexes it and emits `args.<name>`), so a placeholder missing
+  // from `parameters` produced a method whose body referenced an argument that
+  // was neither in the signature nor in the arguments schema — a type error and
+  // an unusable method. Union the template placeholders in so both sources of
+  // truth agree.
+  const pathParams = withTemplatePlaceholders(
+    path,
+    declaredPathParams,
+    primaryScopeParam,
   );
   const queryParams = allParams.filter((p) => p.in === "query");
 
