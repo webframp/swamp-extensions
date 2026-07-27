@@ -609,7 +609,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.27.2",
+  version: "2026.07.27.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1110,14 +1110,21 @@ export const model = {
               }
             }
 
-            // Write RELEASE_NOTES.md — always rewritten for a planned entry,
-            // so it always counts as matched.
+            // Write RELEASE_NOTES.md — prepend the new entry, preserving
+            // existing changelog history.
             filesMatched++;
             if (!args.dry_run) {
-              await Deno.writeTextFile(
-                `${extDir}/RELEASE_NOTES.md`,
-                entry.releaseNotes,
-              );
+              const rnPath = `${extDir}/RELEASE_NOTES.md`;
+              let existing = "";
+              try {
+                existing = await Deno.readTextFile(rnPath);
+              } catch {
+                // File may not exist yet — that's fine, start fresh.
+              }
+              const updated = existing
+                ? `${entry.releaseNotes}\n${existing}`
+                : entry.releaseNotes;
+              await Deno.writeTextFile(rnPath, updated);
               filesModified++;
             }
 
