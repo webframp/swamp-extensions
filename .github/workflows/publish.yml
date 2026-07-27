@@ -6,6 +6,14 @@ on:
     workflows: ["CI"]
     types: [completed]
 
+# Serialize publishes for a branch, but never cancel one. `swamp extension push`
+# writes to the registry and published versions are immutable, so a cancelled
+# run can leave some extensions in a matrix published and others not — with no
+# way to redo the same version. Queue instead.
+concurrency:
+  group: publish-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
 jobs:
   detect-changes:
     name: Detect changed extensions

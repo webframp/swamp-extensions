@@ -19,6 +19,13 @@ on:
           - stable
           - rc
 
+# Serialize promotions of the same extension version, never cancel. Channel
+# promotion mutates registry state; a cancelled run leaves the channel pointer
+# in an unknown position.
+concurrency:
+  group: promote-${{ inputs.extension }}-${{ inputs.version }}
+  cancel-in-progress: false
+
 jobs:
   promote:
     name: Promote ${{ inputs.extension }}@${{ inputs.version }} → ${{ inputs.channel }}
