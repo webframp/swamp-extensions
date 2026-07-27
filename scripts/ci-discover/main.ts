@@ -144,7 +144,9 @@ function main() {
     const removed = before - result.extensions.length;
     if (removed > 0) {
       console.error(
-        `excluded ${removed} extension(s) from matrix: ${opts.exclude.join(", ")}`,
+        `excluded ${removed} extension(s) from matrix: ${
+          opts.exclude.join(", ")
+        }`,
       );
     }
     // Warn if an --exclude value didn't match anything — likely a typo.
