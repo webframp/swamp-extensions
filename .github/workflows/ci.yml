@@ -765,7 +765,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [cloudflare-codegen, datadog-codegen, snyk-codegen]
+        dir: [cloudflare-codegen, ci-discover, datadog-codegen, snyk-codegen]
         task: [check, lint, fmt:check, test]
     defaults:
       run:
