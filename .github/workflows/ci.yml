@@ -14,107 +14,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  discover:
+    # Derive the extension matrix from the filesystem. Eliminates hand-maintained
+    # lists that silently fall behind as extensions are added or renamed.
+    name: Discover extensions
+    runs-on: ubuntu-latest
+    outputs:
+      extensions: ${{ steps.discover.outputs.extensions }}
+      scope: ${{ steps.discover.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: "2.7.14"
+      - name: Run ci-discover
+        id: discover
+        working-directory: scripts/ci-discover
+        run: deno task discover -- --github-output --exclude datastore/valkey
+
   extension-check:
     # One job per extension, four tasks as steps.
     #
-    # Previously each extension ran four separate jobs -- 336 jobs for 82
-    # extensions -- each paying its own checkout and Deno install for a mean of
-    # 8.6s of mostly-setup work. Tasks as steps pay that once.
+    # GitHub caps a matrix at 256 jobs per workflow run, so 137 extensions x 4
+    # tasks (548) cannot be expressed, while 137 x 1 can.
     #
-    # This shape is also what makes auto-discovery possible at all: GitHub caps a
-    # matrix at 256 jobs per workflow run, so 137 extensions x 4 tasks (548)
-    # cannot be expressed, while 137 x 1 can.
-    #
-    # Every extension defines check/lint/fmt:check/test with identical names, so
-    # no per-task branching is needed here. The inline shell the old jobs carried
-    # was a fossil from before that convention settled.
+    # datastore/valkey is excluded from this matrix because it needs a service
+    # container; it has its own job below. The exclusion is visible in the
+    # discover job's --exclude flag, not hidden in YAML.
+    needs: [discover]
     name: ${{ matrix.extension }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        extension:
-          - ai-usage
-          - aws/adopt
-          - aws/alarm-investigation
-          - aws/alarms
-          - aws/bedrock-usage
-          - aws/config-compliance
-          - aws/cost-audit
-          - aws/cost-estimate
-          - aws/cost-explorer
-          - aws/cost-report
-          - aws/dns-observation
-          - aws/drift-state
-          - aws/event-topology
-          - aws/guardduty
-          - aws/iam
-          - aws/inventory
-          - aws/logs
-          - aws/metrics
-          - aws/networking
-          - aws/ops
-          - aws/pricing
-          - aws/securityhub-findings
-          - aws/service-quotas
-          - aws/terraform-drift
-          - aws/traces
-          - azure/openai-usage
-          - cloudflare
-          - cloudflare-audit
-          - datadog/dora
-          - datadog/downtimes
-          - datadog/events
-          - datadog/incidents
-          - datadog/logs
-          - datadog/metrics
-          - datadog/monitors
-          - datadog/on-call
-          - datadog/security-rules
-          - datadog/security-signals
-          - datadog/security-suppressions
-          - datadog/slos
-          - datadog/synthetics
-          - datadog/teams
-          - datastore/azure-blob
-          - datastore/dynamodb
-          - datastore/gitlab-datastore
-          - datastore/postgres
-          - gcp/vertex-usage
-          - github
-          - gitlab
-          - microsoft/teams
-          - network
-          - redmine
-          - redmine-kanban
-          - snyk/apps
-          - snyk/assets
-          - snyk/cloud
-          - snyk/collections
-          - snyk/container-images
-          - snyk/groups
-          - snyk/inventory
-          - snyk/issues
-          - snyk/memberships
-          - snyk/policies
-          - snyk/projects
-          - snyk/sast
-          - snyk/sbom
-          - snyk/self
-          - snyk/service-accounts
-          - snyk/settings
-          - snyk/slack
-          - snyk/sso
-          - snyk/tenants
-          - snyk/tests
-          - sre
-          - system
-          - terraform
-          - twitch
-          - vault/gopass
-          - vault/hashicorp-vault
-          - vault/macos-keychain
-          - vault/pass
+        extension: ${{ fromJson(needs.discover.outputs.extensions) }}
     defaults:
       run:
         working-directory: ${{ matrix.extension }}

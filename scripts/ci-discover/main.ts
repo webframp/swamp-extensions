@@ -9,12 +9,13 @@
  *   deno task discover -- --diff-base <ref>     # scope to what changed vs ref
  *   deno task discover -- --changed-from <file> # scope to paths in a file
  *   deno task discover -- --repo-root <path>    # default: two levels up
+ *   deno task discover -- --exclude <dirs>      # comma-separated dirs to omit
  *
  * Output is a single JSON object on stdout:
  *   { "scope": "full"|"scoped", "reason": "...", "extensions": ["aws/inventory"] }
  *
- * Not yet consumed by any workflow. PR 7 wires the extension matrix to it and
- * PR 8 turns on diff scoping.
+ * Consumed by the `discover` job in `.github/workflows/ci.yml`. PR 8 adds
+ * diff scoping.
  *
  * @module
  */
@@ -28,6 +29,8 @@ export interface Options {
   diffBase?: string;
   changedFrom?: string;
   githubOutput: boolean;
+  /** Extension directories to exclude from the final matrix (e.g. "datastore/valkey"). */
+  exclude: string[];
 }
 
 export function parseArgs(args: string[]): Options {
@@ -35,6 +38,7 @@ export function parseArgs(args: string[]): Options {
     // scripts/ci-discover/main.ts -> repo root is two levels up.
     repoRoot: new URL("../..", import.meta.url).pathname.replace(/\/$/, ""),
     githubOutput: false,
+    exclude: [],
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -54,6 +58,11 @@ export function parseArgs(args: string[]): Options {
         break;
       case "--github-output":
         opts.githubOutput = true;
+        break;
+      case "--exclude":
+        opts.exclude = args[++i].split(",").map((s) => s.trim()).filter((s) =>
+          s.length > 0
+        );
         break;
       default:
         console.error(`unknown argument: ${args[i]}`);
@@ -125,6 +134,28 @@ function main() {
     (seed) => expandDependents(seed, dependents),
   );
 
+  // Apply exclusions AFTER classification. Excluded extensions are tested
+  // elsewhere (e.g. datastore/valkey needs a service container), so they are
+  // removed from this matrix but NOT from CI coverage.
+  if (opts.exclude.length > 0) {
+    const excludeSet = new Set(opts.exclude);
+    const before = result.extensions.length;
+    result.extensions = result.extensions.filter((d) => !excludeSet.has(d));
+    const removed = before - result.extensions.length;
+    if (removed > 0) {
+      console.error(
+        `excluded ${removed} extension(s) from matrix: ${opts.exclude.join(", ")}`,
+      );
+    }
+    // Warn if an --exclude value didn't match anything — likely a typo.
+    for (const ex of opts.exclude) {
+      if (!exts.some((e) => e.dir === ex)) {
+        console.error(
+          `warning: --exclude value "${ex}" does not match any discovered extension`,
+        );
+      }
+    }
+  }
   console.log(JSON.stringify(result));
 
   // Reason goes to stderr so stdout stays parseable as JSON.

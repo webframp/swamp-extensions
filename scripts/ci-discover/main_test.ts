@@ -38,6 +38,22 @@ Deno.test("parseArgs: defaults to no scoping and no github output", () => {
   assertEquals(opts.diffBase, undefined);
   assertEquals(opts.changedFrom, undefined);
   assertEquals(opts.githubOutput, false);
+  assertEquals(opts.exclude, []);
+});
+
+Deno.test("parseArgs: --exclude parses comma-separated directories", () => {
+  const opts = parseArgs(["--exclude", "datastore/valkey,foo/bar"]);
+  assertEquals(opts.exclude, ["datastore/valkey", "foo/bar"]);
+});
+
+Deno.test("parseArgs: --exclude trims whitespace and drops empties", () => {
+  const opts = parseArgs(["--exclude", " datastore/valkey , , foo/bar "]);
+  assertEquals(opts.exclude, ["datastore/valkey", "foo/bar"]);
+});
+
+Deno.test("parseArgs: --exclude with single value", () => {
+  const opts = parseArgs(["--exclude", "datastore/valkey"]);
+  assertEquals(opts.exclude, ["datastore/valkey"]);
 });
 
 Deno.test("parseArgs: default repo root is the repository, not the script dir", () => {
