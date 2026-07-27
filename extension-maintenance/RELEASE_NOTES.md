@@ -25,12 +25,20 @@ before it produced data:
    audit. `apply-bump` failed the same way reading the plan.
 
 4. **A dry-run apply was indistinguishable from a real one.** `filesModified`
-   incremented on every planned change regardless of `dry_run`, and
-   `ApplyResultSchema` had no field recording which mode produced the record. A
-   dry run across 35 stale extensions wrote `extensionsBumped: 35` and a nonzero
-   `filesModified` — the same shape a real apply writes — so nothing reading
-   `current-apply` could tell whether the files existed on disk. `dryRun` is now
-   a required field on the resource, populated from the argument.
+   and the extension count incremented on every planned change regardless of
+   `dry_run`, and `ApplyResultSchema` had no field recording which mode produced
+   the record. A dry run across 35 stale extensions reported
+   `extensionsBumped: 35, filesModified: 179` — the exact shape a real apply
+   writes — so nothing reading `current-apply` could tell whether the files
+   existed on disk. Both counters are now gated on the write actually happening,
+   and the same dry run reports `extensionsBumped: 0, filesModified: 0`.
+   `extensionsBumped` also no longer counts entries that threw mid-write; a
+   `deno.lock` regeneration failure still counts as bumped, because the files
+   were written and only the lock is stale.
+
+**Added:** `dryRun` and `filesMatched` on `ApplyResultSchema`. `filesMatched`
+counts files where the target string was present, so a dry run still reports
+scope (`filesMatched: 179`) while being honest that nothing was written.
 
 **Changed:** Resource data names. Anything referencing this model's output must
 be updated:
@@ -68,8 +76,10 @@ Every step targets one model instance and therefore runs strictly sequentially �
 parallelising them would contend on the per-model lock. The workflow expects an
 instance named `ext-maint`.
 
-**Changed:** `ApplyResultSchema` gains a required `dryRun` field. Consumers
-parsing `current-apply` with a strict schema must add it.
+**Changed:** `ApplyResultSchema` gains required `dryRun` and `filesMatched`
+fields, and `extensionsBumped` / `filesModified` now count only work that
+actually happened. Consumers parsing `current-apply` with a strict schema must
+add both new fields.
 
 **Upgrade note:** Requires an `@webframp/extension-maintenance/maintainer`
 instance named `ext-maint` for the bundled workflow to resolve. Existing

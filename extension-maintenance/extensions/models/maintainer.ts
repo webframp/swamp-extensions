@@ -136,10 +136,21 @@ const ApplyResultSchema = z.object({
   dryRun: z
     .boolean()
     .describe(
-      "True when the run reported changes without writing them. Consumers MUST check this before treating extensionsBumped/filesModified as work that happened.",
+      "True when the run reported changes without writing them. On a dry run extensionsBumped and filesModified are both 0; filesMatched carries the scope.",
     ),
-  extensionsBumped: z.number(),
-  filesModified: z.number(),
+  extensionsBumped: z
+    .number()
+    .describe(
+      "Extensions whose file writes completed. 0 on a dry run. Excludes entries that threw mid-write; a deno.lock regeneration failure still counts as bumped because the files were written.",
+    ),
+  filesModified: z
+    .number()
+    .describe("Files actually written to disk. 0 on a dry run."),
+  filesMatched: z
+    .number()
+    .describe(
+      "Files where the target string was present, so a real run would rewrite them. Populated on dry runs and real runs alike.",
+    ),
   errors: z.array(z.object({
     extension: z.string(),
     error: z.string(),
@@ -1039,6 +1050,8 @@ export const model = {
         }).entries;
 
         let filesModified = 0;
+        let filesMatched = 0;
+        let extensionsBumped = 0;
         const errors: Array<{ extension: string; error: string }> = [];
 
         for (const entry of entries) {
@@ -1065,14 +1078,15 @@ export const model = {
                   if (!file) continue;
                   const content = await Deno.readTextFile(file);
                   if (content.includes(change.find)) {
+                    filesMatched++;
                     if (!args.dry_run) {
                       const updated = content.replaceAll(
                         change.find,
                         change.replace,
                       );
                       await Deno.writeTextFile(file, updated);
+                      filesModified++;
                     }
-                    filesModified++;
                   }
                 }
               } else {
@@ -1081,14 +1095,15 @@ export const model = {
                 try {
                   const content = await Deno.readTextFile(filePath);
                   if (content.includes(change.find)) {
+                    filesMatched++;
                     if (!args.dry_run) {
                       const updated = content.replaceAll(
                         change.find,
                         change.replace,
                       );
                       await Deno.writeTextFile(filePath, updated);
+                      filesModified++;
                     }
-                    filesModified++;
                   }
                 } catch {
                   // File may not exist for this extension
@@ -1096,14 +1111,16 @@ export const model = {
               }
             }
 
-            // Write RELEASE_NOTES.md
+            // Write RELEASE_NOTES.md — always rewritten for a planned entry,
+            // so it always counts as matched.
+            filesMatched++;
             if (!args.dry_run) {
               await Deno.writeTextFile(
                 `${extDir}/RELEASE_NOTES.md`,
                 entry.releaseNotes,
               );
+              filesModified++;
             }
-            filesModified++;
 
             // Regenerate deno.lock after pin changes so the lock reflects what
             // deno.json now declares. Without this, apply-bump creates the exact
@@ -1127,6 +1144,12 @@ export const model = {
                 });
               }
             }
+
+            // Reaching here means every write for this entry completed. A
+            // deno.lock regeneration failure above does not unset this: the
+            // files were written, only the lock is stale. On a dry run nothing
+            // was written, so nothing was bumped.
+            if (!args.dry_run) extensionsBumped++;
           } catch (err: unknown) {
             errors.push({
               extension: entry.name,
@@ -1136,16 +1159,17 @@ export const model = {
         }
 
         context.logger.info(
-          `Apply complete: ${entries.length} extensions, ${filesModified} files${
-            args.dry_run ? " (dry run)" : ""
+          `Apply complete: ${extensionsBumped}/${entries.length} extensions bumped, ${filesModified} files written, ${filesMatched} matched${
+            args.dry_run ? " (dry run — nothing written)" : ""
           }`,
         );
 
         const handle = await context.writeResource("apply", "current-apply", {
           appliedAt: new Date().toISOString(),
           dryRun: args.dry_run ?? false,
-          extensionsBumped: entries.length,
+          extensionsBumped,
           filesModified,
+          filesMatched,
           errors,
         });
         return { dataHandles: [handle] };

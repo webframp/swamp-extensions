@@ -169,18 +169,48 @@ Deno.test("ApplyResultSchema requires dryRun", () => {
     appliedAt: "2026-07-26T00:00:00Z",
     extensionsBumped: 35,
     filesModified: 70,
+    filesMatched: 70,
     errors: [],
   });
   assertEquals(result.success, false);
 });
 
-Deno.test("ApplyResultSchema accepts a dry-run result", () => {
+Deno.test("ApplyResultSchema requires filesMatched", () => {
   const applySchema = model.resources.apply.schema;
+  // filesMatched is the only scope signal a dry run produces
   const result = applySchema.safeParse({
     appliedAt: "2026-07-26T00:00:00Z",
     dryRun: true,
+    extensionsBumped: 0,
+    filesModified: 0,
+    errors: [],
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("ApplyResultSchema accepts a dry-run result writing nothing", () => {
+  const applySchema = model.resources.apply.schema;
+  // A dry run over 35 stale extensions: nothing bumped, nothing written,
+  // but 70 files matched and would be rewritten by a real run.
+  const result = applySchema.safeParse({
+    appliedAt: "2026-07-26T00:00:00Z",
+    dryRun: true,
+    extensionsBumped: 0,
+    filesModified: 0,
+    filesMatched: 70,
+    errors: [],
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("ApplyResultSchema accepts a real apply", () => {
+  const applySchema = model.resources.apply.schema;
+  const result = applySchema.safeParse({
+    appliedAt: "2026-07-26T00:00:00Z",
+    dryRun: false,
     extensionsBumped: 35,
     filesModified: 70,
+    filesMatched: 70,
     errors: [],
   });
   assertEquals(result.success, true);
