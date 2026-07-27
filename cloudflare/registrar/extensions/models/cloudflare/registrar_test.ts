@@ -289,7 +289,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update.execute({
-        "domain_name": "test-id-123",
         "completed": false,
         "context": {},
         "created_at": "2024-01-01T00:00:00Z",
@@ -297,6 +296,7 @@ Deno.test({
         "links": null,
         "state": "in_progress",
         "updated_at": "2024-01-01T00:00:00Z",
+        "domain_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

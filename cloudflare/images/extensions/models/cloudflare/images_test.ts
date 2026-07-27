@@ -294,8 +294,8 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_cloudflare_images_keys_add_signing_key.execute({
-        "signing_key_name": "test-id-123",
         "keys": [null],
+        "signing_key_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

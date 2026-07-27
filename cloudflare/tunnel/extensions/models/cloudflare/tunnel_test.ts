@@ -344,7 +344,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_a_cloudflare_tunnel.execute({
-        "tunnel_id": "test-id-123",
         "account_tag": null,
         "config_src": null,
         "connections": null,
@@ -358,6 +357,7 @@ Deno.test({
         "remote_config": null,
         "status": null,
         "tun_type": null,
+        "tunnel_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

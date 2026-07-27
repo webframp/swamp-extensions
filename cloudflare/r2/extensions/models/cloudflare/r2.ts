@@ -350,7 +350,7 @@ const CreateTempAccessCredentialsSchema = z.object({
 /** Cloudflare R2 object storage — buckets, objects, multipart uploads, notifications */
 export const model = {
   type: "@webframp/cloudflare/r2",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

@@ -590,7 +590,7 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -893,7 +893,7 @@ export const model = {
         direct_user: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (

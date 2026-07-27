@@ -306,7 +306,7 @@ const CreatePostZonesZoneIdLogpushValidateOriginSchema = z.object({
 /** Cloudflare Logpush — log jobs, destinations, field configurations */
 export const model = {
   type: "@webframp/cloudflare/logpush",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

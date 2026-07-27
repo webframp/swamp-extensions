@@ -1107,7 +1107,7 @@ const GetLastSeenIdentitySchema = z.object({
 /** Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates */
 export const model = {
   type: "@webframp/cloudflare/access",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

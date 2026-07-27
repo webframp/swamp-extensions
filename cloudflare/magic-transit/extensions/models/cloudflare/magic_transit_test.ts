@@ -615,7 +615,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).updatednsprotectionrule.execute({
-        "rule_id": "test-id-123",
         "burst_sensitivity": "test-value",
         "created_on": "2024-01-01T00:00:00Z",
         "id": "test-value",
@@ -625,6 +624,7 @@ Deno.test({
         "profile_sensitivity": "test-value",
         "rate_sensitivity": "test-value",
         "scope": "test-value",
+        "rule_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

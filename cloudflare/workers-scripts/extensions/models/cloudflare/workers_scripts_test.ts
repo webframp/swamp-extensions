@@ -271,7 +271,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_worker_script_upload_worker_module.execute({
-        "script_name": "test-id-123",
         "cache_options": null,
         "compatibility_date": null,
         "compatibility_flags": null,
@@ -300,6 +299,7 @@ Deno.test({
         "usage_model": null,
         "entry_point": "index.js",
         "startup_time_ms": 10,
+        "script_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -386,9 +386,9 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_assets_upload_session.execute({
-        "script_name": "test-id-123",
         "buckets": [["test-value"]],
         "jwt": "test-value",
+        "script_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -477,10 +477,10 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).worker_tail_logs_start_tail.execute({
-        "script_name": "test-id-123",
         "expires_at": "test-value",
         "id": null,
         "url": "test-value",
+        "script_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

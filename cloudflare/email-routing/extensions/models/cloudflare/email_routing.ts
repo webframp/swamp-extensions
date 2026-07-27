@@ -350,7 +350,7 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
 /** Cloudflare Email Routing — rules, addresses, catch-all, DNS setup */
 export const model = {
   type: "@webframp/cloudflare/email-routing",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

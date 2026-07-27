@@ -281,10 +281,10 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_workers_kv_namespace_rename_a_namespace.execute({
-        "namespace_id": "test-id-123",
         "id": null,
         "supports_url_encoding": true,
         "title": null,
+        "namespace_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -361,9 +361,9 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).delete_multiple_key_value_pairs.execute({
-        "namespace_id": "test-id-123",
         "successful_key_count": 100,
         "unsuccessful_keys": ["test-value"],
+        "namespace_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

@@ -350,7 +350,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_project.execute({
-        "project_name": "test-id-123",
         "build_config": null,
         "canonical_deployment": null,
         "created_on": "2017-01-01T00:00:00Z",
@@ -367,6 +366,7 @@ Deno.test({
         "source": null,
         "subdomain": "helloworld.pages.dev",
         "uses_functions": true,
+        "project_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -488,7 +488,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_deployment.execute({
-        "project_name": null,
         "aliases": ["https://branchname.projectname.pages.dev"],
         "build_config": null,
         "created_on": "2021-03-09T00:55:03.923456Z",
@@ -508,6 +507,7 @@ Deno.test({
         "latest_stage": null,
         "modified_on": "2021-03-09T00:58:59.045655",
         "project_id": "7b162ea7-7367-4d67-bcde-1160995d5",
+        "project_name": "test-id-123",
         "short_id": "f64788e9",
         "skip_reason": "commit_message",
         "source": null,

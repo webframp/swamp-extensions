@@ -195,7 +195,7 @@ const GetSourceConnectivitySchema = z.object({
 /** Cloudflare Images — upload, transform, deliver, and manage image pipelines */
 export const model = {
   type: "@webframp/cloudflare/images",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

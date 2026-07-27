@@ -94,7 +94,7 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
 /** Cloudflare Spectrum — TCP/UDP proxying for non-HTTP applications */
 export const model = {
   type: "@webframp/cloudflare/spectrum",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

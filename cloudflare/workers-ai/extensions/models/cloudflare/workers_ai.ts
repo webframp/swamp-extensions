@@ -3184,7 +3184,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -12777,7 +12777,7 @@ export const model = {
         tags: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -14527,7 +14527,7 @@ export const model = {
         tags: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -14630,7 +14630,7 @@ export const model = {
         tags: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -15330,7 +15330,7 @@ export const model = {
         tags: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -15474,7 +15474,7 @@ export const model = {
         tags: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (

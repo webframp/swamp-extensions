@@ -301,7 +301,7 @@ const UpdateSslVerificationEditSslCertificatePackValidationMethodSchema = z
 /** Cloudflare SSL/TLS — certificate packs, custom certificates, certificate authority */
 export const model = {
   type: "@webframp/cloudflare/ssl-certificates",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

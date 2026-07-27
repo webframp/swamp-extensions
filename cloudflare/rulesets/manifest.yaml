@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/rulesets"
-version: "2026.07.19.1"
+version: "2026.07.27.1"
 description: "Cloudflare Rulesets — WAF custom rules, transform rules, managed rulesets"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

@@ -118,7 +118,7 @@ const GetRotateSecretSchema = z.object({
 /** Cloudflare Turnstile — CAPTCHA-free challenges, site widgets */
 export const model = {
   type: "@webframp/cloudflare/turnstile",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

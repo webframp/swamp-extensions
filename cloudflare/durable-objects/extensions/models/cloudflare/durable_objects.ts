@@ -55,7 +55,7 @@ const ListObjectsSchema = z.object({
 /** Cloudflare Durable Objects — namespaces, object management, alarms */
 export const model = {
   type: "@webframp/cloudflare/durable-objects",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

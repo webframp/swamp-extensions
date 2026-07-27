@@ -299,7 +299,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_hyperdrive.execute({
-        "hyperdrive_id": "test-id-123",
         "caching": null,
         "created_on": "2017-01-01T00:00:00Z",
         "id": null,
@@ -308,6 +307,7 @@ Deno.test({
         "name": null,
         "origin": {},
         "origin_connection_limit": null,
+        "hyperdrive_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

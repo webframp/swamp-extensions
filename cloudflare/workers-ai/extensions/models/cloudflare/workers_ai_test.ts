@@ -1201,7 +1201,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_account_provider_cost.execute({
-        "id": "test-value",
         "account_provider_id": "test-value",
         "changed_by": "test-value",
         "cost_in": 1,
@@ -1209,6 +1208,7 @@ Deno.test({
         "cost_type": "test-value",
         "created_at": "2024-01-01T00:00:00Z",
         "enable": true,
+        "id": "test-id-123",
         "model": "test-value",
         "model_rule": "equals",
         "modified_at": "2024-01-01T00:00:00Z",
@@ -1272,19 +1272,19 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).ai_search_namespace_instance_upload_item.execute({
-        "id": "test-value",
-        "name": "test-id-123",
         "checksum": "test-value",
         "chunks_count": 1,
         "created_at": "2024-01-01T00:00:00Z",
         "error": "test-value",
         "file_size": 1,
+        "id": "test-id-123",
         "key": "test-value",
         "last_seen_at": "2024-01-01T00:00:00Z",
         "namespace": "test-value",
         "next_action": "INDEX",
         "source_id": "test-value",
         "status": "queued",
+        "name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
