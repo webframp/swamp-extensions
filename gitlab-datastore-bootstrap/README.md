@@ -1,12 +1,12 @@
 # @webframp/gitlab-datastore-bootstrap
 
 One-shot bootstrap for `@webframp/gitlab-datastore`. Validates access to a
-GitLab project, optionally creates a scoped project access token, and
-configures the current swamp repository to use GitLab's Terraform state API
-as the datastore backend.
+GitLab project, optionally creates a scoped project access token, and configures
+the current swamp repository to use GitLab's Terraform state API as the
+datastore backend.
 
-Zero infrastructure required — if you already have a GitLab project, this
-gives you a shared datastore with distributed locking in under a minute.
+Zero infrastructure required — if you already have a GitLab project, this gives
+you a shared datastore with distributed locking in under a minute.
 
 ## Prerequisites
 
@@ -39,15 +39,15 @@ swamp datastore status
 
 ## Inputs
 
-| Input | Default | Required | Description |
-|-------|---------|----------|-------------|
-| `project_id` | — | **yes** | Numeric ID or path (`group/project`) |
-| `token` | — | **yes** | PAT with `api` scope |
-| `base_url` | `https://gitlab.com` | no | GitLab instance URL |
-| `username` | (token owner) | no | GitLab username |
-| `state_prefix` | `swamp` | no | Namespace prefix for state objects |
-| `create_project_token` | `false` | no | Create a dedicated project token |
-| `project_token_name` | `swamp-datastore` | no | Token name if creating |
+| Input                  | Default              | Required | Description                          |
+| ---------------------- | -------------------- | -------- | ------------------------------------ |
+| `project_id`           | —                    | **yes**  | Numeric ID or path (`group/project`) |
+| `token`                | —                    | **yes**  | PAT with `api` scope                 |
+| `base_url`             | `https://gitlab.com` | no       | GitLab instance URL                  |
+| `username`             | (token owner)        | no       | GitLab username                      |
+| `state_prefix`         | `swamp`              | no       | Namespace prefix for state objects   |
+| `create_project_token` | `false`              | no       | Create a dedicated project token     |
+| `project_token_name`   | `swamp-datastore`    | no       | Token name if creating               |
 
 ## What happens
 
@@ -59,20 +59,20 @@ swamp datastore status
 
 ## How it stores data
 
-`@webframp/gitlab-datastore` wraps each piece of swamp data in a Terraform
-state envelope. GitLab's native state locking provides distributed lock
-semantics. No extra storage or services needed — it piggybacks on GitLab's
-existing infrastructure.
+`@webframp/gitlab-datastore` wraps each piece of swamp data in a Terraform state
+envelope. GitLab's native state locking provides distributed lock semantics. No
+extra storage or services needed — it piggybacks on GitLab's existing
+infrastructure.
 
 ## Limitations
 
 - **Rate limits**: GitLab.com enforces API rate limits. High-throughput
   workloads (many concurrent writes) may hit 429s. Best suited for
   low-to-moderate write volumes.
-- **State size**: Each Terraform state object is limited to ~10MB on
-  GitLab.com. Large binary artifacts may need chunking.
-- **Not for production at scale**: This is a convenience/PoC datastore for
-  teams already on GitLab. For production workloads, prefer
+- **State size**: Each Terraform state object is limited to ~10MB on GitLab.com.
+  Large binary artifacts may need chunking.
+- **Not for production at scale**: This is a convenience/PoC datastore for teams
+  already on GitLab. For production workloads, prefer
   `@webframp/postgres-datastore` or `@webframp/dynamodb-datastore`.
 
 ## Development

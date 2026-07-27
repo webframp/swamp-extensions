@@ -18,5 +18,11 @@
   },
   "compilerOptions": {
     "strict": true
+  },
+  "fmt": {
+    "exclude": [
+      "CLAUDE.md",
+      "AGENTS.md"
+    ]
   }
 }

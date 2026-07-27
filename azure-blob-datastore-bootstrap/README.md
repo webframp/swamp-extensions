@@ -28,13 +28,13 @@ swamp datastore status
 
 ## Inputs
 
-| Input | Default | Description |
-|-------|---------|-------------|
-| `location` | `eastus` | Azure region |
-| `resource_group` | `swamp-datastore-rg` | Resource group name |
-| `storage_account` | `swampdatastore` | Storage account (globally unique) |
-| `container_name` | `swamp-datastore` | Blob container name |
-| `blob_prefix` | `swamp` | Namespace prefix within the container |
+| Input             | Default              | Description                           |
+| ----------------- | -------------------- | ------------------------------------- |
+| `location`        | `eastus`             | Azure region                          |
+| `resource_group`  | `swamp-datastore-rg` | Resource group name                   |
+| `storage_account` | `swampdatastore`     | Storage account (globally unique)     |
+| `container_name`  | `swamp-datastore`    | Blob container name                   |
+| `blob_prefix`     | `swamp`              | Namespace prefix within the container |
 
 **Important**: Storage account names are globally unique across all of Azure.
 You'll likely need to override `storage_account` with something unique to you.
@@ -61,14 +61,15 @@ You'll likely need to override `storage_account` with something unique to you.
 
 ## Authentication
 
-The bootstrap retrieves the storage account's connection string and
-configures the datastore with `connectionString` auth mode. For production,
-consider switching to `sharedKey` or `servicePrincipal` mode after
-bootstrapping — see the `@webframp/azure-blob-datastore` README.
+The bootstrap retrieves the storage account's connection string and configures
+the datastore with `connectionString` auth mode. For production, consider
+switching to `sharedKey` or `servicePrincipal` mode after bootstrapping — see
+the `@webframp/azure-blob-datastore` README.
 
 ## Idempotency
 
 All resources are checked before creation. Re-running is safe:
+
 - Existing resource groups, storage accounts, and containers are reused
 - The connection string is re-retrieved on each run
 

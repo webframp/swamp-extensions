@@ -8,7 +8,8 @@
   "tasks": {
     "check": "deno check extensions/models/github-issue-lifecycle/lifecycle.ts extensions/models/github-issue-lifecycle/lifecycle_test.ts extensions/reports/lifecycle_metrics.ts",
     "lint": "deno lint",
-    "fmt": "deno fmt --check",
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
     "test": "deno test --allow-run --allow-env --allow-read extensions/"
   },
   "lint": {
@@ -17,5 +18,11 @@
         "no-import-prefix"
       ]
     }
+  },
+  "fmt": {
+    "exclude": [
+      "CLAUDE.md",
+      "AGENTS.md"
+    ]
   }
 }

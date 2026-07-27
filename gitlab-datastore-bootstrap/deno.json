@@ -8,7 +8,8 @@
   "tasks": {
     "check": "deno check extensions/models/provisioner.ts",
     "lint": "deno lint",
-    "fmt": "deno fmt --check",
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
     "test": "deno test --allow-run --allow-env --allow-read --allow-net extensions/"
   },
   "lint": {
@@ -17,5 +18,11 @@
         "no-import-prefix"
       ]
     }
+  },
+  "fmt": {
+    "exclude": [
+      "CLAUDE.md",
+      "AGENTS.md"
+    ]
   }
 }

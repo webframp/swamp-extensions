@@ -609,7 +609,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.26.3",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {

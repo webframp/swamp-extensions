@@ -5,6 +5,9 @@ formatting instead of applying it and there was no way to format the extension
 through its own task. `fmt` now formats and a new `fmt:check` verifies, matching
 every other extension in the repository.
 
+**Changed:** Reformatted files that had drifted from `deno fmt`. No code
+behavior changes.
+
 **Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
 are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
 so `deno task fmt:check` could fail locally on a file CI does not have.

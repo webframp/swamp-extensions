@@ -18,7 +18,9 @@
   },
   "fmt": {
     "exclude": [
-      "worker/"
+      "worker/",
+      "CLAUDE.md",
+      "AGENTS.md"
     ]
   },
   "imports": {

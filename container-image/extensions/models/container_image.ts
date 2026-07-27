@@ -113,7 +113,7 @@ async function runCommand(
 /** Container image model definition. */
 export const model = {
   type: "@webframp/container-image",
-  version: "2026.07.18.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
