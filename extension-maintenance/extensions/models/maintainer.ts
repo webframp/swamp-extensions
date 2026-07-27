@@ -1118,8 +1118,9 @@ export const model = {
               let existing = "";
               try {
                 existing = await Deno.readTextFile(rnPath);
-              } catch {
-                // File may not exist yet — that's fine, start fresh.
+              } catch (err) {
+                if (!(err instanceof Deno.errors.NotFound)) throw err;
+                // File doesn't exist yet — start fresh.
               }
               const updated = existing
                 ? `${entry.releaseNotes}\n${existing}`
