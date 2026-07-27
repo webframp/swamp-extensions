@@ -419,7 +419,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).put_accounts_account_id_logpush_jobs_job_id.execute({
-        "job_id": "test-id-123",
         "dataset": null,
         "destination_conf": null,
         "enabled": null,
@@ -435,6 +434,7 @@ Deno.test({
         "max_upload_records": null,
         "name": null,
         "output_options": null,
+        "job_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

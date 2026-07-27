@@ -332,7 +332,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).get_update.execute({
-        "sitekey": null,
         "bot_fight_mode": null,
         "clearance_level": null,
         "created_on": null,
@@ -346,6 +345,7 @@ Deno.test({
         "offlabel": null,
         "region": null,
         "secret": null,
+        "sitekey": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

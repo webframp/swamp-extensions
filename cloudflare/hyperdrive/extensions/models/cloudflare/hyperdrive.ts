@@ -64,7 +64,7 @@ const PatchHyperdriveSchema = z.object({
 /** Cloudflare Hyperdrive — database connection pooling configurations */
 export const model = {
   type: "@webframp/cloudflare/hyperdrive",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

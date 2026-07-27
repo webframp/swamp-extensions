@@ -331,13 +331,13 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update.execute({
-        "queue_id": "test-value",
         "consumers": [null],
         "consumers_total_count": 1,
         "created_on": "test-value",
         "modified_on": "test-value",
         "producers": [null],
         "producers_total_count": 1,
+        "queue_id": "test-id-123",
         "queue_name": null,
         "settings": null,
       }, context);

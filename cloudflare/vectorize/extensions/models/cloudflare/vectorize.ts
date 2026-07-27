@@ -133,7 +133,7 @@ const VectorizeUpsertVectorSchema = z.object({
 /** Cloudflare Vectorize — vector indexes, insert/query/delete operations */
 export const model = {
   type: "@webframp/cloudflare/vectorize",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

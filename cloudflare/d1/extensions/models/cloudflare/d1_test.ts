@@ -290,7 +290,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_database.execute({
-        "database_id": "test-id-123",
         "created_at": null,
         "file_size": null,
         "jurisdiction": null,
@@ -299,6 +298,7 @@ Deno.test({
         "read_replication": null,
         "uuid": null,
         "version": null,
+        "database_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -382,7 +382,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).d1_import_database.execute({
-        "database_id": "test-id-123",
         "at_bookmark": "test-value",
         "error": "test-value",
         "filename": "test-value",
@@ -396,6 +395,7 @@ Deno.test({
         "success": true,
         "type": "import",
         "upload_url": "test-value",
+        "database_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

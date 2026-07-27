@@ -269,7 +269,7 @@ const GetApiShieldEndpointManagementRetrieveOperationsAndFeaturesAsOpenApiSchema
 /** Cloudflare API Shield — schema validation, endpoint discovery, sequence rules */
 export const model = {
   type: "@webframp/cloudflare/api-shield",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -674,7 +674,9 @@ export const model = {
     },
     list_api_shield_api_discovery_retrieve_discovered_operation_by_id: {
       description: "Retrieve a discovered operation",
-      arguments: z.object({}),
+      arguments: z.object({
+        discovery_id: z.string(),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -691,7 +693,7 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["page", "per_page"]);
+        const excludeKeys = new Set(["discovery_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
@@ -731,6 +733,7 @@ export const model = {
     patch_discovered_operation: {
       description: "Patch discovered operation",
       arguments: z.object({
+        discovery_id: z.string(),
         state: z.unknown().optional(),
       }),
       execute: async (
@@ -749,7 +752,11 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["discovery_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -760,7 +767,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_discovered_operation",
-          "updated",
+          String(args.discovery_id),
           result,
         );
         context.logger.info("Updated patch_discovered_operation", {});
@@ -866,9 +873,11 @@ export const model = {
     },
     get_managed_label: {
       description: "Retrieve managed label",
-      arguments: z.object({}),
+      arguments: z.object({
+        name: z.string(),
+      }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -890,7 +899,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "managed_label",
-          "latest",
+          String(args.name),
           result,
         );
         context.logger.info("Fetched managed_label", {});
@@ -900,6 +909,7 @@ export const model = {
     update_api_shield_labels_replace_operations_attached_to_managed_label: {
       description: "Replace operation(s) attached to a managed label",
       arguments: z.object({
+        name: z.string(),
         selector: z.unknown(),
       }),
       execute: async (
@@ -918,7 +928,11 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -929,7 +943,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "api_shield_labels_replace_operations_attached_to_managed_label",
-          "updated",
+          String(args.name),
           result,
         );
         context.logger.info(
@@ -1004,9 +1018,11 @@ export const model = {
     },
     get_user_label: {
       description: "Retrieve user label",
-      arguments: z.object({}),
+      arguments: z.object({
+        name: z.string(),
+      }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1028,7 +1044,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "user_label",
-          "latest",
+          String(args.name),
           result,
         );
         context.logger.info("Fetched user_label", {});
@@ -1038,6 +1054,7 @@ export const model = {
     put_user_label: {
       description: "Update user label",
       arguments: z.object({
+        name: z.string(),
         description: z.unknown().optional(),
         metadata: z.unknown().optional(),
       }),
@@ -1057,7 +1074,11 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1068,7 +1089,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_user_label",
-          "updated",
+          String(args.name),
           result,
         );
         context.logger.info("Updated put_user_label", {});
@@ -1078,6 +1099,7 @@ export const model = {
     patch_user_label: {
       description: "Patch user label",
       arguments: z.object({
+        name: z.string(),
         description: z.unknown().optional(),
         metadata: z.unknown().optional(),
       }),
@@ -1097,7 +1119,11 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1108,7 +1134,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_user_label",
-          "updated",
+          String(args.name),
           result,
         );
         context.logger.info("Updated patch_user_label", {});
@@ -1117,9 +1143,11 @@ export const model = {
     },
     delete_user_label: {
       description: "Delete user label",
-      arguments: z.object({}),
+      arguments: z.object({
+        name: z.string(),
+      }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1139,13 +1167,14 @@ export const model = {
           `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
         );
 
-        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        context.logger.info("Deleted resource {id}", { id: args.name });
         return { dataHandles: [] };
       },
     },
     update_api_shield_labels_replace_operations_attached_to_user_label: {
       description: "Replace operation(s) attached to a user label",
       arguments: z.object({
+        name: z.string(),
         selector: z.unknown(),
       }),
       execute: async (
@@ -1164,7 +1193,11 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1175,7 +1208,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "api_shield_labels_replace_operations_attached_to_user_label",
-          "updated",
+          String(args.name),
           result,
         );
         context.logger.info(
@@ -1492,9 +1525,11 @@ export const model = {
     get_api_shield_endpoint_management_retrieve_information_about_an_operation:
       {
         description: "Retrieve information about an operation",
-        arguments: z.object({}),
+        arguments: z.object({
+          operation_id: z.string(),
+        }),
         execute: async (
-          _args: Record<string, unknown>,
+          args: Record<string, unknown>,
           context: {
             globalArgs: Record<string, string>;
             writeResource: (
@@ -1516,7 +1551,7 @@ export const model = {
 
           const handle = await context.writeResource(
             "api_shield_endpoint_management_retrieve_information_about_an_operation",
-            "latest",
+            String(args.operation_id),
             result,
           );
           context.logger.info(
@@ -1528,9 +1563,11 @@ export const model = {
       },
     delete_an_operation: {
       description: "Delete an operation",
-      arguments: z.object({}),
+      arguments: z.object({
+        operation_id: z.string(),
+      }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1550,13 +1587,14 @@ export const model = {
           `/zones/${zoneId}/api_gateway/operations/${args.operation_id}`,
         );
 
-        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        context.logger.info("Deleted resource {id}", { id: args.operation_id });
         return { dataHandles: [] };
       },
     },
     create_api_shield_operations_post_labels_to_operation: {
       description: "Attach label(s) on an operation in endpoint management",
       arguments: z.object({
+        operation_id: z.string(),
         managed: z.array(z.unknown()).optional().describe(
           "List of managed label names.",
         ),
@@ -1580,7 +1618,11 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["operation_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1605,6 +1647,7 @@ export const model = {
     put_labels_to_operation: {
       description: "Replace label(s) on an operation in endpoint management",
       arguments: z.object({
+        operation_id: z.string(),
         managed: z.array(z.unknown()).optional().describe(
           "List of managed label names. Omitting this property or passing an empty array...",
         ),
@@ -1628,7 +1671,11 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body = args;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["operation_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1639,7 +1686,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_labels_to_operation",
-          "updated",
+          String(args.operation_id),
           result,
         );
         context.logger.info("Updated put_labels_to_operation", {});
@@ -1649,6 +1696,7 @@ export const model = {
     delete_labels_from_operation: {
       description: "Remove label(s) on an operation in endpoint management",
       arguments: z.object({
+        operation_id: z.string(),
         managed: z.array(z.unknown()).optional().describe(
           "List of managed label names.",
         ),
@@ -1657,7 +1705,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1677,7 +1725,7 @@ export const model = {
           `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
         );
 
-        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        context.logger.info("Deleted resource {id}", { id: args.operation_id });
         return { dataHandles: [] };
       },
     },

@@ -268,8 +268,8 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).disable_catalog.execute({
-        "bucket_name": "test-id-123",
         "id": "fixture-123",
+        "bucket_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -313,12 +313,12 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).patch_bucket.execute({
-        "bucket_name": "test-id-123",
         "creation_date": "test-value",
         "jurisdiction": null,
         "location": null,
         "name": null,
         "storage_class": null,
+        "bucket_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

@@ -567,7 +567,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_a_live_input.execute({
-        "live_input_identifier": "test-id-123",
         "created": null,
         "deleteRecordingAfterDays": null,
         "enabled": null,
@@ -584,6 +583,7 @@ Deno.test({
         "uid": null,
         "webRTC": null,
         "webRTCPlayback": null,
+        "live_input_identifier": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

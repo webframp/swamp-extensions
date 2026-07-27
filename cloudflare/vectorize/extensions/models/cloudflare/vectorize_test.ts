@@ -340,8 +340,8 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).vectorize_insert_vector.execute({
-        "index_name": "test-id-123",
         "mutationId": null,
+        "index_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

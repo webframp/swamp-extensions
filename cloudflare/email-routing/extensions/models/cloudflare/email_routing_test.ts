@@ -483,10 +483,10 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).email_sending_subdomains_fix_sending_subdomain_dns.execute({
-        "subdomain_id": "test-id-123",
         "errors": [null],
         "records": [null],
         "status": "ready",
+        "subdomain_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

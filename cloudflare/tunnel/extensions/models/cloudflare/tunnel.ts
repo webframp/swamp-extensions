@@ -122,7 +122,7 @@ const ListAllTunnelsSchema = z.object({
 /** Cloudflare Tunnel — tunnel management, configurations, connections */
 export const model = {
   type: "@webframp/cloudflare/tunnel",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

@@ -421,7 +421,7 @@ const PutScriptContentSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

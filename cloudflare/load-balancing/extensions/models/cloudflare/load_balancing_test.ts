@@ -438,12 +438,12 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_monitor_group.execute({
-        "monitor_group_id": "test-id-123",
         "created_on": "2014-01-01T05:20:00.12345Z",
         "description": "Primary datacenter monitors",
         "id": null,
         "members": [null],
         "modified_on": "2014-01-01T05:20:00.12345Z",
+        "monitor_group_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

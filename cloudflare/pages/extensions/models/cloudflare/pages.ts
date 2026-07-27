@@ -502,7 +502,7 @@ const GetUploadTokenSchema = z.object({
 /** Cloudflare Pages — projects, deployments, domains, build configs */
 export const model = {
   type: "@webframp/cloudflare/pages",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

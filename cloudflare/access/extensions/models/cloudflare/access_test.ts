@@ -723,12 +723,12 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_portals.execute({
-        "id": "my-mcp-portal",
         "allow_code_mode": true,
         "created_at": "2024-01-01T00:00:00Z",
         "created_by": "test-value",
         "description": "This is my custom MCP Portal",
         "hostname": "exmaple.com",
+        "id": "test-id-123",
         "modified_at": "2024-01-01T00:00:00Z",
         "modified_by": "test-value",
         "name": "My MCP Portal",
@@ -870,7 +870,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).mcp_portals_api_sync_server.execute({
-        "id": "test-id-123",
         "error": "test-value",
         "error_details": {
           "cause": "test-value",
@@ -880,6 +879,7 @@ Deno.test({
           "status_code": 1,
         },
         "status": "waiting",
+        "id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

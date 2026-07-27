@@ -264,8 +264,8 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).updateaccountentrypointruleset.execute({
-        "ruleset_phase": "test-id-123",
         "id": "fixture-123",
+        "ruleset_phase": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

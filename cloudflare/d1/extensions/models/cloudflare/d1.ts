@@ -137,7 +137,7 @@ const D1TimeTravelRestoreSchema = z.object({
 /** Cloudflare D1 serverless SQL databases — databases, queries */
 export const model = {
   type: "@webframp/cloudflare/d1",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

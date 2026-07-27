@@ -35,6 +35,13 @@ interface GenerateOptions {
   services?: string[];
   outputBase?: string;
   version?: string;
+  /**
+   * Release-notes body for this run. Required when regenerating an extension
+   * that already has RELEASE_NOTES.md: the default text claims an initial
+   * release, which is false for every version after the first, and the notes
+   * are what consumers read to decide whether to upgrade.
+   */
+  notes?: string;
 }
 
 function parseArgs(): GenerateOptions {
@@ -55,6 +62,12 @@ function parseArgs(): GenerateOptions {
         break;
       case "--version":
         opts.version = args[++i];
+        break;
+      case "--notes":
+        opts.notes = args[++i];
+        break;
+      case "--notes-file":
+        opts.notes = Deno.readTextFileSync(args[++i]);
         break;
     }
   }
@@ -198,8 +211,33 @@ async function main() {
     const manifest = generateManifest(config, version, modelFileName);
     const denoJson = generateDenoJson();
     const readme = generateReadme(config, methods);
-    const releaseNotes = generateReleaseNotes(config, version, methods.length);
-    const swampYaml = generateSwampYaml();
+    // Regenerating an existing extension with the default "initial release"
+    // text would publish a false claim to the registry, where per-version notes
+    // are immutable. Require an explicit body instead of writing a wrong one.
+    const notesPath = join(extDir, "RELEASE_NOTES.md");
+    const hasExistingNotes = await Deno.stat(notesPath).then(
+      () => true,
+      () => false,
+    );
+    if (hasExistingNotes && !opts.notes) {
+      console.error(
+        `\n❌ ${config.name} already has RELEASE_NOTES.md, so this is not an ` +
+          `initial release.\n   Pass --notes "<body>" or --notes-file <path> ` +
+          `describing what changed in ${version}.`,
+      );
+      Deno.exit(1);
+    }
+    const releaseNotes = generateReleaseNotes(
+      config,
+      version,
+      methods.length,
+      opts.notes,
+    );
+    const swampYaml = generateSwampYaml(
+      await Deno.readTextFile(join(extDir, ".swamp.yaml")).catch(() =>
+        undefined
+      ),
+    );
     const gitignore = generateGitignore();
     const apiLib = generateApiLib();
     const license = generateLicense();

@@ -97,7 +97,7 @@ const UpdateWorkersKvNamespaceWriteKeyValuePairWithMetadataSchema = z.object({})
 /** Cloudflare Workers KV — namespaces, keys, values, bulk operations */
 export const model = {
   type: "@webframp/cloudflare/kv",
-  version: "2026.07.19.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
