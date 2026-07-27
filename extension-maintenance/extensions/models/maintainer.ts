@@ -609,7 +609,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.27.1",
+  version: "2026.07.27.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1063,15 +1063,14 @@ export const model = {
           try {
             for (const change of entry.changes) {
               if (change.file.includes("*")) {
-                // Glob pattern — find matching files
+                // Glob pattern — find matching files. Include test files: when
+                // a dependency version changes, test imports must stay in sync
+                // to avoid duplicate-singleton bugs (e.g. OTel registries).
                 const findResult = await run([
                   "find",
                   `${extDir}/extensions`,
                   "-name",
                   "*.ts",
-                  "-not",
-                  "-name",
-                  "*_test.ts",
                 ]);
                 if (!findResult.success) continue;
                 for (const file of findResult.stdout.trim().split("\n")) {
