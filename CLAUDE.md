@@ -139,6 +139,66 @@ deno task test     # Run tests
 - Pin all npm dependencies to exact versions in `deno.json` (no ranges)
 - Swamp's bundler inlines npm packages at bundle time; `deno.lock` does NOT cover extension deps
 
+## Repository Maintenance Sweep
+
+Dependency refresh across the whole repo runs as a swamp workflow rather than a
+manual loop of four commands. It ships with `@webframp/extension-maintenance`.
+
+### One-time setup
+
+```bash
+swamp extension pull @webframp/extension-maintenance
+swamp model create @webframp/extension-maintenance/maintainer ext-maint \
+  --global-arg repo_root=/path/to/swamp-extensions
+```
+
+The instance must be named `ext-maint` — the shipped workflow references it by
+name.
+
+### Running the sweep
+
+```bash
+swamp workflow run @webframp/extension-maintenance-sweep
+```
+
+Five steps, strictly sequential: `audit` observes staleness across every
+extension, `plan` produces a CalVer bump plan, `approve` pauses for human
+review, `apply` writes the files, `verify` runs the quality gate.
+
+Inspect the plan while the run is suspended, then approve or reject:
+
+```bash
+swamp data get ext-maint current-plan --json
+swamp workflow approve @webframp/extension-maintenance-sweep approve
+swamp workflow resume @webframp/extension-maintenance-sweep
+```
+
+Rejecting marks the run failed and leaves `apply` and `verify` unscheduled.
+Nothing is modified, and the audit and plan data remain queryable.
+
+### Rules
+
+1. **The steps cannot be parallelised.** All five target the single `ext-maint`
+   model and contend on its per-model lock. The dependency chain is load-bearing,
+   not stylistic.
+2. **Never auto-approve.** The gate exists because `apply-bump` rewrites
+   `manifest.yaml`, `deno.json`, and `RELEASE_NOTES.md` across every stale
+   extension in one shot. Read the plan first.
+3. **The sweep does not replace the PR flow.** It writes files in your working
+   tree. Branch, commit, and open a PR as usual — CI still publishes only what
+   lands on main with a bumped version.
+4. **Expect a slow audit.** Roughly five minutes across 137 extensions, because
+   it queries npm once per deduplicated package. Do not shorten it by fanning
+   `audit` out per extension with `forEach` — that defeats the deduplication and
+   multiplies registry calls for identical information.
+5. **Query the results, don't re-run.** Four resources are written per sweep:
+   `current-audit`, `current-plan`, `current-apply`, `current-quality`. Reference
+   them with `swamp data get ext-maint <name>` or CEL rather than re-running a
+   method.
+6. **Run the quality gate standalone when that is all you need.**
+   `swamp model method run ext-maint quality-gate` skips the audit entirely, and
+   accepts a `filter` glob to scope it to one extension directory.
+
 ## Development Workflow
 
 All changes go through pull requests — no direct pushes to main.

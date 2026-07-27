@@ -3,7 +3,7 @@ import { model } from "./maintainer.ts";
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/extension-maintenance/maintainer");
-  assertEquals(model.version, "2026.07.26.2");
+  assertEquals(model.version, "2026.07.26.3");
 });
 
 Deno.test("model has all four methods", () => {
@@ -160,4 +160,28 @@ Deno.test("AuditSummarySchema requires new category counts", () => {
     extensions: [],
   });
   assertEquals(result.success, false);
+});
+
+Deno.test("ApplyResultSchema requires dryRun", () => {
+  const applySchema = model.resources.apply.schema;
+  // Without dryRun a stored result cannot be distinguished from a real apply
+  const result = applySchema.safeParse({
+    appliedAt: "2026-07-26T00:00:00Z",
+    extensionsBumped: 35,
+    filesModified: 70,
+    errors: [],
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("ApplyResultSchema accepts a dry-run result", () => {
+  const applySchema = model.resources.apply.schema;
+  const result = applySchema.safeParse({
+    appliedAt: "2026-07-26T00:00:00Z",
+    dryRun: true,
+    extensionsBumped: 35,
+    filesModified: 70,
+    errors: [],
+  });
+  assertEquals(result.success, true);
 });

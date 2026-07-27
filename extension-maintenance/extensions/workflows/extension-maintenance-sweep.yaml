@@ -1,0 +1,156 @@
+id: 8f2a1d47-6c93-4e5b-b1a8-3d7f0e92c4b6
+name: "@webframp/extension-maintenance-sweep"
+description: |
+  Routine dependency-maintenance sweep across every extension in the repo:
+  observe staleness, plan CalVer bumps, gate on human approval, apply, then
+  verify with the quality gate.
+
+  Replaces the manual four-command loop:
+    swamp model method run ext-maint audit
+    swamp model method run ext-maint plan-bump
+    swamp model method run ext-maint apply-bump
+    swamp model method run ext-maint quality-gate
+
+  Requires an @webframp/extension-maintenance/maintainer instance named
+  `ext-maint`, with repo_root pointing at the extension repository root:
+
+    swamp model create @webframp/extension-maintenance/maintainer ext-maint \
+      --global repo_root=/path/to/swamp-extensions
+
+  Every step targets that one model, so the steps run strictly sequentially.
+  Parallelising them would contend on the per-model lock and time out.
+
+  Rejecting the approval gate marks the run failed and leaves `apply` and
+  `verify` unscheduled. That is intentional: the audit and plan data are
+  already written and inspectable, and nothing was modified. To get a quality
+  snapshot without bumping anything, run the gate on its own:
+
+    swamp model method run ext-maint quality-gate
+
+  The audit step dominates runtime — roughly five minutes across 137
+  extensions, since it queries npm once per deduplicated package.
+version: 1
+tags:
+  extension: "@webframp/extension-maintenance"
+  category: "maintenance"
+  purpose: "dependency-sweep"
+reports:
+  require:
+    - "@swamp/workflow-summary"
+inputs:
+  properties:
+    skip_testing:
+      type: boolean
+      description: >-
+        Skip the deno.json swamp-testing bump for extensions that also have
+        shipped-file changes. Test-only extensions are always excluded.
+      default: false
+    quality_filter:
+      type: string
+      description: >-
+        Glob pattern limiting the quality gate to matching extension
+        directories. Empty string runs the gate across every extension.
+      default: ""
+    stop_on_failure:
+      type: boolean
+      description: Stop the quality gate at the first failing extension.
+      default: false
+    dry_run:
+      type: boolean
+      description: >-
+        Report what apply-bump would change without writing files. Leave the
+        approval gate in place even for a dry run — it is the review point.
+      default: false
+jobs:
+  - name: sweep
+    description: >-
+      Observe, plan, approve, apply, verify. Single job because every step
+      shares the `ext-maint` model lock.
+    steps:
+      - name: audit
+        description: >-
+          Scan every extension, query npm and the swamp registry once per
+          deduplicated package, write the staleness report. Pure observation.
+        task:
+          type: model_method
+          modelIdOrName: ext-maint
+          methodName: audit
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+
+      - name: plan
+        description: >-
+          Read the audit and produce a structured CalVer bump plan. No side
+          effects. Requires the audit to have succeeded — planning against a
+          stale report would bump the wrong versions.
+        task:
+          type: model_method
+          modelIdOrName: ext-maint
+          methodName: plan-bump
+          inputs:
+            skip_testing: ${{ inputs.skip_testing }}
+        dependsOn:
+          - step: audit
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+
+      - name: approve
+        description: >-
+          Review gate. Inspect the plan before any file is written.
+        task:
+          type: manual_approval
+          prompt: >-
+            Review the bump plan before applying. Inspect it with:
+            `swamp data get ext-maint current-plan --json`. Approve to write the
+            planned manifest, deno.json, and RELEASE_NOTES changes. Reject if
+            the plan is empty, or if any entry bumps an extension you did not
+            intend to release.
+        dependsOn:
+          - step: plan
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+
+      - name: apply
+        description: >-
+          Execute the approved plan. Writes files. Gated on explicit approval.
+        task:
+          type: model_method
+          modelIdOrName: ext-maint
+          methodName: apply-bump
+          inputs:
+            dry_run: ${{ inputs.dry_run }}
+        dependsOn:
+          - step: approve
+            condition:
+              type: succeeded
+        weight: 0
+        allowFailure: false
+
+      - name: verify
+        description: >-
+          Run check, lint, fmt, and test, then score each extension against the
+          quality rubric. Depends on `apply` with `always` so a failing apply
+          still yields a quality snapshot showing what state the repo is in.
+          Note that a rejected approval leaves `apply` unscheduled, which
+          leaves this step unscheduled too — `always` only fires for a step
+          that actually ran.
+        task:
+          type: model_method
+          modelIdOrName: ext-maint
+          methodName: quality-gate
+          inputs:
+            filter: ${{ inputs.quality_filter }}
+            stop_on_failure: ${{ inputs.stop_on_failure }}
+        dependsOn:
+          - step: apply
+            condition:
+              type: always
+        weight: 0
+        allowFailure: false
+    dependsOn: []
+    weight: 0

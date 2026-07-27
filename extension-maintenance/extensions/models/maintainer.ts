@@ -133,6 +133,11 @@ const BumpPlanSchema = z.object({
 /** Schema for the apply-bump result resource. */
 const ApplyResultSchema = z.object({
   appliedAt: z.string().describe("ISO 8601 apply timestamp"),
+  dryRun: z
+    .boolean()
+    .describe(
+      "True when the run reported changes without writing them. Consumers MUST check this before treating extensionsBumped/filesModified as work that happened.",
+    ),
   extensionsBumped: z.number(),
   filesModified: z.number(),
   errors: z.array(z.object({
@@ -593,7 +598,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.26.2",
+  version: "2026.07.26.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -641,15 +646,18 @@ export const model = {
             name: string,
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
         const { repo_root } = context.globalArgs;
         const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
 
-        context.log("info", `Scanning extensions in ${resolvedRoot}`);
+        context.logger.info(`Scanning extensions in ${resolvedRoot}`);
         const extDirs = await discoverExtensions(resolvedRoot);
-        context.log("info", `Found ${extDirs.length} extensions`);
+        context.logger.info(`Found ${extDirs.length} extensions`);
 
         // Deduplicate npm packages to minimize registry queries
         const allNpmPkgs = new Set<string>();
@@ -667,13 +675,12 @@ export const model = {
         }
 
         for (const w of unpinnedWarnings) {
-          context.log("warning", w);
+          context.logger.warn(w);
         }
 
         // Batch-query npm registry
         const timeoutMs = context.globalArgs.registry_timeout * 1000;
-        context.log(
-          "info",
+        context.logger.info(
           `Querying npm registry for ${allNpmPkgs.size} packages`,
         );
         const npmLatestVersions = new Map<string, string>();
@@ -688,7 +695,7 @@ export const model = {
           "swamp-testing",
           timeoutMs,
         );
-        context.log("info", `swamp-testing latest: ${testingLatest}`);
+        context.logger.info(`swamp-testing latest: ${testingLatest}`);
 
         // Build per-extension status
         const extensions: z.infer<typeof ExtensionStatusSchema>[] = [];
@@ -778,12 +785,11 @@ export const model = {
         const lockDriftedCount = extensions.filter((e) => e.lockDrifted).length;
         const directSpecCount =
           extensions.filter((e) => e.directSpecifiers.length > 0).length;
-        context.log(
-          "info",
+        context.logger.info(
           `Audit complete: ${staleCount}/${extensions.length} stale, ${lockDriftedCount} lock-drifted, ${directSpecCount} with direct specifiers`,
         );
 
-        const handle = await context.writeResource("audit", "latest", {
+        const handle = await context.writeResource("audit", "current-audit", {
           scannedAt: new Date().toISOString(),
           repoRoot: resolvedRoot,
           totalExtensions: extensions.length,
@@ -822,13 +828,16 @@ export const model = {
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
           readResource: (
-            specName: string,
-            name: string,
+            instanceName: string,
+            version?: number,
           ) => Promise<Record<string, unknown> | null>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
-        const audit = await context.readResource("audit", "latest");
+        const audit = await context.readResource("current-audit");
         if (!audit) {
           throw new Error(
             "No audit data found. Run the audit method first.",
@@ -966,12 +975,11 @@ export const model = {
           });
         }
 
-        context.log(
-          "info",
+        context.logger.info(
           `Plan: ${entries.length} extensions to bump, ${skipped.length} skipped (test-only)`,
         );
 
-        const handle = await context.writeResource("plan", "latest", {
+        const handle = await context.writeResource("plan", "current-plan", {
           plannedAt: new Date().toISOString(),
           totalEntries: entries.length,
           entries,
@@ -1000,16 +1008,19 @@ export const model = {
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
           readResource: (
-            specName: string,
-            name: string,
+            instanceName: string,
+            version?: number,
           ) => Promise<Record<string, unknown> | null>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
         const { repo_root } = context.globalArgs;
         const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
 
-        const plan = await context.readResource("plan", "latest");
+        const plan = await context.readResource("current-plan");
         if (!plan) {
           throw new Error("No plan found. Run plan-bump first.");
         }
@@ -1032,8 +1043,7 @@ export const model = {
 
         for (const entry of entries) {
           const extDir = `${resolvedRoot}/${entry.dir}`;
-          context.log(
-            "info",
+          context.logger.info(
             `${args.dry_run ? "[DRY RUN] " : ""}Applying: ${entry.name}`,
           );
 
@@ -1103,13 +1113,11 @@ export const model = {
             if (!args.dry_run) {
               const lockResult = await run(["deno", "install"], extDir);
               if (lockResult.success) {
-                context.log(
-                  "info",
+                context.logger.info(
                   `  ↳ deno.lock regenerated for ${entry.name}`,
                 );
               } else {
-                context.log(
-                  "warning",
+                context.logger.warn(
                   `  ↳ deno install failed for ${entry.name}`,
                 );
                 errors.push({
@@ -1127,15 +1135,15 @@ export const model = {
           }
         }
 
-        context.log(
-          "info",
+        context.logger.info(
           `Apply complete: ${entries.length} extensions, ${filesModified} files${
             args.dry_run ? " (dry run)" : ""
           }`,
         );
 
-        const handle = await context.writeResource("apply", "latest", {
+        const handle = await context.writeResource("apply", "current-apply", {
           appliedAt: new Date().toISOString(),
+          dryRun: args.dry_run ?? false,
           extensionsBumped: entries.length,
           filesModified,
           errors,
@@ -1166,7 +1174,10 @@ export const model = {
             name: string,
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
         const { repo_root } = context.globalArgs;
@@ -1191,7 +1202,7 @@ export const model = {
           const relDir = dir.slice(resolvedRoot.length + 1) || ".";
           const errors: string[] = [];
 
-          context.log("info", `Quality gate: ${name}`);
+          context.logger.info(`Quality gate: ${name}`);
 
           const checkResult = await run(["deno", "task", "check"], dir);
           const lintResult = await run(["deno", "task", "lint"], dir);
@@ -1229,23 +1240,26 @@ export const model = {
           });
 
           if (!allPassed && args.stop_on_failure) {
-            context.log("warning", `Stopping on failure: ${name}`);
+            context.logger.warn(`Stopping on failure: ${name}`);
             break;
           }
         }
 
-        context.log(
-          "info",
+        context.logger.info(
           `Quality gate complete: ${passed} passed, ${failed} failed`,
         );
 
-        const handle = await context.writeResource("quality", "latest", {
-          ranAt: new Date().toISOString(),
-          totalExtensions: results.length,
-          passed,
-          failed,
-          results,
-        });
+        const handle = await context.writeResource(
+          "quality",
+          "current-quality",
+          {
+            ranAt: new Date().toISOString(),
+            totalExtensions: results.length,
+            passed,
+            failed,
+            results,
+          },
+        );
         return { dataHandles: [handle] };
       },
     },
