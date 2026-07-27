@@ -1,3 +1,9 @@
+## 2026.07.27.3
+
+**Fixed:** `apply-bump` now prepends the new release notes entry to
+`RELEASE_NOTES.md` instead of overwriting it. Previous versions discarded the
+entire changelog history, replacing it with only the current bump's entry.
+
 ## 2026.07.27.2
 
 **Fixed:** `apply-bump` now includes `*_test.ts` files when expanding glob
