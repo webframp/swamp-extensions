@@ -4,6 +4,7 @@
 
 import { assertEquals } from "@std/assert";
 import {
+  bodyReferencesArgs,
   classifyOperation,
   classifyServiceMethods,
   generateMethodName,
@@ -185,4 +186,59 @@ Deno.test("method_classifier: classifies all method types correctly", () => {
   assertEquals(methods[2].type, "create");
   assertEquals(methods[3].type, "update");
   assertEquals(methods[4].type, "delete");
+});
+
+// ---------------------------------------------------------------------------
+// bodyReferencesArgs
+//
+// The execute parameter used to be named by predicting whether the body would
+// reference `args` (methodUsesArgs), which could disagree with the body actually
+// generated. It is now derived from the generated body instead, so this is the
+// gate that keeps the signature and the body in agreement.
+// ---------------------------------------------------------------------------
+
+Deno.test("bodyReferencesArgs: detects a path interpolation", () => {
+  assertEquals(
+    bodyReferencesArgs([
+      "      `/zones/${zoneId}/api_gateway/labels/managed/${args.name}`,",
+    ]),
+    true,
+  );
+});
+
+Deno.test("bodyReferencesArgs: detects a bare reference", () => {
+  assertEquals(
+    bodyReferencesArgs(["      for (const [k, v] of Object.entries(args)) {"]),
+    true,
+  );
+});
+
+Deno.test("bodyReferencesArgs: a body with no args reference is false", () => {
+  assertEquals(
+    bodyReferencesArgs([
+      "      const { apiToken, zoneId } = context.globalArgs;",
+      '      const result = await cfApi(apiToken, "GET", `/zones/${zoneId}/settings`);',
+    ]),
+    false,
+  );
+});
+
+Deno.test("bodyReferencesArgs: context.globalArgs alone does not count", () => {
+  // `globalArgs` ends in "Args" and is preceded by a dot — must not match.
+  assertEquals(
+    bodyReferencesArgs(["      const { apiToken } = context.globalArgs;"]),
+    false,
+  );
+});
+
+Deno.test("bodyReferencesArgs: an already-underscored param does not count", () => {
+  assertEquals(bodyReferencesArgs(["      // _args is unused here"]), false);
+});
+
+Deno.test("bodyReferencesArgs: a longer identifier containing args does not count", () => {
+  assertEquals(
+    bodyReferencesArgs(["      const argsSchema = z.object({});"]),
+    false,
+  );
+  assertEquals(bodyReferencesArgs(["      const myargs = 1;"]), false);
 });

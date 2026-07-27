@@ -12,9 +12,8 @@
  */
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
-import type { SchemaObject } from "./schema_fetcher.ts";
 import { schemaToZod } from "./type_mapper.ts";
-import { MAX_PAGES, ZOD_VERSION } from "../config.ts";
+import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
 export type MethodType =
@@ -376,27 +375,13 @@ function generateResponseSchemas(
   return schemaNames;
 }
 
-/** Determine if a method's execute body references `args` */
-function methodUsesArgs(method: ClassifiedMethod): boolean {
-  const { type, operation } = method;
-  // List methods always use args (as query params)
-  if (type === "list") return true;
-  // Any method with path params uses args for URL construction
-  if (operation.pathParams.length > 0) return true;
-  // Create/update methods use args as the request body
-  if (type === "create" || type === "update") return true;
-  // Action methods with request body use args
-  if (type === "action" && operation.requestBody) return true;
-  return false;
-}
-
 /** Generate a single method definition */
 function generateMethod(
   method: ClassifiedMethod,
   config: ServiceConfig,
   _schemaNames: Map<string, string>,
 ): string {
-  const { operation, type } = method;
+  const { operation } = method;
   const lines: string[] = [];
   const indent = "    ";
 
@@ -408,12 +393,45 @@ function generateMethod(
   // Arguments schema
   lines.push(`${indent}  arguments: ${generateArgsSchema(operation)},`);
 
-  // Execute function
-  const argsUsed = methodUsesArgs(method);
-  const argsParam = argsUsed ? "args" : "_args";
+  // Execute function. The body is generated first so the parameter name can be
+  // derived from whether the body actually references `args`, rather than
+  // predicted ahead of time by methodUsesArgs(). Prediction and reality can
+  // disagree — a path template placeholder the spec never declares still
+  // produces an `args.<name>` reference — and when they do, the generated method
+  // does not compile. Deriving it removes the whole class of mismatch.
+  const bodyLines = generateExecuteBody(method, config, indent);
+  const argsParam = bodyReferencesArgs(bodyLines) ? "args" : "_args";
   lines.push(
     `${indent}  execute: async (${argsParam}: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {`,
   );
+  lines.push(...bodyLines);
+
+  lines.push(`${indent}  },`);
+  lines.push(`${indent}},`);
+
+  return lines.join("\n");
+}
+
+/**
+ * True when generated body text references the `args` parameter.
+ *
+ * Word-boundary matched so `_args`, `argsSchema`, or a field literally named
+ * `myargs` do not count as uses.
+ *
+ * Exported for direct unit testing.
+ */
+export function bodyReferencesArgs(bodyLines: string[]): boolean {
+  return /(^|[^.\w])args\b/.test(bodyLines.join("\n"));
+}
+
+/** Generate the statements inside a method's execute function */
+function generateExecuteBody(
+  method: ClassifiedMethod,
+  config: ServiceConfig,
+  indent: string,
+): string[] {
+  const { operation, type } = method;
+  const lines: string[] = [];
 
   const scopeId = config.scope === "account" ? "accountId" : "zoneId";
 
@@ -447,10 +465,7 @@ function generateMethod(
     lines.push(generateActionBody(method, apiPath, indent));
   }
 
-  lines.push(`${indent}  },`);
-  lines.push(`${indent}},`);
-
-  return lines.join("\n");
+  return lines;
 }
 
 /** Generate the arguments schema for a method */

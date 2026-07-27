@@ -89,14 +89,12 @@ interface ServiceDiff {
 
 async function detectChanges(
   outputBase: string,
-  services: typeof SERVICES,
   groups: ReturnType<typeof groupOperations>,
 ): Promise<ServiceDiff[]> {
   const diffs: ServiceDiff[] = [];
 
   for (const group of groups) {
     const methods = classifyServiceMethods(group);
-    const manifestPath = join(outputBase, group.config.name, "manifest.yaml");
     const modelPath = join(
       outputBase,
       group.config.name,
@@ -211,7 +209,7 @@ async function main() {
   const groups = groupOperations(spec, SERVICES);
 
   // Detect changes
-  const diffs = await detectChanges(OUTPUT_BASE, SERVICES, groups);
+  const diffs = await detectChanges(OUTPUT_BASE, groups);
   const changed = opts.all ? diffs : diffs.filter((d) => d.hasChanges);
 
   if (changed.length === 0) {

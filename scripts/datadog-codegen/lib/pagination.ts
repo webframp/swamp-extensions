@@ -20,7 +20,6 @@ import type {
   ParameterObject,
   RefObject,
   ResponseObject,
-  SchemaObject,
 } from "./schema_fetcher.ts";
 import { resolveSchema } from "./schema_fetcher.ts";
 

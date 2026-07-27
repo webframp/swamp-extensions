@@ -15,13 +15,7 @@
  */
 
 import type { ServiceConfig } from "../config.ts";
-import {
-  calver,
-  OUTPUT_BASE,
-  SWAMP_TESTING_VERSION,
-  ZOD_VERSION,
-} from "../config.ts";
-import { join } from "@std/path";
+import { OUTPUT_BASE, SWAMP_TESTING_VERSION } from "../config.ts";
 
 /** Generate manifest.yaml content */
 export function generateManifest(

@@ -4,7 +4,9 @@
     "generate:dry-run": "deno run --allow-net --allow-read --allow-write --allow-env main.ts --dry-run",
     "check": "deno check *.ts lib/*.ts",
     "lint": "deno lint",
-    "fmt": "deno fmt"
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
+    "test": "deno test --allow-net --allow-read --allow-write --allow-env --permit-no-files"
   },
   "imports": {
     "@std/path": "jsr:@std/path@1",
