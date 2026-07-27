@@ -7,6 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Supersede in-flight runs for the same ref. Safe here because CI only reads —
+# nothing it does is destructive or partially observable if cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   vault-check:
     name: vault/${{ matrix.vault }} - ${{ matrix.task }}
@@ -200,7 +206,10 @@ jobs:
           fi
 
   model-check:
-    name: ${{ matrix.extension }} - ${{ matrix.task }}
+    # `matrix.extension` is an object here, so interpolating it directly
+    # stringifies to the literal "Object" and all six entries collapse into one
+    # check name per task — a failure could not be attributed to an extension.
+    name: ${{ matrix.extension.dir }} - ${{ matrix.task }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

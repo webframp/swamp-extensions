@@ -4,6 +4,12 @@ on:
   issue_comment:
     types: [created]
 
+# One merge attempt per PR at a time, never cancelled. A second `/lgtm` comment
+# should queue behind the first rather than race it or abort a merge midway.
+concurrency:
+  group: merge-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   merge:
     name: Merge PR
