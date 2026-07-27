@@ -478,7 +478,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/aurora-datastore-bootstrap/provisioner",
-  version: "2026.07.22.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

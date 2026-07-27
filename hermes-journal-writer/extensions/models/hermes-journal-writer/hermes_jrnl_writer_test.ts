@@ -600,8 +600,16 @@ Deno.test("write_daily_entry renders The AI Daily Brief editions with written ta
                 summary: "A weekend long-read on agents in the org.",
                 tags: ["Enterprise", "Models"],
                 nuggets: [
-                  { heading: "Take one", body: "Written analysis body.", anchor: "a" },
-                  { heading: "Take two", body: "Second analysis body.", anchor: "b" },
+                  {
+                    heading: "Take one",
+                    body: "Written analysis body.",
+                    anchor: "a",
+                  },
+                  {
+                    heading: "Take two",
+                    body: "Second analysis body.",
+                    anchor: "b",
+                  },
                 ],
               }],
             },
@@ -610,7 +618,9 @@ Deno.test("write_daily_entry renders The AI Daily Brief editions with written ta
         success: true,
       };
     }
-    if (cmd.includes("status")) return { stdout: " A journal/x.org", success: true };
+    if (cmd.includes("status")) {
+      return { stdout: " A journal/x.org", success: true };
+    }
     return { stdout: "", success: true };
   });
   try {
@@ -620,9 +630,15 @@ Deno.test("write_daily_entry renders The AI Daily Brief editions with written ta
     // Section heading present
     assertEquals(content.includes("* The AI Daily Brief"), true);
     // Edition date + title rendered as a level-2 heading
-    assertEquals(content.includes("** 2026-07-19 — *The Self-Driving Company*"), true);
+    assertEquals(
+      content.includes("** 2026-07-19 — *The Self-Driving Company*"),
+      true,
+    );
     // Edition URL included
-    assertEquals(content.includes("https://aidailybrief.ai/e/2026-07-19"), true);
+    assertEquals(
+      content.includes("https://aidailybrief.ai/e/2026-07-19"),
+      true,
+    );
     // Written takeaways rendered, video markers absent
     assertEquals(content.includes("- Take one"), true);
     assertEquals(content.includes("Written analysis body."), true);

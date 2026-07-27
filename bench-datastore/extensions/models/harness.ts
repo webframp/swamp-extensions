@@ -172,7 +172,7 @@ async function runModelMethod(
 /** Harness model definition. */
 export const model = {
   type: "@webframp/bench-datastore/harness",
-  version: "2026.07.24.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     setup: {

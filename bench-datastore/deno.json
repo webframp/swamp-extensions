@@ -8,7 +8,8 @@
   "tasks": {
     "check": "deno check extensions/models/harness.ts extensions/models/harness_test.ts",
     "lint": "deno lint",
-    "fmt": "deno fmt --check",
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
     "test": "deno test --allow-run --allow-env --allow-read --allow-write extensions/"
   },
   "lint": {
@@ -17,5 +18,11 @@
         "no-import-prefix"
       ]
     }
+  },
+  "fmt": {
+    "exclude": [
+      "CLAUDE.md",
+      "AGENTS.md"
+    ]
   }
 }

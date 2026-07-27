@@ -19,8 +19,8 @@ swamp model method run journal-writer write_daily_entry
 
 ## Methods
 
-| Method              | Description                                                                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Method              | Description                                                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `write_daily_entry` | Reads the latest research-collector brief and appends a dated org entry with Hacker News, Lobste.rs, arXiv, SRE Weekly, IFIN, RedMonk, and The AI Daily Brief content. |
 
 ## Org entry format
@@ -42,12 +42,12 @@ Research brief — 20 HN, 20 Lobste.rs, 5 SRE Weekly, 15 IFIN, 5 RedMonk, 3 AI D
 
 ## Global arguments
 
-| Arg          | Default              | Description                    |
-| ------------ | -------------------- | ------------------------------ |
-| `orgDir`     | `~/org`              | Root of org-mode repo          |
-| `jrnlSubdir` | `journal`            | Subdirectory for journal files |
-| `swampBin`   | `~/.local/bin/swamp` | Path to swamp binary           |
-| `repoDir`    | `/tmp/swamp-fresh`   | Swamp repo for data queries    |
+| Arg          | Default              | Description                                                                                                               |
+| ------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `orgDir`     | `~/org`              | Root of org-mode repo                                                                                                     |
+| `jrnlSubdir` | `journal`            | Subdirectory for journal files                                                                                            |
+| `swampBin`   | `~/.local/bin/swamp` | Path to swamp binary                                                                                                      |
+| `repoDir`    | `/tmp/swamp-fresh`   | Swamp repo for data queries                                                                                               |
 | `sources`    | all seven sources    | Which sources to include: `hn`, `lobsters`, `sre`, `ifin`, `redmonk`, `arxiv`, `aiDailyBrief`. Drop a name to disable it. |
 
 ## Dependencies

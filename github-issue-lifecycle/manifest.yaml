@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/github-issue-lifecycle"
-version: "2026.07.24.1"
+version: "2026.07.27.1"
 description: |
   GitHub issue lifecycle tracker for swamp. Drives issues from open through
   triage, planning, implementation, PR linkage, and merge as versioned swamp

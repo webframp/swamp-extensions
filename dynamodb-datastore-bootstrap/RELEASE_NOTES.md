@@ -1,13 +1,13 @@
-## 2026.07.22.1
+## 2026.07.27.1
 
-**Added:** One-shot bootstrap for `@webframp/dynamodb-datastore`. Ships a
-provisioner model that creates a DynamoDB table (PAY_PER_REQUEST, GSI `gsi1`,
-TTL on `ttl`) and a scoped IAM managed policy (7 actions), plus a workflow that
-runs the provisioner and switches the repo datastore to DynamoDB.
+**Fixed:** The `fmt` task ran `deno fmt --check`, so `deno task fmt` verified
+formatting instead of applying it and there was no way to format the extension
+through its own task. `fmt` now formats and a new `fmt:check` verifies, matching
+every other extension in the repository.
 
-**Added:** Full idempotency — re-running the provisioner against existing
-infrastructure is a no-op that reports `tableCreated: false` and
-`policyCreated: false`.
+**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
+are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
+so `deno task fmt:check` could fail locally on a file CI does not have.
 
-**Added:** TOCTOU-safe policy creation — concurrent provisioner runs will not
-fail if the policy is created between the existence check and the create call.
+**Upgrade note:** Tooling and formatting only. No model, method, schema, or
+behavior change — nothing to do on upgrade.

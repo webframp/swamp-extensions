@@ -1,3 +1,8 @@
-## 2026.07.24.1
+## 2026.07.27.1
 
-**Changed:** Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).
+**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
+are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
+so `deno task fmt:check` could fail locally on a file CI does not have.
+
+**Upgrade note:** Tooling and formatting only. No model, method, schema, or
+behavior change — nothing to do on upgrade.
