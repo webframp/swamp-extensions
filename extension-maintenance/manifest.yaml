@@ -15,7 +15,7 @@ description: |
   ```bash
   swamp extension pull @webframp/extension-maintenance
   swamp model create @webframp/extension-maintenance/maintainer ext-maint \
-    --global repo_root=/path/to/extensions
+    --global-arg repo_root=/path/to/extensions
 
   # Observe
   swamp model method run ext-maint audit

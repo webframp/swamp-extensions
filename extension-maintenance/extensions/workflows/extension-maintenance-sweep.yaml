@@ -15,7 +15,7 @@ description: |
   `ext-maint`, with repo_root pointing at the extension repository root:
 
     swamp model create @webframp/extension-maintenance/maintainer ext-maint \
-      --global repo_root=/path/to/swamp-extensions
+      --global-arg repo_root=/path/to/swamp-extensions
 
   Every step targets that one model, so the steps run strictly sequentially.
   Parallelising them would contend on the per-model lock and time out.

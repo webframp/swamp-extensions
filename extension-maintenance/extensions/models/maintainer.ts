@@ -149,7 +149,7 @@ const ApplyResultSchema = z.object({
   filesMatched: z
     .number()
     .describe(
-      "Files where the target string was present, so a real run would rewrite them. Populated on dry runs and real runs alike.",
+      "Files where the target string was present, so a real run would rewrite them. Populated on dry runs and real runs alike. On a real run with errors this can exceed filesModified: matches are counted before the write is attempted, so files belonging to an entry that threw are matched but not modified. Cross-reference the errors array to attribute the difference.",
     ),
   errors: z.array(z.object({
     extension: z.string(),
