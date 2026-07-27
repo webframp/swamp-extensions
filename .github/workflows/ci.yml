@@ -15,8 +15,9 @@ concurrency:
 
 jobs:
   discover:
-    # Derive the extension matrix from the filesystem. Eliminates hand-maintained
-    # lists that silently fall behind as extensions are added or renamed.
+    # Derive the extension matrix from the filesystem. On pull requests, scope
+    # to extensions touched by the diff plus their reverse dependencies. On push
+    # to main or workflow_dispatch, run the full matrix unconditionally.
     name: Discover extensions
     runs-on: ubuntu-latest
     outputs:
@@ -24,13 +25,22 @@ jobs:
       scope: ${{ steps.discover.outputs.scope }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history required for git diff against the base branch.
+          fetch-depth: 0
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: "2.7.14"
       - name: Run ci-discover
         id: discover
         working-directory: scripts/ci-discover
-        run: deno task discover -- --github-output --exclude datastore/valkey
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            deno task discover -- --github-output --exclude datastore/valkey \
+              --diff-base "${{ github.event.pull_request.base.sha }}"
+          else
+            deno task discover -- --github-output --exclude datastore/valkey
+          fi
 
   extension-check:
     # One job per extension, four tasks as steps.
