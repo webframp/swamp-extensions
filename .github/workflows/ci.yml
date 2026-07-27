@@ -14,632 +14,131 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  vault-check:
-    name: vault/${{ matrix.vault }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        vault: [pass, gopass, hashicorp-vault, macos-keychain]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: vault/${{ matrix.vault }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/vaults/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/vaults/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            # Run tests if any exist. Use the extension's own task so the
-            # permission set lives in one place: a hardcoded set here drifts
-            # from deno.json and fails only in CI.
-            if ls extensions/vaults/*_test.ts 1> /dev/null 2>&1; then
-              deno task test
-            else
-              echo "No tests found, skipping"
-            fi
-          else
-            # Check all .ts files except test files
-            deno check extensions/vaults/*.ts
-          fi
-
-  aws-model-check:
-    name: aws/${{ matrix.extension }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        extension: [pricing, inventory, logs, metrics, alarms, alarm-investigation, traces, cost-estimate, cost-explorer, networking, guardduty, bedrock-usage, securityhub-findings, service-quotas, adopt, config-compliance, drift-state, dns-observation, event-topology, iam]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: aws/${{ matrix.extension }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            if ls extensions/models/aws/*_test.ts 1> /dev/null 2>&1; then
-              deno test --allow-env --allow-net --allow-sys extensions/models/
-            else
-              echo "No tests found, skipping"
-            fi
-          else
-            deno check extensions/models/aws/*.ts
-          fi
-
-  aws-report-check:
-    name: aws/${{ matrix.extension }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        extension: [cost-report, ops, cost-audit, adopt]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: aws/${{ matrix.extension }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/reports/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            if ls extensions/reports/*_test.ts 1> /dev/null 2>&1; then
-              deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/reports/
-            else
-              echo "No tests found, skipping"
-            fi
-          else
-            deno check extensions/reports/*.ts
-          fi
-
-  datadog-check:
-    name: datadog/${{ matrix.extension }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        extension: [dora, downtimes, events, incidents, logs, metrics, monitors, on-call, security-rules, security-signals, security-suppressions, slos, synthetics, teams]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: datadog/${{ matrix.extension }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            if ls extensions/models/datadog/*_test.ts 1> /dev/null 2>&1; then
-              deno test --allow-env --allow-net extensions/models/
-            else
-              echo "No tests found, skipping"
-            fi
-          else
-            deno check extensions/models/datadog/*.ts extensions/models/datadog/_lib/*.ts
-          fi
-
-  snyk-check:
-    name: snyk/${{ matrix.extension }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        extension: [apps, assets, cloud, collections, container-images, groups, inventory, issues, memberships, policies, projects, sast, sbom, self, service-accounts, settings, slack, sso, tenants, tests]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: snyk/${{ matrix.extension }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            if ls extensions/models/snyk/*_test.ts 1> /dev/null 2>&1; then
-              deno test --allow-env --allow-net extensions/models/
-            else
-              echo "No tests found, skipping"
-            fi
-          else
-            deno check extensions/models/snyk/*.ts extensions/models/snyk/_lib/*.ts
-          fi
-
-  gitlab-report-check:
-    name: gitlab/report - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: gitlab
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/reports/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/reports/
-          else
-            deno check extensions/reports/*.ts
-          fi
-
-  model-check:
-    # `matrix.extension` is an object here, so interpolating it directly
-    # stringifies to the literal "Object" and all six entries collapse into one
-    # check name per task — a failure could not be attributed to an extension.
-    name: ${{ matrix.extension.dir }} - ${{ matrix.task }}
+  extension-check:
+    # One job per extension, four tasks as steps.
+    #
+    # Previously each extension ran four separate jobs -- 336 jobs for 82
+    # extensions -- each paying its own checkout and Deno install for a mean of
+    # 8.6s of mostly-setup work. Tasks as steps pay that once.
+    #
+    # This shape is also what makes auto-discovery possible at all: GitHub caps a
+    # matrix at 256 jobs per workflow run, so 137 extensions x 4 tasks (548)
+    # cannot be expressed, while 137 x 1 can.
+    #
+    # Every extension defines check/lint/fmt:check/test with identical names, so
+    # no per-task branching is needed here. The inline shell the old jobs carried
+    # was a fossil from before that convention settled.
+    name: ${{ matrix.extension }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         extension:
-          - { dir: cloudflare, models: cloudflare }
-          - { dir: github, models: github }
-          - { dir: gitlab, models: gitlab }
-          - { dir: system, models: system }
-          - { dir: network, models: network }
-          - { dir: twitch, models: twitch }
-        task: [check, lint, fmt]
+          - ai-usage
+          - aws/adopt
+          - aws/alarm-investigation
+          - aws/alarms
+          - aws/bedrock-usage
+          - aws/config-compliance
+          - aws/cost-audit
+          - aws/cost-estimate
+          - aws/cost-explorer
+          - aws/cost-report
+          - aws/dns-observation
+          - aws/drift-state
+          - aws/event-topology
+          - aws/guardduty
+          - aws/iam
+          - aws/inventory
+          - aws/logs
+          - aws/metrics
+          - aws/networking
+          - aws/ops
+          - aws/pricing
+          - aws/securityhub-findings
+          - aws/service-quotas
+          - aws/terraform-drift
+          - aws/traces
+          - azure/openai-usage
+          - cloudflare
+          - cloudflare-audit
+          - datadog/dora
+          - datadog/downtimes
+          - datadog/events
+          - datadog/incidents
+          - datadog/logs
+          - datadog/metrics
+          - datadog/monitors
+          - datadog/on-call
+          - datadog/security-rules
+          - datadog/security-signals
+          - datadog/security-suppressions
+          - datadog/slos
+          - datadog/synthetics
+          - datadog/teams
+          - datastore/azure-blob
+          - datastore/dynamodb
+          - datastore/gitlab-datastore
+          - datastore/postgres
+          - gcp/vertex-usage
+          - github
+          - gitlab
+          - microsoft/teams
+          - network
+          - redmine
+          - redmine-kanban
+          - snyk/apps
+          - snyk/assets
+          - snyk/cloud
+          - snyk/collections
+          - snyk/container-images
+          - snyk/groups
+          - snyk/inventory
+          - snyk/issues
+          - snyk/memberships
+          - snyk/policies
+          - snyk/projects
+          - snyk/sast
+          - snyk/sbom
+          - snyk/self
+          - snyk/service-accounts
+          - snyk/settings
+          - snyk/slack
+          - snyk/sso
+          - snyk/tenants
+          - snyk/tests
+          - sre
+          - system
+          - terraform
+          - twitch
+          - vault/gopass
+          - vault/hashicorp-vault
+          - vault/macos-keychain
+          - vault/pass
     defaults:
       run:
-        working-directory: ${{ matrix.extension.dir }}
+        working-directory: ${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          else
-            deno check extensions/models/${{ matrix.extension.models }}/*.ts
-          fi
-
-  cloudflare-test:
-    name: cloudflare - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cloudflare
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
+      - name: deno check
+        run: deno task check
+      - name: deno lint
+        run: deno task lint
+      - name: deno fmt
+        run: deno task fmt:check
       - name: deno test
-        run: |
-          if ls extensions/models/cloudflare/*_test.ts 1> /dev/null 2>&1; then
-            deno test --allow-net extensions/models/
-          else
-            echo "No tests found, skipping"
-          fi
+        run: deno task test
 
-  network-test:
-    name: network - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: network
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-env --allow-net=0.0.0.0 --allow-read extensions/models/
-
-  system-test:
-    name: system - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: system
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-env --allow-read extensions/models/
-
-  gitlab-test:
-    name: gitlab - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: gitlab
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-run --allow-env extensions/models/
-
-  github-test:
-    name: github - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: github
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-run extensions/models/
-
-  twitch-test:
-    name: twitch - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: twitch
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-env --allow-net --allow-read --allow-write --allow-sys extensions/
-
-  cloudflare-audit-check:
-    name: cloudflare-audit - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt]
-    defaults:
-      run:
-        working-directory: cloudflare-audit
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/reports/
-          else
-            deno check extensions/reports/cloudflare_audit_report.ts
-          fi
-
-  cloudflare-audit-test:
-    name: cloudflare-audit - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cloudflare-audit
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test extensions/reports/
-
-  sre-report-check:
-    name: sre - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt]
-    defaults:
-      run:
-        working-directory: sre
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/reports/
-          else
-            deno check extensions/reports/sre_health_report.ts
-          fi
-
-  sre-test:
-    name: sre - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: sre
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test extensions/reports/
-
-  redmine-check:
-    name: redmine - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt]
-    defaults:
-      run:
-        working-directory: redmine
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          else
-            deno check extensions/models/redmine/*.ts extensions/models/redmine/_lib/*.ts
-          fi
-
-  redmine-test:
-    name: redmine - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: redmine
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/models/
-
-  redmine-kanban-check:
-    name: redmine-kanban - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt]
-    defaults:
-      run:
-        working-directory: redmine-kanban
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/reports/
-          else
-            deno check extensions/reports/*.ts
-          fi
-
-  redmine-kanban-test:
-    name: redmine-kanban - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: redmine-kanban
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-env --allow-net --allow-read --allow-write extensions/reports/
-
-  terraform-check:
-    name: terraform - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt]
-    defaults:
-      run:
-        working-directory: terraform
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          else
-            deno check extensions/models/terraform/*.ts
-          fi
-
-  terraform-test:
-    name: terraform - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: terraform
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-run --allow-env --allow-read extensions/models/
-
-  terraform-drift-check:
-    name: terraform-drift - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt]
-    defaults:
-      run:
-        working-directory: aws/terraform-drift
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/reports/
-          else
-            deno check extensions/reports/drift_report.ts
-          fi
-
-  terraform-drift-test:
-    name: terraform-drift - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: aws/terraform-drift
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-env --allow-read --allow-write extensions/reports/
-
-  microsoft-check:
-    name: microsoft/teams - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt]
-    defaults:
-      run:
-        working-directory: microsoft/teams
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/ extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/ extensions/reports/
-          else
-            deno check extensions/models/microsoft/*.ts extensions/models/microsoft/_lib/*.ts
-          fi
-
-  microsoft-test:
-    name: microsoft/teams - test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: microsoft/teams
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno test
-        run: deno test --allow-env --allow-net extensions/models/ extensions/reports/
-
-  datastore-check:
-    name: datastore/${{ matrix.datastore }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        datastore: [azure-blob, dynamodb, gitlab-datastore, postgres]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: datastore/${{ matrix.datastore }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/
-          else
-            deno task check
-          fi
-
-  # Split from datastore-check because the valkey tests need a live server —
-  # they exercise real SET NX locking and pipeline semantics, which a fake
-  # cannot represent faithfully.
   datastore-valkey:
-    name: datastore/valkey - ${{ matrix.task }}
+    # Kept out of the generic matrix: its test task needs a live Valkey, and a
+    # service container cannot be declared per-step. Collapsing the tasks into
+    # one job still cuts four container startups to one -- and that startup is
+    # what flaked on #284.
+    name: datastore/valkey
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt, test]
     defaults:
       run:
         working-directory: datastore/valkey
@@ -660,100 +159,14 @@ jobs:
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            deno test --allow-net --allow-env --allow-read --allow-write --allow-sys extensions/
-          else
-            deno task check
-          fi
-
-  gcp-extensions:
-    name: gcp/${{ matrix.extension }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        extension: [vertex-usage]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: gcp/${{ matrix.extension }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            deno test --allow-run --allow-env extensions/models/
-          else
-            deno task check
-          fi
-
-  azure-extensions:
-    name: azure/${{ matrix.extension }} - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        extension: [openai-usage]
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: azure/${{ matrix.extension }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            deno test --allow-run --allow-env extensions/models/
-          else
-            deno task check
-          fi
-
-  ai-usage:
-    name: ai-usage - ${{ matrix.task }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [check, lint, fmt, test]
-    defaults:
-      run:
-        working-directory: ai-usage
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
-        with:
-          deno-version: "2.7.14"
-      - name: deno ${{ matrix.task }}
-        run: |
-          if [ "${{ matrix.task }}" = "fmt" ]; then
-            deno fmt --check extensions/models/ extensions/reports/
-          elif [ "${{ matrix.task }}" = "lint" ]; then
-            deno lint extensions/models/ extensions/reports/
-          elif [ "${{ matrix.task }}" = "test" ]; then
-            deno test --allow-env extensions/models/ extensions/reports/
-          else
-            deno task check
-          fi
+      - name: deno check
+        run: deno task check
+      - name: deno lint
+        run: deno task lint
+      - name: deno fmt
+        run: deno task fmt:check
+      - name: deno test
+        run: deno task test
 
   scripts-check:
     # The codegen generators had no CI gate at all, despite generating 26
