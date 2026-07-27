@@ -415,13 +415,23 @@ function generateMethod(
 /**
  * True when generated body text references the `args` parameter.
  *
- * Word-boundary matched so `_args`, `argsSchema`, or a field literally named
- * `myargs` do not count as uses.
+ * Comments are stripped first: a comment mentioning `args` says nothing about
+ * whether the code uses it, and naming the parameter `args` on that basis would
+ * produce a misleading signature.
+ *
+ * Word-boundary matched so `_args`, `argsSchema`, `context.globalArgs`, or a
+ * field literally named `myargs` do not count as uses.
  *
  * Exported for direct unit testing.
  */
 export function bodyReferencesArgs(bodyLines: string[]): boolean {
-  return /(^|[^.\w])args\b/.test(bodyLines.join("\n"));
+  const code = bodyLines
+    .join("\n")
+    // Line comments only. Block comments are not emitted into method bodies by
+    // any generator path, and stripping them naively would corrupt string
+    // literals containing "/*".
+    .replace(/\/\/[^\n]*/g, "");
+  return /(^|[^.\w])args\b/.test(code);
 }
 
 /** Generate the statements inside a method's execute function */

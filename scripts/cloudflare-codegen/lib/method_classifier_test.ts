@@ -8,6 +8,7 @@ import {
   classifyOperation,
   classifyServiceMethods,
   generateMethodName,
+  generateModelSource,
 } from "./method_classifier.ts";
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
 import type { ServiceConfig } from "../config.ts";
@@ -241,4 +242,112 @@ Deno.test("bodyReferencesArgs: a longer identifier containing args does not coun
     false,
   );
   assertEquals(bodyReferencesArgs(["      const myargs = 1;"]), false);
+});
+
+Deno.test("bodyReferencesArgs: a comment mentioning args does not count", () => {
+  // A comment says nothing about whether the code uses the parameter; naming it
+  // `args` on that basis would produce a misleading signature.
+  assertEquals(
+    bodyReferencesArgs(["      // args is supplied via context"]),
+    false,
+  );
+  assertEquals(
+    bodyReferencesArgs([
+      "      const { apiToken } = context.globalArgs; // args unused here",
+    ]),
+    false,
+  );
+});
+
+Deno.test("bodyReferencesArgs: code wins over a comment on the same line", () => {
+  assertEquals(
+    bodyReferencesArgs(["      const id = args.id; // uses args"]),
+    true,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Round trip: generateModelSource -> body generation -> parameter naming.
+//
+// bodyReferencesArgs and withTemplatePlaceholders are each covered in isolation,
+// but the composition is what this fix actually delivers: an undeclared path
+// placeholder must produce BOTH a populated arguments schema and an `args`
+// parameter. A regression in the wiring between them would be invisible to the
+// isolated tests.
+// ---------------------------------------------------------------------------
+
+function makeGroup(op: GroupedOperation): ServiceGroup {
+  const config: ServiceConfig = {
+    name: "api-shield",
+    description: "API Shield",
+    pathPrefixes: ["/zones/{zone_id}/api_gateway"],
+    scope: "zone",
+    labels: ["cloudflare"],
+  };
+  return { config, operations: [op] };
+}
+
+Deno.test("generateModelSource: undeclared placeholder yields args, not _args", () => {
+  // The real api-shield shape: {name} is in the template, declared nowhere, so
+  // withTemplatePlaceholders synthesizes it. The body then interpolates
+  // args.name and the signature must be named `args`.
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/zones/{zone_id}/api_gateway/labels/managed/{name}",
+    operationId: "api-shield-get-managed-label",
+    summary: "Retrieve managed label",
+    pathParams: [
+      { name: "name", in: "path", required: true, schema: { type: "string" } },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  assertEquals(src.includes("${args.name}"), true);
+  assertEquals(src.includes("_args: Record<string, unknown>"), false);
+  assertEquals(src.includes("args: Record<string, unknown>"), true);
+  // The argument must also be declared, or the method is uncallable.
+  assertEquals(/name:\s*z\.string\(\)/.test(src), true);
+});
+
+Deno.test("generateModelSource: a body with no args reference yields _args", () => {
+  // No path params beyond the primary scope and no request body, so nothing
+  // references args — the parameter must stay underscored to satisfy lint.
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/zones/{zone_id}/api_gateway/configuration",
+    operationId: "api-shield-get-configuration",
+    summary: "Retrieve configuration",
+    pathParams: [],
+    queryParams: [],
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  assertEquals(src.includes("_args: Record<string, unknown>"), true);
+});
+
+Deno.test("generateModelSource: derives args from the body, not from pathParams", () => {
+  // This is the case that distinguishes deriving the parameter name from
+  // predicting it. pathParams is EMPTY while the path template still carries a
+  // {placeholder}, so buildApiPath emits `args.name` regardless. Any predictor
+  // keyed on pathParams answers "_args" and the method does not compile.
+  //
+  // withTemplatePlaceholders normally prevents this state from reaching the
+  // classifier, so this test guards the second line of defense: if that union
+  // is ever bypassed or regressed, the signature still matches the body.
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/zones/{zone_id}/api_gateway/labels/managed/{name}",
+    operationId: "api-shield-get-managed-label",
+    summary: "Retrieve managed label",
+    pathParams: [],
+    queryParams: [],
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  assertEquals(src.includes("${args.name}"), true);
+  assertEquals(src.includes("_args: Record<string, unknown>"), false);
 });

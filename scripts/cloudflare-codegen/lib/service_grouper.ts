@@ -156,6 +156,12 @@ function findService(
  * Declared parameters win on conflict, so their schema and description survive.
  * Synthesized ones are required strings, matching how a path segment behaves.
  *
+ * Only the PRIMARY scope param is skipped. Secondary scope params are
+ * deliberately kept, because buildApiPath() in method_classifier.ts emits
+ * `${args.account_id}` / `${args.zone_id}` for them — they are method arguments,
+ * not globalArgs. Changing this to skip both scope params would reintroduce the
+ * exact signature/body mismatch this function exists to prevent.
+ *
  * Exported for direct unit testing.
  */
 export function withTemplatePlaceholders(
