@@ -1,36 +1,94 @@
-## 2026.07.26.2
+## 2026.07.26.3
 
-**Added:** Three new observations in the `audit` method:
+**Fixed:** Every method failed immediately on 2026.07.26.2. Three independent
+mismatches against the model execution context, each of which aborted the run
+before it produced data:
 
-1. **Lockfile-sync validation.** For each extension with both a `deno.json` and a
-   `deno.lock`, the audit now checks whether the lock resolves every pin in
-   `deno.json`. If not, the extension is flagged as `lockDrifted: true`, with
-   the specific stale entries listed. This catches the exact state that caused
-   the lockfile-consistency cleanup in #278: a `deno.json` pin changes, nobody
-   runs `deno install`, and the lock silently drifts.
+1. **`context.log` does not exist.** The runtime supplies `logger`, a LogTape
+   logger with `info`/`warn` methods — not a `log(level, message)` function.
+   Every method called `context.log(...)` and died with
+   `context.log is not a function`. All 14 call sites now use
+   `context.logger.info(...)` / `context.logger.warn(...)`, matching the
+   convention already used across the other `@webframp` extensions.
 
-2. **Direct-specifier detection.** Finds `.ts` source files that import a
-   versioned `jsr:` or `npm:` specifier directly instead of using the
-   `deno.json` import map alias. These bypass any pin change made to
-   `deno.json`, which is how `datastore/azure-blob` and `datastore/dynamodb`
-   kept re-introducing the old `swamp-testing` version in their locks even after
-   the pin was updated.
+2. **`latest` is a reserved data name.** All four resource writes used it, so
+   even after logging was fixed the audit failed with
+   `Data name 'latest' is reserved for internal use`. Resources are now written
+   as `current-audit`, `current-plan`, `current-apply`, and `current-quality`.
 
-3. **Audit summary categories** now include `lockDrifted` (extensions with
-   deno.lock out of sync) and `directSpecifiers` (extensions with imports
-   bypassing the import map).
+3. **`readResource` was called with the wrong arity.** The runtime signatures
+   differ: `writeResource(specName, name, data)` takes both a spec and a data
+   name, while `readResource(instanceName, version?)` takes only the data name.
+   Passing `(specName, name)` meant the spec name was used as the instance name
+   and the data name landed in the `version` slot, so the lookup missed and
+   `plan-bump` reported `No audit data found` immediately after a successful
+   audit. `apply-bump` failed the same way reading the plan.
 
-**Changed:** `plan-bump` now reports a `skipped` array alongside `entries`. Each
-entry names the extension, its directory, and the reason it was excluded. Before
-this, "stale but test-only, correctly skipped" was indistinguishable from
-"nothing stale" in the plan output.
+4. **A dry-run apply was indistinguishable from a real one.** `filesModified`
+   and the extension count incremented on every planned change regardless of
+   `dry_run`, and `ApplyResultSchema` had no field recording which mode produced
+   the record. A dry run across 35 stale extensions reported
+   `extensionsBumped: 35, filesModified: 179` — the exact shape a real apply
+   writes — so nothing reading `current-apply` could tell whether the files
+   existed on disk. Both counters are now gated on the write actually happening,
+   and the same dry run reports `extensionsBumped: 0, filesModified: 0`.
+   `extensionsBumped` also no longer counts entries that threw mid-write; a
+   `deno.lock` regeneration failure still counts as bumped, because the files
+   were written and only the lock is stale.
 
-**Changed:** `apply-bump` now runs `deno install` in each affected extension
-directory after writing pin changes. Without this, `apply-bump` creates the exact
-lockfile-drift state that the new audit check is designed to catch.
+**Added:** `dryRun` and `filesMatched` on `ApplyResultSchema`. `filesMatched`
+counts files where the target string was present, so a dry run still reports
+scope (`filesMatched: 179`) while being honest that nothing was written.
 
-**Upgrade note:** The `audit` resource schema has new required fields
-(`lockfileSync`, `directSpecifiers`, `lockDrifted` per extension, and
-`lockDrifted`/`directSpecifiers` in the categories object). The `plan` resource
-schema now requires a `skipped` array. CEL queries against older audit or plan
-data will need to account for missing fields.
+**Changed:** Resource data names. Anything referencing this model's output must
+be updated:
+
+| Spec      | Was      | Now               |
+| --------- | -------- | ----------------- |
+| `audit`   | `latest` | `current-audit`   |
+| `plan`    | `latest` | `current-plan`    |
+| `apply`   | `latest` | `current-apply`   |
+| `quality` | `latest` | `current-quality` |
+
+Retrieval becomes `swamp data get ext-maint current-audit`. CEL references
+become `data.latest("ext-maint", "current-audit")`. Distinct names also make the
+four resources addressable — under the old scheme all four shared one data name
+and could not be told apart by a workflow expression.
+
+**Added:** A `@webframp/extension-maintenance-sweep` workflow shipping with the
+extension. It chains the full maintenance loop as one command:
+
+```bash
+swamp workflow run @webframp/extension-maintenance-sweep
+```
+
+Five sequential steps — `audit`, `plan`, `approve`, `apply`, `verify` — with a
+`manual_approval` gate between the plan and any file write. Inspect the plan
+while the run is suspended, then approve and resume:
+
+```bash
+swamp data get ext-maint current-plan --json
+swamp workflow approve @webframp/extension-maintenance-sweep approve
+swamp workflow resume @webframp/extension-maintenance-sweep
+```
+
+Every step targets one model instance and therefore runs strictly sequentially —
+parallelising them would contend on the per-model lock. The workflow expects an
+instance named `ext-maint`.
+
+**Changed:** `ApplyResultSchema` gains required `dryRun` and `filesMatched`
+fields, and `extensionsBumped` / `filesModified` now count only work that
+actually happened. Consumers parsing `current-apply` with a strict schema must
+add both new fields.
+
+**Upgrade note:** Requires an `@webframp/extension-maintenance/maintainer`
+instance named `ext-maint` for the bundled workflow to resolve. Existing
+`latest` data from prior runs is not migrated; the first `audit` after upgrading
+writes `current-audit` and any older `latest` data can be deleted.
+
+**Known limitation:** `audit` is documented as pure observation but is not.
+`getQualityScore()` invokes `swamp extension quality` with `cwd` set to each
+extension directory, and each of those invocations writes to that directory's
+`.swamp.yaml` repo marker and can create a missing `deno.lock`. Running the
+audit against a repo of N extensions therefore touches N repo markers. Not
+addressed in this release.

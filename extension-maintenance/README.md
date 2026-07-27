@@ -62,7 +62,7 @@ swamp extension pull @webframp/extension-maintenance
 
 # Create a maintainer instance for your repo
 swamp model create @webframp/extension-maintenance/maintainer ext-maint \
-  --global repo_root=/path/to/your/extension-repo
+  --global-arg repo_root=/path/to/your/extension-repo
 ```
 
 ## Workflow

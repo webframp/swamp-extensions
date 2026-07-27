@@ -133,8 +133,24 @@ const BumpPlanSchema = z.object({
 /** Schema for the apply-bump result resource. */
 const ApplyResultSchema = z.object({
   appliedAt: z.string().describe("ISO 8601 apply timestamp"),
-  extensionsBumped: z.number(),
-  filesModified: z.number(),
+  dryRun: z
+    .boolean()
+    .describe(
+      "True when the run reported changes without writing them. On a dry run extensionsBumped and filesModified are both 0; filesMatched carries the scope.",
+    ),
+  extensionsBumped: z
+    .number()
+    .describe(
+      "Extensions whose file writes completed. 0 on a dry run. Excludes entries that threw mid-write; a deno.lock regeneration failure still counts as bumped because the files were written.",
+    ),
+  filesModified: z
+    .number()
+    .describe("Files actually written to disk. 0 on a dry run."),
+  filesMatched: z
+    .number()
+    .describe(
+      "Files where the target string was present, so a real run would rewrite them. Populated on dry runs and real runs alike. On a real run with errors this can exceed filesModified: matches are counted before the write is attempted, so files belonging to an entry that threw are matched but not modified. Cross-reference the errors array to attribute the difference.",
+    ),
   errors: z.array(z.object({
     extension: z.string(),
     error: z.string(),
@@ -593,7 +609,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.26.2",
+  version: "2026.07.26.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -641,15 +657,18 @@ export const model = {
             name: string,
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
         const { repo_root } = context.globalArgs;
         const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
 
-        context.log("info", `Scanning extensions in ${resolvedRoot}`);
+        context.logger.info(`Scanning extensions in ${resolvedRoot}`);
         const extDirs = await discoverExtensions(resolvedRoot);
-        context.log("info", `Found ${extDirs.length} extensions`);
+        context.logger.info(`Found ${extDirs.length} extensions`);
 
         // Deduplicate npm packages to minimize registry queries
         const allNpmPkgs = new Set<string>();
@@ -667,13 +686,12 @@ export const model = {
         }
 
         for (const w of unpinnedWarnings) {
-          context.log("warning", w);
+          context.logger.warn(w);
         }
 
         // Batch-query npm registry
         const timeoutMs = context.globalArgs.registry_timeout * 1000;
-        context.log(
-          "info",
+        context.logger.info(
           `Querying npm registry for ${allNpmPkgs.size} packages`,
         );
         const npmLatestVersions = new Map<string, string>();
@@ -688,7 +706,7 @@ export const model = {
           "swamp-testing",
           timeoutMs,
         );
-        context.log("info", `swamp-testing latest: ${testingLatest}`);
+        context.logger.info(`swamp-testing latest: ${testingLatest}`);
 
         // Build per-extension status
         const extensions: z.infer<typeof ExtensionStatusSchema>[] = [];
@@ -778,12 +796,11 @@ export const model = {
         const lockDriftedCount = extensions.filter((e) => e.lockDrifted).length;
         const directSpecCount =
           extensions.filter((e) => e.directSpecifiers.length > 0).length;
-        context.log(
-          "info",
+        context.logger.info(
           `Audit complete: ${staleCount}/${extensions.length} stale, ${lockDriftedCount} lock-drifted, ${directSpecCount} with direct specifiers`,
         );
 
-        const handle = await context.writeResource("audit", "latest", {
+        const handle = await context.writeResource("audit", "current-audit", {
           scannedAt: new Date().toISOString(),
           repoRoot: resolvedRoot,
           totalExtensions: extensions.length,
@@ -822,13 +839,16 @@ export const model = {
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
           readResource: (
-            specName: string,
-            name: string,
+            instanceName: string,
+            version?: number,
           ) => Promise<Record<string, unknown> | null>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
-        const audit = await context.readResource("audit", "latest");
+        const audit = await context.readResource("current-audit");
         if (!audit) {
           throw new Error(
             "No audit data found. Run the audit method first.",
@@ -966,12 +986,11 @@ export const model = {
           });
         }
 
-        context.log(
-          "info",
+        context.logger.info(
           `Plan: ${entries.length} extensions to bump, ${skipped.length} skipped (test-only)`,
         );
 
-        const handle = await context.writeResource("plan", "latest", {
+        const handle = await context.writeResource("plan", "current-plan", {
           plannedAt: new Date().toISOString(),
           totalEntries: entries.length,
           entries,
@@ -1000,16 +1019,19 @@ export const model = {
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
           readResource: (
-            specName: string,
-            name: string,
+            instanceName: string,
+            version?: number,
           ) => Promise<Record<string, unknown> | null>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
         const { repo_root } = context.globalArgs;
         const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
 
-        const plan = await context.readResource("plan", "latest");
+        const plan = await context.readResource("current-plan");
         if (!plan) {
           throw new Error("No plan found. Run plan-bump first.");
         }
@@ -1028,12 +1050,13 @@ export const model = {
         }).entries;
 
         let filesModified = 0;
+        let filesMatched = 0;
+        let extensionsBumped = 0;
         const errors: Array<{ extension: string; error: string }> = [];
 
         for (const entry of entries) {
           const extDir = `${resolvedRoot}/${entry.dir}`;
-          context.log(
-            "info",
+          context.logger.info(
             `${args.dry_run ? "[DRY RUN] " : ""}Applying: ${entry.name}`,
           );
 
@@ -1055,14 +1078,15 @@ export const model = {
                   if (!file) continue;
                   const content = await Deno.readTextFile(file);
                   if (content.includes(change.find)) {
+                    filesMatched++;
                     if (!args.dry_run) {
                       const updated = content.replaceAll(
                         change.find,
                         change.replace,
                       );
                       await Deno.writeTextFile(file, updated);
+                      filesModified++;
                     }
-                    filesModified++;
                   }
                 }
               } else {
@@ -1071,14 +1095,15 @@ export const model = {
                 try {
                   const content = await Deno.readTextFile(filePath);
                   if (content.includes(change.find)) {
+                    filesMatched++;
                     if (!args.dry_run) {
                       const updated = content.replaceAll(
                         change.find,
                         change.replace,
                       );
                       await Deno.writeTextFile(filePath, updated);
+                      filesModified++;
                     }
-                    filesModified++;
                   }
                 } catch {
                   // File may not exist for this extension
@@ -1086,14 +1111,16 @@ export const model = {
               }
             }
 
-            // Write RELEASE_NOTES.md
+            // Write RELEASE_NOTES.md — always rewritten for a planned entry,
+            // so it always counts as matched.
+            filesMatched++;
             if (!args.dry_run) {
               await Deno.writeTextFile(
                 `${extDir}/RELEASE_NOTES.md`,
                 entry.releaseNotes,
               );
+              filesModified++;
             }
-            filesModified++;
 
             // Regenerate deno.lock after pin changes so the lock reflects what
             // deno.json now declares. Without this, apply-bump creates the exact
@@ -1103,13 +1130,11 @@ export const model = {
             if (!args.dry_run) {
               const lockResult = await run(["deno", "install"], extDir);
               if (lockResult.success) {
-                context.log(
-                  "info",
+                context.logger.info(
                   `  ↳ deno.lock regenerated for ${entry.name}`,
                 );
               } else {
-                context.log(
-                  "warning",
+                context.logger.warn(
                   `  ↳ deno install failed for ${entry.name}`,
                 );
                 errors.push({
@@ -1119,6 +1144,12 @@ export const model = {
                 });
               }
             }
+
+            // Reaching here means every write for this entry completed. A
+            // deno.lock regeneration failure above does not unset this: the
+            // files were written, only the lock is stale. On a dry run nothing
+            // was written, so nothing was bumped.
+            if (!args.dry_run) extensionsBumped++;
           } catch (err: unknown) {
             errors.push({
               extension: entry.name,
@@ -1127,17 +1158,18 @@ export const model = {
           }
         }
 
-        context.log(
-          "info",
-          `Apply complete: ${entries.length} extensions, ${filesModified} files${
-            args.dry_run ? " (dry run)" : ""
+        context.logger.info(
+          `Apply complete: ${extensionsBumped}/${entries.length} extensions bumped, ${filesModified} files written, ${filesMatched} matched${
+            args.dry_run ? " (dry run — nothing written)" : ""
           }`,
         );
 
-        const handle = await context.writeResource("apply", "latest", {
+        const handle = await context.writeResource("apply", "current-apply", {
           appliedAt: new Date().toISOString(),
-          extensionsBumped: entries.length,
+          dryRun: args.dry_run ?? false,
+          extensionsBumped,
           filesModified,
+          filesMatched,
           errors,
         });
         return { dataHandles: [handle] };
@@ -1166,7 +1198,10 @@ export const model = {
             name: string,
             data: Record<string, unknown>,
           ) => Promise<{ name: string }>;
-          log: (level: string, message: string) => void;
+          logger: {
+            info: (msg: string, ...a: unknown[]) => void;
+            warn: (msg: string, ...a: unknown[]) => void;
+          };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
         const { repo_root } = context.globalArgs;
@@ -1191,7 +1226,7 @@ export const model = {
           const relDir = dir.slice(resolvedRoot.length + 1) || ".";
           const errors: string[] = [];
 
-          context.log("info", `Quality gate: ${name}`);
+          context.logger.info(`Quality gate: ${name}`);
 
           const checkResult = await run(["deno", "task", "check"], dir);
           const lintResult = await run(["deno", "task", "lint"], dir);
@@ -1229,23 +1264,26 @@ export const model = {
           });
 
           if (!allPassed && args.stop_on_failure) {
-            context.log("warning", `Stopping on failure: ${name}`);
+            context.logger.warn(`Stopping on failure: ${name}`);
             break;
           }
         }
 
-        context.log(
-          "info",
+        context.logger.info(
           `Quality gate complete: ${passed} passed, ${failed} failed`,
         );
 
-        const handle = await context.writeResource("quality", "latest", {
-          ranAt: new Date().toISOString(),
-          totalExtensions: results.length,
-          passed,
-          failed,
-          results,
-        });
+        const handle = await context.writeResource(
+          "quality",
+          "current-quality",
+          {
+            ranAt: new Date().toISOString(),
+            totalExtensions: results.length,
+            passed,
+            failed,
+            results,
+          },
+        );
         return { dataHandles: [handle] };
       },
     },
