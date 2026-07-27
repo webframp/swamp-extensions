@@ -1,3 +1,16 @@
+## 2026.07.27.2
+
+**Fixed:** `apply-bump` now includes `*_test.ts` files when expanding glob
+patterns for find-and-replace. Previously the glob expansion excluded test
+files, so a dependency bump in production source would leave the same import at
+the old version in tests — causing duplicate-singleton bugs (e.g.
+OpenTelemetry's global registry keyed per module instance).
+
+The `audit` method's `extractNpmImports` still excludes test files when
+determining _which_ deps are stale (test-only deps don't drive bumps), but once
+a bump plan exists, `apply-bump` replaces all occurrences of the stale version
+string regardless of whether the file is a test.
+
 ## 2026.07.27.1
 
 **Fixed:** The `fmt` task ran `deno fmt --check`, so `deno task fmt` verified
