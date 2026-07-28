@@ -27,7 +27,7 @@ import {
   SpanStatusCode,
   trace,
   type Tracer,
-} from "npm:@opentelemetry/api@1.9.0";
+} from "npm:@opentelemetry/api@1.9.1";
 
 /** Extension name, used as the instrumentation scope. */
 const INSTRUMENTATION_NAME = "@webframp/pass";

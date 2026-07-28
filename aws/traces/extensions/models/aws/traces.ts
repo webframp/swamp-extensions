@@ -14,7 +14,7 @@ import {
   GetServiceGraphCommand,
   GetTraceSummariesCommand,
   XRayClient,
-} from "npm:@aws-sdk/client-xray@3.1094.0";
+} from "npm:@aws-sdk/client-xray@3.1096.0";
 
 // =============================================================================
 // Schemas
@@ -301,7 +301,7 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.07.24.1",
+  version: "2026.07.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

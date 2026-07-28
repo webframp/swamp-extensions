@@ -1,3 +1,7 @@
+## 2026.07.27.2
+
+**Changed:** Bump @webframp/agentcore 2026.07.21.1 → 2026.07.27.1
+
 ## 2026.07.27.1
 
 **Changed:** Reformatted files that had drifted from `deno fmt`. No code

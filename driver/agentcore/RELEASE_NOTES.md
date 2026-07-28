@@ -1,3 +1,7 @@
+## 2026.07.27.2
+
+**Changed:** Bump @aws-sdk/* 3.1094.0 → 3.1096.0 (3 packages)
+
 ## 2026.07.27.1
 
 **Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files

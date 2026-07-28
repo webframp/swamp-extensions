@@ -1,3 +1,7 @@
+## 2026.07.27.1
+
+**Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
+
 ## 2026.07.25.1
 
 **Added:** OpenTelemetry spans for every layer of the datastore. Blob REST

@@ -1,3 +1,13 @@
+## 2026.07.27.1
+
+**Changed:** Bump @aws-sdk/* 3.1094.0 → 3.1096.0 (4 packages)
+
+**Changed:** Bump @swamp/aws/ec2 2026.07.20.1 → 2026.07.27.1
+
+**Changed:** Bump @swamp/aws/rds 2026.07.20.1 → 2026.07.27.1
+
+**Changed:** Bump @swamp/aws/secretsmanager 2026.07.20.1 → 2026.07.27.1
+
 ## 2026.07.26.1
 
 **Fixed:** Model failed to load because the upgrades array's last `toVersion`
