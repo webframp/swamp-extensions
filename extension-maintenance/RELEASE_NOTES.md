@@ -38,3 +38,4 @@ so `deno task fmt:check` could fail locally on a file CI does not have.
 
 **Upgrade note:** Tooling and formatting only. No model, method, schema, or
 behavior change — nothing to do on upgrade.
+
