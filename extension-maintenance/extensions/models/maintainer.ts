@@ -609,7 +609,7 @@ async function readManifestName(extDir: string): Promise<string> {
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.27.3",
+  version: "2026.07.27.4",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1129,25 +1129,41 @@ export const model = {
               filesModified++;
             }
 
-            // Regenerate deno.lock after pin changes so the lock reflects what
-            // deno.json now declares. Without this, apply-bump creates the exact
-            // state the lockfile-sync check is designed to catch: deno.json says
-            // one version, deno.lock records another, and the first developer to
-            // run a task gets an unwanted diff.
+            // Regenerate deno.lock after pin changes. Two steps are needed:
+            // 1. `deno install` resolves specifiers declared in deno.json's
+            //    import map.
+            // 2. `deno cache` on all .ts source files resolves direct
+            //    specifiers (e.g. `npm:@opentelemetry/api@1.9.1`) that bypass
+            //    the import map. Without this, the lock retains the old version
+            //    and CI fails on lock-check.
             if (!args.dry_run) {
-              const lockResult = await run(["deno", "install"], extDir);
+              // Find all .ts files to cache (includes tests — they have deps too)
+              const tsFiles = await run([
+                "find",
+                `${extDir}/extensions`,
+                "-name",
+                "*.ts",
+              ]);
+              const fileList = tsFiles.success
+                ? tsFiles.stdout.trim().split("\n").filter(Boolean)
+                : [];
+
+              // Run deno cache with all source files — this resolves both
+              // import-map and direct specifiers into the lockfile.
+              const cacheCmd = ["deno", "cache", ...fileList];
+              const lockResult = await run(cacheCmd, extDir);
               if (lockResult.success) {
                 context.logger.info(
                   `  ↳ deno.lock regenerated for ${entry.name}`,
                 );
               } else {
                 context.logger.warn(
-                  `  ↳ deno install failed for ${entry.name}`,
+                  `  ↳ deno cache failed for ${entry.name}`,
                 );
                 errors.push({
                   extension: entry.name,
                   error:
-                    "deno install failed after writing pin changes; deno.lock may be out of sync",
+                    "deno cache failed after writing pin changes; deno.lock may be out of sync",
                 });
               }
             }

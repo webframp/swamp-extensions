@@ -1,3 +1,11 @@
+## 2026.07.27.4
+
+**Fixed:** `apply-bump` lockfile regeneration now uses `deno cache` on all
+source files instead of `deno install`. The previous approach only resolved
+specifiers declared in the `deno.json` import map, leaving direct specifiers
+(like `npm:@opentelemetry/api@1.9.1`) unresolved in the lockfile. CI would then
+fail on lock-check because the lockfile still referenced the old version.
+
 ## 2026.07.27.3
 
 **Fixed:** `apply-bump` now prepends the new release notes entry to

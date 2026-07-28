@@ -7,7 +7,7 @@
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
   },
   "tasks": {
-    "check": "deno check extensions/models/maintainer.ts extensions/models/maintainer_test.ts",
+    "check": "deno check extensions/models/maintainer.ts extensions/models/maintainer_test.ts extensions/models/maintainer_integration_test.ts",
     "lint": "deno lint",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
