@@ -1,3 +1,9 @@
+## 2026.07.27.1
+
+**Changed:** Bump @aws-sdk/* 3.1094.0 → 3.1096.0 (2 packages)
+
+**Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
+
 ## 2026.07.25.1
 
 **Added:** OpenTelemetry spans for every layer of the datastore. Each SDK call

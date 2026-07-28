@@ -9,7 +9,7 @@ import {
   type Span,
   SpanStatusCode,
   trace,
-} from "npm:@opentelemetry/api@1.9.0";
+} from "npm:@opentelemetry/api@1.9.1";
 
 /** Instrumentation scope name — matches the extension name in manifest.yaml. */
 const TRACER_NAME = "@webframp/azure-blob-datastore";

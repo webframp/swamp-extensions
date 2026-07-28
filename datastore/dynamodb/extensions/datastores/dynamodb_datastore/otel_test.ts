@@ -3,7 +3,7 @@
 // ABOUTME: nesting — plus that everything still works with no TracerProvider.
 
 import { assert, assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
-import { context, trace } from "npm:@opentelemetry/api@1.9.0";
+import { context, trace } from "npm:@opentelemetry/api@1.9.1";
 import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.10.0";
 import {
   BasicTracerProvider,
@@ -11,12 +11,12 @@ import {
   type ReadableSpan,
   SimpleSpanProcessor,
 } from "npm:@opentelemetry/sdk-trace-base@2.10.0";
-import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1094.0";
+import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1096.0";
 import {
   DynamoDBDocumentClient,
   PutCommand,
   QueryCommand,
-} from "npm:@aws-sdk/lib-dynamodb@3.1094.0";
+} from "npm:@aws-sdk/lib-dynamodb@3.1096.0";
 
 import { createSyncService } from "./sync.ts";
 import { createDynamoLock } from "./lock.ts";
