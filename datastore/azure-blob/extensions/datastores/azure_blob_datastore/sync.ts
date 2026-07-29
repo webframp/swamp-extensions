@@ -372,7 +372,6 @@ export function createSyncService(
         // Compute shard keys for each path (treating each as a potential file).
         // For directory prefixes, the files underneath have their own shard keys
         // which we can't predict without listing them locally first.
-        const localFiles: string[] = [];
         for (const relPath of relPaths) {
           if (isTraversal(relPath)) continue;
           const absPath = `${cachePath}/${relPath}`;
@@ -383,12 +382,10 @@ export function createSyncService(
             if (!(err instanceof Deno.errors.NotFound)) throw err;
           }
           if (stat?.isFile) {
-            localFiles.push(relPath);
             shardKeysNeeded.add(await shardKey(relPath));
           } else if (stat?.isDirectory) {
             // Walk the directory to find all files and their shard keys.
             await walkAndCollect(absPath, relPath, async (childRel, _bytes) => {
-              localFiles.push(childRel);
               shardKeysNeeded.add(await shardKey(childRel));
             });
           } else {
@@ -555,6 +552,11 @@ export function createSyncService(
     }
 
     const pullStartTime = new Date().toISOString();
+    // Capture commitSeq BEFORE fetching shard data so concurrent pushes that
+    // land during the fetch window produce a seq > seqAtPullStart, preventing
+    // the next pull from fast-pathing over missed writes.
+    const seqAtPullStart = scoped ? 0 : (await readCommitSeq()).seq;
+
     const entries: Array<[string, ShardEntry]> = [];
     if (scoped) {
       const all = await queryAllFileMeta();
@@ -604,10 +606,7 @@ export function createSyncService(
 
     if (!scoped && !metadataOnly) {
       await sidecar.setLastPulledAt(pullStartTime);
-      // Record the remote commitSeq at pull time so the fast-path can compare
-      // against it on subsequent pulls.
-      const { seq } = await readCommitSeq();
-      await sidecar.setLastCommitSeq(seq);
+      await sidecar.setLastCommitSeq(seqAtPullStart);
       await sidecar.setLazyPullActive(false);
     }
 
