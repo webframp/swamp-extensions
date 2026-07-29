@@ -1112,7 +1112,10 @@ class GitLabSyncService implements TwoPhaseSyncService {
       const syncState = await readSyncState(this.cachePath);
       const remoteSeq = await this.client.getCommitSeq(this.prefix, signal);
       span.setAttribute(Attr.DATASTORE_COMMIT_SEQ, remoteSeq);
-      span.setAttribute(Attr.DATASTORE_COMMIT_SEQ_LOCAL, syncState.lastPulledSeq);
+      span.setAttribute(
+        Attr.DATASTORE_COMMIT_SEQ_LOCAL,
+        syncState.lastPulledSeq,
+      );
 
       if (
         remoteSeq > 0 &&
@@ -1211,7 +1214,9 @@ class GitLabSyncService implements TwoPhaseSyncService {
       let deletedCount = 0;
 
       // Collect files to push (path + content + hash)
-      const toPush: Array<{ relPath: string; hash: string; content: Uint8Array }> = [];
+      const toPush: Array<
+        { relPath: string; hash: string; content: Uint8Array }
+      > = [];
 
       const collectFile = async (relativePath: string): Promise<void> => {
         const fullPath = `${this.cachePath}/${relativePath}`;
@@ -1341,7 +1346,9 @@ class GitLabSyncService implements TwoPhaseSyncService {
             entry.content,
             undefined,
             signal,
-            cached ? { serial: cached.serial, lineage: cached.lineage } : undefined,
+            cached
+              ? { serial: cached.serial, lineage: cached.lineage }
+              : undefined,
           );
           // Update path meta cache
           syncState.pathMeta[entry.relPath] = {
