@@ -672,6 +672,40 @@ async function checkReleaseNotes(extDir: string): Promise<string | null> {
   return null;
 }
 
+/** Checks that all direct npm/jsr specifiers in source files are resolved in
+ * deno.lock. A stale lockfile means CI will fail with frozen lockfile checks.
+ * Returns an error message listing missing specifiers, or null if all present. */
+async function checkLockfileCompleteness(
+  extDir: string,
+): Promise<string | null> {
+  let lockContent: string;
+  try {
+    lockContent = await Deno.readTextFile(`${extDir}/deno.lock`);
+  } catch {
+    return null; // No lockfile — nothing to check
+  }
+
+  const specifiers = await findDirectSpecifiers(extDir);
+  const missing: string[] = [];
+
+  for (const { specifier } of specifiers) {
+    // Check if this exact specifier appears in the lockfile
+    if (!lockContent.includes(`"${specifier}"`)) {
+      // Also check without quotes (some lock formats vary)
+      if (!lockContent.includes(specifier)) {
+        missing.push(specifier);
+      }
+    }
+  }
+
+  if (missing.length > 0) {
+    return `deno.lock missing ${missing.length} specifier(s): ${
+      missing.slice(0, 3).join(", ")
+    }${missing.length > 3 ? "..." : ""}`;
+  }
+  return null;
+}
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -1367,6 +1401,10 @@ export const model = {
           // Release notes: current version must have an entry
           const releaseNotesResult = await checkReleaseNotes(dir);
           if (releaseNotesResult) errors.push(releaseNotesResult);
+
+          // Lockfile completeness: all source specifiers must be in deno.lock
+          const lockCompleteResult = await checkLockfileCompleteness(dir);
+          if (lockCompleteResult) errors.push(lockCompleteResult);
 
           const allPassed = errors.length === 0;
           if (allPassed) passed++;
