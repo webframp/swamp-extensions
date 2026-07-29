@@ -337,34 +337,6 @@ class GitLabStateClient {
   }
 
   /**
-   * Get the raw Terraform state JSON for a state name.
-   * Used for extracting serial/lineage metadata.
-   */
-  async getStateRaw(
-    stateName: string,
-    signal?: AbortSignal,
-  ): Promise<string | null> {
-    const url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
-    const response = await this.request("getStateRaw", url, {
-      method: "GET",
-      headers: this.headers(),
-      signal,
-    }, { stateName, expected: [404] });
-
-    if (response.status === 404) {
-      return null;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        `GitLab API error: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    return response.body;
-  }
-
-  /**
    * Read the commit sequence counter from the meta state.
    * Returns 0 if the state does not exist.
    */
@@ -383,6 +355,12 @@ class GitLabStateClient {
   /**
    * Increment and write the commit sequence counter.
    * Returns the new sequence number.
+   *
+   * NOTE: This is a non-atomic read-then-write. Two concurrent callers could
+   * both read seq=N and both write N+1, losing an increment. This is safe
+   * because swamp acquires a per-model distributed lock before pushing, so at
+   * most one writer executes this method at a time. The correctness guarantee
+   * comes from the lock, not from this method's internal atomicity.
    */
   async incrementCommitSeq(
     prefix: string,
@@ -1120,9 +1098,13 @@ class GitLabSyncService implements TwoPhaseSyncService {
       if (
         remoteSeq > 0 &&
         syncState.lastPulledSeq >= remoteSeq &&
-        !scopeFilter
+        !scopeFilter &&
+        (!syncState.lazyPullActive || metadataOnly)
       ) {
         // Nothing changed since last pull — fast-path exit.
+        // Gate on lazyPullActive: after a metadata-only pull the local cache
+        // lacks file content. A subsequent full pull (metadataOnly=false) must
+        // not short-circuit or those files will never be hydrated.
         span.setAttributes({
           [Attr.DATASTORE_FAST_PATH_HIT]: true,
           [Attr.DATASTORE_FILES_PULLED]: 0,
@@ -1357,8 +1339,12 @@ class GitLabSyncService implements TwoPhaseSyncService {
             lineage: result.lineage,
           };
         } catch (error) {
-          // If we used cached meta and got an error, retry without cache
-          if (cached) {
+          // Only retry without cache on 409 conflict (stale serial). Other
+          // errors (network timeouts, 5xx) may indicate the server already
+          // committed — retrying would cause double-writes.
+          const is409 = error instanceof Error &&
+            error.message.includes(" 409 ");
+          if (cached && is409) {
             const result = await this.client.putState(
               stateName,
               entry.content,
@@ -1628,7 +1614,12 @@ class GitLabSyncService implements TwoPhaseSyncService {
             lineage: result.lineage,
           };
         } catch (error) {
-          if (cached) {
+          // Only retry without cache on 409 conflict (stale serial). Other
+          // errors (network timeouts, 5xx) may indicate the server already
+          // committed — retrying would cause double-writes.
+          const is409 = error instanceof Error &&
+            error.message.includes(" 409 ");
+          if (cached && is409) {
             const result = await this.client.putState(
               stateName,
               entry.content,
