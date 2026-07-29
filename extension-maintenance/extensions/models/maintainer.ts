@@ -631,7 +631,9 @@ async function checkUpgradeChain(extDir: string): Promise<string | null> {
     if (!content.includes("upgrades") || !content.includes("toVersion")) {
       continue;
     }
-    const versionMatch = content.match(/version:\s*["']([^"']+)["']/);
+    const versionMatch = content.match(
+      /version:\s*["'](\d{4}\.\d{2}\.\d{2}\.\d+)["']/,
+    );
     if (!versionMatch) continue;
     const modelVersion = versionMatch[1];
 
@@ -651,12 +653,8 @@ async function checkUpgradeChain(extDir: string): Promise<string | null> {
 /** Checks that RELEASE_NOTES.md contains an entry for the current manifest version.
  * Returns an error message if missing, null if valid. */
 async function checkReleaseNotes(extDir: string): Promise<string | null> {
-  let manifestVersion: string;
-  try {
-    manifestVersion = await readManifestVersion(extDir);
-  } catch {
-    return null; // No manifest — skip
-  }
+  const manifestVersion = await readManifestVersion(extDir);
+  if (manifestVersion === "unknown") return null; // No manifest — skip
 
   const rnPath = `${extDir}/RELEASE_NOTES.md`;
   let content: string;
