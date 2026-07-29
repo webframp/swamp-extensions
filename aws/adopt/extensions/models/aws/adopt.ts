@@ -1160,7 +1160,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.07.26.1",
+      toVersion: "2026.07.27.1",
       description: "No schema changes — upgrade chain fix",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

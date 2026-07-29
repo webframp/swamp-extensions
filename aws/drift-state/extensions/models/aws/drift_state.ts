@@ -459,7 +459,7 @@ export const model = {
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
-      toVersion: "2026.07.20.1",
+      toVersion: "2026.07.27.1",
       description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
