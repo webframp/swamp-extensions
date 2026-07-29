@@ -1,6 +1,8 @@
 // ABOUTME: Azure Blob sync service — shard-first _index/ path index with ETag
 // ABOUTME: CAS, single-blob-per-file content storage (no chunking needed —
 // ABOUTME: unlike DynamoDB, Blob Storage has no small per-item size ceiling).
+// ABOUTME: Targeted shard fetch for dirty-path pushes, parallel blob uploads
+// ABOUTME: with bounded concurrency, batched shard CAS, and commitSeq counter.
 
 import type { BlobClient, BlobResponse } from "./rest_client.ts";
 import { retryableRequest } from "./_lib/retry.ts";
@@ -176,6 +178,31 @@ function parseListBlobsResponse(
   return { names, nextMarker };
 }
 
+/**
+ * Runs an async operation on each item with bounded concurrency.
+ * At most `limit` operations execute simultaneously.
+ */
+async function runBounded<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let idx = 0;
+  const workers: Promise<void>[] = [];
+  for (let i = 0; i < Math.min(limit, items.length); i++) {
+    workers.push(
+      (async () => {
+        while (idx < items.length) {
+          const current = idx++;
+          if (current >= items.length) break;
+          await fn(items[current]);
+        }
+      })(),
+    );
+  }
+  await Promise.all(workers);
+}
+
 export function createSyncService(
   client: BlobClient,
   container: string,
@@ -194,6 +221,10 @@ export function createSyncService(
 
   function watermarkPath(): string {
     return `/${container}/${prefix}/_meta/last_pushed_at`;
+  }
+
+  function commitSeqPath(): string {
+    return `/${container}/${prefix}/_meta/commit_seq`;
   }
 
   async function listIndexShards(): Promise<string[]> {
@@ -318,6 +349,80 @@ export function createSyncService(
     );
   }
 
+  /**
+   * Targeted shard fetch: compute shard keys for the given paths (including
+   * directory prefixes), fetch only those shards, and return entries that
+   * match the requested paths. This avoids downloading all 256 shards when
+   * we only need metadata for a handful of known dirty paths.
+   */
+  async function queryShardsByPaths(
+    relPaths: string[],
+  ): Promise<Map<string, ShardEntry>> {
+    return await withSpan(
+      "azure-blob-datastore queryShardsByPaths",
+      {},
+      async (span) => {
+        // For specific file paths, compute shard keys directly. For directory
+        // prefixes, we can't know which shards contain children — fall back to
+        // fetching all shards only for directory entries. But first, stat each
+        // path to determine if it's a file or directory.
+        const shardKeysNeeded = new Set<string>();
+        const pathFilters = relPaths;
+
+        // Compute shard keys for each path (treating each as a potential file).
+        // For directory prefixes, the files underneath have their own shard keys
+        // which we can't predict without listing them locally first.
+        const localFiles: string[] = [];
+        for (const relPath of relPaths) {
+          if (isTraversal(relPath)) continue;
+          const absPath = `${cachePath}/${relPath}`;
+          let stat: Deno.FileInfo | null = null;
+          try {
+            stat = await Deno.stat(absPath);
+          } catch (err) {
+            if (!(err instanceof Deno.errors.NotFound)) throw err;
+          }
+          if (stat?.isFile) {
+            localFiles.push(relPath);
+            shardKeysNeeded.add(await shardKey(relPath));
+          } else if (stat?.isDirectory) {
+            // Walk the directory to find all files and their shard keys.
+            await walkAndCollect(absPath, relPath, async (childRel, _bytes) => {
+              localFiles.push(childRel);
+              shardKeysNeeded.add(await shardKey(childRel));
+            });
+          } else {
+            // Path doesn't exist locally (maybe deleted) — still compute its
+            // shard to find its remote metadata for tombstoning.
+            shardKeysNeeded.add(await shardKey(relPath));
+          }
+        }
+
+        const shardKeys = [...shardKeysNeeded];
+        const maps = await Promise.all(
+          shardKeys.map((shard) => getShard(shard)),
+        );
+        const out = new Map<string, ShardEntry>();
+        for (const { map } of maps) {
+          for (const [relPath, entry] of Object.entries(map)) {
+            if (
+              pathFilters.some((p) =>
+                relPath === p || relPath.startsWith(`${p}/`)
+              )
+            ) {
+              out.set(relPath, entry);
+            }
+          }
+        }
+        span.setAttributes({
+          [Attr.DATASTORE_SHARDS]: shardKeys.length,
+          [Attr.DATASTORE_ENTRIES]: out.size,
+        });
+        return out;
+      },
+    );
+  }
+
   async function fetchContent(relPath: string): Promise<Uint8Array> {
     const resp = await retryableRequest(() =>
       client.request({ op: "getBlob", method: "GET", path: blobPath(relPath) })
@@ -326,44 +431,6 @@ export function createSyncService(
       throw new Error(`Get blob ${relPath} failed (${resp.status})`);
     }
     return resp.body;
-  }
-
-  async function writeFileEntry(entry: FileEntry): Promise<void> {
-    const putResp = await retryableRequest(() =>
-      client.request({
-        op: "putBlob",
-        method: "PUT",
-        path: blobPath(entry.relPath),
-        headers: { "x-ms-blob-type": "BlockBlob" },
-        body: entry.bytes,
-      })
-    );
-    if (putResp.status !== 201) {
-      throw new Error(`Put blob ${entry.relPath} failed (${putResp.status})`);
-    }
-    const shard = await shardKey(entry.relPath);
-    await updateShard(shard, (map) => ({
-      ...map,
-      [entry.relPath]: {
-        hash: entry.hash,
-        size: entry.bytes.byteLength,
-        updatedAt: new Date().toISOString(),
-        deletedAt: null,
-      },
-    }));
-  }
-
-  async function tombstonePath(relPath: string): Promise<void> {
-    const shard = await shardKey(relPath);
-    await updateShard(shard, (map) => ({
-      ...map,
-      [relPath]: {
-        hash: "",
-        size: 0,
-        updatedAt: new Date().toISOString(),
-        deletedAt: new Date().toISOString(),
-      },
-    }));
   }
 
   async function writeWatermark(): Promise<void> {
@@ -390,6 +457,60 @@ export function createSyncService(
     return new TextDecoder().decode(resp.body);
   }
 
+  /**
+   * Reads the current commit sequence number. Returns 0 if the blob doesn't
+   * exist yet (first push).
+   */
+  async function readCommitSeq(): Promise<{ seq: number; etag: string | null }> {
+    const resp = await retryableRequest(() =>
+      client.request({
+        op: "getCommitSeq",
+        method: "GET",
+        path: commitSeqPath(),
+      })
+    );
+    if (resp.status === 404) return { seq: 0, etag: null };
+    if (resp.status !== 200) {
+      throw new Error(`Read commit_seq failed (${resp.status})`);
+    }
+    const seq = parseInt(new TextDecoder().decode(resp.body), 10);
+    return { seq: isNaN(seq) ? 0 : seq, etag: resp.headers.get("etag") };
+  }
+
+  /**
+   * Atomically increments the commit sequence counter via ETag-conditional PUT.
+   * Retries on ETag conflict (another writer incremented concurrently).
+   */
+  async function incrementCommitSeq(): Promise<number> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const { seq, etag } = await readCommitSeq();
+      const nextSeq = seq + 1;
+      const body = new TextEncoder().encode(String(nextSeq));
+      const resp = await retryableRequest(() =>
+        client.request({
+          op: "putCommitSeq",
+          method: "PUT",
+          path: commitSeqPath(),
+          headers: {
+            "x-ms-blob-type": "BlockBlob",
+            ...(etag ? { "If-Match": etag } : { "If-None-Match": "*" }),
+          },
+          body,
+        })
+      );
+      if (resp.status === 201 || resp.status === 200) return nextSeq;
+      if (resp.status === 412) {
+        recordRetry(attempt + 1, 0, {
+          "retry.reason": "commit_seq_etag_conflict",
+          "http.response.status_code": resp.status,
+        });
+        continue;
+      }
+      throw new Error(`Increment commit_seq failed (${resp.status})`);
+    }
+    throw new Error("Increment commit_seq exhausted retries on ETag conflict");
+  }
+
   async function pull(opts?: {
     prefixes?: string[];
     metadataOnly?: boolean;
@@ -406,11 +527,28 @@ export function createSyncService(
     const state = await sidecar.read();
 
     if (!scoped && state.lastPulledAt !== null) {
-      const lastPushedAt = await readWatermark();
+      // Fast-path: check both the commitSeq counter (monotonic, immune to
+      // clock skew) and the legacy timestamp watermark. If the remote
+      // commitSeq hasn't advanced since our last pull, nothing has changed.
+      const remoteSeq = await readCommitSeq();
       if (
-        lastPushedAt && new Date(lastPushedAt) <= new Date(state.lastPulledAt)
+        state.lastCommitSeq !== undefined &&
+        state.lastCommitSeq !== null &&
+        remoteSeq.seq <= state.lastCommitSeq
       ) {
         return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
+      }
+      // Fall back to timestamp watermark if commitSeq isn't populated yet
+      // (backwards compat with datastores that haven't pushed with the new
+      // code).
+      if (remoteSeq.seq === 0) {
+        const lastPushedAt = await readWatermark();
+        if (
+          lastPushedAt &&
+          new Date(lastPushedAt) <= new Date(state.lastPulledAt)
+        ) {
+          return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
+        }
       }
     }
 
@@ -464,6 +602,10 @@ export function createSyncService(
 
     if (!scoped && !metadataOnly) {
       await sidecar.setLastPulledAt(pullStartTime);
+      // Record the remote commitSeq at pull time so the fast-path can compare
+      // against it on subsequent pulls.
+      const { seq } = await readCommitSeq();
+      await sidecar.setLastCommitSeq(seq);
       await sidecar.setLazyPullActive(false);
     }
 
@@ -476,19 +618,9 @@ export function createSyncService(
     lazyPullActive: boolean,
     signal?: AbortSignal,
   ): Promise<{ toPush: FileEntry[]; toTombstone: string[] }> {
-    const remotePaths = relPaths === null ? await queryAllFileMeta() : (() => {
-      const filters = relPaths;
-      return queryAllFileMeta().then((all) => {
-        const filtered = new Map<string, ShardEntry>();
-        for (const [k, v] of all) {
-          if (filters.some((p) => k === p || k.startsWith(`${p}/`))) {
-            filtered.set(k, v);
-          }
-        }
-        return filtered;
-      });
-    })();
-    const remotePathsResolved = await remotePaths;
+    const remotePathsResolved: Map<string, ShardEntry> = relPaths === null
+      ? await queryAllFileMeta()
+      : await queryShardsByPaths(relPaths);
 
     const localFiles: FileEntry[] = [];
     if (relPaths === null) {
@@ -559,19 +691,89 @@ export function createSyncService(
     signal?: AbortSignal,
   ): Promise<number> {
     if (toPush.length === 0 && toTombstone.length === 0) return 0;
-    let count = 0;
+
+    // Phase 1: Upload blob content in parallel with bounded concurrency.
+    // Blob uploads are independent — they target different blob paths and don't
+    // contend with each other or with shard updates.
+    const UPLOAD_CONCURRENCY = 12;
+    await runBounded(
+      toPush,
+      UPLOAD_CONCURRENCY,
+      async (entry) => {
+        signal?.throwIfAborted();
+        const putResp = await retryableRequest(() =>
+          client.request({
+            op: "putBlob",
+            method: "PUT",
+            path: blobPath(entry.relPath),
+            headers: { "x-ms-blob-type": "BlockBlob" },
+            body: entry.bytes,
+          })
+        );
+        if (putResp.status !== 201) {
+          throw new Error(
+            `Put blob ${entry.relPath} failed (${putResp.status})`,
+          );
+        }
+      },
+    );
+
+    // Phase 2: Batch shard CAS updates by shard key. Instead of one
+    // read-modify-write per file, accumulate all entries destined for the same
+    // shard and apply them in a single CAS operation.
+    const now = new Date().toISOString();
+    const shardBatches = new Map<string, Array<{ relPath: string; entry: ShardEntry }>>();
     for (const f of toPush) {
-      signal?.throwIfAborted();
-      await writeFileEntry(f);
-      count++;
+      const sk = await shardKey(f.relPath);
+      const batch = shardBatches.get(sk) ?? [];
+      batch.push({
+        relPath: f.relPath,
+        entry: {
+          hash: f.hash,
+          size: f.bytes.byteLength,
+          updatedAt: now,
+          deletedAt: null,
+        },
+      });
+      shardBatches.set(sk, batch);
     }
     for (const relPath of toTombstone) {
-      signal?.throwIfAborted();
-      await tombstonePath(relPath);
-      count++;
+      const sk = await shardKey(relPath);
+      const batch = shardBatches.get(sk) ?? [];
+      batch.push({
+        relPath,
+        entry: {
+          hash: "",
+          size: 0,
+          updatedAt: now,
+          deletedAt: now,
+        },
+      });
+      shardBatches.set(sk, batch);
     }
+
+    // Apply each shard batch as a single CAS update. Shard updates for
+    // different shards can proceed in parallel since they target different blobs.
+    const SHARD_CAS_CONCURRENCY = 10;
+    await runBounded(
+      [...shardBatches.entries()],
+      SHARD_CAS_CONCURRENCY,
+      async ([shard, entries]) => {
+        signal?.throwIfAborted();
+        await updateShard(shard, (map) => {
+          const updated = { ...map };
+          for (const { relPath, entry } of entries) {
+            updated[relPath] = entry;
+          }
+          return updated;
+        });
+      },
+    );
+
+    // Phase 3: Update watermark and commitSeq.
     await writeWatermark();
-    return count;
+    await incrementCommitSeq();
+    return toPush.length + toTombstone.length;
   }
 
   return {

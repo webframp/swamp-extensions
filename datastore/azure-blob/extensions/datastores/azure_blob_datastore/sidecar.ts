@@ -11,6 +11,7 @@ export interface SidecarState {
   bulkInvalidated: boolean;
   lastPulledAt: string | null;
   lazyPullActive: boolean;
+  lastCommitSeq: number | null;
 }
 
 function emptyState(): SidecarState {
@@ -20,6 +21,7 @@ function emptyState(): SidecarState {
     bulkInvalidated: false,
     lastPulledAt: null,
     lazyPullActive: false,
+    lastCommitSeq: null,
   };
 }
 
@@ -66,6 +68,9 @@ async function readState(cachePath: string): Promise<SidecarState> {
       ? obj.lastPulledAt
       : null,
     lazyPullActive: obj.lazyPullActive === true,
+    lastCommitSeq: typeof obj.lastCommitSeq === "number"
+      ? obj.lastCommitSeq
+      : null,
   };
 }
 
@@ -150,6 +155,12 @@ export class Sidecar {
   setLazyPullActive(active: boolean): Promise<SidecarState> {
     return this.update((state) => {
       state.lazyPullActive = active;
+    });
+  }
+
+  setLastCommitSeq(seq: number): Promise<SidecarState> {
+    return this.update((state) => {
+      state.lastCommitSeq = seq;
     });
   }
 }
