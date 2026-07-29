@@ -119,10 +119,10 @@ async function getAccountId(region: string): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.07.27.1",
+  version: "2026.07.29.1",
   upgrades: [
     {
-      toVersion: "2026.07.18.2",
+      toVersion: "2026.07.29.1",
       description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
