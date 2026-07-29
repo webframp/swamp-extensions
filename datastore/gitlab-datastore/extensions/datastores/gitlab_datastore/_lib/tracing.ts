@@ -52,6 +52,9 @@ export const Attr = {
   DATASTORE_METADATA_ONLY: "datastore.metadata_only",
   DATASTORE_HYDRATED: "datastore.hydrated",
   DATASTORE_STATES: "datastore.states",
+  DATASTORE_COMMIT_SEQ: "datastore.commit_seq",
+  DATASTORE_COMMIT_SEQ_LOCAL: "datastore.commit_seq_local",
+  DATASTORE_CONCURRENCY: "datastore.concurrency",
 } as const;
 
 /**

@@ -322,7 +322,7 @@ Deno.test({
             s.name === "gitlab-datastore pullChanged"
           );
           const pull = pulls[pulls.length - 1];
-          assertEquals(pull.attributes[Attr.DATASTORE_STATES], 2);
+          assertEquals(pull.attributes[Attr.DATASTORE_STATES], 3);
           assertEquals(pull.attributes[Attr.DATASTORE_FILES_PULLED], 2);
           assertEquals(pull.attributes[Attr.DATASTORE_SCOPED], false);
           assertEquals(pull.attributes[Attr.DATASTORE_METADATA_ONLY], false);
