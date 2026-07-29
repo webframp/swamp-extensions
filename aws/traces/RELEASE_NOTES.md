@@ -1,6 +1,11 @@
+## 2026.07.29.1
+
+**Fixed:** Terminate upgrade chain at current version (extension was uninstallable due to broken upgrade chain).
+
 ## 2026.07.27.1
 
 **Changed:** Bump @aws-sdk/client-xray 3.1094.0 → 3.1096.0
+
 
 ## 2026.07.24.1
 
