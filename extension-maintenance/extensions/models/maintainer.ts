@@ -973,6 +973,15 @@ export const model = {
             replace: `version: "${nextVer}"`,
             category: "source-version",
           });
+          // Upgrade chain: the last toVersion must match the new model version.
+          // The current toVersion points at ext.version (the pre-bump version).
+          // Replace it with nextVer so the chain terminates correctly.
+          changes.push({
+            file: "extensions/**/*.ts",
+            find: `toVersion: "${ext.version}"`,
+            replace: `toVersion: "${nextVer}"`,
+            category: "source-version",
+          });
 
           const releaseNotes = `## ${nextVer}\n\n${noteLines.join("\n\n")}\n`;
 
