@@ -180,6 +180,14 @@ function isTraversal(p: string): boolean {
   return !p || p.split("/").some((s) => s === "..");
 }
 
+/**
+ * Escape glob metacharacters for use in Redis MATCH patterns.
+ * Characters `*`, `?`, `[`, `]`, and `\` are prefixed with a backslash.
+ */
+function escapeMatchPattern(pattern: string): string {
+  return pattern.replace(/([*?[\]\\])/g, "\\$1");
+}
+
 function modelPrefixes(
   models: ReadonlyArray<{ modelType: string; modelId: string }> | undefined,
 ): string[] {
@@ -476,6 +484,7 @@ function createSyncService(
   async function pathsForPrefixes(
     prefixes: string[],
   ): Promise<{ paths: string[]; truncated: boolean }> {
+    const seen = new Set<string>();
     const results: string[] = [];
     let truncated = false;
     for (const p of prefixes) {
@@ -486,33 +495,85 @@ function createSyncService(
       }
       // With varying scores, ZRANGEBYLEX is unreliable. Use ZSCAN with a
       // glob pattern to find members matching the prefix.
+      const escaped = escapeMatchPattern(p);
       let cursor = "0";
       do {
         const [nextCursor, members] = await commandSpan(
           "ZSCAN",
           pathIdx,
-          () => redis.zscan(pathIdx, cursor, "MATCH", `${p}*`, "COUNT", 500),
+          () =>
+            redis.zscan(
+              pathIdx,
+              cursor,
+              "MATCH",
+              `${escaped}*`,
+              "COUNT",
+              500,
+            ),
         );
         cursor = nextCursor;
         // zscan returns [member, score, member, score, ...]
         for (let i = 0; i < members.length; i += 2) {
-          results.push(members[i]);
-          if (results.length >= PATH_LIMIT) {
-            truncated = true;
-            break;
+          const path = members[i];
+          if (!seen.has(path)) {
+            seen.add(path);
+            results.push(path);
+            if (results.length >= PATH_LIMIT) {
+              truncated = true;
+              break;
+            }
           }
         }
         if (truncated) break;
       } while (cursor !== "0");
       if (truncated) break;
     }
-    return { paths: results, truncated };
+    // Filter out soft-deleted entries
+    const alive = await filterDeleted(results);
+    return { paths: alive, truncated };
+  }
+
+  /**
+   * Filters out paths whose metadata has `deleted: "true"`. Used by allPaths
+   * and pathsForPrefixes to exclude soft-deleted entries from listing.
+   */
+  async function filterDeleted(paths: string[]): Promise<string[]> {
+    if (paths.length === 0) return [];
+    const BATCH = 200;
+    const alive: string[] = [];
+    for (let i = 0; i < paths.length; i += BATCH) {
+      const batch = paths.slice(i, i + BATCH);
+      const pipeline = redis.pipeline();
+      for (const p of batch) {
+        pipeline.hget(metaKey(prefix, p), "deleted");
+      }
+      const results = await pipelineSpan(
+        "filterDeleted",
+        batch.length,
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
+      );
+      if (results) {
+        for (let j = 0; j < batch.length; j++) {
+          const [err, val] = results[j];
+          if (err || val === "true") continue;
+          alive.push(batch[j]);
+        }
+      } else {
+        // Pipeline failed entirely — include all paths as a safe fallback
+        alive.push(...batch);
+      }
+    }
+    return alive;
   }
 
   async function allPaths(): Promise<{ paths: string[]; truncated: boolean }> {
     // With varying scores, ZRANGEBYLEX is unreliable. Use ZRANGEBYSCORE
     // over the full range to enumerate all members.
-    const paths = await commandSpan(
+    const raw = await commandSpan(
       "ZRANGEBYSCORE",
       pathIdx,
       () =>
@@ -525,8 +586,11 @@ function createSyncService(
           PATH_LIMIT + 1,
         ),
     );
-    const truncated = paths.length > PATH_LIMIT;
-    if (truncated) paths.length = PATH_LIMIT;
+    const truncated = raw.length > PATH_LIMIT;
+    if (truncated) raw.length = PATH_LIMIT;
+
+    // Filter out soft-deleted entries by checking metadata
+    const paths = await filterDeleted(raw);
     return { paths, truncated };
   }
 
@@ -599,6 +663,18 @@ function createSyncService(
         }
 
         const remoteMeta = meta as Record<string, string>;
+
+        // Handle soft-deleted paths: remove local file if it exists
+        if (remoteMeta.deleted === "true") {
+          const localPath = `${cachePath}/${relPath}`;
+          try {
+            await Deno.remove(localPath);
+            changes++;
+          } catch (err) {
+            if (!(err instanceof Deno.errors.NotFound)) throw err;
+          }
+          continue;
+        }
 
         if (
           metadataOnly && relPath.startsWith("data/") &&
@@ -760,13 +836,21 @@ function createSyncService(
     let remotePaths: string[];
     if (stat?.isDirectory) {
       remotePaths = [];
+      const escaped = escapeMatchPattern(relPath);
       let cursor = "0";
       do {
         const [nextCursor, members] = await commandSpan(
           "ZSCAN",
           pathIdx,
           () =>
-            redis.zscan(pathIdx, cursor, "MATCH", `${relPath}/*`, "COUNT", 500),
+            redis.zscan(
+              pathIdx,
+              cursor,
+              "MATCH",
+              `${escaped}/*`,
+              "COUNT",
+              500,
+            ),
         );
         cursor = nextCursor;
         for (let i = 0; i < members.length; i += 2) {
@@ -838,8 +922,11 @@ function createSyncService(
       return { changes: 0, pushed: 0, deleted: 0 };
     }
 
-    // Increment sequence counter first so ZADD scores reflect this write batch.
-    const newSeq = await commandSpan("INCR", seq, () => redis.incr(seq));
+    // Read current seq to compute the intended score for this write batch.
+    // The actual INCR happens AFTER writes succeed to avoid orphan seqs on
+    // crash: if writes fail, the seq counter remains unchanged.
+    const currentSeq = await commandSpan("GET", seq, () => redis.get(seq));
+    const writeSeq = (currentSeq ? parseInt(currentSeq, 10) : 0) + 1;
 
     // Pipeline all writes for one round trip per batch
     const BATCH = 50;
@@ -862,8 +949,8 @@ function createSyncService(
           size: String(f.bytes.byteLength),
           deleted: "false",
         });
-        // Score = current seq so pull can ZRANGEBYSCORE to find recent changes
-        pipeline.zadd(pathIdx, newSeq, f.relPath);
+        // Score = writeSeq so pull can ZRANGEBYSCORE to find recent changes
+        pipeline.zadd(pathIdx, writeSeq, f.relPath);
       }
 
       const results = await pipelineSpan(
@@ -890,14 +977,18 @@ function createSyncService(
       }
     }
 
-    // Delete tombstones — also scored at newSeq for consistency
+    // Delete tombstones — keep path in sorted set scored at writeSeq with
+    // deleted: "true" metadata so incremental pull (ZRANGEBYSCORE) discovers
+    // the deletion and removes local files.
     if (toDelete.length > 0) {
       const pipeline = redis.pipeline();
       for (const relPath of toDelete) {
         signal?.throwIfAborted();
         pipeline.del(blobKey(prefix, relPath));
-        pipeline.del(metaKey(prefix, relPath));
-        pipeline.zrem(pathIdx, relPath);
+        pipeline.hset(metaKey(prefix, relPath), {
+          deleted: "true",
+        });
+        pipeline.zadd(pathIdx, writeSeq, relPath);
       }
       const delResults = await pipelineSpan(
         "deleteFiles",
@@ -930,6 +1021,13 @@ function createSyncService(
         }`,
       );
     }
+
+    // All writes succeeded — now atomically advance the seq counter.
+    // Using INCR (not SET) so concurrent writers each get a unique seq.
+    // If a concurrent writer incremented between our GET and this INCR,
+    // our writes already carry the correct score (writeSeq) and will be
+    // visible to any pull with lastPulledSeq < writeSeq.
+    await commandSpan("INCR", seq, () => redis.incr(seq));
 
     return { changes, pushed, deleted };
   }
