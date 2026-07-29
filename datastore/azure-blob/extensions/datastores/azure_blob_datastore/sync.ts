@@ -461,7 +461,9 @@ export function createSyncService(
    * Reads the current commit sequence number. Returns 0 if the blob doesn't
    * exist yet (first push).
    */
-  async function readCommitSeq(): Promise<{ seq: number; etag: string | null }> {
+  async function readCommitSeq(): Promise<
+    { seq: number; etag: string | null }
+  > {
     const resp = await retryableRequest(() =>
       client.request({
         op: "getCommitSeq",
@@ -722,7 +724,10 @@ export function createSyncService(
     // read-modify-write per file, accumulate all entries destined for the same
     // shard and apply them in a single CAS operation.
     const now = new Date().toISOString();
-    const shardBatches = new Map<string, Array<{ relPath: string; entry: ShardEntry }>>();
+    const shardBatches = new Map<
+      string,
+      Array<{ relPath: string; entry: ShardEntry }>
+    >();
     for (const f of toPush) {
       const sk = await shardKey(f.relPath);
       const batch = shardBatches.get(sk) ?? [];
