@@ -592,6 +592,119 @@ async function readManifestName(extDir: string): Promise<string> {
 }
 
 // =============================================================================
+// Validation Checks
+// =============================================================================
+
+/** Checks that the last upgrade chain entry's toVersion matches the model version.
+ * Returns an error message if broken, null if valid or no upgrades present. */
+async function checkUpgradeChain(extDir: string): Promise<string | null> {
+  const tsFiles: string[] = [];
+  try {
+    const findResult = await run(
+      [
+        "find",
+        `${extDir}/extensions`,
+        "-name",
+        "*.ts",
+        "-not",
+        "-name",
+        "*test*",
+      ],
+      extDir,
+    );
+    if (findResult.success) {
+      tsFiles.push(
+        ...findResult.stdout.trim().split("\n").filter(Boolean),
+      );
+    }
+  } catch {
+    return null;
+  }
+
+  for (const file of tsFiles) {
+    let content: string;
+    try {
+      content = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    }
+    if (!content.includes("upgrades") || !content.includes("toVersion")) {
+      continue;
+    }
+    const versionMatch = content.match(
+      /version:\s*["'](\d{4}\.\d{2}\.\d{2}\.\d+)["']/,
+    );
+    if (!versionMatch) continue;
+    const modelVersion = versionMatch[1];
+
+    const toVersionMatches = [
+      ...content.matchAll(/toVersion:\s*["']([^"']+)["']/g),
+    ];
+    if (toVersionMatches.length === 0) continue;
+
+    const lastToVersion = toVersionMatches[toVersionMatches.length - 1][1];
+    if (lastToVersion !== modelVersion) {
+      return `upgrade chain broken: last toVersion "${lastToVersion}" != model version "${modelVersion}"`;
+    }
+  }
+  return null;
+}
+
+/** Checks that RELEASE_NOTES.md contains an entry for the current manifest version.
+ * Returns an error message if missing, null if valid. */
+async function checkReleaseNotes(extDir: string): Promise<string | null> {
+  const manifestVersion = await readManifestVersion(extDir);
+  if (manifestVersion === "unknown") return null; // No manifest — skip
+
+  const rnPath = `${extDir}/RELEASE_NOTES.md`;
+  let content: string;
+  try {
+    content = await Deno.readTextFile(rnPath);
+  } catch {
+    return `RELEASE_NOTES.md missing (version ${manifestVersion} has no release notes)`;
+  }
+
+  if (!content.includes(`## ${manifestVersion}`)) {
+    return `RELEASE_NOTES.md missing entry for current version ${manifestVersion}`;
+  }
+  return null;
+}
+
+/** Checks that all direct npm/jsr specifiers in source files are resolved in
+ * deno.lock. A stale lockfile means CI will fail with frozen lockfile checks.
+ * Returns an error message listing missing specifiers, or null if all present. */
+async function checkLockfileCompleteness(
+  extDir: string,
+): Promise<string | null> {
+  let lockContent: string;
+  try {
+    lockContent = await Deno.readTextFile(`${extDir}/deno.lock`);
+  } catch {
+    return null; // No lockfile — nothing to check
+  }
+
+  const specifiers = await findDirectSpecifiers(extDir);
+  const missing: string[] = [];
+
+  for (const { specifier } of specifiers) {
+    // Check if this exact specifier appears in the lockfile
+    if (!lockContent.includes(`"${specifier}"`)) {
+      // Also check without quotes (some lock formats vary)
+      if (!lockContent.includes(specifier)) {
+        missing.push(specifier);
+      }
+    }
+  }
+
+  if (missing.length > 0) {
+    return `deno.lock missing ${missing.length} specifier(s): ${
+      missing.slice(0, 3).join(", ")
+    }${missing.length > 3 ? "..." : ""}`;
+  }
+  return null;
+}
+
+// =============================================================================
 // Model Definition
 // =============================================================================
 
@@ -973,6 +1086,15 @@ export const model = {
             replace: `version: "${nextVer}"`,
             category: "source-version",
           });
+          // Upgrade chain: the last toVersion must match the new model version.
+          // The current toVersion points at ext.version (the pre-bump version).
+          // Replace it with nextVer so the chain terminates correctly.
+          changes.push({
+            file: "extensions/**/*.ts",
+            find: `toVersion: "${ext.version}"`,
+            replace: `toVersion: "${nextVer}"`,
+            category: "source-version",
+          });
 
           const releaseNotes = `## ${nextVer}\n\n${noteLines.join("\n\n")}\n`;
 
@@ -1269,6 +1391,18 @@ export const model = {
             dir,
           );
           if (!extFmtResult.success) errors.push("extension fmt failed");
+
+          // Upgrade chain: last toVersion must match model version
+          const upgradeChainResult = await checkUpgradeChain(dir);
+          if (upgradeChainResult) errors.push(upgradeChainResult);
+
+          // Release notes: current version must have an entry
+          const releaseNotesResult = await checkReleaseNotes(dir);
+          if (releaseNotesResult) errors.push(releaseNotesResult);
+
+          // Lockfile completeness: all source specifiers must be in deno.lock
+          const lockCompleteResult = await checkLockfileCompleteness(dir);
+          if (lockCompleteResult) errors.push(lockCompleteResult);
 
           const allPassed = errors.length === 0;
           if (allPassed) passed++;
