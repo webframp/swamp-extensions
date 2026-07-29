@@ -592,6 +592,87 @@ async function readManifestName(extDir: string): Promise<string> {
 }
 
 // =============================================================================
+// Validation Checks
+// =============================================================================
+
+/** Checks that the last upgrade chain entry's toVersion matches the model version.
+ * Returns an error message if broken, null if valid or no upgrades present. */
+async function checkUpgradeChain(extDir: string): Promise<string | null> {
+  const tsFiles: string[] = [];
+  try {
+    const findResult = await run(
+      [
+        "find",
+        `${extDir}/extensions`,
+        "-name",
+        "*.ts",
+        "-not",
+        "-name",
+        "*test*",
+      ],
+      extDir,
+    );
+    if (findResult.success) {
+      tsFiles.push(
+        ...findResult.stdout.trim().split("\n").filter(Boolean),
+      );
+    }
+  } catch {
+    return null;
+  }
+
+  for (const file of tsFiles) {
+    let content: string;
+    try {
+      content = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    }
+    if (!content.includes("upgrades") || !content.includes("toVersion")) {
+      continue;
+    }
+    const versionMatch = content.match(/version:\s*["']([^"']+)["']/);
+    if (!versionMatch) continue;
+    const modelVersion = versionMatch[1];
+
+    const toVersionMatches = [
+      ...content.matchAll(/toVersion:\s*["']([^"']+)["']/g),
+    ];
+    if (toVersionMatches.length === 0) continue;
+
+    const lastToVersion = toVersionMatches[toVersionMatches.length - 1][1];
+    if (lastToVersion !== modelVersion) {
+      return `upgrade chain broken: last toVersion "${lastToVersion}" != model version "${modelVersion}"`;
+    }
+  }
+  return null;
+}
+
+/** Checks that RELEASE_NOTES.md contains an entry for the current manifest version.
+ * Returns an error message if missing, null if valid. */
+async function checkReleaseNotes(extDir: string): Promise<string | null> {
+  let manifestVersion: string;
+  try {
+    manifestVersion = await readManifestVersion(extDir);
+  } catch {
+    return null; // No manifest — skip
+  }
+
+  const rnPath = `${extDir}/RELEASE_NOTES.md`;
+  let content: string;
+  try {
+    content = await Deno.readTextFile(rnPath);
+  } catch {
+    return `RELEASE_NOTES.md missing (version ${manifestVersion} has no release notes)`;
+  }
+
+  if (!content.includes(`## ${manifestVersion}`)) {
+    return `RELEASE_NOTES.md missing entry for current version ${manifestVersion}`;
+  }
+  return null;
+}
+
+// =============================================================================
 // Model Definition
 // =============================================================================
 
@@ -1278,6 +1359,14 @@ export const model = {
             dir,
           );
           if (!extFmtResult.success) errors.push("extension fmt failed");
+
+          // Upgrade chain: last toVersion must match model version
+          const upgradeChainResult = await checkUpgradeChain(dir);
+          if (upgradeChainResult) errors.push(upgradeChainResult);
+
+          // Release notes: current version must have an entry
+          const releaseNotesResult = await checkReleaseNotes(dir);
+          if (releaseNotesResult) errors.push(releaseNotesResult);
 
           const allPassed = errors.length === 0;
           if (allPassed) passed++;
