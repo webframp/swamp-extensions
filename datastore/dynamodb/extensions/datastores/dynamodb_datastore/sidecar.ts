@@ -3,6 +3,13 @@
 
 const SIDECAR_FILENAME = ".datastore-sync-state.json";
 const SCHEMA_VERSION = 1;
+
+// DynamoDB's BatchGetItem fetches up to 100 keys per request, making 1000
+// dirty paths cost only 10 batch round-trips — each executed in parallel at
+// the DynamoDB layer. Other datastores (postgres, valkey, azure-blob) use a
+// cap of 200 because their per-path query cost is higher. The elevated cap
+// here is intentional: it delays the expensive full-walk fallback while
+// remaining well within DynamoDB's batch-get efficiency window.
 const DIRTY_PATHS_CAP = 1000;
 
 export interface SidecarState {
@@ -10,6 +17,7 @@ export interface SidecarState {
   dirtyPaths: string[];
   bulkInvalidated: boolean;
   lastPulledAt: string | null;
+  lastPulledSeq: number;
   lazyPullActive: boolean;
 }
 
@@ -19,6 +27,7 @@ function emptyState(): SidecarState {
     dirtyPaths: [],
     bulkInvalidated: false,
     lastPulledAt: null,
+    lastPulledSeq: 0,
     lazyPullActive: false,
   };
 }
@@ -65,6 +74,9 @@ async function readState(cachePath: string): Promise<SidecarState> {
     lastPulledAt: typeof obj.lastPulledAt === "string"
       ? obj.lastPulledAt
       : null,
+    lastPulledSeq: typeof obj.lastPulledSeq === "number"
+      ? obj.lastPulledSeq
+      : 0,
     lazyPullActive: obj.lazyPullActive === true,
   };
 }
@@ -150,6 +162,12 @@ export class Sidecar {
   setLazyPullActive(active: boolean): Promise<SidecarState> {
     return this.update((state) => {
       state.lazyPullActive = active;
+    });
+  }
+
+  setLastPulledSeq(seq: number): Promise<SidecarState> {
+    return this.update((state) => {
+      state.lastPulledSeq = seq;
     });
   }
 }

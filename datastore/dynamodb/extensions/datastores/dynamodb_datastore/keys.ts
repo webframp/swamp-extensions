@@ -55,6 +55,14 @@ export function parseChunkIndex(sk: string): number {
 
 export const SYNC_STATE_KEY = { pk: "SYNCSTATE#global", sk: "STATE" } as const;
 
+/** Monotonic sequence counter — incremented atomically via UpdateItem ADD on
+ * each push. Pull checks this before querying partitions: if localSeq matches
+ * remoteSeq, no changes exist, avoiding partition queries entirely. Stored as
+ * a separate item (not inside SYNC_STATE_KEY) so that the atomic ADD operates
+ * on a dedicated item with no other attributes, eliminating contention with
+ * the timestamp watermark write. */
+export const COMMIT_SEQ_KEY = { pk: "SYNCSTATE#global", sk: "SEQ" } as const;
+
 export const GSI_NAME = "gsi1";
 
 /**

@@ -66,6 +66,7 @@ export const Attr = {
   DATASTORE_ENTRIES: "datastore.entries",
   DATASTORE_CHUNKS: "datastore.chunks",
   DATASTORE_HYDRATED: "datastore.hydrated",
+  DATASTORE_SEQ: "datastore.seq",
 } as const;
 
 /**
