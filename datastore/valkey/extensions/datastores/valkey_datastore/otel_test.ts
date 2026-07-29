@@ -492,7 +492,7 @@ Deno.test({
         // The fast path short-circuits before scanning the path index.
         assertEquals(pulls[1].attributes[Attr.DATASTORE_PATHS], undefined);
 
-        findSpan(spans(), "Valkey ZRANGEBYLEX");
+        findSpan(spans(), "Valkey ZRANGEBYSCORE");
       });
     });
   },
