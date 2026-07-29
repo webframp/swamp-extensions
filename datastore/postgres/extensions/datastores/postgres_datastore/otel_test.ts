@@ -99,6 +99,7 @@ interface FakeSql {
  */
 function fakeSql(options: FakeSqlOptions = {}): FakeSql {
   const statements: string[] = [];
+  let nextvalCounter = 0;
 
   const rowsFor = (
     text: string,
@@ -113,6 +114,11 @@ function fakeSql(options: FakeSqlOptions = {}): FakeSql {
           ? entry.rows(params)
           : entry.rows;
       }
+    }
+    // The sync service calls nextval inside push transactions; return a
+    // monotonically increasing sequence value so destructuring succeeds.
+    if (text.includes("nextval(")) {
+      return [{ nextval: String(++nextvalCounter) }];
     }
     return [];
   };
@@ -247,7 +253,7 @@ Deno.test("pushChanged span reports files pushed and nests its SQL", async () =>
       assertEquals(tx.spanContext().traceId, push.spanContext().traceId);
       assertEquals(parentIdOf(push), undefined);
 
-      const manifest = findSpan(spans(), "PostgreSQL fetchRemoteManifest");
+      const manifest = findSpan(spans(), "PostgreSQL fetchRemoteManifestBatch");
       assertEquals(manifest.attributes[Attr.DB_RETURNED_ROWS], 0);
     });
   });
@@ -615,7 +621,7 @@ Deno.test("a failing statement marks both the query and the sync span", async ()
       }
       assert(threw, "the query failure must propagate");
 
-      const query = findSpan(spans(), "PostgreSQL fetchRemoteManifest");
+      const query = findSpan(spans(), "PostgreSQL fetchRemoteManifestBatch");
       assertEquals(query.status.code, 2);
       assertEquals(query.attributes[Attr.ERROR_TYPE], "PostgresError");
       assertEquals(query.events.some((e) => e.name === "exception"), true);

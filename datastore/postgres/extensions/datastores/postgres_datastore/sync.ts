@@ -546,7 +546,7 @@ export function createSyncService(
 
     // For tombstone detection we need to find remote-only files that the local
     // side has deleted. Use lastPulledAt as a bound to narrow the scan.
-    let remoteOnlyPaths = new Map<
+    const remoteOnlyPaths = new Map<
       string,
       { hash: string; deletedAt: unknown; updatedAt: Date }
     >();
@@ -786,7 +786,7 @@ export function createSyncService(
     return { toPush, toTombstone };
   }
 
-  async function pushOneRel(
+  async function _pushOneRel(
     relPath: string,
     lastPulledAt: string | null,
     lazyPullActive: boolean,
