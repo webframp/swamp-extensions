@@ -612,11 +612,27 @@ export function createSyncService(
   }
 
   async function writeWatermark(): Promise<void> {
-    // Atomically increment the monotonic commitSeq counter. UpdateItem ADD
-    // creates the attribute if it doesn't exist (starts at 0) and adds 1 in a
-    // single atomic operation — safe under concurrent writers without
-    // read-modify-write races. Returns the new value so we don't need a
-    // separate read.
+    // Timestamp watermark written FIRST — preserved for backward compatibility
+    // and for time-range partition queries during pull. Writing timestamp
+    // before seq ensures a puller that sees the new seq is guaranteed the
+    // timestamp watermark is already advanced. The two writes are non-atomic
+    // (DynamoDB has no cross-item transactions without TransactWriteItems),
+    // but ordering timestamp-first makes partial failure safe: if seq fails
+    // after timestamp succeeds, the fast-path stays stale and forces a full
+    // pull. If timestamp fails before seq runs, neither advances.
+    await retryable(() =>
+      doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { ...SYNC_STATE_KEY, lastPushedAt: new Date().toISOString() },
+        }),
+      )
+    );
+
+    // Atomically increment the monotonic commitSeq counter LAST. This is the
+    // "commit signal". UpdateItem ADD creates the attribute if it doesn't
+    // exist (starts at 0) and adds 1 in a single atomic operation — safe
+    // under concurrent writers without read-modify-write races.
     await retryable(() =>
       doc.send(
         new UpdateCommand({
@@ -624,17 +640,6 @@ export function createSyncService(
           Key: { ...COMMIT_SEQ_KEY },
           UpdateExpression: "ADD seq :one",
           ExpressionAttributeValues: { ":one": 1 },
-        }),
-      )
-    );
-
-    // Timestamp watermark preserved for backward compatibility and for
-    // time-range partition queries during pull.
-    await retryable(() =>
-      doc.send(
-        new PutCommand({
-          TableName: tableName,
-          Item: { ...SYNC_STATE_KEY, lastPushedAt: new Date().toISOString() },
         }),
       )
     );
@@ -675,18 +680,19 @@ export function createSyncService(
     // Only applies to unscoped pulls because lastPulledSeq certifies "all
     // partitions seen up to this sequence" — a scoped pull for partition A
     // cannot certify partition B is current.
+    let seqAtPull = 0;
     if (!scoped && state.lastPulledSeq > 0) {
-      const remoteSeq = await getRemoteSeq();
-      if (remoteSeq <= state.lastPulledSeq) {
+      seqAtPull = await getRemoteSeq();
+      if (seqAtPull <= state.lastPulledSeq) {
         return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
       }
+    } else if (!scoped) {
+      // First pull (lastPulledSeq === 0): capture seq before data fetch so
+      // concurrent pushes during the fetch produce a seq > seqAtPull.
+      seqAtPull = await getRemoteSeq();
     }
 
     const pullStartTime = new Date().toISOString();
-    // Capture the remote seq BEFORE querying partitions so that any concurrent
-    // push that lands after this read will produce a seq > seqAtPull, ensuring
-    // the next pull won't fast-path over those writes.
-    const seqAtPull = scoped ? 0 : await getRemoteSeq();
 
     const entries: Array<[string, RemoteFileMeta]> = [];
     if (scoped) {

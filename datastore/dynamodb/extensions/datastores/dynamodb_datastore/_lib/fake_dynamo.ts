@@ -97,32 +97,35 @@ export class FakeDynamoTable {
           const values = params.ExpressionAttributeValues ?? {};
           const next: Item = existing ? { ...existing } : { pk, sk };
           const match = updateExpr.match(/^ADD (\w+) :(\w+)$/);
-          if (match) {
-            const attr = match[1];
-            const valKey = `:${match[2]}`;
-            const toAdd = values[valKey];
-            if (toAdd === undefined) {
-              throw new Error(
-                `ADD expression references ${valKey} but it is not in ExpressionAttributeValues`,
+          if (!match) {
+            throw new Error(
+              `FakeDynamoTable: unrecognized ADD expression: "${updateExpr}"`,
+            );
+          }
+          const attr = match[1];
+          const valKey = `:${match[2]}`;
+          const toAdd = values[valKey];
+          if (toAdd === undefined) {
+            throw new Error(
+              `ADD expression references ${valKey} but it is not in ExpressionAttributeValues`,
+            );
+          }
+          if (typeof toAdd === "number") {
+            // Numeric ADD: atomically increment (or initialize to 0 then add)
+            const current = typeof next[attr] === "number"
+              ? next[attr] as number
+              : 0;
+            next[attr] = current + toAdd;
+          } else {
+            // StringSet ADD: merge into existing set
+            const setVal = toAdd as Set<string>;
+            const current = next[attr] instanceof Set
+              ? next[attr] as Set<string>
+              : new Set<string>(
+                Array.isArray(next[attr]) ? next[attr] as string[] : [],
               );
-            }
-            if (typeof toAdd === "number") {
-              // Numeric ADD: atomically increment (or initialize to 0 then add)
-              const current = typeof next[attr] === "number"
-                ? next[attr] as number
-                : 0;
-              next[attr] = current + toAdd;
-            } else {
-              // StringSet ADD: merge into existing set
-              const setVal = toAdd as Set<string>;
-              const current = next[attr] instanceof Set
-                ? next[attr] as Set<string>
-                : new Set<string>(
-                  Array.isArray(next[attr]) ? next[attr] as string[] : [],
-                );
-              for (const v of setVal) current.add(v);
-              next[attr] = current;
-            }
+            for (const v of setVal) current.add(v);
+            next[attr] = current;
           }
           this.items.set(key, next);
           return {};

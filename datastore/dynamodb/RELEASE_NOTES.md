@@ -1,3 +1,20 @@
+## 2026.07.29.1
+
+**Added:** Parallel push writes with bounded concurrency (10 concurrent
+`writeFileEntry` calls). Reduces push latency 5-10x for bulk operations.
+
+**Added:** Atomic `commitSeq` counter via DynamoDB `UpdateItem ADD`. Pull
+fast-path now compares a monotonic integer instead of parsing ISO timestamps,
+eliminating clock-skew vulnerabilities. The sidecar persists `lastPulledSeq`
+for fast-path comparison across sessions.
+
+**Changed:** Pull captures `remoteSeq` before partition queries (not after)
+to prevent TOCTOU races where concurrent pushes during the fetch window could
+be silently missed.
+
+**Changed:** FakeDynamoTable test double handles numeric `ADD` operations and
+throws on undefined ExpressionAttributeValues references.
+
 ## 2026.07.27.1
 
 **Changed:** Bump @aws-sdk/* 3.1094.0 → 3.1096.0 (2 packages)
