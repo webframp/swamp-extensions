@@ -343,6 +343,30 @@ export function createSyncService(
       conditions.push(`updated_at >= $${paramIdx++}`);
     }
 
+    // Capture commitSeq BEFORE the metadata scan so concurrent pushes that
+    // arrive during the scan don't get their seq stored without their data.
+    let preScanCommitSeq: number | null = null;
+    if (!scoped && !metadataOnly) {
+      try {
+        const [seqRow] = await sqlSpan(
+          "capturePreScanCommitSeq",
+          "SELECT",
+          syncStateTable,
+          () =>
+            retryable(() =>
+              sql.unsafe(
+                `SELECT value FROM ${syncStateTable} WHERE key = 'commit_seq'`,
+              )
+            ),
+        );
+        if (seqRow) {
+          preScanCommitSeq = Number(seqRow.value);
+        }
+      } catch {
+        // commit_seq may not exist yet — non-fatal
+      }
+    }
+
     if (metadataOnly) {
       conditions.push(`NOT (path ~ '^data/.*/raw$')`);
     }
@@ -455,16 +479,11 @@ export function createSyncService(
     if (!scoped && !metadataOnly) {
       await sidecar.setLastPulledAt(pullStartTime);
       await sidecar.setLazyPullActive(false);
-      // Persist the current commitSeq for next fast-path check
-      try {
-        const [seqRow] = await sql.unsafe(
-          `SELECT value FROM ${syncStateTable} WHERE key = 'commit_seq'`,
-        );
-        if (seqRow) {
-          await sidecar.setCommitSeq(Number(seqRow.value));
-        }
-      } catch {
-        // commit_seq may not exist yet — non-fatal
+      // Store the commitSeq captured BEFORE the metadata scan — any pushes
+      // that landed after our snapshot will have a higher seq and will be
+      // picked up on the next pull.
+      if (preScanCommitSeq !== null) {
+        await sidecar.setCommitSeq(preScanCommitSeq);
       }
     }
 
@@ -784,86 +803,6 @@ export function createSyncService(
     }
 
     return { toPush, toTombstone };
-  }
-
-  async function _pushOneRel(
-    relPath: string,
-    lastPulledAt: string | null,
-    lazyPullActive: boolean,
-    signal?: AbortSignal,
-  ): Promise<PushCounts> {
-    if (isTraversal(relPath)) return { changes: 0, pushed: 0, deleted: 0 };
-    await ready();
-
-    const { toPush, toTombstone } = await collectOneRelDiff(
-      relPath,
-      lastPulledAt,
-      lazyPullActive,
-      signal,
-    );
-
-    if (toPush.length === 0 && toTombstone.length === 0) {
-      return { changes: 0, pushed: 0, deleted: 0 };
-    }
-
-    // Execute all writes in a single transaction
-    const changes = await retryable(() =>
-      sqlSpan(
-        "scopedPushTransaction",
-        "TRANSACTION",
-        filesTable,
-        async () => {
-          let count = 0;
-          await sql.begin(async (tx) => {
-            for (const f of toPush) {
-              await tx.unsafe(
-                `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
-             VALUES ($1, $2, $3, $4, now(), NULL)
-             ON CONFLICT (path) DO UPDATE SET
-               hash = EXCLUDED.hash, size = EXCLUDED.size,
-               content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
-                [f.relPath, f.hash, f.bytes.byteLength, f.bytes],
-              );
-              count++;
-            }
-            for (const path of toTombstone) {
-              await tx.unsafe(
-                `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
-                [path],
-              );
-              count++;
-            }
-            // Advance commitSeq and persist
-            const [{ nextval: seq }] = await tx.unsafe(
-              `SELECT nextval('${commitSeqName}') AS nextval`,
-            );
-            await tx.unsafe(
-              `INSERT INTO ${syncStateTable} (key, value, updated_at)
-           VALUES ('commit_seq', to_jsonb($1::bigint), now())
-           ON CONFLICT (key) DO UPDATE SET value = to_jsonb($1::bigint), updated_at = now()`,
-              [seq],
-            );
-            // Keep legacy timestamp watermark for backward compat
-            await tx.unsafe(
-              `INSERT INTO ${syncStateTable} (key, value, updated_at)
-           VALUES ('last_pushed_at', to_jsonb(now()::text), now())
-           ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
-            );
-            // Tombstone GC: remove rows deleted more than N days ago
-            await tx.unsafe(
-              `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
-            );
-          });
-          return count;
-        },
-      )
-    );
-
-    return {
-      changes,
-      pushed: toPush.length,
-      deleted: toTombstone.length,
-    };
   }
 
   return {
