@@ -683,6 +683,11 @@ export function createSyncService(
     }
 
     const pullStartTime = new Date().toISOString();
+    // Capture the remote seq BEFORE querying partitions so that any concurrent
+    // push that lands after this read will produce a seq > seqAtPull, ensuring
+    // the next pull won't fast-path over those writes.
+    const seqAtPull = scoped ? 0 : await getRemoteSeq();
+
     const entries: Array<[string, RemoteFileMeta]> = [];
     if (scoped) {
       // Scoped pull: query exactly the model partitions requested
@@ -737,9 +742,6 @@ export function createSyncService(
 
     if (!metadataOnly && !scoped) {
       await sidecar.setLastPulledAt(pullStartTime);
-      // Record the remote seq at pull-start so the fast-path on the next pull
-      // can short-circuit without querying partitions.
-      const seqAtPull = await getRemoteSeq();
       await sidecar.setLastPulledSeq(seqAtPull);
       await sidecar.setLazyPullActive(false);
     }

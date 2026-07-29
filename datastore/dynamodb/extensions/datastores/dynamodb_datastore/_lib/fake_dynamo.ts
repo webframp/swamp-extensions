@@ -101,6 +101,11 @@ export class FakeDynamoTable {
             const attr = match[1];
             const valKey = `:${match[2]}`;
             const toAdd = values[valKey];
+            if (toAdd === undefined) {
+              throw new Error(
+                `ADD expression references ${valKey} but it is not in ExpressionAttributeValues`,
+              );
+            }
             if (typeof toAdd === "number") {
               // Numeric ADD: atomically increment (or initialize to 0 then add)
               const current = typeof next[attr] === "number"
