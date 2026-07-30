@@ -21,6 +21,7 @@ import {
 } from "./_lib/tracing.ts";
 import { reassembleChunks, splitIntoChunks } from "./chunking.ts";
 import {
+  COMMIT_SEQ_KEY,
   fileChunkKey,
   fileChunkPrefix,
   fileMetaKey,
@@ -181,6 +182,45 @@ function batchesOf<T>(items: T[], size: number): T[][] {
     out.push(items.slice(i, i + size));
   }
   return out;
+}
+
+/**
+ * Runs async tasks with bounded concurrency. At most `limit` tasks execute
+ * simultaneously; the next task starts only when a prior one resolves.
+ * Rejects immediately if any task rejects (remaining in-flight tasks are
+ * awaited but their rejections are suppressed to surface the first failure).
+ */
+async function parallelLimit<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let index = 0;
+  let firstError: unknown = undefined;
+  let errored = false;
+
+  async function worker(): Promise<void> {
+    while (!errored) {
+      const i = index++;
+      if (i >= items.length) return;
+      try {
+        await fn(items[i]);
+      } catch (err) {
+        if (!errored) {
+          errored = true;
+          firstError = err;
+        }
+        return;
+      }
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  if (errored) throw firstError;
 }
 
 export function createSyncService(
@@ -572,6 +612,14 @@ export function createSyncService(
   }
 
   async function writeWatermark(): Promise<void> {
+    // Timestamp watermark written FIRST — preserved for backward compatibility
+    // and for time-range partition queries during pull. Writing timestamp
+    // before seq ensures a puller that sees the new seq is guaranteed the
+    // timestamp watermark is already advanced. The two writes are non-atomic
+    // (DynamoDB has no cross-item transactions without TransactWriteItems),
+    // but ordering timestamp-first makes partial failure safe: if seq fails
+    // after timestamp succeeds, the fast-path stays stale and forces a full
+    // pull. If timestamp fails before seq runs, neither advances.
     await retryable(() =>
       doc.send(
         new PutCommand({
@@ -580,6 +628,35 @@ export function createSyncService(
         }),
       )
     );
+
+    // Atomically increment the monotonic commitSeq counter LAST. This is the
+    // "commit signal". UpdateItem ADD creates the attribute if it doesn't
+    // exist (starts at 0) and adds 1 in a single atomic operation — safe
+    // under concurrent writers without read-modify-write races.
+    await retryable(() =>
+      doc.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: { ...COMMIT_SEQ_KEY },
+          UpdateExpression: "ADD seq :one",
+          ExpressionAttributeValues: { ":one": 1 },
+        }),
+      )
+    );
+  }
+
+  /** Reads the current remote commitSeq. Returns 0 if no pushes have occurred. */
+  async function getRemoteSeq(): Promise<number> {
+    const result = await retryable(() =>
+      doc.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { ...COMMIT_SEQ_KEY },
+          ProjectionExpression: "seq",
+        }),
+      )
+    );
+    return (result.Item?.seq as number) ?? 0;
   }
 
   async function pull(opts?: {
@@ -598,25 +675,25 @@ export function createSyncService(
     if (metadataOnly) await sidecar.setLazyPullActive(true);
     const state = await sidecar.read();
 
-    // Watermark fast-path: if nothing has been pushed since our last pull,
-    // skip the partition queries entirely. Only applies to unscoped pulls
-    // because lastPulledAt certifies "all partitions seen up to this time" —
-    // a scoped pull for partition A cannot certify partition B is current.
-    if (!scoped && state.lastPulledAt !== null) {
-      const watermark = await retryable(() =>
-        doc.send(
-          new GetCommand({ TableName: tableName, Key: { ...SYNC_STATE_KEY } }),
-        )
-      );
-      const lastPushedAt = watermark.Item?.lastPushedAt as string | undefined;
-      if (
-        lastPushedAt && new Date(lastPushedAt) <= new Date(state.lastPulledAt)
-      ) {
+    // Sequence-based fast-path: if the remote commitSeq hasn't advanced since
+    // our last pull, no changes exist anywhere — skip partition queries entirely.
+    // Only applies to unscoped pulls because lastPulledSeq certifies "all
+    // partitions seen up to this sequence" — a scoped pull for partition A
+    // cannot certify partition B is current.
+    let seqAtPull = 0;
+    if (!scoped && state.lastPulledSeq > 0) {
+      seqAtPull = await getRemoteSeq();
+      if (seqAtPull <= state.lastPulledSeq) {
         return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
       }
+    } else if (!scoped) {
+      // First pull (lastPulledSeq === 0): capture seq before data fetch so
+      // concurrent pushes during the fetch produce a seq > seqAtPull.
+      seqAtPull = await getRemoteSeq();
     }
 
     const pullStartTime = new Date().toISOString();
+
     const entries: Array<[string, RemoteFileMeta]> = [];
     if (scoped) {
       // Scoped pull: query exactly the model partitions requested
@@ -671,6 +748,7 @@ export function createSyncService(
 
     if (!metadataOnly && !scoped) {
       await sidecar.setLastPulledAt(pullStartTime);
+      await sidecar.setLastPulledSeq(seqAtPull);
       await sidecar.setLazyPullActive(false);
     }
 
@@ -776,20 +854,28 @@ export function createSyncService(
     signal?: AbortSignal,
   ): Promise<number> {
     if (toPush.length === 0 && toTombstone.length === 0) return 0;
-    let count = 0;
-    for (const f of toPush) {
+
+    // Parallelize file writes with bounded concurrency. Each writeFileEntry()
+    // targets a different partition key (FILE#<relPath>), so concurrent writes
+    // don't contend at the DynamoDB level. Concurrency of 10 balances latency
+    // improvement against connection/throttle pressure.
+    const WRITE_CONCURRENCY = 10;
+
+    await parallelLimit(toPush, WRITE_CONCURRENCY, async (f) => {
       signal?.throwIfAborted();
       const prev = remoteChunkCounts.get(f.relPath);
       await writeFileEntry(f, prev?.count ?? 0, prev?.version ?? 0);
-      count++;
-    }
-    for (const relPath of toTombstone) {
+    });
+
+    // Tombstones are lightweight PutItem calls — parallelize with the same
+    // concurrency bound.
+    await parallelLimit(toTombstone, WRITE_CONCURRENCY, async (relPath) => {
       signal?.throwIfAborted();
       await tombstonePath(relPath);
-      count++;
-    }
+    });
+
     await writeWatermark();
-    return count;
+    return toPush.length + toTombstone.length;
   }
 
   return {
