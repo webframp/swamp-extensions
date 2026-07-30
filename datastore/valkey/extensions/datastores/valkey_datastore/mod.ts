@@ -153,6 +153,10 @@ function seqKey(prefix: string): string {
   return `${prefix}:_seq`;
 }
 
+function minRetainedSeqKey(prefix: string): string {
+  return `${prefix}:_min_retained_seq`;
+}
+
 function lockKey(prefix: string, key: string): string {
   return `${prefix}:_lock:${key}`;
 }
@@ -178,6 +182,14 @@ const DATASTORE_SUBDIRS = [
 
 function isTraversal(p: string): boolean {
   return !p || p.split("/").some((s) => s === "..");
+}
+
+/**
+ * Escape glob metacharacters for use in Redis MATCH patterns.
+ * Characters `*`, `?`, `[`, `]`, and `\` are prefixed with a backslash.
+ */
+function escapeMatchPattern(pattern: string): string {
+  return pattern.replace(/([*?[\]\\])/g, "\\$1");
 }
 
 function modelPrefixes(
@@ -465,9 +477,19 @@ function createSyncService(
   const sidecar = new Sidecar(cachePath);
   const pathIdx = pathIndexKey(prefix);
   const seq = seqKey(prefix);
+  const minRetainedKey = minRetainedSeqKey(prefix);
 
   async function getRemoteSeq(): Promise<number> {
     const val = await commandSpan("GET", seq, () => redis.get(seq));
+    return val ? parseInt(val, 10) : 0;
+  }
+
+  async function getMinRetainedSeq(): Promise<number> {
+    const val = await commandSpan(
+      "GET",
+      minRetainedKey,
+      () => redis.get(minRetainedKey),
+    );
     return val ? parseInt(val, 10) : 0;
   }
 
@@ -476,43 +498,142 @@ function createSyncService(
   async function pathsForPrefixes(
     prefixes: string[],
   ): Promise<{ paths: string[]; truncated: boolean }> {
+    const seen = new Set<string>();
     const results: string[] = [];
     let truncated = false;
     for (const p of prefixes) {
-      const end = p + String.fromCharCode(0xff);
       const remaining = PATH_LIMIT - results.length;
       if (remaining <= 0) {
         truncated = true;
         break;
       }
-      const members = await commandSpan(
-        "ZRANGEBYLEX",
-        pathIdx,
-        () =>
-          redis.zrangebylex(
-            pathIdx,
-            `[${p}`,
-            `(${end}`,
-            "LIMIT",
-            0,
-            remaining,
-          ),
-      );
-      results.push(...members);
-      if (results.length >= PATH_LIMIT) truncated = true;
+      // With varying scores, ZRANGEBYLEX is unreliable. Use ZSCAN with a
+      // glob pattern to find members matching the prefix.
+      const escaped = escapeMatchPattern(p);
+      let cursor = "0";
+      do {
+        const [nextCursor, members] = await commandSpan(
+          "ZSCAN",
+          pathIdx,
+          () =>
+            redis.zscan(
+              pathIdx,
+              cursor,
+              "MATCH",
+              `${escaped}*`,
+              "COUNT",
+              500,
+            ),
+        );
+        cursor = nextCursor;
+        // zscan returns [member, score, member, score, ...]
+        for (let i = 0; i < members.length; i += 2) {
+          const path = members[i];
+          if (!seen.has(path)) {
+            seen.add(path);
+            results.push(path);
+            if (results.length >= PATH_LIMIT) {
+              truncated = true;
+              break;
+            }
+          }
+        }
+        if (truncated) break;
+      } while (cursor !== "0");
+      if (truncated) break;
     }
-    return { paths: results, truncated };
+    // Filter out soft-deleted entries
+    const alive = await filterDeleted(results);
+    // Truncated if the raw scan was capped OR if live paths still exceed limit.
+    return { paths: alive, truncated };
+  }
+
+  /**
+   * Filters out paths whose metadata has `deleted: "true"`. Used by allPaths
+   * and pathsForPrefixes to exclude soft-deleted entries from listing.
+   */
+  async function filterDeleted(paths: string[]): Promise<string[]> {
+    if (paths.length === 0) return [];
+    const BATCH = 200;
+    const alive: string[] = [];
+    for (let i = 0; i < paths.length; i += BATCH) {
+      const batch = paths.slice(i, i + BATCH);
+      const pipeline = redis.pipeline();
+      for (const p of batch) {
+        pipeline.hget(metaKey(prefix, p), "deleted");
+      }
+      const results = await pipelineSpan(
+        "filterDeleted",
+        batch.length,
+        async (span) => {
+          const r = await pipeline.exec();
+          recordPipelineResults(span, r);
+          return r;
+        },
+      );
+      if (results) {
+        for (let j = 0; j < batch.length; j++) {
+          const [err, val] = results[j];
+          // Include path if: no error and not deleted, OR error (unknown state
+          // — assume live and let pullFiles decide via its own metadata fetch).
+          if (err || val !== "true") {
+            alive.push(batch[j]);
+          }
+        }
+      } else {
+        // Pipeline threw entirely (connection lost) — propagate so the caller
+        // can retry. Silently excluding would permanently hide live files.
+        throw new Error(
+          `filterDeleted pipeline batch failed; ${batch.length} paths could not be classified`,
+        );
+      }
+    }
+    return alive;
   }
 
   async function allPaths(): Promise<{ paths: string[]; truncated: boolean }> {
-    const paths = await commandSpan(
-      "ZRANGEBYLEX",
+    // With varying scores, ZRANGEBYLEX is unreliable. Use ZRANGEBYSCORE
+    // over the full range to enumerate all members.
+    const raw = await commandSpan(
+      "ZRANGEBYSCORE",
       pathIdx,
       () =>
-        redis.zrangebylex(
+        redis.zrangebyscore(
           pathIdx,
-          "-",
-          "+",
+          "-inf",
+          "+inf",
+          "LIMIT",
+          0,
+          PATH_LIMIT + 1,
+        ),
+    );
+    const rawTruncated = raw.length > PATH_LIMIT;
+    if (rawTruncated) raw.length = PATH_LIMIT;
+
+    // Filter out soft-deleted entries by checking metadata
+    const paths = await filterDeleted(raw);
+    // Truncated means we have more live paths than we can handle. Evaluate
+    // against the filtered count — if tombstones brought us under the limit,
+    // we can still process what we have (some unfetched paths may exist but
+    // will be caught on the next push cycle via diff detection).
+    return { paths, truncated: rawTruncated };
+  }
+
+  /**
+   * Returns paths whose score (write-seq) is strictly greater than `sinceSeq`.
+   * Used by pullChanged to fetch only paths that changed since the last pull.
+   */
+  async function changedPathsSince(
+    sinceSeq: number,
+  ): Promise<{ paths: string[]; truncated: boolean }> {
+    const paths = await commandSpan(
+      "ZRANGEBYSCORE",
+      pathIdx,
+      () =>
+        redis.zrangebyscore(
+          pathIdx,
+          `(${sinceSeq}`,
+          "+inf",
           "LIMIT",
           0,
           PATH_LIMIT + 1,
@@ -568,6 +689,18 @@ function createSyncService(
 
         const remoteMeta = meta as Record<string, string>;
 
+        // Handle soft-deleted paths: remove local file if it exists
+        if (remoteMeta.deleted === "true") {
+          const localPath = `${cachePath}/${relPath}`;
+          try {
+            await Deno.remove(localPath);
+            changes++;
+          } catch (err) {
+            if (!(err instanceof Deno.errors.NotFound)) throw err;
+          }
+          continue;
+        }
+
         if (
           metadataOnly && relPath.startsWith("data/") &&
           relPath.endsWith("/raw")
@@ -614,13 +747,40 @@ function createSyncService(
       );
     }
     const remotePaths = new Set(allRemote);
+
+    // Walk local cache first to determine which files exist locally.
+    const localFiles = new Map<
+      string,
+      { hash: string; bytes: Uint8Array }
+    >();
+
+    for (const sub of DATASTORE_SUBDIRS) {
+      signal?.throwIfAborted();
+      await walkCache(
+        `${cachePath}/${sub}`,
+        sub,
+        async (relPath, bytes) => {
+          signal?.throwIfAborted();
+          const hash = await sha256Hex(bytes);
+          localFiles.set(relPath, { hash, bytes });
+        },
+        signal,
+      );
+    }
+
+    // Only fetch remote hashes for paths that exist BOTH locally and remotely.
+    // New local files (not in remote) need no comparison — they always push.
+    // Remote-only files (not local) are deletions — no hash needed.
+    const intersection = [...localFiles.keys()].filter((p) =>
+      remotePaths.has(p)
+    );
     const remoteHashes = new Map<string, string>();
 
-    if (remotePaths.size > 0) {
-      const pathArray = [...remotePaths];
+    if (intersection.length > 0) {
       const BATCH = 100;
-      for (let i = 0; i < pathArray.length; i += BATCH) {
-        const batch = pathArray.slice(i, i + BATCH);
+      for (let i = 0; i < intersection.length; i += BATCH) {
+        signal?.throwIfAborted();
+        const batch = intersection.slice(i, i + BATCH);
         const pipeline = redis.pipeline();
         for (const p of batch) {
           pipeline.hget(metaKey(prefix, p), "sha256");
@@ -643,31 +803,19 @@ function createSyncService(
       }
     }
 
-    // Walk local cache and diff
-    const localPaths = new Set<string>();
+    // Diff: local files whose hash differs from remote (or are new)
     const toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }> =
       [];
-
-    for (const sub of DATASTORE_SUBDIRS) {
-      signal?.throwIfAborted();
-      await walkCache(
-        `${cachePath}/${sub}`,
-        sub,
-        async (relPath, bytes) => {
-          signal?.throwIfAborted();
-          localPaths.add(relPath);
-          const hash = await sha256Hex(bytes);
-          if (remoteHashes.get(relPath) === hash) return;
-          toPush.push({ relPath, hash, bytes });
-        },
-        signal,
-      );
+    for (const [relPath, { hash, bytes }] of localFiles) {
+      if (remoteHashes.get(relPath) === hash) continue;
+      toPush.push({ relPath, hash, bytes });
     }
 
     // Files in remote but not local = tombstones
+    const localPathSet = new Set(localFiles.keys());
     const toDelete: string[] = [];
     for (const remotePath of remotePaths) {
-      if (!localPaths.has(remotePath)) {
+      if (!localPathSet.has(remotePath)) {
         toDelete.push(remotePath);
       }
     }
@@ -709,30 +857,58 @@ function createSyncService(
       }, signal);
     }
 
-    // Fetch remote state: prefix range for directories, point lookup otherwise
+    // Fetch remote state: ZSCAN with pattern for directories, point lookup otherwise
     let remotePaths: string[];
     if (stat?.isDirectory) {
-      const end = relPath + String.fromCharCode(0xff);
-      remotePaths = await commandSpan(
-        "ZRANGEBYLEX",
+      remotePaths = [];
+      const escaped = escapeMatchPattern(relPath);
+      let cursor = "0";
+      do {
+        const [nextCursor, members] = await commandSpan(
+          "ZSCAN",
+          pathIdx,
+          () =>
+            redis.zscan(
+              pathIdx,
+              cursor,
+              "MATCH",
+              `${escaped}/*`,
+              "COUNT",
+              500,
+            ),
+        );
+        cursor = nextCursor;
+        for (let i = 0; i < members.length; i += 2) {
+          remotePaths.push(members[i]);
+          if (remotePaths.length >= PATH_LIMIT) break;
+        }
+        if (remotePaths.length >= PATH_LIMIT) break;
+      } while (cursor !== "0");
+      // Also include the exact relPath itself if it exists as a file
+      const exactScore = await commandSpan(
+        "ZSCORE",
         pathIdx,
-        () =>
-          redis.zrangebylex(
-            pathIdx,
-            `[${relPath}`,
-            `(${end}`,
-            "LIMIT",
-            0,
-            PATH_LIMIT,
-          ),
+        () => redis.zscore(pathIdx, relPath),
       );
+      if (exactScore !== null && !remotePaths.includes(relPath)) {
+        remotePaths.push(relPath);
+      }
+      // Filter out tombstoned paths — they should not appear in toDelete
+      // or trigger re-scoring (which would refresh their seq indefinitely).
+      remotePaths = await filterDeleted(remotePaths);
     } else {
       const score = await commandSpan(
         "ZSCORE",
         pathIdx,
         () => redis.zscore(pathIdx, relPath),
       );
-      remotePaths = score !== null ? [relPath] : [];
+      if (score !== null) {
+        // Check if it's a tombstone
+        const alive = await filterDeleted([relPath]);
+        remotePaths = alive.length > 0 ? [relPath] : [];
+      } else {
+        remotePaths = [];
+      }
     }
 
     const remoteHashes = new Map<string, string>();
@@ -780,6 +956,12 @@ function createSyncService(
       return { changes: 0, pushed: 0, deleted: 0 };
     }
 
+    // Read current seq to compute the intended score for this write batch.
+    // INCR first so each concurrent writer gets a unique seq. A wasted seq on
+    // crash is acceptable — seq gaps don't affect correctness (ZRANGEBYSCORE
+    // with exclusive lower bound handles them transparently).
+    const writeSeq = await commandSpan("INCR", seq, () => redis.incr(seq));
+
     // Pipeline all writes for one round trip per batch
     const BATCH = 50;
     let changes = 0;
@@ -801,7 +983,8 @@ function createSyncService(
           size: String(f.bytes.byteLength),
           deleted: "false",
         });
-        pipeline.zadd(pathIdx, 0, f.relPath);
+        // Score = writeSeq so pull can ZRANGEBYSCORE to find recent changes
+        pipeline.zadd(pathIdx, writeSeq, f.relPath);
       }
 
       const results = await pipelineSpan(
@@ -828,14 +1011,18 @@ function createSyncService(
       }
     }
 
-    // Delete tombstones
+    // Delete tombstones — keep path in sorted set scored at writeSeq with
+    // deleted: "true" metadata so incremental pull (ZRANGEBYSCORE) discovers
+    // the deletion and removes local files.
     if (toDelete.length > 0) {
       const pipeline = redis.pipeline();
       for (const relPath of toDelete) {
         signal?.throwIfAborted();
         pipeline.del(blobKey(prefix, relPath));
-        pipeline.del(metaKey(prefix, relPath));
-        pipeline.zrem(pathIdx, relPath);
+        pipeline.hset(metaKey(prefix, relPath), {
+          deleted: "true",
+        });
+        pipeline.zadd(pathIdx, writeSeq, relPath);
       }
       const delResults = await pipelineSpan(
         "deleteFiles",
@@ -869,8 +1056,63 @@ function createSyncService(
       );
     }
 
-    // Increment sequence counter
-    await commandSpan("INCR", seq, () => redis.incr(seq));
+    // Tombstone GC: evict tombstones whose score is older than
+    // TOMBSTONE_RETENTION_SEQS behind the current seq. After eviction,
+    // write minRetainedSeq so stale clients know to fall back to full pull.
+    const TOMBSTONE_RETENTION_SEQS = 1000;
+    const GC_BATCH_LIMIT = 5000;
+    const gcThreshold = writeSeq - TOMBSTONE_RETENTION_SEQS;
+    if (gcThreshold > 0) {
+      // Find old entries by score range, bounded to avoid OOM on large repos
+      const oldPaths = await commandSpan(
+        "ZRANGEBYSCORE",
+        pathIdx,
+        () =>
+          redis.zrangebyscore(
+            pathIdx,
+            "-inf",
+            String(gcThreshold),
+            "LIMIT",
+            0,
+            GC_BATCH_LIMIT,
+          ),
+      );
+      if (oldPaths.length > 0) {
+        // Check which are tombstones (deleted: "true")
+        const pipeline = redis.pipeline();
+        for (const p of oldPaths) {
+          pipeline.hget(metaKey(prefix, p), "deleted");
+        }
+        const gcResults = await pipeline.exec();
+        if (gcResults) {
+          const toEvict: string[] = [];
+          for (let i = 0; i < oldPaths.length; i++) {
+            const [err, val] = gcResults[i];
+            if (!err && val === "true") toEvict.push(oldPaths[i]);
+          }
+          if (toEvict.length > 0) {
+            const gcPipeline = redis.pipeline();
+            for (const p of toEvict) {
+              gcPipeline.zrem(pathIdx, p);
+              gcPipeline.del(metaKey(prefix, p));
+            }
+            const evictResults = await gcPipeline.exec();
+            // Only advance minRetainedKey if ALL evictions succeeded.
+            // Partial failure leaves orphan entries but doesn't advance the
+            // threshold, so stale clients still get the full-pull fallback.
+            const allSucceeded = evictResults !== null &&
+              evictResults.every(([err]) => err === null);
+            if (allSucceeded) {
+              await commandSpan(
+                "SET",
+                minRetainedKey,
+                () => redis.set(minRetainedKey, String(gcThreshold + 1)),
+              );
+            }
+          }
+        }
+      }
+    }
 
     return { changes, pushed, deleted };
   }
@@ -908,10 +1150,34 @@ function createSyncService(
           return 0;
         }
 
-        // Determine which paths to pull
-        const result = scoped
-          ? await pathsForPrefixes(scopePrefixes)
-          : await allPaths();
+        // Determine which paths to pull.
+        // When we have a prior seq, use score-based range to fetch only
+        // paths changed since last pull (O(changed) instead of O(total)).
+        // But if our lastPulledSeq is older than the oldest retained
+        // tombstone, we must fall back to a full pull + reconciliation.
+        let result: { paths: string[]; truncated: boolean };
+        if (scoped) {
+          result = await pathsForPrefixes(scopePrefixes);
+        } else if (state.lastPulledSeq > 0) {
+          const minRetained = await getMinRetainedSeq();
+          if (minRetained > 0 && state.lastPulledSeq < minRetained) {
+            // Our seq predates GC — tombstones we need may have been evicted.
+            // Fall back to full pull so we can reconcile against the live set.
+            result = await allPaths();
+          } else {
+            result = await changedPathsSince(state.lastPulledSeq);
+          }
+        } else {
+          result = await allPaths();
+        }
+
+        if (result.truncated) {
+          throw new Error(
+            `Pull path set exceeds ${PATH_LIMIT} entries; ` +
+              "use scoped sync or reduce change volume between pulls",
+          );
+        }
+
         span.setAttributes({
           [Attr.DATASTORE_PATHS]: result.paths.length,
           [Attr.DATASTORE_TRUNCATED]: result.truncated,
@@ -982,19 +1248,31 @@ function createSyncService(
             });
             return 0;
           } else {
-            changes = 0;
-            for (const relPath of snapshot.dirtyPaths) {
-              signal?.throwIfAborted();
-              const diff = await collectOneRelDiff(relPath, signal);
-              const counts = await applyChanges(
-                diff.toPush,
-                diff.toDelete,
-                signal,
-              );
-              changes += counts.changes;
-              pushed += counts.pushed;
-              deleted += counts.deleted;
-            }
+            // Batch: collect all diffs first, then apply in one pass to
+            // reduce from N pipeline flushes to 1-3.
+            const allToPush: Array<
+              { relPath: string; hash: string; bytes: Uint8Array }
+            > = [];
+            const allToDelete: string[] = [];
+            await Promise.all(
+              snapshot.dirtyPaths.map(async (relPath) => {
+                signal?.throwIfAborted();
+                const diff = await collectOneRelDiff(relPath, signal);
+                // Push results into shared arrays after each resolves.
+                // No mutex needed — array push is safe here because we only
+                // append and never read until all promises settle.
+                allToPush.push(...diff.toPush);
+                allToDelete.push(...diff.toDelete);
+              }),
+            );
+            const counts = await applyChanges(
+              allToPush,
+              allToDelete,
+              signal,
+            );
+            changes = counts.changes;
+            pushed = counts.pushed;
+            deleted = counts.deleted;
           }
 
           await sidecar.clearPushed(snapshot);
@@ -1072,12 +1350,14 @@ function createSyncService(
             toPush = diff.toPush;
             toDelete = diff.toDelete;
           } else if (snapshot.dirtyPaths.length > 0) {
-            for (const relPath of snapshot.dirtyPaths) {
-              signal?.throwIfAborted();
-              const diff = await collectOneRelDiff(relPath, signal);
-              toPush.push(...diff.toPush);
-              toDelete.push(...diff.toDelete);
-            }
+            await Promise.all(
+              snapshot.dirtyPaths.map(async (relPath) => {
+                signal?.throwIfAborted();
+                const diff = await collectOneRelDiff(relPath, signal);
+                toPush.push(...diff.toPush);
+                toDelete.push(...diff.toDelete);
+              }),
+            );
           }
 
           span.setAttributes({
