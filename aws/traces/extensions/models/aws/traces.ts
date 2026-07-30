@@ -15,6 +15,7 @@ import {
   GetTraceSummariesCommand,
   XRayClient,
 } from "npm:@aws-sdk/client-xray@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 // =============================================================================
 // Schemas
@@ -25,7 +26,33 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("us-east-1")
     .describe("AWS region for X-Ray"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const ServiceNodeSchema = z.object({
   name: z.string(),
@@ -301,13 +328,13 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -354,7 +381,7 @@ export const model = {
       execute: async (
         args: { startTime: string; endTime?: string; groupName?: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -365,9 +392,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new XRayClient({
-          region: context.globalArgs.region,
-        });
+        const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -463,7 +488,7 @@ export const model = {
           limit: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -474,9 +499,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new XRayClient({
-          region: context.globalArgs.region,
-        });
+        const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -562,7 +585,7 @@ export const model = {
           limit: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -573,9 +596,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new XRayClient({
-          region: context.globalArgs.region,
-        });
+        const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -666,7 +687,7 @@ export const model = {
       execute: async (
         args: { startTime: string; endTime?: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -677,9 +698,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new XRayClient({
-          region: context.globalArgs.region,
-        });
+        const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime

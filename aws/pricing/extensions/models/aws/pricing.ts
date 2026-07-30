@@ -19,6 +19,7 @@ import {
   GetProductsCommand,
   PricingClient,
 } from "npm:@aws-sdk/client-pricing@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 const MAX_PAGES = 10;
 
@@ -33,7 +34,33 @@ const GlobalArgsSchema = z.object({
     .describe(
       "AWS Pricing API region (only us-east-1 or ap-south-1 available)",
     ),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const ServiceSchema = z.object({
   serviceCode: z.string(),
@@ -77,13 +104,13 @@ const PriceResultSchema = z.object({
  */
 export const model = {
   type: "@webframp/aws/pricing",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -121,7 +148,7 @@ export const model = {
       execute: async (
         args: { serviceCode?: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -132,7 +159,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new PricingClient({ region: context.globalArgs.region });
+        const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const services: Array<
             { serviceCode: string; attributeNames: string[] }
@@ -188,7 +215,7 @@ export const model = {
       execute: async (
         args: { serviceCode: string; attributeName: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -199,7 +226,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new PricingClient({ region: context.globalArgs.region });
+        const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const values: string[] = [];
           let nextToken: string | undefined;
@@ -277,7 +304,7 @@ export const model = {
           maxResults: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -288,7 +315,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new PricingClient({ region: context.globalArgs.region });
+        const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const apiFilters: Filter[] = (args.filters || []).map((f) => ({
             Type: "TERM_MATCH" as const,
@@ -387,7 +414,7 @@ export const model = {
           tenancy: string;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -398,7 +425,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new PricingClient({ region: context.globalArgs.region });
+        const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const command = new GetProductsCommand({
             ServiceCode: "AmazonEC2",

@@ -24,6 +24,7 @@ import {
   CloudWatchClient,
   GetMetricStatisticsCommand,
 } from "npm:@aws-sdk/client-cloudwatch@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 const MAX_PAGES = 10;
 
@@ -36,7 +37,33 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("us-east-1")
     .describe("AWS region to inspect"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const NatGatewaySchema = z.object({
   natGatewayId: z.string(),
@@ -88,7 +115,7 @@ const NetworkingResultSchema = z.object({
 // =============================================================================
 
 type MethodContext = {
-  globalArgs: { region: string };
+  globalArgs: GlobalArgs;
   writeResource: (
     spec: string,
     instance: string,
@@ -114,12 +141,12 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/networking",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -141,7 +168,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
-        const client = new EC2Client({ region: context.globalArgs.region });
+        const client = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const gateways: z.infer<typeof NatGatewaySchema>[] = [];
           let nextToken: string | undefined;
@@ -224,9 +251,9 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
-        const client = new ElasticLoadBalancingV2Client({
-          region: context.globalArgs.region,
-        });
+        const client = new ElasticLoadBalancingV2Client(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const loadBalancers: z.infer<typeof LoadBalancerSchema>[] = [];
           let marker: string | undefined;
@@ -338,7 +365,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
-        const client = new EC2Client({ region: context.globalArgs.region });
+        const client = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const command = new DescribeAddressesCommand({});
           const response = await client.send(command);
@@ -424,8 +451,12 @@ export const model = {
         context: MethodContext,
       ) => {
         const region = context.globalArgs.region;
-        const cwClient = new CloudWatchClient({ region });
-        const elbClient = new ElasticLoadBalancingV2Client({ region });
+        const cwClient = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
+        const elbClient = new ElasticLoadBalancingV2Client(
+          makeClientConfig(context.globalArgs),
+        );
         let ec2Client: EC2Client | undefined;
 
         try {
@@ -436,7 +467,7 @@ export const model = {
           // Discover or use provided NAT Gateway IDs
           let natGatewayIds = args.natGatewayIds;
           if (!natGatewayIds) {
-            ec2Client = new EC2Client({ region });
+            ec2Client = new EC2Client(makeClientConfig(context.globalArgs));
             natGatewayIds = [];
             let nextToken: string | undefined;
             let pages = 0;

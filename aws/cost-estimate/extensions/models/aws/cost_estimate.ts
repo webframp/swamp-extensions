@@ -15,6 +15,7 @@ import {
   GetProductsCommand,
   PricingClient,
 } from "npm:@aws-sdk/client-pricing@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 // =============================================================================
 // Schemas
@@ -25,7 +26,33 @@ const GlobalArgsSchema = z.object({
     .enum(["us-east-1", "ap-south-1"])
     .default("us-east-1")
     .describe("AWS Pricing API region (only us-east-1 or ap-south-1)"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.pricingRegion,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const EC2CostItemSchema = z.object({
   instanceId: z.string(),
@@ -205,14 +232,14 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -253,7 +280,7 @@ export const model = {
           }>;
         },
         context: {
-          globalArgs: { pricingRegion: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -264,9 +291,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new PricingClient({
-          region: context.globalArgs.pricingRegion,
-        });
+        const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const items: z.infer<typeof EC2CostItemSchema>[] = [];
           let totalMonthly = 0;
@@ -357,7 +382,7 @@ export const model = {
           storageRatePerGb: number;
         },
         context: {
-          globalArgs: { pricingRegion: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -368,9 +393,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new PricingClient({
-          region: context.globalArgs.pricingRegion,
-        });
+        const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const items: z.infer<typeof RDSCostItemSchema>[] = [];
           let totalMonthly = 0;
@@ -483,7 +506,7 @@ export const model = {
           }>;
         },
         context: {
-          globalArgs: { pricingRegion: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -494,9 +517,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new PricingClient({
-          region: context.globalArgs.pricingRegion,
-        });
+        const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const estimates: Array<{
             name: string;
