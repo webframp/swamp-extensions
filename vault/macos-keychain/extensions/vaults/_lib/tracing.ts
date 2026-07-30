@@ -10,9 +10,9 @@
  * Secret values, argv, stdin, and error messages. The last one is not obvious:
  * the swamp host records the message of any error that escapes a vault method
  * into `swamp.cli` as a status description, an `exception.message`, and a stack
- * trace. A keychain error message is `security`'s stderr, and `put` passes the
- * secret to `security` as a command-line argument, so a CLI that quotes a
- * rejected argument back would put the secret in that message.
+ * trace. A keychain error message is `security`'s stderr, and `put` feeds the
+ * hex-encoded secret to `security -i` on stdin, whose parser echoes rejected
+ * input back — so an unredacted stderr would put the secret in that message.
  *
  * {@linkcode withVaultSpan} therefore records `SpanStatusCode.ERROR` and an
  * `error.type` and nothing else. It accepts no parameter capable of carrying a
@@ -32,7 +32,7 @@ import {
 /** Extension name, used as the instrumentation scope. */
 const INSTRUMENTATION_NAME = "@webframp/macos-keychain";
 /** Kept in step with `version` in manifest.yaml. */
-const INSTRUMENTATION_VERSION = "2026.07.26.2";
+const INSTRUMENTATION_VERSION = "2026.07.30.1";
 
 /** Returns the tracer for this extension. No-op unless the host configured a provider. */
 export function getTracer(): Tracer {
