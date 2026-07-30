@@ -1,3 +1,27 @@
+## 2026.07.29.1
+
+**Added:** Incremental pull via sorted-set scores. Pull now fetches only paths
+changed since `lastPulledSeq` using `ZRANGEBYSCORE`, converting pull from
+O(total files) to O(changed files).
+
+**Added:** Deleted paths are retained in the sorted set with `deleted: "true"`
+metadata so incremental pulls receive tombstone signals. Previously, `ZREM` on
+delete made deletions invisible to score-range queries.
+
+**Changed:** Dirty-path diffs are collected in parallel and applied in a single
+`applyChanges` call (1-3 pipeline flushes instead of N separate cycles).
+
+**Changed:** `INCR` for the commit sequence now runs after pipeline writes
+succeed, not before. A crash mid-batch no longer leaves an orphaned seq.
+
+**Changed:** Pull throws on PATH_LIMIT truncation instead of silently dropping
+paths beyond 50,000.
+
+**Fixed:** ZSCAN MATCH patterns now escape glob metacharacters (`*`, `?`, `[`,
+`]`, `\`) preventing mismatches on paths containing those characters.
+
+**Fixed:** `pathsForPrefixes` deduplicates results when scope prefixes overlap.
+
 ## 2026.07.27.1
 
 **Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
