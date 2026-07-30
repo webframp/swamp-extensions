@@ -301,11 +301,14 @@ export const vault = {
               "-U",
             ].join(" ") + "\n";
 
-            if (line.length > MAX_INTERACTIVE_LINE) {
+            // The 4096-byte buffer counts UTF-8 bytes on stdin, not string
+            // code units; a multi-byte service or key makes the two differ.
+            const lineBytes = new TextEncoder().encode(line).byteLength;
+            if (lineBytes > MAX_INTERACTIVE_LINE) {
               const maxBytes = Math.max(
                 0,
                 Math.floor(
-                  (MAX_INTERACTIVE_LINE - (line.length - valueHex.length)) / 2,
+                  (MAX_INTERACTIVE_LINE - (lineBytes - valueHex.length)) / 2,
                 ),
               );
               throw new Error(

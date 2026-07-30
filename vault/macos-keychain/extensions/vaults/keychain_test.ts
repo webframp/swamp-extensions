@@ -331,16 +331,22 @@ class MockProcess {
 
     // security -i: commands arrive on stdin, one per line.
     if (this.args[0] === "-i") {
-      const text = new TextDecoder().decode(
-        Uint8Array.from(this.stdinChunks.flatMap((c) => [...c])),
+      const stdinBytes = Uint8Array.from(
+        this.stdinChunks.flatMap((c) => [...c]),
       );
+      const text = new TextDecoder().decode(stdinBytes);
       const newlineIdx = text.indexOf("\n");
       const line = newlineIdx === -1 ? text : text.slice(0, newlineIdx);
       lastInteractiveLine = line;
 
       // The real CLI splits longer lines and can store a corrupted value.
       // The provider guards before spawning, so reaching this is a bug.
-      if (line.length + 1 > 4096) {
+      // Like the real readline buffer, count UTF-8 bytes, not code units.
+      const newlineByteIdx = stdinBytes.indexOf(0x0a);
+      const lineBytes = newlineByteIdx === -1
+        ? stdinBytes.byteLength
+        : newlineByteIdx;
+      if (lineBytes + 1 > 4096) {
         return Promise.resolve({
           code: 1,
           stdout: new Uint8Array(),
@@ -557,7 +563,7 @@ Deno.test("put sends one -X command line, upserting, within the -i budget", asyn
     assertStringIncludes(line, "-U");
     // The raw secret itself must not be on the line either.
     assertEquals(line.includes("hunter2"), false);
-    assertEquals(line.length + 1 <= 4096, true);
+    assertEquals(encoder.encode(line).byteLength + 1 <= 4096, true);
   });
 });
 
@@ -597,6 +603,26 @@ Deno.test("put rejects an oversize secret before spawning anything", async () =>
       "too large",
     );
     assertEquals(securitySpawnCount, 0);
+  });
+});
+
+Deno.test("put budgets the -i line in UTF-8 bytes, not code units", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    // "🔑" is 2 UTF-16 code units but 4 UTF-8 bytes. With the default
+    // service "swamp", a 2024-byte secret makes the line 4095 code units
+    // (passes a code-unit check) but 4097 bytes (over the real buffer).
+    securitySpawnCount = 0;
+    await assertRejects(
+      () => provider.put("🔑", "a".repeat(2024)),
+      Error,
+      "too large",
+    );
+    assertEquals(securitySpawnCount, 0);
+
+    // One byte under the buffer must still work.
+    await provider.put("🔑", "a".repeat(2023));
+    assertEquals(mockKeychain.get("swamp/🔑"), "a".repeat(2023));
   });
 });
 
