@@ -42,6 +42,17 @@ Deno.test("model globalArguments has region with default", () => {
   assertEquals(parsed.region, "us-east-1");
 });
 
+Deno.test("model globalArguments accepts optional profile", () => {
+  const parsed = model.globalArguments.parse({ profile: "prod-account" });
+  assertEquals(parsed.region, "us-east-1");
+  assertEquals(parsed.profile, "prod-account");
+});
+
+Deno.test("model globalArguments omits profile when not provided", () => {
+  const parsed = model.globalArguments.parse({});
+  assertEquals(parsed.profile, undefined);
+});
+
 Deno.test("model has required resources", () => {
   assertExists(model.resources.log_groups);
   assertExists(model.resources.query_results);
@@ -375,6 +386,122 @@ Deno.test(
       assertEquals(data.statistics.recordsScanned, 100);
       // Verify polling happened (at least 2 calls)
       assertEquals(getResultsCalls >= 2, true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+// =============================================================================
+// profile Global Argument Tests
+// =============================================================================
+
+Deno.test(
+  "list_log_groups: works with profile global argument set",
+  { sanitizeResources: false }, // CloudWatchLogsClient uses connection pooling
+  async () => {
+    const restore = mockLogsClient(() => ({
+      logGroups: [
+        {
+          logGroupName: "/aws/lambda/prod-func",
+          arn:
+            "arn:aws:logs:us-west-2:999999999999:log-group:/aws/lambda/prod-func",
+          creationTime: 1704067200000,
+          retentionInDays: 14,
+          storedBytes: 2048,
+          logGroupClass: "STANDARD",
+        },
+      ],
+      nextToken: undefined,
+    }));
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { region: "us-west-2", profile: "prod-account" },
+        definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+      });
+
+      await model.methods.list_log_groups.execute(
+        { limit: 10 },
+        context as unknown as Parameters<
+          typeof model.methods.list_log_groups.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      const data = resources[0].data as {
+        logGroups: Array<{ name: string }>;
+        count: number;
+      };
+
+      assertEquals(data.count, 1);
+      assertEquals(data.logGroups[0].name, "/aws/lambda/prod-func");
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: works with profile global argument set",
+  { sanitizeResources: false }, // CloudWatchLogsClient uses connection pooling
+  async () => {
+    const restore = mockLogsClient((cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "StartQueryCommand") {
+        return { queryId: "q-profile-456" };
+      }
+      if (name === "GetQueryResultsCommand") {
+        return {
+          status: "Complete",
+          results: [
+            [
+              { field: "@message", value: "profile test line" },
+              { field: "@timestamp", value: "2026-01-01T00:00:00Z" },
+            ],
+          ],
+          statistics: {
+            recordsMatched: 1.0,
+            recordsScanned: 50.0,
+            bytesScanned: 2500.0,
+          },
+        };
+      }
+      return {};
+    });
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { region: "eu-west-1", profile: "staging" },
+        definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+      });
+
+      await model.methods.query.execute(
+        {
+          logGroupNames: ["/aws/lambda/staging-func"],
+          queryString: "fields @timestamp, @message | limit 10",
+          startTime: "1h",
+          maxWaitSeconds: 5,
+        },
+        context as unknown as Parameters<
+          typeof model.methods.query.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      const data = resources[0].data as {
+        queryId: string;
+        status: string;
+        results: Array<Record<string, string>>;
+      };
+
+      assertEquals(data.queryId, "q-profile-456");
+      assertEquals(data.status, "Complete");
+      assertEquals(data.results[0]["@message"], "profile test line");
     } finally {
       restore();
     }

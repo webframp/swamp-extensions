@@ -1,12 +1,16 @@
 manifestVersion: 1
 name: "@webframp/aws/logs"
-version: "2026.07.29.1"
+version: "2026.07.30.1"
 description: |
   Query and analyze CloudWatch Logs for operational visibility and incident investigation.
 
   ## Authentication
 
-  Uses the default AWS credential chain. Requires CloudWatch Logs permissions.
+  Uses the default AWS credential chain. Set the optional `profile` global argument to
+  resolve credentials from a named AWS shared-config profile (SSO token cache / fromIni),
+  enabling multi-account use within a single swamp repo.
+
+  Requires CloudWatch Logs permissions.
 
   ## Required IAM Permissions
 
@@ -18,8 +22,12 @@ description: |
   ## Usage
 
   ```bash
-  # Create logs model
+  # Create logs model (default credential chain)
   swamp model create @webframp/aws/logs aws-logs --global-arg region=us-east-1
+
+  # Create logs model with a named profile for multi-account use
+  swamp model create @webframp/aws/logs aws-logs-prod \
+    --global-arg region=us-east-1 --global-arg profile=prod-account
 
   # List log groups
   swamp model method run aws-logs list_log_groups --input prefix=/aws/lambda

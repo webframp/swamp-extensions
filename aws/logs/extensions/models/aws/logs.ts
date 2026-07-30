@@ -13,11 +13,13 @@
 import { z } from "npm:zod@4.4.3";
 import {
   CloudWatchLogsClient,
+  type CloudWatchLogsClientConfig,
   DescribeLogGroupsCommand,
   FilterLogEventsCommand,
   GetQueryResultsCommand,
   StartQueryCommand,
 } from "npm:@aws-sdk/client-cloudwatch-logs@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 // =============================================================================
 // Schemas
@@ -28,7 +30,17 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("us-east-1")
     .describe("AWS region for CloudWatch Logs"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 const LogGroupSchema = z.object({
   name: z.string(),
@@ -132,6 +144,19 @@ function parseRelativeTime(timeStr: string): Date {
   return new Date(now.getTime() - 60 * 60 * 1000);
 }
 
+/**
+ * Build a CloudWatchLogsClient with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClient(globalArgs: GlobalArgs): CloudWatchLogsClient {
+  const config: CloudWatchLogsClientConfig = { region: globalArgs.region };
+  if (globalArgs.profile) {
+    config.credentials = fromIni({ profile: globalArgs.profile });
+  }
+  return new CloudWatchLogsClient(config);
+}
+
 async function waitForQueryCompletion(
   client: CloudWatchLogsClient,
   queryId: string,
@@ -207,12 +232,12 @@ async function waitForQueryCompletion(
  */
 export const model = {
   type: "@webframp/aws/logs",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -254,7 +279,7 @@ export const model = {
       execute: async (
         args: { prefix?: string; limit: number },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -265,9 +290,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchLogsClient({
-          region: context.globalArgs.region,
-        });
+        const client = makeClient(context.globalArgs);
         try {
           const logGroups: z.infer<typeof LogGroupSchema>[] = [];
           let nextToken: string | undefined;
@@ -356,7 +379,7 @@ export const model = {
           maxWaitSeconds: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -367,9 +390,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchLogsClient({
-          region: context.globalArgs.region,
-        });
+        const client = makeClient(context.globalArgs);
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -465,7 +486,7 @@ export const model = {
           limit: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -476,9 +497,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchLogsClient({
-          region: context.globalArgs.region,
-        });
+        const client = makeClient(context.globalArgs);
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -635,7 +654,7 @@ export const model = {
           limit: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -646,9 +665,7 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchLogsClient({
-          region: context.globalArgs.region,
-        });
+        const client = makeClient(context.globalArgs);
         try {
           const startTime = parseRelativeTime(args.startTime);
           const events: z.infer<typeof LogEventSchema>[] = [];
