@@ -176,7 +176,8 @@ function startMockServer(
     if (path.match(/\/groups\/[^/]+\/members/)) {
       return Response.json({ data: MOCK_GROUP_MEMBERS, has_more: false });
     }
-    if (path.endsWith("/groups")) {
+    // Groups listing is top-level (/v1/compliance/groups), not org-scoped
+    if (path === "/v1/compliance/groups") {
       return Response.json({ data: MOCK_GROUPS, has_more: false });
     }
     if (path.endsWith("/settings")) {
