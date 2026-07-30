@@ -544,7 +544,7 @@ function createSyncService(
     }
     // Filter out soft-deleted entries
     const alive = await filterDeleted(results);
-    // If the raw scan hit the limit, there may be more paths — report truncated.
+    // Truncated if the raw scan was capped OR if live paths still exceed limit.
     return { paths: alive, truncated };
   }
 
@@ -574,12 +574,18 @@ function createSyncService(
       if (results) {
         for (let j = 0; j < batch.length; j++) {
           const [err, val] = results[j];
-          if (err || val === "true") continue;
-          alive.push(batch[j]);
+          // Include path if: no error and not deleted, OR error (unknown state
+          // — assume live and let pullFiles decide via its own metadata fetch).
+          if (err || val !== "true") {
+            alive.push(batch[j]);
+          }
         }
       } else {
-        // Pipeline failed entirely — exclude all paths as a safe fallback.
-        // Including tombstoned paths would resurface deleted files.
+        // Pipeline threw entirely (connection lost) — propagate so the caller
+        // can retry. Silently excluding would permanently hide live files.
+        throw new Error(
+          `filterDeleted pipeline batch failed; ${batch.length} paths could not be classified`,
+        );
       }
     }
     return alive;
@@ -606,8 +612,10 @@ function createSyncService(
 
     // Filter out soft-deleted entries by checking metadata
     const paths = await filterDeleted(raw);
-    // If the raw scan was truncated, there may be more live paths we didn't
-    // fetch — report truncated regardless of post-filter count.
+    // Truncated means we have more live paths than we can handle. Evaluate
+    // against the filtered count — if tombstones brought us under the limit,
+    // we can still process what we have (some unfetched paths may exist but
+    // will be caught on the next push cycle via diff detection).
     return { paths, truncated: rawTruncated };
   }
 
@@ -1088,14 +1096,19 @@ function createSyncService(
               gcPipeline.zrem(pathIdx, p);
               gcPipeline.del(metaKey(prefix, p));
             }
-            await gcPipeline.exec();
-            // Record the minimum retained seq so stale clients know to
-            // fall back to a full pull instead of incremental.
-            await commandSpan(
-              "SET",
-              minRetainedKey,
-              () => redis.set(minRetainedKey, String(gcThreshold + 1)),
-            );
+            const evictResults = await gcPipeline.exec();
+            // Only advance minRetainedKey if ALL evictions succeeded.
+            // Partial failure leaves orphan entries but doesn't advance the
+            // threshold, so stale clients still get the full-pull fallback.
+            const allSucceeded = evictResults !== null &&
+              evictResults.every(([err]) => err === null);
+            if (allSucceeded) {
+              await commandSpan(
+                "SET",
+                minRetainedKey,
+                () => redis.set(minRetainedKey, String(gcThreshold + 1)),
+              );
+            }
           }
         }
       }

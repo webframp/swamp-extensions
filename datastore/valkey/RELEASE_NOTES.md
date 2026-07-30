@@ -11,8 +11,9 @@ delete made deletions invisible to score-range queries.
 **Changed:** Dirty-path diffs are collected in parallel and applied in a single
 `applyChanges` call (1-3 pipeline flushes instead of N separate cycles).
 
-**Changed:** `INCR` for the commit sequence now runs after pipeline writes
-succeed, not before. A crash mid-batch no longer leaves an orphaned seq.
+**Changed:** `INCR` for the commit sequence now runs before pipeline writes,
+not after. Each concurrent writer atomically reserves a unique seq. A wasted seq
+on crash is acceptable — seq gaps do not affect correctness.
 
 **Changed:** Pull throws on PATH_LIMIT truncation instead of silently dropping
 paths beyond 50,000.
