@@ -691,16 +691,20 @@ export function createSyncService(
            VALUES ('last_pushed_at', to_jsonb(now()::text), now())
            ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
             );
-            // Tombstone GC: remove rows deleted more than N days ago
-            await tx.unsafe(
-              `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
-            );
           });
           return count;
         },
       )
     );
     txDone();
+
+    // Tombstone GC: fire-and-forget outside the transaction. A failure here
+    // (e.g. missing DELETE privilege) must never block pushes.
+    try {
+      await sql.unsafe(
+        `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
+      );
+    } catch { /* GC failure is non-fatal */ }
 
     trace.summary("push", Math.round(performance.now() - pushStart), {
       files: toPush.length,
@@ -952,15 +956,18 @@ export function createSyncService(
                    VALUES ('last_pushed_at', to_jsonb(now()::text), now())
                    ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
                       );
-                      // Tombstone GC
-                      await tx.unsafe(
-                        `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
-                      );
+                      // Tombstone GC — moved outside transaction below
                     });
                     return count;
                   },
                 )
               );
+              // Tombstone GC: fire-and-forget outside the transaction.
+              try {
+                await sql.unsafe(
+                  `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
+                );
+              } catch { /* GC failure is non-fatal */ }
               pushed = allToPush.length;
               deleted = allToTombstone.length;
             }
@@ -1166,15 +1173,19 @@ export function createSyncService(
              VALUES ('last_pushed_at', to_jsonb(now()::text), now())
              ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
                 );
-                // Tombstone GC
-                await tx.unsafe(
-                  `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
-                );
+                // Tombstone GC — moved outside transaction below
               });
               return count;
             },
           )
         );
+
+        // Tombstone GC: fire-and-forget outside the transaction.
+        try {
+          await sql.unsafe(
+            `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
+          );
+        } catch { /* GC failure is non-fatal */ }
 
         await sidecar.clearPushed(internal.snapshot);
         span.setAttributes({
