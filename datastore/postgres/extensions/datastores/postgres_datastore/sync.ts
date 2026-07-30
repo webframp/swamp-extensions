@@ -1,11 +1,18 @@
 // ABOUTME: PostgreSQL sync service — transaction-wrapped push with batched inserts,
 // ABOUTME: team-safe watermarking via sync_state table, retry on transient errors.
+// ABOUTME: Uses BIGSERIAL commitSeq for monotonic ordering and tombstone GC.
 
 import type postgres from "npm:postgres@3.4.9";
 import { Sidecar } from "./sidecar.ts";
 import { retryable } from "./_lib/retry.ts";
 import { tracerFromEnv } from "./_lib/trace.ts";
 import { Attr, sqlSpan, withSpan } from "./_lib/tracing.ts";
+
+/** Number of content-fetch batches to run concurrently during pull phase 2. */
+const CONTENT_FETCH_CONCURRENCY = 3;
+
+/** Tombstones older than this are eligible for garbage collection. */
+const TOMBSTONE_GC_AGE_DAYS = 7;
 
 export interface SyncContext {
   models?: ReadonlyArray<{ modelType: string; modelId: string }>;
@@ -170,6 +177,9 @@ export function createSyncService(
   }
   const syncStateTable = filesTable.replace(/\.files$/, ".sync_state");
 
+  // Derive the sequence name from the filesTable schema (e.g. "swamp.commit_seq")
+  const commitSeqName = filesTable.replace(/\.files$/, ".commit_seq");
+
   async function ensureSchema(): Promise<void> {
     await sqlSpan(
       "createFilesTable",
@@ -216,6 +226,19 @@ export function createSyncService(
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `)
+        ),
+    );
+    // BIGSERIAL sequence for monotonic commit ordering — eliminates clock skew
+    // concerns with concurrent pushers.
+    await sqlSpan(
+      "createCommitSeq",
+      "CREATE SEQUENCE",
+      commitSeqName,
+      () =>
+        retryable(() =>
+          sql.unsafe(
+            `CREATE SEQUENCE IF NOT EXISTS ${commitSeqName} AS BIGINT`,
+          )
         ),
     );
   }
@@ -271,24 +294,46 @@ export function createSyncService(
       conditions.push(`(${orClauses.join(" OR ")})`);
     } else if (state.lastPulledAt !== null) {
       // Skip pull entirely if nothing was pushed since our last pull.
-      // The DB watermark is authoritative for team-wide changes.
+      // Use commitSeq (monotonic integer) as the authoritative check;
+      // fall back to timestamp watermark for backwards compatibility.
       try {
-        const [stateRow] = await sqlSpan(
-          "readWatermark",
+        const [seqRow] = await sqlSpan(
+          "readCommitSeq",
           "SELECT",
           syncStateTable,
           () =>
             retryable(() =>
               sql.unsafe(
-                `SELECT value FROM ${syncStateTable} WHERE key = 'last_pushed_at'`,
+                `SELECT value FROM ${syncStateTable} WHERE key = 'commit_seq'`,
               )
             ),
         );
-        if (stateRow) {
-          const dbPushedAt = String(stateRow.value);
-          if (new Date(dbPushedAt) <= new Date(state.lastPulledAt)) {
+        if (seqRow) {
+          const dbSeq = Number(seqRow.value);
+          const localSeq = state.commitSeq ?? 0;
+          if (dbSeq <= localSeq) {
             trace.summary("pull", 0, { files: 0, skipped: "no_changes" });
             return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
+          }
+        } else {
+          // No commit_seq yet — fall back to timestamp watermark
+          const [stateRow] = await sqlSpan(
+            "readWatermark",
+            "SELECT",
+            syncStateTable,
+            () =>
+              retryable(() =>
+                sql.unsafe(
+                  `SELECT value FROM ${syncStateTable} WHERE key = 'last_pushed_at'`,
+                )
+              ),
+          );
+          if (stateRow) {
+            const dbPushedAt = String(stateRow.value);
+            if (new Date(dbPushedAt) <= new Date(state.lastPulledAt)) {
+              trace.summary("pull", 0, { files: 0, skipped: "no_changes" });
+              return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
+            }
           }
         }
       } catch {
@@ -296,6 +341,30 @@ export function createSyncService(
       }
       params.push(state.lastPulledAt);
       conditions.push(`updated_at >= $${paramIdx++}`);
+    }
+
+    // Capture commitSeq BEFORE the metadata scan so concurrent pushes that
+    // arrive during the scan don't get their seq stored without their data.
+    let preScanCommitSeq: number | null = null;
+    if (!scoped && !metadataOnly) {
+      try {
+        const [seqRow] = await sqlSpan(
+          "capturePreScanCommitSeq",
+          "SELECT",
+          syncStateTable,
+          () =>
+            retryable(() =>
+              sql.unsafe(
+                `SELECT value FROM ${syncStateTable} WHERE key = 'commit_seq'`,
+              )
+            ),
+        );
+        if (seqRow) {
+          preScanCommitSeq = Number(seqRow.value);
+        }
+      } catch {
+        // commit_seq may not exist yet — non-fatal
+      }
     }
 
     if (metadataOnly) {
@@ -355,35 +424,54 @@ export function createSyncService(
       }
     }
 
-    // Phase 2: fetch content only for changed/missing files
+    // Phase 2: fetch content only for changed/missing files (concurrent batches)
     const contentFetchDone = trace.startTimer("pull", "content_fetch");
     const BATCH_SIZE = 100;
+    const batches: string[][] = [];
     for (let i = 0; i < needContent.length; i += BATCH_SIZE) {
+      batches.push(needContent.slice(i, i + BATCH_SIZE));
+    }
+
+    // Run batches with limited concurrency to avoid exhausting the pool
+    for (
+      let chunk = 0;
+      chunk < batches.length;
+      chunk += CONTENT_FETCH_CONCURRENCY
+    ) {
       signal?.throwIfAborted();
-      const batch = needContent.slice(i, i + BATCH_SIZE);
-      const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(", ");
-      const contentRows: postgres.Row[] = await sqlSpan(
-        "fetchFileContent",
-        "SELECT",
-        filesTable,
-        async (span) => {
-          const rows: postgres.Row[] = await retryable(() =>
-            sql.unsafe(
-              `SELECT path, content FROM ${filesTable} WHERE path IN (${placeholders}) AND deleted_at IS NULL`,
-              batch,
-            )
-          );
-          span.setAttribute(Attr.DB_RETURNED_ROWS, rows.length);
-          return rows;
-        },
+      const concurrent = batches.slice(
+        chunk,
+        chunk + CONTENT_FETCH_CONCURRENCY,
       );
-      for (const row of contentRows) {
-        signal?.throwIfAborted();
-        const relPath = row.path as string;
-        const content = row.content as Uint8Array;
-        await writeFileAtomic(`${cachePath}/${relPath}`, content);
-        changes++;
-        pulled++;
+      const results = await Promise.all(
+        concurrent.map((batch) => {
+          const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(", ");
+          return sqlSpan(
+            "fetchFileContent",
+            "SELECT",
+            filesTable,
+            async (span) => {
+              const rows: postgres.Row[] = await retryable(() =>
+                sql.unsafe(
+                  `SELECT path, content FROM ${filesTable} WHERE path IN (${placeholders}) AND deleted_at IS NULL`,
+                  batch,
+                )
+              );
+              span.setAttribute(Attr.DB_RETURNED_ROWS, rows.length);
+              return rows;
+            },
+          );
+        }),
+      );
+      for (const contentRows of results) {
+        for (const row of contentRows) {
+          signal?.throwIfAborted();
+          const relPath = row.path as string;
+          const content = row.content as Uint8Array;
+          await writeFileAtomic(`${cachePath}/${relPath}`, content);
+          changes++;
+          pulled++;
+        }
       }
     }
     contentFetchDone();
@@ -391,6 +479,12 @@ export function createSyncService(
     if (!scoped && !metadataOnly) {
       await sidecar.setLastPulledAt(pullStartTime);
       await sidecar.setLazyPullActive(false);
+      // Store the commitSeq captured BEFORE the metadata scan — any pushes
+      // that landed after our snapshot will have a higher seq and will be
+      // picked up on the next pull.
+      if (preScanCommitSeq !== null) {
+        await sidecar.setCommitSeq(preScanCommitSeq);
+      }
     }
 
     trace.summary("pull", Math.round(performance.now() - pullStart), {
@@ -410,40 +504,10 @@ export function createSyncService(
     toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }>;
     toTombstone: string[];
   }> {
-    // Fetch remote manifest for diff (metadata only, no content)
-    const manifestDone = trace.startTimer("push", "manifest_fetch");
-    const remoteRows: postgres.Row[] = await sqlSpan(
-      "fetchRemoteManifest",
-      "SELECT",
-      filesTable,
-      async (span) => {
-        const rows: postgres.Row[] = await retryable(() =>
-          sql.unsafe(
-            `SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE deleted_at IS NULL`,
-          )
-        );
-        span.setAttribute(Attr.DB_RETURNED_ROWS, rows.length);
-        return rows;
-      },
-    );
-    manifestDone();
-    const remotePaths = new Map<
-      string,
-      { hash: string; deletedAt: unknown; updatedAt: Date }
-    >();
-    for (const r of remoteRows) {
-      remotePaths.set(r.path as string, {
-        hash: r.hash as string,
-        deletedAt: r.deleted_at,
-        updatedAt: new Date(String(r.updated_at)),
-      });
-    }
-
-    // Collect all files that need pushing (diff against remote)
-    const localPaths = new Set<string>();
-    const toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }> =
-      [];
-
+    // Collect all local files first so we know what paths to query
+    const localFiles: Array<
+      { relPath: string; hash: string; bytes: Uint8Array }
+    > = [];
     for (const sub of DATASTORE_SUBDIRS) {
       signal?.throwIfAborted();
       await walkAndPush(
@@ -451,27 +515,107 @@ export function createSyncService(
         sub,
         async (relPath, bytes) => {
           signal?.throwIfAborted();
-          localPaths.add(relPath);
           const hash = await sha256Hex(bytes);
-          const existing = remotePaths.get(relPath);
-          if (
-            existing && existing.deletedAt === null && existing.hash === hash
-          ) {
-            return;
-          }
-          toPush.push({ relPath, hash, bytes });
+          localFiles.push({ relPath, hash, bytes });
         },
         signal,
       );
     }
+    const localPathSet = new Set(localFiles.map((f) => f.relPath));
 
-    // Collect tombstones
+    // Fetch remote manifest for diff — use narrowed batch lookups for known
+    // local paths, and a full scan only for tombstone detection.
+    const manifestDone = trace.startTimer("push", "manifest_fetch");
+
+    // For known local paths, batch-query their remote hashes instead of
+    // fetching the entire manifest.
+    const MANIFEST_BATCH_SIZE = 200;
+    const remoteByPath = new Map<
+      string,
+      { hash: string; deletedAt: unknown; updatedAt: Date }
+    >();
+    const localPathList = [...localPathSet];
+    for (let i = 0; i < localPathList.length; i += MANIFEST_BATCH_SIZE) {
+      signal?.throwIfAborted();
+      const batch = localPathList.slice(i, i + MANIFEST_BATCH_SIZE);
+      const placeholders = batch.map((_, idx) => `$${idx + 1}`).join(", ");
+      const rows: postgres.Row[] = await sqlSpan(
+        "fetchRemoteManifestBatch",
+        "SELECT",
+        filesTable,
+        async (span) => {
+          const result: postgres.Row[] = await retryable(() =>
+            sql.unsafe(
+              `SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE path IN (${placeholders})`,
+              batch,
+            )
+          );
+          span.setAttribute(Attr.DB_RETURNED_ROWS, result.length);
+          return result;
+        },
+      );
+      for (const r of rows) {
+        remoteByPath.set(r.path as string, {
+          hash: r.hash as string,
+          deletedAt: r.deleted_at,
+          updatedAt: new Date(String(r.updated_at)),
+        });
+      }
+    }
+
+    // For tombstone detection we need to find remote-only files that the local
+    // side has deleted. Use lastPulledAt as a bound to narrow the scan.
+    const remoteOnlyPaths = new Map<
+      string,
+      { hash: string; deletedAt: unknown; updatedAt: Date }
+    >();
+    if (lastPulledAt !== null && !lazyPullActive) {
+      const tombstoneRows: postgres.Row[] = await sqlSpan(
+        "fetchRemoteTombstoneCandidates",
+        "SELECT",
+        filesTable,
+        async (span) => {
+          const rows: postgres.Row[] = await retryable(() =>
+            sql.unsafe(
+              `SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE deleted_at IS NULL AND updated_at <= $1`,
+              [lastPulledAt],
+            )
+          );
+          span.setAttribute(Attr.DB_RETURNED_ROWS, rows.length);
+          return rows;
+        },
+      );
+      for (const r of tombstoneRows) {
+        const path = r.path as string;
+        if (!localPathSet.has(path)) {
+          remoteOnlyPaths.set(path, {
+            hash: r.hash as string,
+            deletedAt: r.deleted_at,
+            updatedAt: new Date(String(r.updated_at)),
+          });
+        }
+      }
+    }
+    manifestDone();
+
+    // Diff: find files to push
+    const toPush: Array<{ relPath: string; hash: string; bytes: Uint8Array }> =
+      [];
+    for (const f of localFiles) {
+      signal?.throwIfAborted();
+      const existing = remoteByPath.get(f.relPath);
+      if (
+        existing && existing.deletedAt === null && existing.hash === f.hash
+      ) {
+        continue;
+      }
+      toPush.push(f);
+    }
+
+    // Collect tombstones: remote-only files not updated after watermark
     const toTombstone: string[] = [];
     if (lastPulledAt !== null && !lazyPullActive) {
-      const watermark = new Date(lastPulledAt);
-      for (const [relPath, doc] of remotePaths) {
-        if (localPaths.has(relPath) || doc.deletedAt !== null) continue;
-        if (doc.updatedAt > watermark) continue;
+      for (const [relPath] of remoteOnlyPaths) {
         toTombstone.push(relPath);
       }
     }
@@ -531,7 +675,17 @@ export function createSyncService(
               );
               count++;
             }
-            // Update team-global watermark
+            // Advance commitSeq and persist it in sync_state
+            const [{ nextval: seq }] = await tx.unsafe(
+              `SELECT nextval('${commitSeqName}') AS nextval`,
+            );
+            await tx.unsafe(
+              `INSERT INTO ${syncStateTable} (key, value, updated_at)
+           VALUES ('commit_seq', to_jsonb($1::bigint), now())
+           ON CONFLICT (key) DO UPDATE SET value = to_jsonb($1::bigint), updated_at = now()`,
+              [seq],
+            );
+            // Keep legacy timestamp watermark for backward compat
             await tx.unsafe(
               `INSERT INTO ${syncStateTable} (key, value, updated_at)
            VALUES ('last_pushed_at', to_jsonb(now()::text), now())
@@ -543,6 +697,14 @@ export function createSyncService(
       )
     );
     txDone();
+
+    // Tombstone GC: fire-and-forget outside the transaction. A failure here
+    // (e.g. missing DELETE privilege) must never block pushes.
+    try {
+      await sql.unsafe(
+        `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
+      );
+    } catch { /* GC failure is non-fatal */ }
 
     trace.summary("push", Math.round(performance.now() - pushStart), {
       files: toPush.length,
@@ -647,72 +809,6 @@ export function createSyncService(
     return { toPush, toTombstone };
   }
 
-  async function pushOneRel(
-    relPath: string,
-    lastPulledAt: string | null,
-    lazyPullActive: boolean,
-    signal?: AbortSignal,
-  ): Promise<PushCounts> {
-    if (isTraversal(relPath)) return { changes: 0, pushed: 0, deleted: 0 };
-    await ready();
-
-    const { toPush, toTombstone } = await collectOneRelDiff(
-      relPath,
-      lastPulledAt,
-      lazyPullActive,
-      signal,
-    );
-
-    if (toPush.length === 0 && toTombstone.length === 0) {
-      return { changes: 0, pushed: 0, deleted: 0 };
-    }
-
-    // Execute all writes in a single transaction
-    const changes = await retryable(() =>
-      sqlSpan(
-        "scopedPushTransaction",
-        "TRANSACTION",
-        filesTable,
-        async () => {
-          let count = 0;
-          await sql.begin(async (tx) => {
-            for (const f of toPush) {
-              await tx.unsafe(
-                `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
-             VALUES ($1, $2, $3, $4, now(), NULL)
-             ON CONFLICT (path) DO UPDATE SET
-               hash = EXCLUDED.hash, size = EXCLUDED.size,
-               content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
-                [f.relPath, f.hash, f.bytes.byteLength, f.bytes],
-              );
-              count++;
-            }
-            for (const path of toTombstone) {
-              await tx.unsafe(
-                `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
-                [path],
-              );
-              count++;
-            }
-            // Update team-global watermark
-            await tx.unsafe(
-              `INSERT INTO ${syncStateTable} (key, value, updated_at)
-           VALUES ('last_pushed_at', to_jsonb(now()::text), now())
-           ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
-            );
-          });
-          return count;
-        },
-      )
-    );
-
-    return {
-      changes,
-      pushed: toPush.length,
-      deleted: toTombstone.length,
-    };
-  }
-
   return {
     capabilities(): SyncCapabilities {
       return { scopedSync: true, lazyHydration: true, twoPhaseSync: true };
@@ -793,18 +889,87 @@ export function createSyncService(
             });
             return 0;
           } else {
-            changes = 0;
+            // Batch all dirty paths into a single transaction instead of
+            // N separate pushOneRel calls — eliminates per-path round trips.
+            const allToPush: Array<
+              { relPath: string; hash: string; bytes: Uint8Array }
+            > = [];
+            const allToTombstone: string[] = [];
+
             for (const relPath of snapshot.dirtyPaths) {
               signal?.throwIfAborted();
-              const counts = await pushOneRel(
+              const { toPush, toTombstone } = await collectOneRelDiff(
                 relPath,
                 snapshot.lastPulledAt,
                 lazy,
                 signal,
               );
-              changes += counts.changes;
-              pushed += counts.pushed;
-              deleted += counts.deleted;
+              allToPush.push(...toPush);
+              allToTombstone.push(...toTombstone);
+            }
+
+            if (allToPush.length === 0 && allToTombstone.length === 0) {
+              changes = 0;
+            } else {
+              await ready();
+              changes = await retryable(() =>
+                sqlSpan(
+                  "batchDirtyPushTransaction",
+                  "TRANSACTION",
+                  filesTable,
+                  async () => {
+                    let count = 0;
+                    await sql.begin(async (tx) => {
+                      for (const f of allToPush) {
+                        signal?.throwIfAborted();
+                        await tx.unsafe(
+                          `INSERT INTO ${filesTable} (path, hash, size, content, updated_at, deleted_at)
+                     VALUES ($1, $2, $3, $4, now(), NULL)
+                     ON CONFLICT (path) DO UPDATE SET
+                       hash = EXCLUDED.hash, size = EXCLUDED.size,
+                       content = EXCLUDED.content, updated_at = now(), deleted_at = NULL`,
+                          [f.relPath, f.hash, f.bytes.byteLength, f.bytes],
+                        );
+                        count++;
+                      }
+                      for (const path of allToTombstone) {
+                        signal?.throwIfAborted();
+                        await tx.unsafe(
+                          `UPDATE ${filesTable} SET deleted_at = now(), updated_at = now() WHERE path = $1`,
+                          [path],
+                        );
+                        count++;
+                      }
+                      // Advance commitSeq and persist
+                      const [{ nextval: seq }] = await tx.unsafe(
+                        `SELECT nextval('${commitSeqName}') AS nextval`,
+                      );
+                      await tx.unsafe(
+                        `INSERT INTO ${syncStateTable} (key, value, updated_at)
+                   VALUES ('commit_seq', to_jsonb($1::bigint), now())
+                   ON CONFLICT (key) DO UPDATE SET value = to_jsonb($1::bigint), updated_at = now()`,
+                        [seq],
+                      );
+                      // Keep legacy timestamp watermark
+                      await tx.unsafe(
+                        `INSERT INTO ${syncStateTable} (key, value, updated_at)
+                   VALUES ('last_pushed_at', to_jsonb(now()::text), now())
+                   ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
+                      );
+                      // Tombstone GC — moved outside transaction below
+                    });
+                    return count;
+                  },
+                )
+              );
+              // Tombstone GC: fire-and-forget outside the transaction.
+              try {
+                await sql.unsafe(
+                  `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
+                );
+              } catch { /* GC failure is non-fatal */ }
+              pushed = allToPush.length;
+              deleted = allToTombstone.length;
             }
             trace.summary(
               "push_incremental",
@@ -992,17 +1157,35 @@ export function createSyncService(
                   );
                   count++;
                 }
-                // Update team-global watermark
+                // Advance commitSeq and persist
+                const [{ nextval: seq }] = await tx.unsafe(
+                  `SELECT nextval('${commitSeqName}') AS nextval`,
+                );
+                await tx.unsafe(
+                  `INSERT INTO ${syncStateTable} (key, value, updated_at)
+             VALUES ('commit_seq', to_jsonb($1::bigint), now())
+             ON CONFLICT (key) DO UPDATE SET value = to_jsonb($1::bigint), updated_at = now()`,
+                  [seq],
+                );
+                // Keep legacy timestamp watermark
                 await tx.unsafe(
                   `INSERT INTO ${syncStateTable} (key, value, updated_at)
              VALUES ('last_pushed_at', to_jsonb(now()::text), now())
              ON CONFLICT (key) DO UPDATE SET value = to_jsonb(now()::text), updated_at = now()`,
                 );
+                // Tombstone GC — moved outside transaction below
               });
               return count;
             },
           )
         );
+
+        // Tombstone GC: fire-and-forget outside the transaction.
+        try {
+          await sql.unsafe(
+            `DELETE FROM ${filesTable} WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '${TOMBSTONE_GC_AGE_DAYS} days'`,
+          );
+        } catch { /* GC failure is non-fatal */ }
 
         await sidecar.clearPushed(internal.snapshot);
         span.setAttributes({
