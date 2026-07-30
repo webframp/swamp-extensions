@@ -65,6 +65,7 @@ export type PushManifest = { readonly [PushManifestBrand]: true };
 /** Internal manifest structure — cast to/from PushManifest via `as unknown`. */
 interface InternalPushManifest {
   entries: Array<{ relPath: string; hash: string; content: Uint8Array }>;
+  deletions: string[];
   syncState: SyncState;
   processedDirtyPaths: Set<string>;
 }
@@ -192,14 +193,19 @@ function unwrapFromTerraformState(stateJson: string): Uint8Array | null {
 }
 
 /**
- * Extract serial number from state for incrementing
+ * Extract serial and lineage from a state JSON envelope.
  */
-function getStateSerial(stateJson: string): number {
+function getStateSerialAndLineage(
+  stateJson: string,
+): { serial: number; lineage: string } {
   try {
     const state = JSON.parse(stateJson) as TerraformState;
-    return state.serial ?? 0;
+    return {
+      serial: state.serial ?? 0,
+      lineage: state.lineage ?? crypto.randomUUID(),
+    };
   } catch {
-    return 0;
+    return { serial: 0, lineage: crypto.randomUUID() };
   }
 }
 
@@ -331,40 +337,89 @@ class GitLabStateClient {
   }
 
   /**
-   * Put state content (wrapped in Terraform state format)
+   * Read the commit sequence counter from the meta state.
+   * Returns 0 if the state does not exist.
+   */
+  async getCommitSeq(prefix: string, signal?: AbortSignal): Promise<number> {
+    const stateName = `${prefix}--${META_COMMIT_SEQ_SUFFIX}`;
+    const content = await this.getState(stateName, signal);
+    if (!content) return 0;
+    try {
+      const json = JSON.parse(new TextDecoder().decode(content));
+      return typeof json.seq === "number" ? json.seq : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Increment and write the commit sequence counter.
+   * Returns the new sequence number.
+   *
+   * NOTE: This is a non-atomic read-then-write. Two concurrent callers could
+   * both read seq=N and both write N+1, losing an increment. This is safe
+   * because swamp acquires a per-model distributed lock before pushing, so at
+   * most one writer executes this method at a time. The correctness guarantee
+   * comes from the lock, not from this method's internal atomicity.
+   */
+  async incrementCommitSeq(
+    prefix: string,
+    signal?: AbortSignal,
+  ): Promise<number> {
+    const stateName = `${prefix}--${META_COMMIT_SEQ_SUFFIX}`;
+    const current = await this.getCommitSeq(prefix, signal);
+    const next = current + 1;
+    const payload = new TextEncoder().encode(JSON.stringify({ seq: next }));
+    await this.putState(stateName, payload, undefined, signal);
+    return next;
+  }
+
+  /**
+   * Put state content (wrapped in Terraform state format).
+   *
+   * When `cachedMeta` is provided the pre-PUT GET for serial/lineage is
+   * skipped — the caller already has the values from the sidecar. If the
+   * POST returns 409 (conflict) the caller should invalidate the cache and
+   * retry with a fresh GET.
    */
   async putState(
     stateName: string,
     content: Uint8Array,
     lockId?: string,
     signal?: AbortSignal,
-  ): Promise<void> {
+    cachedMeta?: { serial: number; lineage: string },
+  ): Promise<{ serial: number; lineage: string }> {
     let url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
     if (lockId) {
       url += `?ID=${encodeURIComponent(lockId)}`;
     }
 
-    // Get current serial if state exists, increment for new version
-    let serial = 1;
-    let lineage: string | undefined;
-    try {
-      const existingResponse = await this.request(
-        "readStateSerial",
-        `${this.baseUrl}/${encodeURIComponent(stateName)}`,
-        { method: "GET", headers: this.headers(), signal },
-        // A first push has nothing to read a serial from; 404 is expected.
-        { stateName, expected: [404] },
-      );
-      if (existingResponse.ok) {
-        const existingState = existingResponse.body;
-        serial = getStateSerial(existingState) + 1;
-        // Preserve lineage if it exists
-        try {
-          const parsed = JSON.parse(existingState);
-          lineage = parsed.lineage;
-        } catch { /* ignore */ }
-      }
-    } catch { /* state doesn't exist, use defaults */ }
+    let serial: number;
+    let lineage: string;
+
+    if (cachedMeta) {
+      serial = cachedMeta.serial + 1;
+      lineage = cachedMeta.lineage;
+    } else {
+      // Get current serial if state exists, increment for new version
+      serial = 1;
+      lineage = crypto.randomUUID();
+      try {
+        const existingResponse = await this.request(
+          "readStateSerial",
+          `${this.baseUrl}/${encodeURIComponent(stateName)}`,
+          { method: "GET", headers: this.headers(), signal },
+          // A first push has nothing to read a serial from; 404 is expected.
+          { stateName, expected: [404] },
+        );
+        if (existingResponse.ok) {
+          const existingState = existingResponse.body;
+          const meta = getStateSerialAndLineage(existingState);
+          serial = meta.serial + 1;
+          lineage = meta.lineage;
+        }
+      } catch { /* state doesn't exist, use defaults */ }
+    }
 
     const wrappedState = wrapInTerraformState(content, serial, lineage);
 
@@ -384,6 +439,8 @@ class GitLabStateClient {
         `GitLab API error: ${response.status} ${response.statusText}: ${body}`,
       );
     }
+
+    return { serial, lineage };
   }
 
   /**
@@ -861,12 +918,58 @@ const SYNC_STATE_FILE = ".datastore-sync-state.json";
 /** Maximum dirty paths before falling back to full walk. */
 const MAX_DIRTY_PATHS = 200;
 
+/** Maximum concurrent HTTP requests for parallel pull/push. */
+const MAX_CONCURRENCY = 8;
+
+/** State name suffix for the commit sequence counter meta state. */
+const META_COMMIT_SEQ_SUFFIX = "_meta--commit_seq";
+
+/**
+ * Run an array of async tasks with bounded concurrency.
+ * Returns results in the same order as the input.
+ */
+async function parallelMap<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+  signal?: AbortSignal,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      signal?.throwIfAborted();
+      const idx = nextIndex++;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+/** Per-path metadata cached to avoid redundant GETs on push. */
+interface PathMeta {
+  hash: string;
+  serial: number;
+  lineage: string;
+}
+
 /** Persisted sync state for lazy hydration and dirty tracking. */
 interface SyncState {
   lazyPullActive: boolean;
   dirtyPaths: string[];
   dirtyOverflow: boolean;
   hashes: Record<string, string>;
+  /** Last-pulled remote commit sequence number. */
+  lastPulledSeq: number;
+  /** Per-path serial/lineage cache for push optimization. */
+  pathMeta: Record<string, PathMeta>;
 }
 
 /** Read sync state from the sidecar file. */
@@ -882,6 +985,8 @@ async function readSyncState(cachePath: string): Promise<SyncState> {
       ),
       dirtyOverflow: parsed.dirtyOverflow ?? false,
       hashes: parsed.hashes ?? {},
+      lastPulledSeq: parsed.lastPulledSeq ?? 0,
+      pathMeta: parsed.pathMeta ?? {},
     };
   } catch {
     return {
@@ -889,6 +994,8 @@ async function readSyncState(cachePath: string): Promise<SyncState> {
       dirtyPaths: [],
       dirtyOverflow: false,
       hashes: {},
+      lastPulledSeq: 0,
+      pathMeta: {},
     };
   }
 }
@@ -974,20 +1081,59 @@ class GitLabSyncService implements TwoPhaseSyncService {
     return await withSpan("gitlab-datastore pullChanged", {
       [Attr.DATASTORE_SCOPED]: scopeFilter !== null,
       [Attr.DATASTORE_METADATA_ONLY]: options?.metadataOnly === true,
+      [Attr.DATASTORE_CONCURRENCY]: MAX_CONCURRENCY,
     }, async (span) => {
       const signal = options?.signal;
       const metadataOnly = options?.metadataOnly === true;
+
+      // --- commitSeq fast-path (Item 1) ---
+      const syncState = await readSyncState(this.cachePath);
+      const remoteSeq = await this.client.getCommitSeq(this.prefix, signal);
+      span.setAttribute(Attr.DATASTORE_COMMIT_SEQ, remoteSeq);
+      span.setAttribute(
+        Attr.DATASTORE_COMMIT_SEQ_LOCAL,
+        syncState.lastPulledSeq,
+      );
+
+      if (
+        remoteSeq > 0 &&
+        syncState.lastPulledSeq >= remoteSeq &&
+        !scopeFilter &&
+        (!syncState.lazyPullActive || metadataOnly)
+      ) {
+        // Nothing changed since last pull — fast-path exit.
+        // Gate on lazyPullActive: after a metadata-only pull the local cache
+        // lacks file content. A subsequent full pull (metadataOnly=false) must
+        // not short-circuit or those files will never be hydrated.
+        span.setAttributes({
+          [Attr.DATASTORE_FAST_PATH_HIT]: true,
+          [Attr.DATASTORE_FILES_PULLED]: 0,
+        });
+        return 0;
+      }
+
       const states = await this.client.listStates(signal);
       span.setAttribute(Attr.DATASTORE_STATES, states.length);
-      let count = 0;
 
-      for (const stateName of states) {
-        signal?.throwIfAborted();
+      // Filter states to those matching scope and prefix
+      const metaStateSuffix = `--${META_COMMIT_SEQ_SUFFIX}`;
+      const candidates = states.filter((stateName) => {
+        // Skip the meta commit_seq state itself
+        if (stateName.endsWith(metaStateSuffix)) return false;
         const relativePath = decodeStateName(this.prefix, stateName);
         if (!relativePath || relativePath.split("/").some((s) => s === "..")) {
-          continue;
+          return false;
         }
-        if (scopeFilter && !scopeFilter(relativePath)) continue;
+        if (scopeFilter && !scopeFilter(relativePath)) return false;
+        return true;
+      });
+
+      // --- Parallel pull with bounded concurrency (Item 2) ---
+      let count = 0;
+
+      const downloadOne = async (stateName: string): Promise<void> => {
+        signal?.throwIfAborted();
+        const relativePath = decodeStateName(this.prefix, stateName)!;
 
         if (metadataOnly && isDataRawFile(relativePath)) {
           // Skip raw content but create parent directory for catalog walker
@@ -996,7 +1142,7 @@ class GitLabSyncService implements TwoPhaseSyncService {
             localPath.substring(0, localPath.lastIndexOf("/")),
             { recursive: true },
           );
-          continue;
+          return;
         }
 
         const content = await this.client.getState(stateName, signal);
@@ -1011,21 +1157,29 @@ class GitLabSyncService implements TwoPhaseSyncService {
           await Deno.rename(tmpPath, localPath);
           count++;
         }
+      };
+
+      await parallelMap(candidates, MAX_CONCURRENCY, downloadOne, signal);
+
+      // Update sync state: record the remote seq we just pulled to.
+      const freshState = await readSyncState(this.cachePath);
+      if (remoteSeq > 0) {
+        freshState.lastPulledSeq = remoteSeq;
       }
 
       // Track lazy hydration state
       if (metadataOnly) {
-        const state = await readSyncState(this.cachePath);
-        state.lazyPullActive = true;
-        await writeSyncState(this.cachePath, state);
+        freshState.lazyPullActive = true;
       } else if (!options?.context) {
         // Full unscoped pull clears lazy state
-        const state = await readSyncState(this.cachePath);
-        state.lazyPullActive = false;
-        await writeSyncState(this.cachePath, state);
+        freshState.lazyPullActive = false;
       }
+      await writeSyncState(this.cachePath, freshState);
 
-      span.setAttribute(Attr.DATASTORE_FILES_PULLED, count);
+      span.setAttributes({
+        [Attr.DATASTORE_FILES_PULLED]: count,
+        [Attr.DATASTORE_FAST_PATH_HIT]: false,
+      });
       return count;
     });
   }
@@ -1034,12 +1188,19 @@ class GitLabSyncService implements TwoPhaseSyncService {
     const scopeFilter = buildScopeFilter(options?.context);
     return await withSpan("gitlab-datastore pushChanged", {
       [Attr.DATASTORE_SCOPED]: scopeFilter !== null,
+      [Attr.DATASTORE_CONCURRENCY]: MAX_CONCURRENCY,
     }, async (span) => {
       const signal = options?.signal;
       const syncState = await readSyncState(this.cachePath);
       let count = 0;
+      let deletedCount = 0;
 
-      const pushFile = async (relativePath: string): Promise<void> => {
+      // Collect files to push (path + content + hash)
+      const toPush: Array<
+        { relPath: string; hash: string; content: Uint8Array }
+      > = [];
+
+      const collectFile = async (relativePath: string): Promise<void> => {
         const fullPath = `${this.cachePath}/${relativePath}`;
         let content: Uint8Array;
         try {
@@ -1052,7 +1213,6 @@ class GitLabSyncService implements TwoPhaseSyncService {
         }
 
         // Skip files exceeding GitLab's practical state size limit (4MB).
-        // These are typically binary artifacts that don't need remote sync.
         const MAX_FILE_SIZE = 4 * 1024 * 1024;
         if (content.length > MAX_FILE_SIZE) return;
 
@@ -1060,11 +1220,11 @@ class GitLabSyncService implements TwoPhaseSyncService {
         const hash = await sha256Hex(content);
         if (syncState.hashes[relativePath] === hash) return;
 
-        const stateName = encodeStateName(this.prefix, relativePath);
-        await this.client.putState(stateName, content, undefined, signal);
-        syncState.hashes[relativePath] = hash;
-        count++;
+        toPush.push({ relPath: relativePath, hash, content });
       };
+
+      // --- Tombstoning (Item 3): collect deleted dirty paths ---
+      const toDelete: string[] = [];
 
       // Use dirty paths when available and not overflowed
       const useDirtyPaths = syncState.dirtyPaths.length > 0 &&
@@ -1076,13 +1236,25 @@ class GitLabSyncService implements TwoPhaseSyncService {
           signal?.throwIfAborted();
           if (scopeFilter && !scopeFilter(relPath)) continue;
           processed.add(relPath);
-          await pushFile(relPath);
+          // Check if file still exists — if not, it's a deletion
+          try {
+            await Deno.stat(`${this.cachePath}/${relPath}`);
+            await collectFile(relPath);
+          } catch (error) {
+            if (error instanceof Deno.errors.NotFound) {
+              toDelete.push(relPath);
+            } else {
+              throw error;
+            }
+          }
         }
         // Only remove paths that were actually processed; keep out-of-scope paths
         syncState.dirtyPaths = syncState.dirtyPaths.filter((p) =>
           !processed.has(p)
         );
       } else {
+        // Full-walk mode: collect local files to push
+        const localFiles = new Set<string>();
         const queue: Array<{ dir: string; base: string }> = [
           { dir: this.cachePath, base: "" },
         ];
@@ -1109,7 +1281,8 @@ class GitLabSyncService implements TwoPhaseSyncService {
                 if (relativePath === SYNC_STATE_FILE) continue;
                 if (isExcludedFile(entry.name)) continue;
                 if (scopeFilter && !scopeFilter(relativePath)) continue;
-                await pushFile(relativePath);
+                localFiles.add(relativePath);
+                await collectFile(relativePath);
               }
             }
           } catch (error) {
@@ -1118,25 +1291,113 @@ class GitLabSyncService implements TwoPhaseSyncService {
             }
           }
         }
+
+        // Tombstoning in full-walk mode: find remote states that no longer
+        // exist locally. Only when NOT in lazyPullActive mode — un-hydrated
+        // files don't exist locally but should not be deleted remotely.
+        if (!syncState.lazyPullActive) {
+          const remoteStates = await this.client.listStates(signal);
+          const metaStateSuffix = `--${META_COMMIT_SEQ_SUFFIX}`;
+          for (const stateName of remoteStates) {
+            if (stateName.endsWith(metaStateSuffix)) continue;
+            const relativePath = decodeStateName(this.prefix, stateName);
+            if (
+              !relativePath || relativePath.split("/").some((s) => s === "..")
+            ) {
+              continue;
+            }
+            if (scopeFilter && !scopeFilter(relativePath)) continue;
+            if (!localFiles.has(relativePath)) {
+              toDelete.push(relativePath);
+            }
+          }
+        }
+      }
+
+      // --- Parallel push uploads (Item 5) ---
+      const uploadOne = async (
+        entry: { relPath: string; hash: string; content: Uint8Array },
+      ): Promise<void> => {
+        signal?.throwIfAborted();
+        const stateName = encodeStateName(this.prefix, entry.relPath);
+        // Use cached serial/lineage if available (Item 4)
+        const cached = syncState.pathMeta[entry.relPath];
+        try {
+          const result = await this.client.putState(
+            stateName,
+            entry.content,
+            undefined,
+            signal,
+            cached
+              ? { serial: cached.serial, lineage: cached.lineage }
+              : undefined,
+          );
+          // Update path meta cache
+          syncState.pathMeta[entry.relPath] = {
+            hash: entry.hash,
+            serial: result.serial,
+            lineage: result.lineage,
+          };
+        } catch (error) {
+          // Only retry without cache on 409 conflict (stale serial). Other
+          // errors (network timeouts, 5xx) may indicate the server already
+          // committed — retrying would cause double-writes.
+          const is409 = error instanceof Error &&
+            error.message.includes(" 409 ");
+          if (cached && is409) {
+            const result = await this.client.putState(
+              stateName,
+              entry.content,
+              undefined,
+              signal,
+            );
+            syncState.pathMeta[entry.relPath] = {
+              hash: entry.hash,
+              serial: result.serial,
+              lineage: result.lineage,
+            };
+          } else {
+            throw error;
+          }
+        }
+        syncState.hashes[entry.relPath] = entry.hash;
+        count++;
+      };
+
+      await parallelMap(toPush, MAX_CONCURRENCY, uploadOne, signal);
+
+      // --- Parallel tombstone deletes (Item 3) ---
+      const deleteOne = async (relPath: string): Promise<void> => {
+        signal?.throwIfAborted();
+        const stateName = encodeStateName(this.prefix, relPath);
+        await this.client.deleteState(stateName);
+        // Clean up sidecar entries for the deleted path
+        delete syncState.hashes[relPath];
+        delete syncState.pathMeta[relPath];
+        deletedCount++;
+      };
+
+      await parallelMap(toDelete, MAX_CONCURRENCY, deleteOne, signal);
+
+      // Increment commit sequence if we actually changed anything
+      if (count > 0 || deletedCount > 0) {
+        const newSeq = await this.client.incrementCommitSeq(
+          this.prefix,
+          signal,
+        );
+        syncState.lastPulledSeq = newSeq;
       }
 
       // Clear dirty state after successful push.
-      // For full walk: clear everything. For dirty-path mode: already filtered above.
       if (!useDirtyPaths) {
         syncState.dirtyPaths = [];
       }
       syncState.dirtyOverflow = false;
       await writeSyncState(this.cachePath, syncState);
 
-      // GitLab states have no delete-on-push path, so files_deleted is always
-      // zero here — recorded anyway so the attribute set matches the other
-      // datastore extensions. There is no short-circuit in this method, so
-      // fast_path_hit is deliberately not set: in the sibling extensions it
-      // means "no work was done", and reporting it for a dirty-path push that
-      // uploaded files would make it mean two different things.
       span.setAttributes({
         [Attr.DATASTORE_FILES_PUSHED]: count,
-        [Attr.DATASTORE_FILES_DELETED]: 0,
+        [Attr.DATASTORE_FILES_DELETED]: deletedCount,
         [Attr.DATASTORE_DIRTY_PATH_MODE]: useDirtyPaths,
       });
       return count;
@@ -1193,6 +1454,7 @@ class GitLabSyncService implements TwoPhaseSyncService {
       const entries: Array<
         { relPath: string; hash: string; content: Uint8Array }
       > = [];
+      const deletions: string[] = [];
 
       const collectFile = async (relativePath: string): Promise<void> => {
         const fullPath = `${this.cachePath}/${relativePath}`;
@@ -1224,9 +1486,20 @@ class GitLabSyncService implements TwoPhaseSyncService {
           signal?.throwIfAborted();
           if (scopeFilter && !scopeFilter(relPath)) continue;
           processedDirtyPaths.add(relPath);
-          await collectFile(relPath);
+          // Check if file exists — if not, it's a deletion
+          try {
+            await Deno.stat(`${this.cachePath}/${relPath}`);
+            await collectFile(relPath);
+          } catch (error) {
+            if (error instanceof Deno.errors.NotFound) {
+              deletions.push(relPath);
+            } else {
+              throw error;
+            }
+          }
         }
       } else {
+        const localFiles = new Set<string>();
         const queue: Array<{ dir: string; base: string }> = [
           { dir: this.cachePath, base: "" },
         ];
@@ -1253,6 +1526,7 @@ class GitLabSyncService implements TwoPhaseSyncService {
                 if (relativePath === SYNC_STATE_FILE) continue;
                 if (isExcludedFile(entry.name)) continue;
                 if (scopeFilter && !scopeFilter(relativePath)) continue;
+                localFiles.add(relativePath);
                 await collectFile(relativePath);
               }
             }
@@ -1262,15 +1536,38 @@ class GitLabSyncService implements TwoPhaseSyncService {
             }
           }
         }
+
+        // Tombstoning in full-walk mode: detect orphaned remote states.
+        // Skip when lazyPullActive — un-hydrated files don't exist locally
+        // but should not be deleted remotely.
+        if (!syncState.lazyPullActive) {
+          const remoteStates = await this.client.listStates(signal);
+          const metaStateSuffix = `--${META_COMMIT_SEQ_SUFFIX}`;
+          for (const stateName of remoteStates) {
+            if (stateName.endsWith(metaStateSuffix)) continue;
+            const relativePath = decodeStateName(this.prefix, stateName);
+            if (
+              !relativePath ||
+              relativePath.split("/").some((s) => s === "..")
+            ) {
+              continue;
+            }
+            if (scopeFilter && !scopeFilter(relativePath)) continue;
+            if (!localFiles.has(relativePath)) {
+              deletions.push(relativePath);
+            }
+          }
+        }
       }
 
       span.setAttributes({
         [Attr.DATASTORE_FILES_PLANNED_PUSH]: entries.length,
-        [Attr.DATASTORE_FILES_PLANNED_DELETE]: 0,
+        [Attr.DATASTORE_FILES_PLANNED_DELETE]: deletions.length,
       });
 
       return {
         entries,
+        deletions,
         syncState,
         processedDirtyPaths,
       } as unknown as PushManifest;
@@ -1284,22 +1581,100 @@ class GitLabSyncService implements TwoPhaseSyncService {
     const internal = manifest as unknown as InternalPushManifest;
     return await withSpan("gitlab-datastore commitPush", {
       [Attr.DATASTORE_FILES_PLANNED_PUSH]: internal.entries.length,
-      [Attr.DATASTORE_FILES_PLANNED_DELETE]: 0,
+      [Attr.DATASTORE_FILES_PLANNED_DELETE]: internal.deletions
+        ? internal.deletions.length
+        : 0,
+      [Attr.DATASTORE_CONCURRENCY]: MAX_CONCURRENCY,
     }, async (span) => {
       const signal = options?.signal;
-
-      for (const entry of internal.entries) {
-        signal?.throwIfAborted();
-        const stateName = encodeStateName(this.prefix, entry.relPath);
-        await this.client.putState(stateName, entry.content, undefined, signal);
-      }
 
       // Re-read fresh state to avoid overwriting concurrent updates
       const freshState = await readSyncState(this.cachePath);
 
+      // --- Parallel uploads (Item 5) with serial/lineage caching (Item 4) ---
+      const uploadOne = async (
+        entry: { relPath: string; hash: string; content: Uint8Array },
+      ): Promise<void> => {
+        signal?.throwIfAborted();
+        const stateName = encodeStateName(this.prefix, entry.relPath);
+        const cached = freshState.pathMeta[entry.relPath];
+        try {
+          const result = await this.client.putState(
+            stateName,
+            entry.content,
+            undefined,
+            signal,
+            cached
+              ? { serial: cached.serial, lineage: cached.lineage }
+              : undefined,
+          );
+          freshState.pathMeta[entry.relPath] = {
+            hash: entry.hash,
+            serial: result.serial,
+            lineage: result.lineage,
+          };
+        } catch (error) {
+          // Only retry without cache on 409 conflict (stale serial). Other
+          // errors (network timeouts, 5xx) may indicate the server already
+          // committed — retrying would cause double-writes.
+          const is409 = error instanceof Error &&
+            error.message.includes(" 409 ");
+          if (cached && is409) {
+            const result = await this.client.putState(
+              stateName,
+              entry.content,
+              undefined,
+              signal,
+            );
+            freshState.pathMeta[entry.relPath] = {
+              hash: entry.hash,
+              serial: result.serial,
+              lineage: result.lineage,
+            };
+          } else {
+            throw error;
+          }
+        }
+      };
+
+      await parallelMap(
+        internal.entries,
+        MAX_CONCURRENCY,
+        uploadOne,
+        signal,
+      );
+
+      // --- Parallel tombstone deletes (Item 3) ---
+      let deletedCount = 0;
+      if (internal.deletions && internal.deletions.length > 0) {
+        const deleteOne = async (relPath: string): Promise<void> => {
+          signal?.throwIfAborted();
+          const stateName = encodeStateName(this.prefix, relPath);
+          await this.client.deleteState(stateName);
+          delete freshState.hashes[relPath];
+          delete freshState.pathMeta[relPath];
+          deletedCount++;
+        };
+        await parallelMap(
+          internal.deletions,
+          MAX_CONCURRENCY,
+          deleteOne,
+          signal,
+        );
+      }
+
       // Merge manifest hashes into fresh state
       for (const entry of internal.entries) {
         freshState.hashes[entry.relPath] = entry.hash;
+      }
+
+      // Increment commit sequence if we changed anything
+      if (internal.entries.length > 0 || deletedCount > 0) {
+        const newSeq = await this.client.incrementCommitSeq(
+          this.prefix,
+          signal,
+        );
+        freshState.lastPulledSeq = newSeq;
       }
 
       // Clear dirty state after successful commit.
@@ -1317,8 +1692,9 @@ class GitLabSyncService implements TwoPhaseSyncService {
 
       span.setAttributes({
         [Attr.DATASTORE_FILES_PUSHED]: internal.entries.length,
-        [Attr.DATASTORE_FILES_DELETED]: 0,
-        [Attr.DATASTORE_FAST_PATH_HIT]: internal.entries.length === 0,
+        [Attr.DATASTORE_FILES_DELETED]: deletedCount,
+        [Attr.DATASTORE_FAST_PATH_HIT]: internal.entries.length === 0 &&
+          deletedCount === 0,
       });
       return internal.entries.length;
     });
