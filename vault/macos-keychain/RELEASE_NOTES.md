@@ -49,4 +49,8 @@ older macOS versions.
 
 **Upgrade note:** no schema or config changes. If you store secrets larger
 than ~2 KB through this vault, `put` will now refuse them — store large blobs
-elsewhere and keep the keychain for credentials.
+elsewhere and keep the keychain for credentials. `put` now requires macOS
+10.15 or newer: the `-X` flag it relies on first shipped in Catalina
+(Security-59306; it is documented in `security(1)` since then). The size cap
+matches `MAX_LINE_LEN 4096` in Apple's SecurityTool source, so it is a
+property of the interactive interface, not of this extension.
