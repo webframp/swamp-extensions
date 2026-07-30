@@ -31,6 +31,7 @@ import {
   ListSecretsCommand,
   SecretsManagerClient,
 } from "npm:@aws-sdk/client-secrets-manager@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 // =============================================================================
 // Schemas
@@ -46,6 +47,14 @@ const GlobalArgsSchema = z.object({
     .string()
     .optional()
     .describe("Filter discovery to a specific VPC"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
 
 /** Schema for a discovered VPC resource. */
@@ -430,7 +439,24 @@ function generateSetupCommands(
 type GlobalArgs = {
   region: string;
   vpcId?: string;
+  profile?: string;
 };
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 /** Maximum pagination pages to fetch per API call to prevent unbounded loops. */
 const MAX_PAGES = 5;
@@ -1144,7 +1170,7 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1160,8 +1186,8 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes — upgrade chain fix",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1194,7 +1220,7 @@ export const model = {
       description: "Discover existing VPCs",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const ec2 = new EC2Client({ region: context.globalArgs.region });
+        const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: vpcs, truncated } = await discoverVpcs(
             ec2,
@@ -1233,7 +1259,7 @@ export const model = {
       description: "Discover existing subnets",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const ec2 = new EC2Client({ region: context.globalArgs.region });
+        const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: subnets, truncated } = await discoverSubnets(
             ec2,
@@ -1272,7 +1298,7 @@ export const model = {
       description: "Discover existing internet gateways",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const ec2 = new EC2Client({ region: context.globalArgs.region });
+        const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: igws, truncated } = await discoverInternetGateways(
             ec2,
@@ -1311,7 +1337,7 @@ export const model = {
       description: "Discover existing route tables",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const ec2 = new EC2Client({ region: context.globalArgs.region });
+        const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: tables, truncated } = await discoverRouteTables(
             ec2,
@@ -1350,7 +1376,7 @@ export const model = {
       description: "Discover existing security groups",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const ec2 = new EC2Client({ region: context.globalArgs.region });
+        const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: groups, truncated } = await discoverSecurityGroups(
             ec2,
@@ -1389,7 +1415,7 @@ export const model = {
       description: "Discover existing RDS clusters",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const rds = new RDSClient({ region: context.globalArgs.region });
+        const rds = new RDSClient(makeClientConfig(context.globalArgs));
         try {
           const { results: clusters, truncated } = await discoverRdsClusters(
             rds,
@@ -1421,7 +1447,7 @@ export const model = {
       description: "Discover existing RDS instances",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const rds = new RDSClient({ region: context.globalArgs.region });
+        const rds = new RDSClient(makeClientConfig(context.globalArgs));
         try {
           const { results: instances, truncated } = await discoverRdsInstances(
             rds,
@@ -1453,7 +1479,7 @@ export const model = {
       description: "Discover existing DB subnet groups",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const rds = new RDSClient({ region: context.globalArgs.region });
+        const rds = new RDSClient(makeClientConfig(context.globalArgs));
         try {
           const { results: groups, truncated } = await discoverDbSubnetGroups(
             rds,
@@ -1485,9 +1511,9 @@ export const model = {
       description: "Discover existing Secrets Manager secrets",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const sm = new SecretsManagerClient({
-          region: context.globalArgs.region,
-        });
+        const sm = new SecretsManagerClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const { results: secrets, truncated } = await discoverSecrets(sm);
           const handle = await context.writeResource(
@@ -1531,9 +1557,11 @@ export const model = {
         context: MethodContext,
       ) => {
         const region = context.globalArgs.region;
-        const ec2 = new EC2Client({ region });
-        const rds = new RDSClient({ region });
-        const sm = new SecretsManagerClient({ region });
+        const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
+        const rds = new RDSClient(makeClientConfig(context.globalArgs));
+        const sm = new SecretsManagerClient(
+          makeClientConfig(context.globalArgs),
+        );
 
         try {
           context.logger.info("Starting full discovery in {region}", {
@@ -1770,7 +1798,9 @@ export const model = {
         context: MethodContext,
       ) => {
         const region = context.globalArgs.region;
-        const cfn = new CloudFormationClient({ region });
+        const cfn = new CloudFormationClient(
+          makeClientConfig(context.globalArgs),
+        );
 
         try {
           context.logger.info(

@@ -20,6 +20,7 @@ import {
   GetCallerIdentityCommand,
   STSClient,
 } from "npm:@aws-sdk/client-sts@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 const MAX_PAGES = 20;
 
@@ -29,7 +30,33 @@ const MAX_PAGES = 20;
 
 const GlobalArgsSchema = z.object({
   region: z.string().default("us-east-1").describe("AWS region to query"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const ComplianceEvaluationSchema = z.object({
   resourceId: z.string(),
@@ -82,7 +109,7 @@ const RuleListSchema = z.object({
 // =============================================================================
 
 type ConfigComplianceContext = {
-  globalArgs: { region: string };
+  globalArgs: GlobalArgs;
   writeResource: (
     spec: string,
     instance: string,
@@ -102,8 +129,8 @@ type ConfigComplianceContext = {
 // Helpers
 // =============================================================================
 
-async function getAccountId(region: string): Promise<string> {
-  const sts = new STSClient({ region });
+async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
+  const sts = new STSClient(makeClientConfig(globalArgs));
   try {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
@@ -119,11 +146,11 @@ async function getAccountId(region: string): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -156,8 +183,10 @@ export const model = {
         context: ConfigComplianceContext,
       ) => {
         const region = context.globalArgs.region;
-        const client = new ConfigServiceClient({ region });
-        const accountId = await getAccountId(region);
+        const client = new ConfigServiceClient(
+          makeClientConfig(context.globalArgs),
+        );
+        const accountId = await getAccountId(context.globalArgs);
 
         try {
           // Step 1: Get all non-compliant rules
@@ -276,7 +305,9 @@ export const model = {
         context: ConfigComplianceContext,
       ) => {
         const region = context.globalArgs.region;
-        const client = new ConfigServiceClient({ region });
+        const client = new ConfigServiceClient(
+          makeClientConfig(context.globalArgs),
+        );
 
         try {
           // Get all rules with their compliance status
@@ -370,7 +401,9 @@ export const model = {
         context: ConfigComplianceContext,
       ) => {
         const region = context.globalArgs.region;
-        const client = new ConfigServiceClient({ region });
+        const client = new ConfigServiceClient(
+          makeClientConfig(context.globalArgs),
+        );
 
         try {
           const rules: z.infer<typeof RuleSummarySchema>[] = [];

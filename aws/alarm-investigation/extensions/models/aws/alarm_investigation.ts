@@ -20,6 +20,7 @@ import {
   ListSubscriptionsByTopicCommand,
   SNSClient,
 } from "npm:@aws-sdk/client-sns@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 const MAX_PAGES = 10;
 
@@ -32,7 +33,33 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("us-east-1")
     .describe("AWS region for CloudWatch and SNS"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const SnsTopicSchema = z.object({
   arn: z.string(),
@@ -343,13 +370,13 @@ async function enrichAlarm(
  */
 export const model = {
   type: "@webframp/aws/alarm-investigation",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -381,7 +408,7 @@ export const model = {
       execute: async (
         args: { alarmName: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -398,8 +425,10 @@ export const model = {
 
         context.logger.info("Investigating alarm {alarmName}", { alarmName });
 
-        const cwClient = new CloudWatchClient({ region });
-        const snsClient = new SNSClient({ region });
+        const cwClient = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
+        const snsClient = new SNSClient(makeClientConfig(context.globalArgs));
         try {
           const command = new DescribeAlarmsCommand({
             AlarmNames: [alarmName],
@@ -467,7 +496,7 @@ export const model = {
           stateFilter?: "OK" | "ALARM" | "INSUFFICIENT_DATA";
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -479,7 +508,6 @@ export const model = {
           };
         },
       ) => {
-        const { region } = context.globalArgs;
         const { limit, stateFilter } = args;
 
         context.logger.info(
@@ -487,8 +515,10 @@ export const model = {
           { limit, stateFilter: stateFilter ?? "all" },
         );
 
-        const cwClient = new CloudWatchClient({ region });
-        const snsClient = new SNSClient({ region });
+        const cwClient = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
+        const snsClient = new SNSClient(makeClientConfig(context.globalArgs));
         try {
           // Fetch all alarms, paginating up to `limit`
           const alarms: MetricAlarm[] = [];

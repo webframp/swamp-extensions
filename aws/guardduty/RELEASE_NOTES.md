@@ -1,12 +1,7 @@
-## 2026.07.29.1
+## 2026.07.30.1
 
-**Fixed:** Terminate upgrade chain at current version (extension was uninstallable due to broken upgrade chain).
+**Added:** Optional `profile` global argument for multi-account credential resolution.
+When set, credentials resolve via `fromIni` (supports SSO token cache and shared-config
+profiles). When omitted, the default credential chain applies as before. Fully backward
+compatible — no changes required for existing instances.
 
-## 2026.07.27.1
-
-**Changed:** Bump @aws-sdk/client-guardduty 3.1094.0 → 3.1096.0
-
-
-## 2026.07.24.1
-
-**Changed:** Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).

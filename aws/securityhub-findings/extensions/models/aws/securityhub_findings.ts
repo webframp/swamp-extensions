@@ -25,6 +25,7 @@ import {
   ListAccountsCommand,
   OrganizationsClient,
 } from "npm:@aws-sdk/client-organizations@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 // =============================================================================
 // Schemas
@@ -35,7 +36,33 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("us-east-1")
     .describe("AWS region (aggregation home region)"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const FindingSummarySchema = z.object({
   id: z.string(),
@@ -224,8 +251,8 @@ function parseRelativeTime(input: string): string {
 }
 
 /** Create a SecurityHubClient for the configured region. */
-function createClient(region: string): SecurityHubClient {
-  return new SecurityHubClient({ region });
+function createClient(globalArgs: GlobalArgs): SecurityHubClient {
+  return new SecurityHubClient(makeClientConfig(globalArgs));
 }
 
 /** Map an AWS finding to our normalized summary schema. */
@@ -270,12 +297,12 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -380,7 +407,7 @@ export const model = {
           limit: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -398,7 +425,7 @@ export const model = {
           startTime: args.startTime,
         });
 
-        const client = createClient(context.globalArgs.region);
+        const client = createClient(context.globalArgs);
         try {
           const filters: Record<string, unknown[]> = {
             RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
@@ -494,7 +521,7 @@ export const model = {
       execute: async (
         args: { findingArns: string[] },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -509,7 +536,7 @@ export const model = {
           count: args.findingArns.length,
         });
 
-        const client = createClient(context.globalArgs.region);
+        const client = createClient(context.globalArgs);
         try {
           // Paginate — API may not return all matching findings in one page
           const allRawFindings: AwsSecurityFinding[] = [];
@@ -608,7 +635,7 @@ export const model = {
           startTime: string;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -625,7 +652,7 @@ export const model = {
           startTime: args.startTime,
         });
 
-        const client = createClient(context.globalArgs.region);
+        const client = createClient(context.globalArgs);
         try {
           const startIso = parseRelativeTime(args.startTime);
           const filters: Record<string, unknown[]> = {
@@ -747,7 +774,7 @@ export const model = {
       execute: async (
         args: { findingArns: string[]; note: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -759,7 +786,7 @@ export const model = {
         },
       ): Promise<{ dataHandles: unknown[] }> => {
         return await updateWorkflowStatus(
-          context.globalArgs.region,
+          context.globalArgs,
           args.findingArns,
           "SUPPRESSED",
           args.note,
@@ -785,7 +812,7 @@ export const model = {
       execute: async (
         args: { findingArns: string[]; note: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -797,7 +824,7 @@ export const model = {
         },
       ): Promise<{ dataHandles: unknown[] }> => {
         return await updateWorkflowStatus(
-          context.globalArgs.region,
+          context.globalArgs,
           args.findingArns,
           "RESOLVED",
           args.note,
@@ -823,7 +850,7 @@ export const model = {
       execute: async (
         args: { findingArns: string[]; note: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -835,7 +862,7 @@ export const model = {
         },
       ): Promise<{ dataHandles: unknown[] }> => {
         return await updateWorkflowStatus(
-          context.globalArgs.region,
+          context.globalArgs,
           args.findingArns,
           "NEW",
           args.note,
@@ -875,7 +902,7 @@ export const model = {
           limit: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -891,7 +918,7 @@ export const model = {
           startTime: args.startTime,
         });
 
-        const client = createClient(context.globalArgs.region);
+        const client = createClient(context.globalArgs);
         try {
           const filters: Record<string, unknown[]> = {
             RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
@@ -1031,7 +1058,7 @@ export const model = {
           limit: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -1051,7 +1078,7 @@ export const model = {
           startTime: args.startTime,
         });
 
-        const client = createClient(context.globalArgs.region);
+        const client = createClient(context.globalArgs);
         try {
           const filters: Record<string, unknown[]> = {
             RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
@@ -1155,7 +1182,7 @@ export const model = {
       execute: async (
         _args: Record<string, never>,
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -1170,6 +1197,7 @@ export const model = {
 
         // AWS Organizations is a global service — must use us-east-1 regardless of model region
         const client = new OrganizationsClient({
+          ...makeClientConfig(context.globalArgs),
           region: "us-east-1",
         });
         try {
@@ -1257,7 +1285,7 @@ export const model = {
           maxPages: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           logger: {
             info: (msg: string, props?: Record<string, unknown>) => void;
           };
@@ -1274,7 +1302,7 @@ export const model = {
           startTime: args.startTime,
         });
 
-        const client = createClient(context.globalArgs.region);
+        const client = createClient(context.globalArgs);
         try {
           const filters: Record<string, unknown[]> = {
             RecordState: [{ Value: "ACTIVE", Comparison: "EQUALS" }],
@@ -1369,7 +1397,7 @@ export const model = {
  * BatchUpdateFindings.
  */
 async function updateWorkflowStatus(
-  region: string,
+  globalArgs: GlobalArgs,
   findingArns: string[],
   status: "SUPPRESSED" | "RESOLVED" | "NEW",
   note: string,
@@ -1384,7 +1412,7 @@ async function updateWorkflowStatus(
     ) => Promise<unknown>;
   },
 ): Promise<{ dataHandles: unknown[] }> {
-  const client = createClient(region);
+  const client = createClient(globalArgs);
   try {
     context.logger.info("Updating {count} findings to {status}", {
       count: findingArns.length,

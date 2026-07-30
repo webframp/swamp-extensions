@@ -14,6 +14,7 @@ import {
   CostExplorerClient,
   GetCostAndUsageCommand,
 } from "npm:@aws-sdk/client-cost-explorer@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 // =============================================================================
 // Schemas
@@ -24,7 +25,33 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("us-east-1")
     .describe("AWS region for the Cost Explorer endpoint"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const CostByServiceSchema = z.object({
   service: z.string(),
@@ -83,7 +110,7 @@ function formatPeriod(days: number): { Start: string; End: string } {
 
 /** Execution context provided by swamp to each model method. */
 type MethodContext = {
-  globalArgs: { region: string };
+  globalArgs: GlobalArgs;
   writeResource: (
     spec: string,
     instance: string,
@@ -110,13 +137,13 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -144,9 +171,9 @@ export const model = {
         args: { days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
-        const client = new CostExplorerClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CostExplorerClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const period = formatPeriod(args.days);
 
@@ -223,9 +250,9 @@ export const model = {
         args: { service: string; days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
-        const client = new CostExplorerClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CostExplorerClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const period = formatPeriod(args.days);
 
@@ -302,9 +329,9 @@ export const model = {
         args: { days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
-        const client = new CostExplorerClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CostExplorerClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const period = formatPeriod(args.days);
 
@@ -391,9 +418,9 @@ export const model = {
         args: { days: number; limit: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
-        const client = new CostExplorerClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CostExplorerClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const period = formatPeriod(args.days);
 
@@ -480,9 +507,9 @@ export const model = {
         args: { days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
-        const client = new CostExplorerClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CostExplorerClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const now = new Date();
           const currentStart = new Date(now);

@@ -22,6 +22,7 @@ import {
   GetCallerIdentityCommand,
   STSClient,
 } from "npm:@aws-sdk/client-sts@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 const MAX_PAGES = 50;
 
@@ -33,7 +34,33 @@ const GlobalArgsSchema = z.object({
   region: z.string().default("us-east-1").describe(
     "AWS region (Route53 is global but STS needs a region)",
   ),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const HostedZoneSchema = z.object({
   id: z.string(),
@@ -113,7 +140,7 @@ const OrphanReportSchema = z.object({
 // =============================================================================
 
 type DnsObservationContext = {
-  globalArgs: { region: string };
+  globalArgs: GlobalArgs;
   writeResource: (
     spec: string,
     instance: string,
@@ -141,8 +168,8 @@ type DnsObservationContext = {
 // Helpers
 // =============================================================================
 
-async function getAccountId(region: string): Promise<string> {
-  const sts = new STSClient({ region });
+async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
+  const sts = new STSClient(makeClientConfig(globalArgs));
   try {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
@@ -445,11 +472,11 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -490,9 +517,8 @@ export const model = {
         args: { includePrivate?: boolean },
         context: DnsObservationContext,
       ) => {
-        const region = context.globalArgs.region;
-        const accountId = await getAccountId(region);
-        const client = new Route53Client({ region });
+        const accountId = await getAccountId(context.globalArgs);
+        const client = new Route53Client(makeClientConfig(context.globalArgs));
 
         try {
           const zones: z.infer<typeof HostedZoneSchema>[] = [];
@@ -589,9 +615,8 @@ export const model = {
         args: { zoneFilter?: string[]; typeFilter?: string[] },
         context: DnsObservationContext,
       ) => {
-        const region = context.globalArgs.region;
-        const accountId = await getAccountId(region);
-        const client = new Route53Client({ region });
+        const accountId = await getAccountId(context.globalArgs);
+        const client = new Route53Client(makeClientConfig(context.globalArgs));
 
         try {
           // Get zones — either from filter or list all
@@ -754,8 +779,7 @@ export const model = {
         },
         context: DnsObservationContext,
       ) => {
-        const region = context.globalArgs.region;
-        const accountId = await getAccountId(region);
+        const accountId = await getAccountId(context.globalArgs);
 
         // Read records from our own stored data
         let recordsData: z.infer<typeof RecordListSchema> | null = null;

@@ -19,6 +19,7 @@ import {
   GetMetricStatisticsCommand,
   ListMetricsCommand,
 } from "npm:@aws-sdk/client-cloudwatch@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 /** Local type for SDK dimension responses where Name and Value are optional in list responses. */
 interface AwsDimension {
@@ -36,7 +37,33 @@ const GlobalArgsSchema = z.object({
     .string()
     .default("us-east-1")
     .describe("AWS region for CloudWatch Metrics"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: globalArgs.region,
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 /** Schema describing a single CloudWatch dimension (name/value pair). */
 const DimensionSchema = z.object({
@@ -253,13 +280,13 @@ function findAnomalies(
  */
 export const model = {
   type: "@webframp/aws/metrics",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -305,7 +332,7 @@ export const model = {
       execute: async (
         args: { namespace?: string; metricName?: string; limit: number },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -316,9 +343,9 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const metrics: z.infer<typeof MetricSchema>[] = [];
           let nextToken: string | undefined;
@@ -415,7 +442,7 @@ export const model = {
           period?: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -426,9 +453,9 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -549,7 +576,7 @@ export const model = {
           anomalyThreshold: number;
         },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -560,9 +587,9 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -673,7 +700,7 @@ export const model = {
       execute: async (
         args: { instanceId: string; startTime: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -684,9 +711,9 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = new Date();
@@ -768,7 +795,7 @@ export const model = {
       execute: async (
         args: { functionName: string; startTime: string },
         context: {
-          globalArgs: { region: string };
+          globalArgs: GlobalArgs;
           writeResource: (
             spec: string,
             instance: string,
@@ -779,9 +806,9 @@ export const model = {
           };
         },
       ) => {
-        const client = new CloudWatchClient({
-          region: context.globalArgs.region,
-        });
+        const client = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
         try {
           const startTime = parseRelativeTime(args.startTime);
           const endTime = new Date();

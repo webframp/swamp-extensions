@@ -43,6 +43,7 @@ import {
   GetResourcesCommand,
   ResourceGroupsTaggingAPIClient,
 } from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1096.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
 const MAX_PAGES = 10;
 
@@ -56,7 +57,34 @@ const GlobalArgsSchema = z.object({
     .min(1, "at least one region required")
     .default(["us-east-1"])
     .describe("AWS regions to inventory (fan-out across all)"),
+  profile: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "AWS shared-config profile to resolve credentials from (fromIni / SSO " +
+        "token cache). Omit to use the default credential chain.",
+    ),
 });
+
+type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
+
+/**
+ * Build base AWS client configuration with region and optional profile credentials.
+ * When `profile` is set, credentials resolve via fromIni (supports SSO token
+ * cache and shared config). When absent, the default credential chain applies.
+ */
+function makeClientConfig(
+  globalArgs: GlobalArgs,
+  region?: string,
+): { region: string; credentials?: ReturnType<typeof fromIni> } {
+  return {
+    region: region ?? globalArgs.regions[0],
+    ...(globalArgs.profile
+      ? { credentials: fromIni({ profile: globalArgs.profile }) }
+      : {}),
+  };
+}
 
 const EC2InstanceSchema = z.object({
   instanceId: z.string(),
@@ -339,12 +367,13 @@ function classifyUnmodeledType(
 
 /** Try Resource Explorer 2 search. Returns null if not available. */
 async function tryResourceExplorer(
-  region: string,
+  globalArgs: GlobalArgs,
 ): Promise<
   | { resources: z.infer<typeof ScannedResourceSchema>[]; truncated: boolean }
   | null
 > {
-  const client = new ResourceExplorer2Client({ region });
+  const client = new ResourceExplorer2Client(makeClientConfig(globalArgs));
+  const region = globalArgs.regions[0];
   try {
     const resources: z.infer<typeof ScannedResourceSchema>[] = [];
     let nextToken: string | undefined;
@@ -409,12 +438,13 @@ async function tryResourceExplorer(
 
 /** Try AWS Config select. Returns null if not available. */
 async function tryConfig(
-  region: string,
+  globalArgs: GlobalArgs,
 ): Promise<
   | { resources: z.infer<typeof ScannedResourceSchema>[]; truncated: boolean }
   | null
 > {
-  const client = new ConfigServiceClient({ region });
+  const client = new ConfigServiceClient(makeClientConfig(globalArgs));
+  const region = globalArgs.regions[0];
   try {
     const resources: z.infer<typeof ScannedResourceSchema>[] = [];
     let nextToken: string | undefined;
@@ -463,11 +493,14 @@ async function tryConfig(
 
 /** Try Resource Groups Tagging API. Always available but only sees tagged resources. */
 async function tryTagApi(
-  region: string,
+  globalArgs: GlobalArgs,
 ): Promise<
   { resources: z.infer<typeof ScannedResourceSchema>[]; truncated: boolean }
 > {
-  const client = new ResourceGroupsTaggingAPIClient({ region });
+  const client = new ResourceGroupsTaggingAPIClient(
+    makeClientConfig(globalArgs),
+  );
+  const region = globalArgs.regions[0];
   try {
     const resources: z.infer<typeof ScannedResourceSchema>[] = [];
     let paginationToken: string | undefined;
@@ -539,7 +572,7 @@ async function tryTagApi(
 // =============================================================================
 
 type InventoryContext = {
-  globalArgs: { regions: string[] };
+  globalArgs: GlobalArgs;
   writeResource: (
     spec: string,
     instance: string,
@@ -568,7 +601,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.07.29.1",
+  version: "2026.07.30.1",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -587,8 +620,8 @@ export const model = {
       },
     },
     {
-      toVersion: "2026.07.29.1",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Add optional profile global argument for multi-account use",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -632,7 +665,9 @@ export const model = {
       ) => {
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
-          const client = new EC2Client({ region });
+          const client = new EC2Client(
+            makeClientConfig(context.globalArgs, region),
+          );
           try {
             const instances: z.infer<typeof EC2InstanceSchema>[] = [];
             let nextToken: string | undefined;
@@ -719,7 +754,9 @@ export const model = {
       ) => {
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
-          const client = new RDSClient({ region });
+          const client = new RDSClient(
+            makeClientConfig(context.globalArgs, region),
+          );
           try {
             const instances: z.infer<typeof RDSInstanceSchema>[] = [];
             let marker: string | undefined;
@@ -788,7 +825,7 @@ export const model = {
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
           const client = new DynamoDBClient({
-            region: region,
+            ...makeClientConfig(context.globalArgs, region),
           });
           try {
             const tables: z.infer<typeof DynamoDBTableSchema>[] = [];
@@ -881,7 +918,9 @@ export const model = {
       ) => {
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
-          const client = new LambdaClient({ region });
+          const client = new LambdaClient(
+            makeClientConfig(context.globalArgs, region),
+          );
           try {
             const functions: z.infer<typeof LambdaFunctionSchema>[] = [];
             let marker: string | undefined;
@@ -986,7 +1025,7 @@ export const model = {
         _args: Record<string, never>,
         context: InventoryContext,
       ) => {
-        const client = new S3Client({ region: context.globalArgs.regions[0] });
+        const client = new S3Client(makeClientConfig(context.globalArgs));
         try {
           const buckets: z.infer<typeof S3BucketSchema>[] = [];
 
@@ -1040,7 +1079,9 @@ export const model = {
       ) => {
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
-          const client = new EC2Client({ region });
+          const client = new EC2Client(
+            makeClientConfig(context.globalArgs, region),
+          );
           try {
             const volumes: z.infer<typeof EBSVolumeSchema>[] = [];
             let nextToken: string | undefined;
@@ -1147,10 +1188,18 @@ export const model = {
       ) => {
         const allHandles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
-          const ec2Client = new EC2Client({ region });
-          const rdsClient = new RDSClient({ region });
-          const ddbClient = new DynamoDBClient({ region });
-          const lambdaClient = new LambdaClient({ region });
+          const ec2Client = new EC2Client(
+            makeClientConfig(context.globalArgs, region),
+          );
+          const rdsClient = new RDSClient(
+            makeClientConfig(context.globalArgs, region),
+          );
+          const ddbClient = new DynamoDBClient(
+            makeClientConfig(context.globalArgs, region),
+          );
+          const lambdaClient = new LambdaClient(
+            makeClientConfig(context.globalArgs, region),
+          );
           let s3Client: S3Client | undefined;
 
           try {
@@ -1315,7 +1364,9 @@ export const model = {
             // S3 (optional)
             const s3Buckets: z.infer<typeof S3BucketSchema>[] = [];
             if (args.includeS3) {
-              s3Client = new S3Client({ region });
+              s3Client = new S3Client(
+                makeClientConfig(context.globalArgs, region),
+              );
               const s3Resp = await s3Client.send(new ListBucketsCommand({}));
               for (const b of s3Resp.Buckets || []) {
                 if (b.Name) {
@@ -1431,7 +1482,7 @@ export const model = {
         let truncated = false;
 
         if (args.source === "resource-explorer" || args.source === "auto") {
-          const result = await tryResourceExplorer(region);
+          const result = await tryResourceExplorer(context.globalArgs);
           if (result) {
             resources = result.resources;
             truncated = result.truncated;
@@ -1445,7 +1496,7 @@ export const model = {
             );
           } else {
             // Fall through to Config
-            const configResult = await tryConfig(region);
+            const configResult = await tryConfig(context.globalArgs);
             if (configResult) {
               resources = configResult.resources;
               truncated = configResult.truncated;
@@ -1455,7 +1506,7 @@ export const model = {
               coverage = "config-tracked";
             } else {
               // Fall through to Tag API
-              const tagResult = await tryTagApi(region);
+              const tagResult = await tryTagApi(context.globalArgs);
               resources = tagResult.resources;
               truncated = tagResult.truncated;
               source = "tag-api";
@@ -1465,7 +1516,7 @@ export const model = {
             }
           }
         } else if (args.source === "config") {
-          const result = await tryConfig(region);
+          const result = await tryConfig(context.globalArgs);
           if (!result) {
             throw new Error(
               "AWS Config not available in this region/account. " +
@@ -1478,7 +1529,7 @@ export const model = {
           sourceNote = `AWS Config queried in ${region}`;
           coverage = "config-tracked";
         } else {
-          const result = await tryTagApi(region);
+          const result = await tryTagApi(context.globalArgs);
           resources = result.resources;
           truncated = result.truncated;
           source = "tag-api";
@@ -1602,19 +1653,19 @@ export const model = {
         let truncated = false;
         let currentSource = "";
 
-        const re2Result = await tryResourceExplorer(region);
+        const re2Result = await tryResourceExplorer(context.globalArgs);
         if (re2Result) {
           currentResources = re2Result.resources;
           truncated = re2Result.truncated;
           currentSource = "resource-explorer";
         } else {
-          const configResult = await tryConfig(region);
+          const configResult = await tryConfig(context.globalArgs);
           if (configResult) {
             currentResources = configResult.resources;
             truncated = configResult.truncated;
             currentSource = "config";
           } else {
-            const tagResult = await tryTagApi(region);
+            const tagResult = await tryTagApi(context.globalArgs);
             currentResources = tagResult.resources;
             truncated = tagResult.truncated;
             currentSource = "tag-api";
