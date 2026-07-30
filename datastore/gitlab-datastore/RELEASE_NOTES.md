@@ -1,3 +1,27 @@
+## 2026.07.29.1
+
+**Added:** Commit sequence fast-path via dedicated
+`{prefix}--_meta--commit_seq` state. Pull reads it first — if unchanged,
+returns immediately (1 request instead of N+1).
+
+**Added:** Tombstoning via `deleteState()`. Files deleted locally are now
+deleted remotely. Dirty-path mode detects missing files; full-walk mode compares
+the remote state set against local files.
+
+**Changed:** Pull and push requests run with bounded concurrency of 8 workers
+instead of sequentially. Expected 5-10x latency reduction.
+
+**Changed:** Serial and lineage are cached in the sidecar per path, eliminating
+the pre-push GET for serial discovery (halves HTTP requests on push in the
+common case). Falls back to fresh GET on 409 conflict.
+
+**Changed:** Fast-path is gated on `lazyPullActive` — a full pull after a
+metadata-only pull no longer short-circuits via commitSeq when files have not
+been hydrated.
+
+**Fixed:** Push retry restricted to 409 conflicts only. Network timeouts and
+other errors are rethrown instead of triggering a retry that could double-write.
+
 ## 2026.07.27.1
 
 **Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
