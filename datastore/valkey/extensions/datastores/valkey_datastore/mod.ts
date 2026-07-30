@@ -530,7 +530,9 @@ function createSyncService(
     }
     // Filter out soft-deleted entries
     const alive = await filterDeleted(results);
-    return { paths: alive, truncated };
+    // Only report truncated if live count still hits the limit after filtering.
+    const actuallyTruncated = truncated && alive.length >= PATH_LIMIT;
+    return { paths: alive, truncated: actuallyTruncated };
   }
 
   /**
@@ -563,8 +565,8 @@ function createSyncService(
           alive.push(batch[j]);
         }
       } else {
-        // Pipeline failed entirely — include all paths as a safe fallback
-        alive.push(...batch);
+        // Pipeline failed entirely — exclude all paths as a safe fallback.
+        // Including tombstoned paths would resurface deleted files.
       }
     }
     return alive;
@@ -586,11 +588,14 @@ function createSyncService(
           PATH_LIMIT + 1,
         ),
     );
-    const truncated = raw.length > PATH_LIMIT;
-    if (truncated) raw.length = PATH_LIMIT;
+    const rawTruncated = raw.length > PATH_LIMIT;
+    if (rawTruncated) raw.length = PATH_LIMIT;
 
     // Filter out soft-deleted entries by checking metadata
     const paths = await filterDeleted(raw);
+    // Only report truncated if the live count still exceeds the limit.
+    // A repo with many tombstones should not trigger truncation for live paths.
+    const truncated = rawTruncated && paths.length >= PATH_LIMIT;
     return { paths, truncated };
   }
 
@@ -868,13 +873,22 @@ function createSyncService(
       if (exactScore !== null && !remotePaths.includes(relPath)) {
         remotePaths.push(relPath);
       }
+      // Filter out tombstoned paths — they should not appear in toDelete
+      // or trigger re-scoring (which would refresh their seq indefinitely).
+      remotePaths = await filterDeleted(remotePaths);
     } else {
       const score = await commandSpan(
         "ZSCORE",
         pathIdx,
         () => redis.zscore(pathIdx, relPath),
       );
-      remotePaths = score !== null ? [relPath] : [];
+      if (score !== null) {
+        // Check if it's a tombstone
+        const alive = await filterDeleted([relPath]);
+        remotePaths = alive.length > 0 ? [relPath] : [];
+      } else {
+        remotePaths = [];
+      }
     }
 
     const remoteHashes = new Map<string, string>();
@@ -923,10 +937,10 @@ function createSyncService(
     }
 
     // Read current seq to compute the intended score for this write batch.
-    // The actual INCR happens AFTER writes succeed to avoid orphan seqs on
-    // crash: if writes fail, the seq counter remains unchanged.
-    const currentSeq = await commandSpan("GET", seq, () => redis.get(seq));
-    const writeSeq = (currentSeq ? parseInt(currentSeq, 10) : 0) + 1;
+    // INCR first so each concurrent writer gets a unique seq. A wasted seq on
+    // crash is acceptable — seq gaps don't affect correctness (ZRANGEBYSCORE
+    // with exclusive lower bound handles them transparently).
+    const writeSeq = await commandSpan("INCR", seq, () => redis.incr(seq));
 
     // Pipeline all writes for one round trip per batch
     const BATCH = 50;
@@ -1022,12 +1036,42 @@ function createSyncService(
       );
     }
 
-    // All writes succeeded — now atomically advance the seq counter.
-    // Using INCR (not SET) so concurrent writers each get a unique seq.
-    // If a concurrent writer incremented between our GET and this INCR,
-    // our writes already carry the correct score (writeSeq) and will be
-    // visible to any pull with lastPulledSeq < writeSeq.
-    await commandSpan("INCR", seq, () => redis.incr(seq));
+    // Tombstone GC: evict tombstones whose score is older than
+    // TOMBSTONE_RETENTION_SEQS behind the current seq. Clients that haven't
+    // pulled in that many pushes fall back to a full sync via the watermark.
+    const TOMBSTONE_RETENTION_SEQS = 1000;
+    const gcThreshold = writeSeq - TOMBSTONE_RETENTION_SEQS;
+    if (gcThreshold > 0) {
+      // Find old tombstones by score range, then verify they're actually deleted
+      const oldPaths = await commandSpan(
+        "ZRANGEBYSCORE",
+        pathIdx,
+        () => redis.zrangebyscore(pathIdx, "-inf", String(gcThreshold)),
+      );
+      if (oldPaths.length > 0) {
+        // Check which are tombstones (deleted: "true")
+        const pipeline = redis.pipeline();
+        for (const p of oldPaths) {
+          pipeline.hget(metaKey(prefix, p), "deleted");
+        }
+        const gcResults = await pipeline.exec();
+        if (gcResults) {
+          const toEvict: string[] = [];
+          for (let i = 0; i < oldPaths.length; i++) {
+            const [err, val] = gcResults[i];
+            if (!err && val === "true") toEvict.push(oldPaths[i]);
+          }
+          if (toEvict.length > 0) {
+            const gcPipeline = redis.pipeline();
+            for (const p of toEvict) {
+              gcPipeline.zrem(pathIdx, p);
+              gcPipeline.del(metaKey(prefix, p));
+            }
+            await gcPipeline.exec();
+          }
+        }
+      }
+    }
 
     return { changes, pushed, deleted };
   }
