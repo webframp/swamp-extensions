@@ -1173,7 +1173,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.18.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1431,7 +1431,7 @@ export const model = {
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, MERGE_REQUESTS_QUERY, {
           fullPath: args.project,
-          state: args.state === "all" ? undefined : args.state.toUpperCase(),
+          state: args.state === "all" ? undefined : args.state,
           first: 20,
         });
         const conn = data.project?.mergeRequests;
@@ -1471,7 +1471,7 @@ export const model = {
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, ISSUES_QUERY, {
           fullPath: args.project,
-          state: args.state === "all" ? undefined : args.state.toUpperCase(),
+          state: args.state === "all" ? undefined : args.state,
           first: 20,
         });
         const conn = data.project?.issues;
