@@ -394,6 +394,9 @@ const MergeStatusSchema = z.object({
   title: z.string(),
   state: z.string(),
   draft: z.boolean(),
+  sourceBranch: z.string().nullable(),
+  targetBranch: z.string().nullable(),
+  webUrl: z.string().nullable(),
   mergeable: z.boolean().nullable(),
   // GitLab's detailed_merge_status enum, e.g. mergeable, need_rebase, conflict,
   // ci_must_pass, not_approved, discussions_not_resolved, draft_status.
@@ -743,6 +746,7 @@ query mrStatus($fullPath: ID!, $iid: String!) {
   project(fullPath: $fullPath) {
     mergeRequest(iid: $iid) {
       iid title state draft
+      sourceBranch targetBranch webUrl
       detailedMergeStatus
       mergeable
       conflicts
@@ -1180,6 +1184,17 @@ export const model = {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.30.1",
+      description:
+        "Add sourceBranch, targetBranch, webUrl to mergeStatus resource",
+      upgradeAttributes: (old: Record<string, unknown>) => ({
+        ...old,
+        sourceBranch: null,
+        targetBranch: null,
+        webUrl: null,
+      }),
     },
   ],
   reports: ["@webframp/review-dashboard"],
@@ -2128,6 +2143,9 @@ export const model = {
             title: mr.title ?? "",
             state: mr.state ?? "",
             draft: mr.draft ?? false,
+            sourceBranch: mr.sourceBranch ?? null,
+            targetBranch: mr.targetBranch ?? null,
+            webUrl: mr.webUrl ?? null,
             mergeable,
             detailedMergeStatus: dms,
             conflicts: mr.conflicts ?? null,
