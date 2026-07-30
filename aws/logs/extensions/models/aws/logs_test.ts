@@ -5,6 +5,7 @@ import {
   assertEquals,
   assertExists,
   assertMatch,
+  assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1096.0";
@@ -502,6 +503,245 @@ Deno.test(
       assertEquals(data.queryId, "q-profile-456");
       assertEquals(data.status, "Complete");
       assertEquals(data.results[0]["@message"], "profile test line");
+    } finally {
+      restore();
+    }
+  },
+);
+
+// =============================================================================
+// Query Timeout / Failure Behavior Tests
+// =============================================================================
+
+Deno.test(
+  "query: throws on timeout when query stays Running",
+  { sanitizeResources: false },
+  async () => {
+    let stopQueryCalled = false;
+    const restore = mockLogsClient((cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "StartQueryCommand") {
+        return { queryId: "q-timeout-1" };
+      }
+      if (name === "GetQueryResultsCommand") {
+        return { status: "Running", results: [], statistics: null };
+      }
+      if (name === "StopQueryCommand") {
+        stopQueryCalled = true;
+        return { success: true };
+      }
+      return {};
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+      });
+
+      await assertRejects(
+        () =>
+          model.methods.query.execute(
+            {
+              logGroupNames: ["/aws/lambda/func1"],
+              queryString: "fields @timestamp | limit 10",
+              startTime: "1h",
+              maxWaitSeconds: 1,
+            },
+            context as unknown as Parameters<
+              typeof model.methods.query.execute
+            >[1],
+          ),
+        Error,
+        "timed out",
+      );
+
+      assertEquals(stopQueryCalled, true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: throws on Failed status",
+  { sanitizeResources: false },
+  async () => {
+    const restore = mockLogsClient((cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "StartQueryCommand") {
+        return { queryId: "q-failed-1" };
+      }
+      if (name === "GetQueryResultsCommand") {
+        return { status: "Failed", results: [], statistics: null };
+      }
+      return {};
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+      });
+
+      await assertRejects(
+        () =>
+          model.methods.query.execute(
+            {
+              logGroupNames: ["/aws/lambda/func1"],
+              queryString: "fields @timestamp | limit 10",
+              startTime: "1h",
+              maxWaitSeconds: 5,
+            },
+            context as unknown as Parameters<
+              typeof model.methods.query.execute
+            >[1],
+          ),
+        Error,
+        "failed",
+      );
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: throws on Cancelled status",
+  { sanitizeResources: false },
+  async () => {
+    const restore = mockLogsClient((cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "StartQueryCommand") {
+        return { queryId: "q-cancelled-1" };
+      }
+      if (name === "GetQueryResultsCommand") {
+        return { status: "Cancelled", results: [], statistics: null };
+      }
+      return {};
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+      });
+
+      await assertRejects(
+        () =>
+          model.methods.query.execute(
+            {
+              logGroupNames: ["/aws/lambda/func1"],
+              queryString: "fields @timestamp | limit 10",
+              startTime: "1h",
+              maxWaitSeconds: 5,
+            },
+            context as unknown as Parameters<
+              typeof model.methods.query.execute
+            >[1],
+          ),
+        Error,
+        "cancelled",
+      );
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: stores partial results when requireComplete is false",
+  { sanitizeResources: false },
+  async () => {
+    const restore = mockLogsClient((cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "StartQueryCommand") {
+        return { queryId: "q-partial-1" };
+      }
+      if (name === "GetQueryResultsCommand") {
+        return { status: "Running", results: [], statistics: null };
+      }
+      return {};
+    });
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+      });
+
+      await model.methods.query.execute(
+        {
+          logGroupNames: ["/aws/lambda/func1"],
+          queryString: "fields @timestamp | limit 10",
+          startTime: "1h",
+          maxWaitSeconds: 1,
+          requireComplete: false,
+        },
+        context as unknown as Parameters<
+          typeof model.methods.query.execute
+        >[1],
+      );
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      const data = resources[0].data as {
+        queryId: string;
+        status: string;
+        results: Array<Record<string, string>>;
+      };
+
+      assertEquals(data.queryId, "q-partial-1");
+      assertEquals(data.status, "Running");
+      assertEquals(data.results.length, 0);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "find_errors: throws on timeout (requireComplete defaults to true)",
+  { sanitizeResources: false },
+  async () => {
+    const restore = mockLogsClient((cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "StartQueryCommand") {
+        return { queryId: "q-errors-timeout" };
+      }
+      if (name === "GetQueryResultsCommand") {
+        return { status: "Running", results: [], statistics: null };
+      }
+      if (name === "StopQueryCommand") {
+        return { success: true };
+      }
+      return {};
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+      });
+
+      await assertRejects(
+        () =>
+          model.methods.find_errors.execute(
+            {
+              logGroupNames: ["/aws/lambda/func1"],
+              startTime: "1h",
+              keywords: ["error"],
+              limit: 100,
+              maxWaitSeconds: 1,
+            },
+            context as unknown as Parameters<
+              typeof model.methods.find_errors.execute
+            >[1],
+          ),
+        Error,
+        "timed out",
+      );
     } finally {
       restore();
     }

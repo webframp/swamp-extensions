@@ -1,9 +1,14 @@
-## 2026.07.30.1
+## 2026.07.30.2
 
-**Added:** Optional `profile` global argument for multi-account credential resolution.
-When set, credentials resolve via `fromIni` (supports SSO token cache and shared-config
-profiles). When omitted, the default credential chain applies as before. Fully backward
-compatible — no changes required for existing instances.
+**Fixed:** The `query` and `find_errors` methods now fail when a Logs Insights query
+does not reach `Complete` status. Previously, a timed-out query (status `Running`) or
+a terminal failure (`Failed`/`Cancelled`) was stored as a successful result with zero
+rows, misleading downstream consumers.
 
-**Changed:** Internal client construction extracted into a shared `makeClient` helper.
-No behavioral difference for instances without a `profile` set.
+**Added:** `requireComplete` argument on the `query` method (default `true`). Set to
+`false` to store partial/incomplete results without error — useful for callers that
+inspect the `status` field themselves.
+
+**Changed:** When a query times out with `requireComplete: true`, the method cancels
+the in-progress query via `StopQuery` before throwing, preventing orphaned scans from
+continuing to consume resources.

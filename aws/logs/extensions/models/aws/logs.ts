@@ -18,6 +18,7 @@ import {
   FilterLogEventsCommand,
   GetQueryResultsCommand,
   StartQueryCommand,
+  StopQueryCommand,
 } from "npm:@aws-sdk/client-cloudwatch-logs@3.1096.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
 
@@ -161,6 +162,7 @@ async function waitForQueryCompletion(
   client: CloudWatchLogsClient,
   queryId: string,
   maxWaitMs: number = 30000,
+  requireComplete: boolean = true,
 ): Promise<{
   status: string;
   results: Array<Record<string, string>>;
@@ -215,6 +217,40 @@ async function waitForQueryCompletion(
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  // Handle non-Complete terminal states
+  if (requireComplete) {
+    if (status === "Running" || status === "Scheduled") {
+      // Query did not finish in time — cancel it to stop scanning
+      try {
+        await client.send(new StopQueryCommand({ queryId }));
+      } catch {
+        // Best-effort cancel; query may have completed between check and stop
+      }
+      throw new Error(
+        `Query ${queryId} timed out after ${
+          maxWaitMs / 1000
+        }s (status: ${status}). ` +
+          "Query was stopped by this method. Increase maxWaitSeconds or narrow the time range.",
+      );
+    }
+    if (status === "Failed") {
+      throw new Error(
+        `Query ${queryId} failed. The Logs Insights query could not be executed.`,
+      );
+    }
+    if (status === "Cancelled") {
+      throw new Error(
+        `Query ${queryId} was cancelled externally before completion.`,
+      );
+    }
+    // Catch any unrecognized status that isn't Complete
+    if (status !== "Complete") {
+      throw new Error(
+        `Query ${queryId} ended in unexpected status: ${status}. Results may be incomplete.`,
+      );
+    }
+  }
+
   return { status, results, statistics };
 }
 
@@ -232,12 +268,18 @@ async function waitForQueryCompletion(
  */
 export const model = {
   type: "@webframp/aws/logs",
-  version: "2026.07.30.1",
+  version: "2026.07.30.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.30.1",
       description: "Add optional profile global argument for multi-account use",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.30.2",
+      description:
+        "Fail on non-Complete query status instead of storing empty results",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -369,6 +411,13 @@ export const model = {
           .number()
           .default(30)
           .describe("Maximum seconds to wait for query completion"),
+        requireComplete: z
+          .boolean()
+          .default(true)
+          .describe(
+            "Fail if the query does not reach Complete status. Set to false " +
+              "to store partial/incomplete results without error.",
+          ),
       }),
       execute: async (
         args: {
@@ -377,6 +426,7 @@ export const model = {
           startTime: string;
           endTime?: string;
           maxWaitSeconds: number;
+          requireComplete?: boolean;
         },
         context: {
           globalArgs: GlobalArgs;
@@ -419,6 +469,7 @@ export const model = {
             client,
             queryId,
             args.maxWaitSeconds * 1000,
+            args.requireComplete ?? true,
           );
 
           const groupsKey = args.logGroupNames.slice().sort().join(",");
@@ -476,6 +527,10 @@ export const model = {
           .number()
           .default(100)
           .describe("Maximum number of error events to analyze"),
+        maxWaitSeconds: z
+          .number()
+          .default(30)
+          .describe("Maximum seconds to wait for query completion"),
       }),
       execute: async (
         args: {
@@ -484,6 +539,7 @@ export const model = {
           endTime?: string;
           keywords: string[];
           limit: number;
+          maxWaitSeconds?: number;
         },
         context: {
           globalArgs: GlobalArgs;
@@ -529,7 +585,8 @@ export const model = {
           const { results } = await waitForQueryCompletion(
             client,
             queryId,
-            30000,
+            (args.maxWaitSeconds ?? 30) * 1000,
+            true,
           );
 
           // Analyze patterns from results
