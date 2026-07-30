@@ -153,6 +153,10 @@ function seqKey(prefix: string): string {
   return `${prefix}:_seq`;
 }
 
+function minRetainedSeqKey(prefix: string): string {
+  return `${prefix}:_min_retained_seq`;
+}
+
 function lockKey(prefix: string, key: string): string {
   return `${prefix}:_lock:${key}`;
 }
@@ -473,9 +477,19 @@ function createSyncService(
   const sidecar = new Sidecar(cachePath);
   const pathIdx = pathIndexKey(prefix);
   const seq = seqKey(prefix);
+  const minRetainedKey = minRetainedSeqKey(prefix);
 
   async function getRemoteSeq(): Promise<number> {
     const val = await commandSpan("GET", seq, () => redis.get(seq));
+    return val ? parseInt(val, 10) : 0;
+  }
+
+  async function getMinRetainedSeq(): Promise<number> {
+    const val = await commandSpan(
+      "GET",
+      minRetainedKey,
+      () => redis.get(minRetainedKey),
+    );
     return val ? parseInt(val, 10) : 0;
   }
 
@@ -530,9 +544,8 @@ function createSyncService(
     }
     // Filter out soft-deleted entries
     const alive = await filterDeleted(results);
-    // Only report truncated if live count still hits the limit after filtering.
-    const actuallyTruncated = truncated && alive.length >= PATH_LIMIT;
-    return { paths: alive, truncated: actuallyTruncated };
+    // If the raw scan hit the limit, there may be more paths — report truncated.
+    return { paths: alive, truncated };
   }
 
   /**
@@ -593,10 +606,9 @@ function createSyncService(
 
     // Filter out soft-deleted entries by checking metadata
     const paths = await filterDeleted(raw);
-    // Only report truncated if the live count still exceeds the limit.
-    // A repo with many tombstones should not trigger truncation for live paths.
-    const truncated = rawTruncated && paths.length >= PATH_LIMIT;
-    return { paths, truncated };
+    // If the raw scan was truncated, there may be more live paths we didn't
+    // fetch — report truncated regardless of post-filter count.
+    return { paths, truncated: rawTruncated };
   }
 
   /**
@@ -1037,16 +1049,25 @@ function createSyncService(
     }
 
     // Tombstone GC: evict tombstones whose score is older than
-    // TOMBSTONE_RETENTION_SEQS behind the current seq. Clients that haven't
-    // pulled in that many pushes fall back to a full sync via the watermark.
+    // TOMBSTONE_RETENTION_SEQS behind the current seq. After eviction,
+    // write minRetainedSeq so stale clients know to fall back to full pull.
     const TOMBSTONE_RETENTION_SEQS = 1000;
+    const GC_BATCH_LIMIT = 5000;
     const gcThreshold = writeSeq - TOMBSTONE_RETENTION_SEQS;
     if (gcThreshold > 0) {
-      // Find old tombstones by score range, then verify they're actually deleted
+      // Find old entries by score range, bounded to avoid OOM on large repos
       const oldPaths = await commandSpan(
         "ZRANGEBYSCORE",
         pathIdx,
-        () => redis.zrangebyscore(pathIdx, "-inf", String(gcThreshold)),
+        () =>
+          redis.zrangebyscore(
+            pathIdx,
+            "-inf",
+            String(gcThreshold),
+            "LIMIT",
+            0,
+            GC_BATCH_LIMIT,
+          ),
       );
       if (oldPaths.length > 0) {
         // Check which are tombstones (deleted: "true")
@@ -1068,6 +1089,13 @@ function createSyncService(
               gcPipeline.del(metaKey(prefix, p));
             }
             await gcPipeline.exec();
+            // Record the minimum retained seq so stale clients know to
+            // fall back to a full pull instead of incremental.
+            await commandSpan(
+              "SET",
+              minRetainedKey,
+              () => redis.set(minRetainedKey, String(gcThreshold + 1)),
+            );
           }
         }
       }
@@ -1112,11 +1140,20 @@ function createSyncService(
         // Determine which paths to pull.
         // When we have a prior seq, use score-based range to fetch only
         // paths changed since last pull (O(changed) instead of O(total)).
+        // But if our lastPulledSeq is older than the oldest retained
+        // tombstone, we must fall back to a full pull + reconciliation.
         let result: { paths: string[]; truncated: boolean };
         if (scoped) {
           result = await pathsForPrefixes(scopePrefixes);
         } else if (state.lastPulledSeq > 0) {
-          result = await changedPathsSince(state.lastPulledSeq);
+          const minRetained = await getMinRetainedSeq();
+          if (minRetained > 0 && state.lastPulledSeq < minRetained) {
+            // Our seq predates GC — tombstones we need may have been evicted.
+            // Fall back to full pull so we can reconcile against the live set.
+            result = await allPaths();
+          } else {
+            result = await changedPathsSince(state.lastPulledSeq);
+          }
         } else {
           result = await allPaths();
         }
