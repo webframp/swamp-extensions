@@ -1,3 +1,25 @@
+## 2026.07.29.1
+
+**Added:** Targeted shard fetch for dirty-path pushes. Computes shard keys for
+changed paths and fetches only those shards (typically 5-10) instead of all 256.
+
+**Added:** Atomic `commitSeq` counter blob (`_meta/commit_seq`) incremented via
+ETag-CAS on push. Pull fast-path compares a monotonic integer immune to client
+clock skew.
+
+**Changed:** Blob uploads run with bounded concurrency of 12 workers instead of
+sequentially.
+
+**Changed:** Shard CAS updates are batched by shard key — one read-modify-write
+per distinct shard instead of one per file.
+
+**Changed:** Pull captures `commitSeq` before fetching shard data (not after) to
+prevent TOCTOU races where concurrent pushes during the fetch window could be
+silently missed.
+
+**Fixed:** Removed unused `localFiles` array in `queryShardsByPaths` that
+misled readers about what drives the output filter.
+
 ## 2026.07.27.1
 
 **Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
