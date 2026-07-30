@@ -4,6 +4,7 @@
 import {
   assertEquals,
   assertRejects,
+  assertStringIncludes,
   assertThrows,
 } from "jsr:@std/assert@1.0.19";
 import {
@@ -35,6 +36,7 @@ Deno.test("vault export conforms to VaultProvider contract", () => {
     invalidConfigs: [
       { service: 123 }, // Wrong type
       { service: "" }, // Empty string not allowed
+      { service: "line\nbreak" }, // Would split the security -i command line
     ],
   });
 });
@@ -63,8 +65,36 @@ Deno.test("createProvider throws on empty service string", () => {
   );
 });
 
+Deno.test("createProvider throws on service with control characters", () => {
+  assertThrows(
+    () => vault.createProvider("bad-vault", { service: "svc\nname" }),
+    Error,
+  );
+  assertThrows(
+    () => vault.createProvider("bad-vault", { service: "svc\tname" }),
+    Error,
+  );
+});
+
 // ---------------------------------------------------------------------------
-// Behavioral tests using Deno.Command stubbing
+// Mock of the `security` CLI
+//
+// The behaviors mocked here are not guesses: each one was probed on real
+// hardware (macOS 26.5.2, build 25F84) and recorded in #275.
+//
+//  - `find-generic-password -w` prints lowercase hex instead of the value
+//    when any byte falls outside printable ASCII (0x20-0x7E), plus one
+//    trailing newline either way. `mockMode = "legacy"` disables the hex
+//    behavior to model older macOS.
+//  - `find-generic-password -g` prints the password on stderr, marked
+//    `password: "..."` for printable values and `password: 0x<HEX>` when it
+//    hex-encodes. `-g` hex-encodes for backslashes too, not only for
+//    non-printable bytes.
+//  - `security -i` reads whitespace-tokenized commands from stdin. Quotes
+//    group a token; inside double quotes a backslash escapes the next
+//    character. Lines longer than 4096 bytes (newline included) are split by
+//    the real CLI and can store corrupted values, so the mock refuses them —
+//    the provider must never send one.
 // ---------------------------------------------------------------------------
 
 /** In-memory store for mock keychain items (service/account -> password) */
@@ -76,17 +106,182 @@ const OriginalCommand = Deno.Command;
 /** Track the last args passed to security for verification */
 let lastSecurityArgs: string[] = [];
 
+/** The last full line handed to `security -i` on stdin. */
+let lastInteractiveLine: string | undefined;
+
+/** Number of security processes spawned since the mock was installed. */
+let securitySpawnCount = 0;
+
+/** "macos26" hex-encodes non-printable output; "legacy" prints raw bytes. */
+let mockMode: "macos26" | "legacy" = "macos26";
+
 /**
- * When set, `add-generic-password` fails and quotes the `-w` value back on
- * stderr.
- *
- * `put` passes the secret as that argument, and the swamp host publishes thrown
- * error messages to the trace backend, so this is the disclosure path worth
- * having a test for.
+ * When set, the `-i` write fails and `security` echoes the submitted line —
+ * hex-encoded secret included — back on stderr, the way its parser echoes
+ * input it rejects. The swamp host publishes thrown error messages to the
+ * trace backend, so this is the disclosure path worth having a test for.
  */
 let addEchoesValueOnFailure = false;
 
-/** Mock Deno.Command that simulates macOS security CLI */
+/**
+ * Overrides the `-g` password line. `null` omits the line entirely; a string
+ * is used verbatim. For probing the provider's fail-loud paths.
+ */
+let gPasswordLineOverride: string | null | undefined;
+
+const PRINTABLE = /^[\x20-\x7e]*$/;
+
+function toLowerHex(value: string): string {
+  let out = "";
+  for (const b of new TextEncoder().encode(value)) {
+    out += b.toString(16).padStart(2, "0");
+  }
+  return out;
+}
+
+function hexToString(hex: string): string {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * Tokenizes a `security -i` line with the probed rules: whitespace splits,
+ * single or double quotes group, and inside double quotes (or bare) a
+ * backslash escapes the next character.
+ */
+function tokenizeInteractive(line: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let inToken = false;
+  let i = 0;
+  while (i < line.length) {
+    const c = line[i];
+    if (c === " " || c === "\t") {
+      if (inToken) {
+        tokens.push(current);
+        current = "";
+        inToken = false;
+      }
+      i++;
+      continue;
+    }
+    inToken = true;
+    if (c === '"') {
+      i++;
+      while (i < line.length && line[i] !== '"') {
+        if (line[i] === "\\" && i + 1 < line.length) {
+          current += line[i + 1];
+          i += 2;
+        } else {
+          current += line[i];
+          i++;
+        }
+      }
+      i++; // closing quote
+      continue;
+    }
+    if (c === "'") {
+      i++;
+      while (i < line.length && line[i] !== "'") {
+        current += line[i];
+        i++;
+      }
+      i++;
+      continue;
+    }
+    if (c === "\\" && i + 1 < line.length) {
+      current += line[i + 1];
+      i += 2;
+      continue;
+    }
+    current += c;
+    i++;
+  }
+  if (inToken) tokens.push(current);
+  return tokens;
+}
+
+function flagValue(tokens: string[], flag: string): string | undefined {
+  const idx = tokens.indexOf(flag);
+  return idx >= 0 ? tokens[idx + 1] : undefined;
+}
+
+const encoder = new TextEncoder();
+
+function notFoundResult() {
+  return {
+    code: 44,
+    stdout: new Uint8Array(),
+    stderr: encoder.encode(
+      "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.",
+    ),
+  };
+}
+
+type MockOutput = { code: number; stdout: Uint8Array; stderr: Uint8Array };
+
+function handleAdd(tokens: string[]): MockOutput {
+  const service = flagValue(tokens, "-s") ?? "";
+  const account = flagValue(tokens, "-a") ?? "";
+  const hex = flagValue(tokens, "-X");
+  if (hex === undefined || !/^(?:[0-9a-fA-F]{2})*$/.test(hex)) {
+    return {
+      code: 2,
+      stdout: new Uint8Array(),
+      stderr: encoder.encode("security: mock expected -X <hex>"),
+    };
+  }
+  mockKeychain.set(`${service}/${account}`, hexToString(hex));
+  return { code: 0, stdout: new Uint8Array(), stderr: new Uint8Array() };
+}
+
+function handleFind(args: string[]): MockOutput {
+  const sIdx = args.indexOf("-s");
+  const aIdx = args.indexOf("-a");
+  const service = sIdx >= 0 ? args[sIdx + 1] : "";
+  const account = aIdx >= 0 ? args[aIdx + 1] : "";
+  const value = mockKeychain.get(`${service}/${account}`);
+  if (value === undefined) return notFoundResult();
+
+  if (args.includes("-w")) {
+    const hexEncode = mockMode === "macos26" && !PRINTABLE.test(value);
+    const body = hexEncode ? toLowerHex(value) : value;
+    return {
+      code: 0,
+      stdout: encoder.encode(body + "\n"),
+      stderr: new Uint8Array(),
+    };
+  }
+
+  if (args.includes("-g")) {
+    let pwLine: string | null;
+    if (gPasswordLineOverride !== undefined) {
+      pwLine = gPasswordLineOverride;
+    } else if (value === "") {
+      pwLine = "password: ";
+    } else if (!PRINTABLE.test(value) || value.includes("\\")) {
+      // -g hex-encodes more aggressively than -w: backslashes trigger it too.
+      pwLine = `password: 0x${toLowerHex(value).toUpperCase()} `;
+    } else {
+      pwLine = `password: "${value}"`;
+    }
+    const stderrText = pwLine === null ? "" : pwLine + "\n";
+    return {
+      code: 0,
+      stdout: encoder.encode(
+        `keychain: "/Users/mock/Library/Keychains/login.keychain-db"\n`,
+      ),
+      stderr: encoder.encode(stderrText),
+    };
+  }
+
+  return notFoundResult();
+}
+
+/** Mock Deno.Command that simulates the macOS security CLI */
 class MockCommand {
   private command: string;
   private args: string[];
@@ -108,6 +303,7 @@ class MockCommand {
   }
 
   spawn(): MockProcess {
+    if (this.command === "security") securitySpawnCount++;
     return new MockProcess(this.command, this.args);
   }
 }
@@ -116,122 +312,93 @@ class MockProcess {
   stdin: MockStdin;
   private command: string;
   private args: string[];
+  private stdinChunks: Uint8Array[] = [];
 
   constructor(command: string, args: string[]) {
     this.command = command;
     this.args = args;
-    this.stdin = new MockStdin();
+    this.stdin = new MockStdin(this.stdinChunks);
   }
 
-  output(): Promise<{
-    code: number;
-    stdout: Uint8Array;
-    stderr: Uint8Array;
-  }> {
-    const encoder = new TextEncoder();
+  output(): Promise<MockOutput> {
+    if (this.command !== "security") {
+      return Promise.resolve({
+        code: 127,
+        stdout: new Uint8Array(),
+        stderr: encoder.encode(`command not found: ${this.command}`),
+      });
+    }
 
-    if (this.command === "security") {
-      const subcommand = this.args[0];
+    // security -i: commands arrive on stdin, one per line.
+    if (this.args[0] === "-i") {
+      const text = new TextDecoder().decode(
+        Uint8Array.from(this.stdinChunks.flatMap((c) => [...c])),
+      );
+      const newlineIdx = text.indexOf("\n");
+      const line = newlineIdx === -1 ? text : text.slice(0, newlineIdx);
+      lastInteractiveLine = line;
 
-      // security find-generic-password -s <service> -a <account> -w
-      if (subcommand === "find-generic-password") {
-        const serviceIdx = this.args.indexOf("-s");
-        const accountIdx = this.args.indexOf("-a");
-        const service = serviceIdx >= 0 ? this.args[serviceIdx + 1] : "";
-        const account = accountIdx >= 0 ? this.args[accountIdx + 1] : "";
-
-        const key = `${service}/${account}`;
-        const value = mockKeychain.get(key);
-
-        if (value === undefined) {
-          return Promise.resolve({
-            code: 44, // Item not found error code
-            stdout: new Uint8Array(),
-            stderr: encoder.encode(
-              "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.",
-            ),
-          });
-        }
+      // The real CLI splits longer lines and can store a corrupted value.
+      // The provider guards before spawning, so reaching this is a bug.
+      if (line.length + 1 > 4096) {
         return Promise.resolve({
-          code: 0,
-          stdout: encoder.encode(value),
-          stderr: new Uint8Array(),
-        });
-      }
-
-      // security add-generic-password -s <service> -a <account> -w <password> -U
-      if (subcommand === "add-generic-password") {
-        const serviceIdx = this.args.indexOf("-s");
-        const accountIdx = this.args.indexOf("-a");
-        const passwordIdx = this.args.indexOf("-w");
-        const service = serviceIdx >= 0 ? this.args[serviceIdx + 1] : "";
-        const account = accountIdx >= 0 ? this.args[accountIdx + 1] : "";
-        const password = passwordIdx >= 0 ? this.args[passwordIdx + 1] : "";
-
-        if (addEchoesValueOnFailure) {
-          // The failure mode that matters: a CLI quoting a rejected argument
-          // back on stderr, where `put` passed the secret as that argument.
-          return Promise.resolve({
-            code: 1,
-            stdout: new Uint8Array(),
-            stderr: encoder.encode(
-              `security: invalid value for -w: ${password}`,
-            ),
-          });
-        }
-
-        const key = `${service}/${account}`;
-        mockKeychain.set(key, password);
-
-        return Promise.resolve({
-          code: 0,
+          code: 1,
           stdout: new Uint8Array(),
-          stderr: new Uint8Array(),
+          stderr: encoder.encode(
+            "mock: line exceeds the security -i 4096-byte buffer",
+          ),
         });
       }
 
-      // security delete-generic-password -s <service> -a <account>
-      if (subcommand === "delete-generic-password") {
-        const serviceIdx = this.args.indexOf("-s");
-        const accountIdx = this.args.indexOf("-a");
-        const service = serviceIdx >= 0 ? this.args[serviceIdx + 1] : "";
-        const account = accountIdx >= 0 ? this.args[accountIdx + 1] : "";
-
-        const key = `${service}/${account}`;
-        if (!mockKeychain.has(key)) {
-          return Promise.resolve({
-            code: 44,
-            stdout: new Uint8Array(),
-            stderr: encoder.encode(
-              "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain.",
-            ),
-          });
-        }
-        mockKeychain.delete(key);
+      if (addEchoesValueOnFailure) {
         return Promise.resolve({
-          code: 0,
+          code: 1,
           stdout: new Uint8Array(),
-          stderr: new Uint8Array(),
+          stderr: encoder.encode(`security: unknown command "${line}"`),
         });
       }
+
+      const tokens = tokenizeInteractive(line);
+      if (tokens[0] === "add-generic-password") {
+        return Promise.resolve(handleAdd(tokens));
+      }
+      return Promise.resolve({
+        code: 1,
+        stdout: new Uint8Array(),
+        stderr: encoder.encode(`security: unknown command "${tokens[0]}"`),
+      });
+    }
+
+    const subcommand = this.args[0];
+    if (subcommand === "find-generic-password") {
+      return Promise.resolve(handleFind(this.args));
+    }
+    if (subcommand === "add-generic-password") {
+      // argv add is only used for the empty value, where -X "" is safe.
+      return Promise.resolve(handleAdd(this.args));
     }
 
     return Promise.resolve({
-      code: 127,
+      code: 2,
       stdout: new Uint8Array(),
-      stderr: encoder.encode(`command not found: ${this.command}`),
+      stderr: encoder.encode(`security: unknown command "${subcommand}"`),
     });
   }
 }
 
 class MockStdin {
+  constructor(private chunks: Uint8Array[]) {}
+
   getWriter(): MockWriter {
-    return new MockWriter();
+    return new MockWriter(this.chunks);
   }
 }
 
 class MockWriter {
-  write(_chunk: Uint8Array): Promise<void> {
+  constructor(private chunks: Uint8Array[]) {}
+
+  write(chunk: Uint8Array): Promise<void> {
+    this.chunks.push(chunk);
     return Promise.resolve();
   }
 
@@ -243,7 +410,11 @@ class MockWriter {
 function installMock(): void {
   mockKeychain.clear();
   lastSecurityArgs = [];
+  lastInteractiveLine = undefined;
+  securitySpawnCount = 0;
+  mockMode = "macos26";
   addEchoesValueOnFailure = false;
+  gPasswordLineOverride = undefined;
   // deno-lint-ignore no-explicit-any
   (Deno as any).Command = MockCommand;
 }
@@ -325,14 +496,6 @@ Deno.test("keychain vault: put overwrites existing secret", async () => {
   });
 });
 
-Deno.test("keychain vault: put uses -U flag for upsert", async () => {
-  await withMockedSecurity(async () => {
-    const provider = vault.createProvider("test", {});
-    await provider.put("any-key", "any-value");
-    assertEquals(lastSecurityArgs.includes("-U"), true);
-  });
-});
-
 Deno.test("keychain vault: list throws not supported error", async () => {
   await withMockedSecurity(async () => {
     const provider = vault.createProvider("test", {});
@@ -365,33 +528,273 @@ Deno.test("keychain vault: custom service is applied to all operations", async (
 });
 
 // ---------------------------------------------------------------------------
+// The write path: secret on stdin, never in argv (#275 part 1)
+// ---------------------------------------------------------------------------
+
+Deno.test("put spawns security -i and keeps the secret out of argv", async () => {
+  await withMockedSecurity(async () => {
+    const secret = "SECRET-MUST-NOT-BE-IN-ARGV-51c2";
+    const provider = vault.createProvider("v", {});
+    await provider.put("k", secret);
+
+    assertEquals(lastSecurityArgs, ["-i"]);
+    const argvText = lastSecurityArgs.join(" ");
+    assertEquals(argvText.includes(secret), false);
+    assertEquals(argvText.includes(toLowerHex(secret)), false);
+  });
+});
+
+Deno.test("put sends one -X command line, upserting, within the -i budget", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", { service: "my svc" });
+    await provider.put("some-key", "hunter2");
+
+    const line = lastInteractiveLine!;
+    assertStringIncludes(line, "add-generic-password");
+    assertStringIncludes(line, `-s "my svc"`);
+    assertStringIncludes(line, `-a "some-key"`);
+    assertStringIncludes(line, `-X ${toLowerHex("hunter2")}`);
+    assertStringIncludes(line, "-U");
+    // The raw secret itself must not be on the line either.
+    assertEquals(line.includes("hunter2"), false);
+    assertEquals(line.length + 1 <= 4096, true);
+  });
+});
+
+Deno.test("put quotes service and key with backslash escapes", async () => {
+  await withMockedSecurity(async () => {
+    const service = `we ird"svc`;
+    const key = `spaced "key\\name`;
+    const provider = vault.createProvider("v", { service });
+    await provider.put(key, "value1");
+
+    // The mock tokenizer implements the probed -i quoting rules; storage
+    // under the exact raw names proves the escaping round-trips.
+    assertEquals(mockKeychain.get(`${service}/${key}`), "value1");
+    assertEquals(await provider.get(key), "value1");
+  });
+});
+
+Deno.test("put rejects an oversize secret before spawning anything", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    // Default service "swamp", key "k": the -i line budget allows 2025
+    // bytes of secret. One more must throw without touching `security`,
+    // because an over-long line stores corrupted bytes before erroring.
+    await provider.put("k", "a".repeat(2025));
+
+    securitySpawnCount = 0;
+    await assertRejects(
+      () => provider.put("k", "a".repeat(2026)),
+      Error,
+      "too large",
+    );
+    assertEquals(securitySpawnCount, 0);
+
+    await assertRejects(
+      () => provider.put("k", "a".repeat(4096)),
+      Error,
+      "too large",
+    );
+    assertEquals(securitySpawnCount, 0);
+  });
+});
+
+Deno.test("put of an empty secret uses argv, where nothing can leak", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    await provider.put("empty-key", "");
+    assertEquals(lastSecurityArgs.includes("-X"), true);
+    assertEquals(lastSecurityArgs.includes(""), true);
+    assertEquals(mockKeychain.get("swamp/empty-key"), "");
+    assertEquals(await provider.get("empty-key"), "");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The read path: macOS 26 hex output (#275 part 2)
+// ---------------------------------------------------------------------------
+
+/** The nine probe values from #275. */
+const TABLE_VALUES: [string, string][] = [
+  ["baseline", "simple"],
+  ["space", "with space"],
+  ["quotes", `with"double'single`],
+  ["backslash", "back\\slash"],
+  ["newline", "line1\nline2"],
+  ["padded", "  padded  "],
+  ["non-ascii", "é日本語"],
+  ["4KiB-printable", printable4KiB()],
+  ["hex-looking", "DEADBEEF"],
+];
+
+/** Deterministic 4 KiB of printable ASCII (Lehmer LCG, no float overflow). */
+function printable4KiB(): string {
+  let out = "";
+  let x = 42;
+  for (let i = 0; i < 4096; i++) {
+    x = (x * 48271) % 2147483647;
+    out += String.fromCharCode(33 + (x % 94));
+  }
+  return out;
+}
+
+Deno.test("all nine #275 table values round-trip through get (macOS 26 mode)", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    for (const [label, value] of TABLE_VALUES) {
+      mockKeychain.set("swamp/probe", value);
+      assertEquals(await provider.get("probe"), value, label);
+    }
+  });
+});
+
+Deno.test("all nine #275 table values round-trip through get (legacy raw mode)", async () => {
+  await withMockedSecurity(async () => {
+    mockMode = "legacy";
+    const provider = vault.createProvider("v", {});
+    for (const [label, value] of TABLE_VALUES) {
+      mockKeychain.set("swamp/probe", value);
+      assertEquals(await provider.get("probe"), value, label);
+    }
+  });
+});
+
+Deno.test("table values that fit the write budget round-trip through put + get", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    for (const [label, value] of TABLE_VALUES) {
+      if (label === "4KiB-printable") continue; // exceeds the put budget
+      await provider.put("probe", value);
+      assertEquals(await provider.get("probe"), value, label);
+    }
+  });
+});
+
+Deno.test("get decodes hex-encoded output back to the exact secret", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    for (
+      const secret of [
+        "line1\nline2",
+        "é日本語",
+        "tab\there",
+        "ends with newline\n",
+        "control",
+      ]
+    ) {
+      mockKeychain.set("swamp/hexed", secret);
+      assertEquals(await provider.get("hexed"), secret);
+    }
+  });
+});
+
+Deno.test("get returns hex-looking secrets verbatim, never decoded", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    // Each of these is a printable secret the naive "looks like hex, decode
+    // it" fix would corrupt. `-g` answers "quoted", so they come back raw.
+    for (
+      const secret of [
+        "DEADBEEF",
+        "deadbeef",
+        "6c696e65310a6c696e6532",
+        toLowerHex(printable4KiB()).slice(0, 4000),
+      ]
+    ) {
+      mockKeychain.set("swamp/hexlike", secret);
+      assertEquals(await provider.get("hexlike"), secret);
+    }
+  });
+});
+
+Deno.test("get consults -g only for hex-looking output", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+
+    mockKeychain.set("swamp/plain", "just a password");
+    securitySpawnCount = 0;
+    await provider.get("plain");
+    assertEquals(securitySpawnCount, 1); // -w only
+
+    mockKeychain.set("swamp/hexlike", "deadbeef");
+    securitySpawnCount = 0;
+    await provider.get("hexlike");
+    assertEquals(securitySpawnCount, 2); // -w, then -g to disambiguate
+  });
+});
+
+Deno.test("get fails loudly when -g yields no password line", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    mockKeychain.set("swamp/k", "line1\nline2"); // forces the hex path
+    gPasswordLineOverride = null;
+    await assertRejects(
+      () => provider.get("k"),
+      Error,
+      "could not determine",
+    );
+  });
+});
+
+Deno.test("get fails loudly on a malformed -g hex token", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    mockKeychain.set("swamp/k", "line1\nline2");
+    gPasswordLineOverride = "password: 0xNOTHEX";
+    await assertRejects(
+      () => provider.get("k"),
+      Error,
+      "could not determine",
+    );
+  });
+});
+
+Deno.test("get fails loudly when the stored bytes are not valid UTF-8", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("v", {});
+    mockKeychain.set("swamp/k", "line1\nline2");
+    // 0xC3 is a dangling UTF-8 lead byte. Returning replacement characters
+    // would be silent corruption; the provider must throw instead.
+    gPasswordLineOverride = "password: 0xC3 ";
+    await assertRejects(() => provider.get("k"));
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Hardening: byte fidelity and key validation
 // ---------------------------------------------------------------------------
 
 Deno.test("get preserves leading and trailing whitespace in a secret", async () => {
   await withMockedSecurity(async () => {
     const provider = vault.createProvider("v", {});
-    // The old `.trim()` returned "padded" for every one of these.
-    for (const secret of ["  padded  ", "\tleading tab", "trailing space "]) {
-      mockKeychain.set("swamp/ws", secret);
-      assertEquals(await provider.get("ws"), secret);
+    // "\tleading tab" hex-encodes on macOS 26; cover the raw path too.
+    for (const mode of ["macos26", "legacy"] as const) {
+      mockMode = mode;
+      for (const secret of ["  padded  ", "\tleading tab", "trailing space "]) {
+        mockKeychain.set("swamp/ws", secret);
+        assertEquals(await provider.get("ws"), secret, mode);
+      }
     }
   });
 });
 
-Deno.test("get strips exactly one trailing newline, not a run of them", async () => {
+Deno.test("trailing newlines survive exactly (hex path) and via the one-strip rule (raw path)", async () => {
   await withMockedSecurity(async () => {
     const provider = vault.createProvider("v", {});
+    // macOS 26: any newline forces hex output, which decodes exactly.
     mockKeychain.set("swamp/nl", "line\n\n");
-    assertEquals(await provider.get("nl"), "line\n");
-    mockKeychain.set("swamp/crlf", "line\r\n");
-    assertEquals(await provider.get("crlf"), "line");
+    assertEquals(await provider.get("nl"), "line\n\n");
+    // Legacy: output is value + exactly one CLI newline; one strip is exact.
+    mockMode = "legacy";
+    mockKeychain.set("swamp/nl", "line\n\n");
+    assertEquals(await provider.get("nl"), "line\n\n");
     mockKeychain.set("swamp/none", "line");
     assertEquals(await provider.get("none"), "line");
   });
 });
 
-Deno.test("empty and flag-like keys are rejected", async () => {
+Deno.test("empty, flag-like, and control-character keys are rejected", async () => {
   await withMockedSecurity(async () => {
     const provider = vault.createProvider("v", {});
     await assertRejects(() => provider.get(""), Error, "empty");
@@ -407,15 +810,26 @@ Deno.test("empty and flag-like keys are rejected", async () => {
       Error,
       "must not start with",
     );
+    // A newline would split the -i command line; other control characters
+    // are rejected with it.
+    for (const key of ["a\nb", "a\rb", "a\tb", "a\x00b"]) {
+      await assertRejects(
+        () => provider.put(key, "x"),
+        Error,
+        "control",
+      );
+      await assertRejects(() => provider.get(key), Error, "control");
+    }
   });
 });
 
 // ---------------------------------------------------------------------------
 // OpenTelemetry spans
 //
-// `put` hands the secret to `security` as a command-line argument, so the
-// absence assertions here are the ones that matter: argv must never reach a
-// span, and neither must an error message built from the CLI's stderr.
+// `put` feeds the hex-encoded secret to `security -i` on stdin. The absence
+// assertions here are the ones that matter: neither the secret, nor its hex
+// encoding, nor the submitted command line may reach a span — and neither may
+// an error message built from the CLI's stderr.
 // ---------------------------------------------------------------------------
 
 /**
@@ -501,21 +915,25 @@ Deno.test("otel: get emits a span with the documented attribute set", async () =
   assertEquals(span.status.code, SpanStatusCode.UNSET);
 });
 
-Deno.test("otel: the secret passed in argv never reaches a span", async () => {
-  const secret = "SECRET-IN-ARGV-9b31";
+Deno.test("otel: the secret is absent from argv and from every span", async () => {
+  const secret = "SECRET-NEVER-IN-ARGV-9b31";
   let argvAtPut: string[] = [];
+  let lineAtPut = "";
   const spans = await withMockedSecurity(() =>
     withSpans(async () => {
       const provider = vault.createProvider("v", {});
       await provider.put("k", secret);
       argvAtPut = [...lastSecurityArgs];
+      lineAtPut = lastInteractiveLine!;
       await provider.get("k");
     })
   );
 
-  // The secret really is in the argument vector — that is the exposure #275
-  // tracks, and it is exactly what a span must not mirror.
-  assertEquals(argvAtPut.includes(secret), true);
+  // The #275 fix itself: argv carries only "-i"; the secret travels on stdin
+  // as hex.
+  assertEquals(argvAtPut, ["-i"]);
+  assertStringIncludes(lineAtPut, toLowerHex(secret));
+
   assertEquals(spans.length > 0, true);
   for (const s of spans) {
     const text = spanText(s);
@@ -524,7 +942,12 @@ Deno.test("otel: the secret passed in argv never reaches a span", async () => {
       false,
       `secret present in span "${s.name}"`,
     );
-    // No attribute may carry the argument vector in any form.
+    assertEquals(
+      text.includes(toLowerHex(secret)),
+      false,
+      `hex-encoded secret present in span "${s.name}"`,
+    );
+    // No attribute may carry the command line in any form.
     assertEquals(text.includes("add-generic-password"), false);
     assertEquals(text.includes("find-generic-password"), false);
   }
@@ -547,7 +970,7 @@ Deno.test("otel: a failed get is marked ERROR with a type and no message", async
   assertEquals(span.events.length, 0);
 });
 
-Deno.test("otel: stderr quoting the -w argument does not leak the secret", async () => {
+Deno.test("otel: stderr echoing the -i line does not leak the secret", async () => {
   const secret = "SECRET-ECHOED-BY-SECURITY-7c4d";
   let thrown: Error | undefined;
   const spans = await withMockedSecurity(() =>
@@ -559,14 +982,22 @@ Deno.test("otel: stderr quoting the -w argument does not leak the secret", async
   );
 
   // This message is what the host writes into swamp.cli as a status
-  // description, an exception.message, and a stack trace.
+  // description, an exception.message, and a stack trace. The mock echoed the
+  // whole -i line, so the hex encoding is the value that must be gone.
   assertEquals(thrown?.message.includes(secret), false);
+  assertEquals(thrown?.message.includes(toLowerHex(secret)), false);
   assertEquals(thrown?.message.includes("[redacted]"), true);
   for (const s of spans) {
+    const text = spanText(s);
     assertEquals(
-      spanText(s).includes(secret),
+      text.includes(secret),
       false,
       `secret present in span "${s.name}"`,
+    );
+    assertEquals(
+      text.includes(toLowerHex(secret)),
+      false,
+      `hex-encoded secret present in span "${s.name}"`,
     );
   }
 });

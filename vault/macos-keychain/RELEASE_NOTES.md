@@ -1,48 +1,52 @@
-## 2026.07.27.1
+## 2026.07.30.1
 
-**Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
+Closes the two problems tracked in #275. Every behavior below was probed on
+real hardware (macOS 26.5.2, build 25F84) before implementation; the probe
+record is in the issue.
 
-## 2026.07.26.2
+**Fixed:** `put` no longer passes the secret as a command-line argument.
+Process arguments are readable by any process running as the same user, so
+every secret written through this vault was visible to `ps`, EDR agents, and
+anything else that records command lines. The secret is now hex-encoded and
+fed to `security -i` on stdin as `add-generic-password ... -X <hex>`. Hex
+survives the interactive parser's tokenizer unchanged, so values with spaces,
+quotes, backslashes, newlines, and non-ASCII bytes all store byte-exact.
 
-**Added:** OpenTelemetry spans on `get`, `put`, and `list`, named `Keychain get`,
-`Keychain put`, and `Keychain list`. Attributes: `vault.name`,
-`vault.secret_key`, `vault.service`, `rpc.system`, `rpc.service`, and
-`rpc.method`. `list` is unsupported by this provider and its span reports ERROR,
-which is honest: a caller asked for a listing and did not get one.
+**Fixed:** `get` no longer returns garbage for secrets containing
+non-printable or non-ASCII bytes on macOS 26. There,
+`find-generic-password -w` prints lowercase hex instead of the secret when any
+byte falls outside printable ASCII (0x20–0x7E). Output that looks like hex is
+now disambiguated through `-g`, whose output marks the encoding explicitly
+(`password: 0x...` versus `password: "..."`), and decoded only when the
+keychain says it is hex. A secret whose value legitimately looks like hex
+(for example the literal string `deadbeef`) is returned verbatim — never
+decoded. Older macOS versions are unaffected: raw output of a secret with a
+non-printable byte can never look like hex, so the check does not engage.
 
-This closes a real observability gap rather than duplicating the host. swamp
-emits `swamp.vault.*` spans when a human runs a `swamp vault` subcommand, with
-no attributes at all — and emits **nothing** when a model or workflow resolves a
-vault expression. A secret read during a run was invisible in traces. These
-spans appear on both paths.
+**Changed:** the maximum secret size for `put` drops from roughly 1 MiB (the
+argv limit) to about 2 KB (the `security -i` 4096-byte line buffer, minus
+command overhead; the exact figure depends on the service and key length).
+Oversize writes now fail with a descriptive error **before** anything is
+executed. This is deliberate: the interactive parser splits over-long lines
+and can store a silently corrupted value, which is worse for a vault than a
+loud refusal. Reads are unaffected — existing larger secrets still round-trip
+(verified to 4 KiB).
 
-The extension uses `@opentelemetry/api` only and never constructs a
-TracerProvider. With no provider configured the tracer is a no-op and the cost is
-a few property lookups.
+**Changed:** `get` now fails loudly instead of guessing in two cases: when the
+keychain reports a hex-encoded value that is not valid UTF-8 (this provider
+returns strings, and replacement characters would be silent corruption), and
+when the encoding of an ambiguous read cannot be determined. A vault that
+returns a wrong secret is worse than one that errors.
 
-There are deliberately no spans around the `security` invocation itself. `put`
-passes the secret as the `-w` argument, so keeping span code out of the exec
-helper means no edit can attach argv to a span. A test asserts the secret is
-genuinely present in argv and absent from every span field.
+**Changed:** keys and the configured service name now reject control
+characters (previously only NUL was rejected in keys). A newline would split
+the command line `put` writes to `security -i`.
 
-**Changed:** Error messages no longer echo the submitted secret. `security`
-receives the value as a command-line argument, and a CLI that rejects an argument
-commonly quotes it back on stderr — that stderr was the thrown error message
-verbatim. The value is now replaced with `[redacted]` first. This matters beyond
-this extension's own spans: the swamp host publishes thrown error messages into
-its span as a status description, an `exception.message`, and a stack trace, so
-an echoed secret reached the trace backend with no instrumentation involved at
-all.
+**Changed:** on macOS 26, a secret ending in a newline now round-trips
+exactly. Such values take the hex path, which is byte-exact, so the
+long-documented trailing-newline ambiguity only remains for raw reads on
+older macOS versions.
 
-**Still outstanding — the secret is passed as a command-line argument.** `put`
-invokes `security add-generic-password … -w <secret>`, and process arguments are
-readable by other processes running as the same user. Tracked in #275 along with
-the macOS 26 hex-encoding of `find-generic-password -w` output. Neither can be
-verified without a Mac, and a wrong guess breaks the write path for every user.
-
-**Note on what spans deliberately omit:** spans record `error.type` and an ERROR
-status on failure, and never `recordException` and never a status description. A
-keychain error message is `security`'s stderr, and the host already publishes it
-once. Recording key names is intentional — a vault span without the key is close
-to useless for debugging — so treat key names as visible to anyone with access to
-your trace backend and do not encode sensitive information in them.
+**Upgrade note:** no schema or config changes. If you store secrets larger
+than ~2 KB through this vault, `put` will now refuse them — store large blobs
+elsewhere and keep the keychain for credentials.
