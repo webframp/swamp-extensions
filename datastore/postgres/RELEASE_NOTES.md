@@ -1,3 +1,26 @@
+## 2026.07.29.1
+
+**Added:** Monotonic `commitSeq` via PostgreSQL sequence. Pull fast-path now
+compares a single integer instead of parsing timestamps, eliminating clock-skew
+vulnerabilities across concurrent writers.
+
+**Changed:** Dirty-path pushes are batched into a single transaction (was N
+separate `BEGIN/COMMIT` pairs). One watermark write instead of N. Expected
+10-50x latency improvement for incremental pushes.
+
+**Changed:** Pull captures `commitSeq` before the metadata scan (not after) to
+prevent TOCTOU races where concurrent pushes during the fetch window could be
+silently missed.
+
+**Changed:** Content-fetch batches during pull run up to 3 in parallel via
+`Promise.all`.
+
+**Changed:** Manifest query for push uses batch path lookups (IN clause) instead
+of a full table scan when `lastPulledAt` provides a bound.
+
+**Added:** Tombstone garbage collection — every push transaction deletes
+tombstones older than 7 days, preventing unbounded table growth.
+
 ## 2026.07.27.1
 
 **Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
