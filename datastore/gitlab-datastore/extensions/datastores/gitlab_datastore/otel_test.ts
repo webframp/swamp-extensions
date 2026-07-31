@@ -508,7 +508,7 @@ Deno.test({
         const acquire = findSpan(spans(), "gitlab-datastore lock acquire");
         assertEquals(acquire.attributes[Attr.LOCK_CONTENDED], false);
         assertEquals(acquire.attributes[Attr.LOCK_TTL_MS], 5_000);
-        assertEquals(acquire.attributes[Attr.LOCK_TIMEOUT_MS], 60_000);
+        assertEquals(acquire.attributes[Attr.LOCK_TIMEOUT_MS], 30_000);
         assertExists(acquire.attributes[Attr.LOCK_WAIT_DURATION_MS]);
         assertExists(acquire.attributes[Attr.LOCK_KEY]);
 

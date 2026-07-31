@@ -695,9 +695,9 @@ class GitLabLock implements DistributedLock {
   ) {
     this.client = client;
     this.stateName = stateName;
-    this.ttlMs = options?.ttlMs ?? 30_000;
-    this.retryIntervalMs = options?.retryIntervalMs ?? 1_000;
-    this.maxWaitMs = options?.maxWaitMs ?? 60_000;
+    this.ttlMs = options?.ttlMs ?? 10_000;
+    this.retryIntervalMs = options?.retryIntervalMs ?? 500;
+    this.maxWaitMs = options?.maxWaitMs ?? 30_000;
   }
 
   async acquire(): Promise<void> {
@@ -1744,11 +1744,14 @@ export const datastore = {
 
     return {
       createLock: (
-        _datastorePath: string,
+        datastorePath: string,
         options?: LockOptions,
       ): DistributedLock => {
-        // Use a dedicated lock state for the entire datastore
-        const lockStateName = `${parsed.statePrefix}--lock`;
+        // Per-path lock: incorporate the datastore path into the lock state
+        // name so that different models/paths never contend on a single lock.
+        const key = options?.lockKey ?? datastorePath;
+        const sanitized = key.replace(/[^a-zA-Z0-9_-]/g, "--");
+        const lockStateName = `${parsed.statePrefix}--lock--${sanitized}`;
         return new GitLabLock(client, lockStateName, options);
       },
 

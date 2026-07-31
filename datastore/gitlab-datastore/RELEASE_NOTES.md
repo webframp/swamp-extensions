@@ -1,64 +1,18 @@
-## 2026.07.29.1
+## 2026.07.30.1
 
-**Added:** Commit sequence fast-path via dedicated
-`{prefix}--_meta--commit_seq` state. Pull reads it first — if unchanged,
-returns immediately (1 request instead of N+1).
+**Fixed:** Lock contention on back-to-back model operations. Previously all
+lock paths mapped to a single GitLab Terraform state (`{prefix}--lock`),
+causing the second operation's sync push to time out waiting for the first to
+release. Locks are now per-path — each datastore path gets its own lock state
+(`{prefix}--lock--{sanitized-path}`), eliminating cross-model contention
+entirely.
 
-**Added:** Tombstoning via `deleteState()`. Files deleted locally are now
-deleted remotely. Dirty-path mode detects missing files; full-walk mode compares
-the remote state set against local files.
+**Changed:** Default lock timing constants tuned for actual push latency.
+TTL reduced from 30s to 10s, retry interval from 1s to 500ms, max wait from
+60s to 30s. Stale lock detection now triggers at 20s (2x TTL) instead of 60s,
+recovering abandoned locks faster.
 
-**Changed:** Pull and push requests run with bounded concurrency of 8 workers
-instead of sequentially. Expected 5-10x latency reduction.
-
-**Changed:** Serial and lineage are cached in the sidecar per path, eliminating
-the pre-push GET for serial discovery (halves HTTP requests on push in the
-common case). Falls back to fresh GET on 409 conflict.
-
-**Changed:** Fast-path is gated on `lazyPullActive` — a full pull after a
-metadata-only pull no longer short-circuits via commitSeq when files have not
-been hydrated.
-
-**Fixed:** Push retry restricted to 409 conflicts only. Network timeouts and
-other errors are rethrown instead of triggering a retry that could double-write.
-
-## 2026.07.27.1
-
-**Changed:** Bump @opentelemetry/api 1.9.0 → 1.9.1
-
-## 2026.07.25.1
-
-**Added:** OpenTelemetry spans for every layer of the datastore. All GitLab API
-calls now flow through a single choke point that emits one span each
-(`GitLab getState`, `GitLab putState`, `GitLab lock`, `GitLab listStates`, …)
-carrying the HTTP method, response status, project ID, state name, and server
-host. The lock emits `gitlab-datastore lock acquire` / `release` / `withLock` /
-`inspect` / `forceRelease`, with acquire recording wait duration, contention,
-and the current holder. The sync service emits
-`gitlab-datastore pullChanged` / `pushChanged` / `hydrateFile` / `preparePush` /
-`commitPush` with file counts and the number of states listed.
-
-**Added:** Lock retries are recorded as `retry` span events, distinguishing
-ordinary contention from stealing a stale lock.
-
-**Changed:** Non-2xx responses now mark their span as an error, except where a
-status is normal control flow — a 404 from `getState` meaning the state does
-not exist, a 409 or 423 from `lock` meaning another holder has it, a 404 or 204
-from `getLockInfo` meaning the state is unlocked. This client inspects
-`response.status` by hand rather than throwing, so without the distinction a
-span would have reported success on a 500.
-
-**Changed:** `pushChanged` records `datastore.dirty_path_mode` rather than
-`datastore.fast_path_hit`. In the sibling extensions `fast_path_hit` means no
-work was done; this method has no short-circuit, and a dirty-path push that
-uploads files is not a fast path.
-
-**Changed:** Nothing observable without tracing configured. The extension
-depends on `@opentelemetry/api` only; the host process owns the
-TracerProvider, and every span is a no-op when none is registered. Existing
-behaviour, return values, and log output are unchanged.
-
-**Note on secrets:** Every request carries a PRIVATE-TOKEN header and request
-bodies carry file content. Neither headers nor bodies are ever recorded — span
-attributes hold only the operation name, HTTP method, status, project ID, state
-name, and host. A test asserts no span attribute contains the token.
+**Upgrade note:** Existing locks held under the old single-state name
+(`{prefix}--lock`) will not conflict with the new per-path names. No migration
+required — old lock states become orphaned and can be cleaned up via the GitLab
+Terraform states UI if desired.
