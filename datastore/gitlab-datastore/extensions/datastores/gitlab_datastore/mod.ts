@@ -1757,8 +1757,12 @@ export const datastore = {
       ): DistributedLock => {
         // Per-path lock: incorporate the datastore path into the lock state
         // name so that different models/paths never contend on a single lock.
+        // Percent-encode disallowed characters for a collision-free mapping.
         const key = options?.lockKey ?? datastorePath;
-        const sanitized = key.replace(/[^a-zA-Z0-9_-]/g, "--");
+        const sanitized = key.replace(
+          /[^a-zA-Z0-9_-]/g,
+          (c) => `%${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+        );
         const lockStateName = `${parsed.statePrefix}--lock--${sanitized}`;
         return new GitLabLock(client, lockStateName, options);
       },

@@ -9,8 +9,8 @@ entirely.
 
 **Changed:** Default lock timing constants tuned for actual push latency.
 TTL reduced from 30s to 10s, retry interval from 1s to 500ms, max wait from
-60s to 30s. Stale lock detection now triggers at 20s (2x TTL) instead of 60s,
-recovering abandoned locks faster.
+60s to 30s. Stale lock detection remains at 60s (threshold is now configurable
+via `staleLockThresholdMs` and decoupled from TTL).
 
 **Upgrade note:** Existing locks held under the old single-state name
 (`{prefix}--lock`) will not conflict with the new per-path names. No migration

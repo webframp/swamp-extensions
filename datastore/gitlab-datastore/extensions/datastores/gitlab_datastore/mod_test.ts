@@ -1325,7 +1325,7 @@ Deno.test({
 
       // Inject a stale lock directly into the mock server with a Created
       // timestamp older than the staleLockThresholdMs (default 60s).
-      const staleLockStateName = "swamp--lock----test--path";
+      const staleLockStateName = "swamp--lock--%2ftest%2fpath";
       const staleCreated = new Date(Date.now() - 120_000).toISOString(); // 2 minutes ago
       mock.locks.set(staleLockStateName, {
         ID: "stale-nonce-123",
@@ -1383,7 +1383,7 @@ Deno.test({
       });
 
       // Inject a lock that is NOT stale (Created 5s ago, threshold 60s)
-      const lockStateName = "swamp--lock----test--path";
+      const lockStateName = "swamp--lock--%2ftest%2fpath";
       const recentCreated = new Date(Date.now() - 5_000).toISOString();
       mock.locks.set(lockStateName, {
         ID: "live-nonce-456",
