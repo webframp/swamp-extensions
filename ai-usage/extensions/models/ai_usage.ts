@@ -5,11 +5,186 @@
  * and a `generate` method that reads scan data from provider models and
  * produces a unified cross-provider report as a data artifact.
  *
+ * Provider definitions are data-driven: adding a new provider (Anthropic,
+ * Moonshot, etc.) requires only appending to the PROVIDERS array with the
+ * appropriate field mappings and setup guidance.
+ *
  * @module
  */
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
+
+// ---------------------------------------------------------------------------
+// Provider Definition Interface
+// ---------------------------------------------------------------------------
+
+/**
+ * Describes how to find, normalize, and present setup guidance for a single
+ * AI token usage provider. Adding a provider means adding one of these objects.
+ */
+interface ProviderDefinition {
+  /** Human-readable name shown in status and reports. */
+  name: string;
+  /** Swamp model instance name (what users pass to `model create`). */
+  modelName: string;
+  /** Extension type identifier. */
+  extensionType: string;
+  /** Method name invoked by the scan workflow. */
+  scanMethod: string;
+  /** Resource spec name where scan results are stored. */
+  scanSpec: string;
+
+  /** Setup guidance for users who haven't configured this provider. */
+  setup: {
+    /** Full `swamp model create` command with all required arguments. */
+    command: string;
+    /** Least-privilege permissions required by the provider. */
+    permissions: string[];
+    /** Brief explanation of the authentication mechanism. */
+    authNotes: string;
+  };
+
+  /**
+   * Field mappings for normalizing provider-specific scan data into the
+   * unified report shape. Paths are keys within `attributes`.
+   */
+  fields: {
+    /** Key in `totals` for input/prompt token count. */
+    inputTokens: string;
+    /** Key in `totals` for output/generated token count. */
+    outputTokens: string;
+    /** Key in `totals` for combined token count. */
+    totalTokens: string;
+    /** Key in `totals` for input tokens per minute. */
+    inputRate: string;
+    /** Key in `totals` for output tokens per minute. */
+    outputRate: string;
+    /** Top-level array key grouping results (accounts, projects, resources). */
+    groupKey: string;
+    /** Field within each group item used as the display name. */
+    groupNameField: string;
+    /** Field within each group item holding the token total. */
+    groupTotalField: string;
+    /** Array key within each group item for per-model/deployment breakdown. */
+    modelKey: string;
+    /** Field within each model entry for the model/deployment name. */
+    modelNameField: string;
+    /** Field within each model entry for the token total. */
+    modelTotalField: string;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Provider Registry
+// ---------------------------------------------------------------------------
+
+/** Registry of all supported AI usage providers with setup guidance and field mappings. */
+export const PROVIDERS: ProviderDefinition[] = [
+  {
+    name: "AWS Bedrock",
+    modelName: "bedrock-usage",
+    extensionType: "@webframp/aws/bedrock-usage",
+    scanMethod: "scan_accounts",
+    scanSpec: "scan_results",
+    setup: {
+      command: `swamp model create @webframp/aws/bedrock-usage bedrock-usage \\
+  --global-arg 'profiles=["default"]' \\
+  --global-arg 'regions=["us-east-1","us-west-2"]'`,
+      permissions: [
+        "cloudwatch:ListMetrics",
+        "cloudwatch:GetMetricData",
+      ],
+      authNotes:
+        "Uses the AWS credential chain (profiles, SSO, environment variables). " +
+        "Configure a profile whose assumed role grants the above CloudWatch " +
+        "read-only permissions. A ReadOnlyAccess managed policy covers both.",
+    },
+    fields: {
+      inputTokens: "inputTokens",
+      outputTokens: "outputTokens",
+      totalTokens: "totalTokens",
+      inputRate: "inputTokensPerMinute",
+      outputRate: "outputTokensPerMinute",
+      groupKey: "accounts",
+      groupNameField: "profile",
+      groupTotalField: "totalTokens",
+      modelKey: "models",
+      modelNameField: "modelId",
+      modelTotalField: "totalTokens",
+    },
+  },
+  {
+    name: "GCP Vertex AI",
+    modelName: "vertex-usage",
+    extensionType: "@webframp/gcp/vertex-usage",
+    scanMethod: "scan_projects",
+    scanSpec: "scan_results",
+    setup: {
+      command: `swamp model create @webframp/gcp/vertex-usage vertex-usage \\
+  --global-arg 'projects=["my-project"]' \\
+  --global-arg 'serviceAccountJson=<contents of service-account.json>'`,
+      permissions: [
+        "monitoring.timeSeries.list",
+      ],
+      authNotes:
+        "Uses a GCP service account JSON key (signed JWT exchanged for an access token). " +
+        "Pass the JSON key contents as the serviceAccountJson global arg, or set " +
+        "GOOGLE_APPLICATION_CREDENTIALS to the key file path. The service account " +
+        "needs only the Monitoring Viewer role (roles/monitoring.viewer) on each project.",
+    },
+    fields: {
+      inputTokens: "inputTokens",
+      outputTokens: "outputTokens",
+      totalTokens: "totalTokens",
+      inputRate: "inputTokensPerMinute",
+      outputRate: "outputTokensPerMinute",
+      groupKey: "projects",
+      groupNameField: "project",
+      groupTotalField: "totalTokens",
+      modelKey: "models",
+      modelNameField: "modelId",
+      modelTotalField: "totalTokens",
+    },
+  },
+  {
+    name: "Azure OpenAI",
+    modelName: "azure-ai-usage",
+    extensionType: "@webframp/azure/openai-usage",
+    scanMethod: "scan_subscriptions",
+    scanSpec: "scan_results",
+    setup: {
+      command:
+        `swamp model create @webframp/azure/openai-usage azure-ai-usage \\
+  --global-arg 'subscriptions=["<subscription-uuid>"]' \\
+  --global-arg 'tenantId=<tenant-uuid>' \\
+  --global-arg 'clientId=<app-registration-uuid>' \\
+  --global-arg 'clientSecret=<secret-value>'`,
+      permissions: [
+        "Microsoft.CognitiveServices/accounts/read",
+        "Microsoft.Insights/metrics/read",
+      ],
+      authNotes:
+        "Uses Azure AD client credentials flow (tenant + app registration + secret). " +
+        "Assign the Reader role on each target subscription. The app registration " +
+        "needs no API permissions beyond ARM Reader \u2014 metrics and resource " +
+        "discovery use the same token.",
+    },
+    fields: {
+      inputTokens: "promptTokens",
+      outputTokens: "generatedTokens",
+      totalTokens: "totalTokens",
+      inputRate: "promptTokensPerMinute",
+      outputRate: "generatedTokensPerMinute",
+      groupKey: "resources",
+      groupNameField: "resourceName",
+      groupTotalField: "totalTokens",
+      modelKey: "deployments",
+      modelNameField: "deploymentName",
+      modelTotalField: "totalTokens",
+    },
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -18,12 +193,20 @@ import { z } from "npm:zod@4.4.3";
 /** Global arguments — none required, this model reads from other models' data. */
 const GlobalArgsSchema = z.object({});
 
+/** Provider setup guidance. */
+const ProviderSetupSchema = z.object({
+  command: z.string(),
+  permissions: z.array(z.string()),
+  authNotes: z.string(),
+});
+
 /** Provider status entry. */
 const ProviderStatusSchema = z.object({
   provider: z.string(),
   configured: z.boolean(),
   modelName: z.string(),
-  hint: z.string(),
+  extensionType: z.string(),
+  setup: ProviderSetupSchema,
   lastScanned: z.string().nullable(),
   totalTokens: z.number().nullable(),
 });
@@ -76,32 +259,66 @@ const ReportSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Provider definitions
+// Helpers
 // ---------------------------------------------------------------------------
 
-const PROVIDERS = [
-  {
-    name: "AWS Bedrock",
-    modelName: "bedrock-usage",
-    type: "@webframp/aws/bedrock-usage",
-    hint:
-      'swamp model create @webframp/aws/bedrock-usage bedrock-usage --global-arg \'profiles=["default"]\' --global-arg \'regions=["us-east-1","us-west-2"]\'',
-  },
-  {
-    name: "GCP Vertex AI",
-    modelName: "vertex-usage",
-    type: "@webframp/gcp/vertex-usage",
-    hint:
-      "swamp model create @webframp/gcp/vertex-usage vertex-usage --global-arg 'projects=[\"my-project\"]'",
-  },
-  {
-    name: "Azure OpenAI",
-    modelName: "azure-ai-usage",
-    type: "@webframp/azure/openai-usage",
-    hint:
-      "swamp model create @webframp/azure/openai-usage azure-ai-usage --global-arg 'subscriptions=[\"sub-id\"]'",
-  },
-];
+/** Context shape expected by both methods. */
+interface MethodContext {
+  globalArgs: Record<string, never>;
+  writeResource: (
+    spec: string,
+    instance: string,
+    data: unknown,
+  ) => Promise<{ name: string }>;
+  dataRepository: {
+    findBySpec: (
+      modelName: string,
+      specName: string,
+    ) => Promise<
+      Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
+    >;
+  };
+  logger: {
+    info: (msg: string, props: Record<string, unknown>) => void;
+    warn: (msg: string, props: Record<string, unknown>) => void;
+  };
+}
+
+/**
+ * Given an array of data entries, return the most recent one by updatedAt.
+ */
+function pickLatest(
+  data: Array<{ attributes: Record<string, unknown>; updatedAt?: string }>,
+): { attributes: Record<string, unknown>; updatedAt?: string } {
+  const withTimestamp = data.filter((d) => d.updatedAt);
+  if (withTimestamp.length === 0) return data[0];
+  withTimestamp.sort(
+    (a, b) =>
+      new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime(),
+  );
+  return withTimestamp[0];
+}
+
+/**
+ * Safely extract a nested numeric value from an object using a dot-less key.
+ */
+function numField(obj: Record<string, unknown>, key: string): number {
+  const val = obj[key];
+  return typeof val === "number" ? val : 0;
+}
+
+/**
+ * Build the setup object for a provider definition, blanked when configured.
+ */
+function buildSetup(
+  provider: ProviderDefinition,
+  configured: boolean,
+): z.infer<typeof ProviderSetupSchema> {
+  if (configured) {
+    return { command: "", permissions: [], authNotes: "" };
+  }
+  return { ...provider.setup };
+}
 
 // ---------------------------------------------------------------------------
 // Model Definition
@@ -110,12 +327,18 @@ const PROVIDERS = [
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.07.31.1",
+  version: "2026.07.31.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.20.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.31.2",
+      description:
+        "Breaking: hint field replaced with setup object containing command, permissions, authNotes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -138,30 +361,12 @@ export const model = {
   methods: {
     status: {
       description:
-        "Check which provider models are configured and provide setup hints for unconfigured providers.",
+        "Check which provider models are configured. Returns setup guidance " +
+        "with least-privilege permissions for unconfigured providers.",
       arguments: z.object({}),
       execute: async (
         _args: Record<string, never>,
-        context: {
-          globalArgs: Record<string, never>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          dataRepository: {
-            findBySpec: (
-              modelName: string,
-              specName: string,
-            ) => Promise<
-              Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
-            >;
-          };
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-            warn: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
+        context: MethodContext,
       ) => {
         const providers: z.infer<typeof ProviderStatusSchema>[] = [];
 
@@ -173,22 +378,20 @@ export const model = {
           try {
             const data = await context.dataRepository.findBySpec(
               p.modelName,
-              "scan_results",
+              p.scanSpec,
             );
             if (data.length > 0) {
               configured = true;
-              const sorted = data.filter((d) => d.updatedAt).sort((a, b) =>
-                new Date(b.updatedAt!).getTime() -
-                new Date(a.updatedAt!).getTime()
-              );
-              const latest = sorted[0] ?? data[0];
+              const latest = pickLatest(data);
               lastScanned = (latest.attributes.scannedAt as string) ??
                 latest.updatedAt ??
                 null;
-              const totals = latest.attributes.totals as {
-                totalTokens?: number;
-              } | undefined;
-              totalTokens = totals?.totalTokens ?? null;
+              const totals = latest.attributes.totals as
+                | Record<string, unknown>
+                | undefined;
+              totalTokens = totals
+                ? numField(totals, p.fields.totalTokens)
+                : null;
             }
           } catch (err) {
             context.logger.warn("Failed to query provider data", {
@@ -201,7 +404,8 @@ export const model = {
             provider: p.name,
             configured,
             modelName: p.modelName,
-            hint: configured ? "" : p.hint,
+            extensionType: p.extensionType,
+            setup: buildSetup(p, configured),
             lastScanned,
             totalTokens,
           });
@@ -225,7 +429,8 @@ export const model = {
 
     generate: {
       description:
-        "Generate a unified cross-provider AI usage report from collected scan data. Shows coverage status with setup hints for unconfigured providers.",
+        "Generate a unified cross-provider AI usage report from collected scan data. " +
+        "Shows coverage status with setup hints for unconfigured providers.",
       arguments: z.object({
         days: z.number().min(1).default(30).describe(
           "Expected lookback period",
@@ -233,381 +438,129 @@ export const model = {
       }),
       execute: async (
         args: { days: number },
-        context: {
-          globalArgs: Record<string, never>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          dataRepository: {
-            findBySpec: (
-              modelName: string,
-              specName: string,
-            ) => Promise<
-              Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
-            >;
-          };
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-            warn: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
+        context: MethodContext,
       ) => {
         const periodMinutes = args.days * 24 * 60;
         const coverage: z.infer<typeof ProviderStatusSchema>[] = [];
         const providerResults: z.infer<typeof ReportSchema>["providers"] = [];
         const highlights: string[] = [];
 
-        // --- AWS Bedrock ---
-        try {
-          const data = await context.dataRepository.findBySpec(
-            "bedrock-usage",
-            "scan_results",
-          );
-          if (data.length > 0) {
-            const sorted = data.filter((d) =>
-              (d as { updatedAt?: string }).updatedAt
-            ).sort((a, b) =>
-              new Date((b as { updatedAt?: string }).updatedAt!).getTime() -
-              new Date((a as { updatedAt?: string }).updatedAt!).getTime()
+        for (const p of PROVIDERS) {
+          try {
+            const data = await context.dataRepository.findBySpec(
+              p.modelName,
+              p.scanSpec,
             );
-            const latest = sorted[0] ?? data[0];
-            const attrs = latest.attributes as {
-              totals: {
-                inputTokens: number;
-                outputTokens: number;
-                totalTokens: number;
-                inputTokensPerMinute: number;
-                outputTokensPerMinute: number;
-              };
-              accounts: Array<{
-                profile: string;
-                totalTokens: number;
-                models: Array<{ modelId: string; totalTokens: number }>;
-              }>;
-            };
 
-            // Consolidate accounts by profile before top-5
-            const profileMap = new Map<string, number>();
-            for (const a of attrs.accounts || []) {
-              profileMap.set(
-                a.profile,
-                (profileMap.get(a.profile) || 0) + a.totalTokens,
-              );
+            if (data.length === 0) {
+              coverage.push({
+                provider: p.name,
+                configured: false,
+                modelName: p.modelName,
+                extensionType: p.extensionType,
+                setup: buildSetup(p, false),
+                lastScanned: null,
+                totalTokens: null,
+              });
+              continue;
             }
-            const topAccounts = [...profileMap.entries()]
+
+            const latest = pickLatest(data);
+            const attrs = latest.attributes as Record<string, unknown>;
+            const totals = (attrs.totals ?? {}) as Record<string, unknown>;
+            const groups = (attrs[p.fields.groupKey] ?? []) as Array<
+              Record<string, unknown>
+            >;
+
+            const inputTokens = numField(totals, p.fields.inputTokens);
+            const outputTokens = numField(totals, p.fields.outputTokens);
+            const totalTokens = numField(totals, p.fields.totalTokens);
+            const inputRate = numField(totals, p.fields.inputRate);
+            const outputRate = numField(totals, p.fields.outputRate);
+
+            // Build top accounts/groups
+            const groupMap = new Map<string, number>();
+            for (const g of groups) {
+              const name = String(g[p.fields.groupNameField] ?? "unknown");
+              const tokens = numField(g, p.fields.groupTotalField);
+              groupMap.set(name, (groupMap.get(name) ?? 0) + tokens);
+            }
+            const topAccounts = [...groupMap.entries()]
               .sort((a, b) => b[1] - a[1])
               .slice(0, 5)
-              .map(([name, totalTokens]) => ({
+              .map(([name, tokens]) => ({
                 name,
-                totalTokens,
-                percentage: attrs.totals.totalTokens > 0
-                  ? (totalTokens / attrs.totals.totalTokens) * 100
-                  : 0,
+                totalTokens: tokens,
+                percentage: totalTokens > 0 ? (tokens / totalTokens) * 100 : 0,
               }));
 
-            const allModels = (attrs.accounts || []).flatMap(
-              (a) => a.models || [],
+            // Build top models/deployments
+            const allModels = groups.flatMap(
+              (g) =>
+                (g[p.fields.modelKey] ?? []) as Array<
+                  Record<string, unknown>
+                >,
             );
             const modelMap = new Map<string, number>();
             for (const m of allModels) {
-              modelMap.set(
-                m.modelId,
-                (modelMap.get(m.modelId) || 0) + m.totalTokens,
-              );
+              const id = String(m[p.fields.modelNameField] ?? "unknown");
+              const tokens = numField(m, p.fields.modelTotalField);
+              modelMap.set(id, (modelMap.get(id) ?? 0) + tokens);
             }
             const topModels = [...modelMap.entries()]
               .sort((a, b) => b[1] - a[1])
               .slice(0, 5)
-              .map(([modelId, totalTokens]) => ({ modelId, totalTokens }));
+              .map(([modelId, tokens]) => ({ modelId, totalTokens: tokens }));
 
             providerResults.push({
-              name: "AWS Bedrock",
-              inputTokens: attrs.totals.inputTokens,
-              outputTokens: attrs.totals.outputTokens,
-              totalTokens: attrs.totals.totalTokens,
-              inputTokensPerMinute: attrs.totals.inputTokensPerMinute,
-              outputTokensPerMinute: attrs.totals.outputTokensPerMinute,
+              name: p.name,
+              inputTokens,
+              outputTokens,
+              totalTokens,
+              inputTokensPerMinute: inputRate,
+              outputTokensPerMinute: outputRate,
               topAccounts,
               topModels,
             });
 
             coverage.push({
-              provider: "AWS Bedrock",
+              provider: p.name,
               configured: true,
-              modelName: "bedrock-usage",
-              hint: "",
-              lastScanned:
-                (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
-              totalTokens: attrs.totals.totalTokens,
+              modelName: p.modelName,
+              extensionType: p.extensionType,
+              setup: buildSetup(p, true),
+              lastScanned: (attrs.scannedAt as string) ?? null,
+              totalTokens,
             });
 
             if (topAccounts.length > 0) {
               highlights.push(
-                `Highest AWS account: ${topAccounts[0].name} (${
+                `Highest ${p.name} account: ${topAccounts[0].name} (${
                   topAccounts[0].totalTokens.toLocaleString()
                 } tokens, ${topAccounts[0].percentage.toFixed(1)}%)`,
               );
             }
             if (topModels.length > 0) {
               highlights.push(
-                `Top AWS model: ${topModels[0].modelId} (${
+                `Top ${p.name} model: ${topModels[0].modelId} (${
                   topModels[0].totalTokens.toLocaleString()
                 } tokens)`,
               );
             }
-          } else {
+          } catch {
             coverage.push({
-              provider: "AWS Bedrock",
+              provider: p.name,
               configured: false,
-              modelName: "bedrock-usage",
-              hint: PROVIDERS[0].hint,
+              modelName: p.modelName,
+              extensionType: p.extensionType,
+              setup: buildSetup(p, false),
               lastScanned: null,
               totalTokens: null,
             });
           }
-        } catch {
-          coverage.push({
-            provider: "AWS Bedrock",
-            configured: false,
-            modelName: "bedrock-usage",
-            hint: PROVIDERS[0].hint,
-            lastScanned: null,
-            totalTokens: null,
-          });
         }
 
-        // --- GCP Vertex AI ---
-        try {
-          const data = await context.dataRepository.findBySpec(
-            "vertex-usage",
-            "scan_results",
-          );
-          if (data.length > 0) {
-            const sorted = data.filter((d) =>
-              (d as { updatedAt?: string }).updatedAt
-            ).sort((a, b) =>
-              new Date((b as { updatedAt?: string }).updatedAt!).getTime() -
-              new Date((a as { updatedAt?: string }).updatedAt!).getTime()
-            );
-            const latest = sorted[0] ?? data[0];
-            const attrs = latest.attributes as {
-              totals: {
-                inputTokens: number;
-                outputTokens: number;
-                totalTokens: number;
-                inputTokensPerMinute: number;
-                outputTokensPerMinute: number;
-              };
-              projects: Array<{
-                project: string;
-                totalTokens: number;
-                models: Array<{ modelId: string; totalTokens: number }>;
-              }>;
-            };
-
-            const topAccounts = [...(attrs.projects || [])]
-              .sort((a, b) => b.totalTokens - a.totalTokens)
-              .slice(0, 5)
-              .map((p) => ({
-                name: p.project,
-                totalTokens: p.totalTokens,
-                percentage: attrs.totals.totalTokens > 0
-                  ? (p.totalTokens / attrs.totals.totalTokens) * 100
-                  : 0,
-              }));
-
-            const allModels = (attrs.projects || []).flatMap(
-              (p) => p.models || [],
-            );
-            const modelMap = new Map<string, number>();
-            for (const m of allModels) {
-              modelMap.set(
-                m.modelId,
-                (modelMap.get(m.modelId) || 0) + m.totalTokens,
-              );
-            }
-            const topModels = [...modelMap.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 5)
-              .map(([modelId, totalTokens]) => ({ modelId, totalTokens }));
-
-            providerResults.push({
-              name: "GCP Vertex AI",
-              inputTokens: attrs.totals.inputTokens,
-              outputTokens: attrs.totals.outputTokens,
-              totalTokens: attrs.totals.totalTokens,
-              inputTokensPerMinute: attrs.totals.inputTokensPerMinute,
-              outputTokensPerMinute: attrs.totals.outputTokensPerMinute,
-              topAccounts,
-              topModels,
-            });
-
-            coverage.push({
-              provider: "GCP Vertex AI",
-              configured: true,
-              modelName: "vertex-usage",
-              hint: "",
-              lastScanned:
-                (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
-              totalTokens: attrs.totals.totalTokens,
-            });
-
-            if (topAccounts.length > 0) {
-              highlights.push(
-                `Highest GCP project: ${topAccounts[0].name} (${
-                  topAccounts[0].totalTokens.toLocaleString()
-                } tokens, ${topAccounts[0].percentage.toFixed(1)}%)`,
-              );
-            }
-            if (topModels.length > 0) {
-              highlights.push(
-                `Top GCP model: ${topModels[0].modelId} (${
-                  topModels[0].totalTokens.toLocaleString()
-                } tokens)`,
-              );
-            }
-          } else {
-            coverage.push({
-              provider: "GCP Vertex AI",
-              configured: false,
-              modelName: "vertex-usage",
-              hint: PROVIDERS[1].hint,
-              lastScanned: null,
-              totalTokens: null,
-            });
-          }
-        } catch {
-          coverage.push({
-            provider: "GCP Vertex AI",
-            configured: false,
-            modelName: "vertex-usage",
-            hint: PROVIDERS[1].hint,
-            lastScanned: null,
-            totalTokens: null,
-          });
-        }
-
-        // --- Azure OpenAI ---
-        try {
-          const data = await context.dataRepository.findBySpec(
-            "azure-ai-usage",
-            "scan_results",
-          );
-          if (data.length > 0) {
-            const sorted = data.filter((d) =>
-              (d as { updatedAt?: string }).updatedAt
-            ).sort((a, b) =>
-              new Date((b as { updatedAt?: string }).updatedAt!).getTime() -
-              new Date((a as { updatedAt?: string }).updatedAt!).getTime()
-            );
-            const latest = sorted[0] ?? data[0];
-            const attrs = latest.attributes as {
-              totals: {
-                promptTokens: number;
-                generatedTokens: number;
-                totalTokens: number;
-                promptTokensPerMinute: number;
-                generatedTokensPerMinute: number;
-              };
-              resources: Array<{
-                resourceName: string;
-                totalTokens: number;
-                deployments: Array<{
-                  deploymentName: string;
-                  totalTokens: number;
-                }>;
-              }>;
-            };
-
-            const topAccounts = [...(attrs.resources || [])]
-              .sort((a, b) => b.totalTokens - a.totalTokens)
-              .slice(0, 5)
-              .map((r) => ({
-                name: r.resourceName,
-                totalTokens: r.totalTokens,
-                percentage: attrs.totals.totalTokens > 0
-                  ? (r.totalTokens / attrs.totals.totalTokens) * 100
-                  : 0,
-              }));
-
-            const allDeployments = (attrs.resources || []).flatMap(
-              (r) => r.deployments || [],
-            );
-            const deployMap = new Map<string, number>();
-            for (const d of allDeployments) {
-              deployMap.set(
-                d.deploymentName,
-                (deployMap.get(d.deploymentName) || 0) + d.totalTokens,
-              );
-            }
-            const topModels = [...deployMap.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 5)
-              .map(([modelId, totalTokens]) => ({ modelId, totalTokens }));
-
-            providerResults.push({
-              name: "Azure OpenAI",
-              inputTokens: attrs.totals.promptTokens,
-              outputTokens: attrs.totals.generatedTokens,
-              totalTokens: attrs.totals.totalTokens,
-              inputTokensPerMinute: attrs.totals.promptTokensPerMinute,
-              outputTokensPerMinute: attrs.totals.generatedTokensPerMinute,
-              topAccounts,
-              topModels,
-            });
-
-            coverage.push({
-              provider: "Azure OpenAI",
-              configured: true,
-              modelName: "azure-ai-usage",
-              hint: "",
-              lastScanned:
-                (attrs as unknown as { scannedAt: string }).scannedAt ?? null,
-              totalTokens: attrs.totals.totalTokens,
-            });
-
-            if (topAccounts.length > 0) {
-              highlights.push(
-                `Highest Azure resource: ${topAccounts[0].name} (${
-                  topAccounts[0].totalTokens.toLocaleString()
-                } tokens, ${topAccounts[0].percentage.toFixed(1)}%)`,
-              );
-            }
-            if (topModels.length > 0) {
-              highlights.push(
-                `Top Azure deployment: ${topModels[0].modelId} (${
-                  topModels[0].totalTokens.toLocaleString()
-                } tokens)`,
-              );
-            }
-          } else {
-            coverage.push({
-              provider: "Azure OpenAI",
-              configured: false,
-              modelName: "azure-ai-usage",
-              hint: PROVIDERS[2].hint,
-              lastScanned: null,
-              totalTokens: null,
-            });
-          }
-        } catch {
-          coverage.push({
-            provider: "Azure OpenAI",
-            configured: false,
-            modelName: "azure-ai-usage",
-            hint: PROVIDERS[2].hint,
-            lastScanned: null,
-            totalTokens: null,
-          });
-        }
-
-        // Grand totals — sum from providerResults to avoid mismatch
-        const grandTotal = providerResults.reduce(
-          (s, p) => s + p.totalTokens,
-          0,
-        );
+        // Grand totals
         const grandInput = providerResults.reduce(
           (s, p) => s + p.inputTokens,
           0,
@@ -616,6 +569,19 @@ export const model = {
           (s, p) => s + p.outputTokens,
           0,
         );
+        const grandTotal = providerResults.reduce(
+          (s, p) => s + p.totalTokens,
+          0,
+        );
+        const grandInputRate = providerResults.reduce(
+          (s, p) => s + p.inputTokensPerMinute,
+          0,
+        );
+        const grandOutputRate = providerResults.reduce(
+          (s, p) => s + p.outputTokensPerMinute,
+          0,
+        );
+
         if (grandTotal > 0 && providerResults.length > 1) {
           const sorted = [...providerResults].sort(
             (a, b) => b.totalTokens - a.totalTokens,
@@ -627,15 +593,6 @@ export const model = {
           );
         }
 
-        const grandInputPerMin = providerResults.reduce(
-          (s, p) => s + p.inputTokensPerMinute,
-          0,
-        );
-        const grandOutputPerMin = providerResults.reduce(
-          (s, p) => s + p.outputTokensPerMinute,
-          0,
-        );
-
         const result = {
           generatedAt: new Date().toISOString(),
           days: args.days,
@@ -646,8 +603,8 @@ export const model = {
             inputTokens: grandInput,
             outputTokens: grandOutput,
             totalTokens: grandTotal,
-            inputTokensPerMinute: grandInputPerMin,
-            outputTokensPerMinute: grandOutputPerMin,
+            inputTokensPerMinute: grandInputRate,
+            outputTokensPerMinute: grandOutputRate,
           },
           highlights,
         };
@@ -662,3 +619,6 @@ export const model = {
     },
   },
 };
+
+/** Shape of a provider definition in the registry. */
+export type { ProviderDefinition };

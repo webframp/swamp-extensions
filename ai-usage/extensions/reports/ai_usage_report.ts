@@ -1,13 +1,42 @@
 /**
  * Unified AI usage report extension for swamp.
  *
- * Workflow-scope report that aggregates token usage data from AWS Bedrock,
- * GCP Vertex AI, and Azure OpenAI scan results into a unified view.
+ * Workflow-scope report that aggregates token usage data from configured
+ * providers into a unified markdown + JSON view. Uses the same provider
+ * definitions as the model to stay in sync automatically.
  *
  * @module
  */
 // SPDX-License-Identifier: Apache-2.0
 
+import { PROVIDERS } from "../models/ai_usage.ts";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function numField(obj: Record<string, unknown>, key: string): number {
+  const val = obj[key];
+  return typeof val === "number" ? val : 0;
+}
+
+function pickLatest(
+  data: Array<{ attributes: Record<string, unknown>; updatedAt?: string }>,
+): { attributes: Record<string, unknown>; updatedAt?: string } {
+  const withTimestamp = data.filter((d) => d.updatedAt);
+  if (withTimestamp.length === 0) return data[0];
+  withTimestamp.sort(
+    (a, b) =>
+      new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime(),
+  );
+  return withTimestamp[0];
+}
+
+// ---------------------------------------------------------------------------
+// Report Definition
+// ---------------------------------------------------------------------------
+
+/** Cross-provider AI token usage report with coverage status and per-provider breakdown. */
 export const report = {
   name: "@webframp/ai-usage-report",
   description:
@@ -29,37 +58,37 @@ export const report = {
     const jsonData: Record<string, unknown> = {};
     let grandInput = 0;
     let grandOutput = 0;
+    let grandTotal = 0;
 
     sections.push("# AI Token Usage Report\n");
 
     // --- Coverage ---
     const coverageRows: string[] = [];
-    const providers = [
-      { name: "AWS Bedrock", model: "bedrock-usage", spec: "scan_results" },
-      { name: "GCP Vertex AI", model: "vertex-usage", spec: "scan_results" },
-      { name: "Azure OpenAI", model: "azure-ai-usage", spec: "scan_results" },
-    ];
 
     // Cache findBySpec results to avoid double-fetching
-    const cachedData: Record<string, Array<Record<string, unknown>>> = {};
+    const cachedData: Map<
+      string,
+      Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
+    > = new Map();
 
-    for (const p of providers) {
+    for (const p of PROVIDERS) {
       try {
-        const data = await context.dataRepository.findBySpec(p.model, p.spec);
-        cachedData[p.model] = data as unknown as Array<
-          Record<string, unknown>
-        >;
-        if (data && data.length > 0) {
-          coverageRows.push(`| ${p.name} | ✅ Active | — |`);
+        const data = await context.dataRepository.findBySpec(
+          p.modelName,
+          p.scanSpec,
+        );
+        cachedData.set(p.modelName, data);
+        if (data.length > 0) {
+          coverageRows.push(`| ${p.name} | \u2705 Active | \u2014 |`);
         } else {
           coverageRows.push(
-            `| ${p.name} | ⚠️ Not configured | Create \`${p.model}\` model instance |`,
+            `| ${p.name} | \u26A0\uFE0F Not configured | Create \`${p.modelName}\` model instance |`,
           );
         }
       } catch {
-        cachedData[p.model] = [];
+        cachedData.set(p.modelName, []);
         coverageRows.push(
-          `| ${p.name} | ⚠️ Not configured | Create \`${p.model}\` model instance |`,
+          `| ${p.name} | \u26A0\uFE0F Not configured | Create \`${p.modelName}\` model instance |`,
         );
       }
     }
@@ -70,174 +99,62 @@ export const report = {
     sections.push(...coverageRows);
     sections.push("");
 
-    // --- AWS ---
-    {
-      const data = cachedData["bedrock-usage"] ?? [];
-      if (data.length > 0) {
-        const sorted = data.filter((d: Record<string, unknown>) => d.updatedAt)
-          .sort((
-            a: Record<string, unknown>,
-            b: Record<string, unknown>,
-          ) =>
-            new Date(b.updatedAt as string).getTime() -
-            new Date(a.updatedAt as string).getTime()
-          );
-        const latest = sorted[0] ?? data[0];
-        const attrs = latest.attributes as {
-          totals: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            inputTokensPerMinute: number;
-            outputTokensPerMinute: number;
-          };
-          accounts: Array<
-            {
-              profile: string;
-              totalTokens: number;
-              inputTokens: number;
-              outputTokens: number;
-              models: Array<{ modelId: string; totalTokens: number }>;
-            }
-          >;
-        };
-        grandInput += attrs.totals.inputTokens;
-        grandOutput += attrs.totals.outputTokens;
+    // --- Per-provider sections ---
+    for (const p of PROVIDERS) {
+      const data = cachedData.get(p.modelName) ?? [];
+      if (data.length === 0) continue;
 
-        sections.push("## AWS Bedrock\n");
+      const latest = pickLatest(data);
+      const attrs = latest.attributes as Record<string, unknown>;
+      const totals = (attrs.totals ?? {}) as Record<string, unknown>;
+      const groups = (attrs[p.fields.groupKey] ?? []) as Array<
+        Record<string, unknown>
+      >;
+
+      const inputTokens = numField(totals, p.fields.inputTokens);
+      const outputTokens = numField(totals, p.fields.outputTokens);
+      const totalTokens = numField(totals, p.fields.totalTokens);
+      const inputRate = numField(totals, p.fields.inputRate);
+      const outputRate = numField(totals, p.fields.outputRate);
+
+      grandInput += inputTokens;
+      grandOutput += outputTokens;
+      grandTotal += totalTokens;
+
+      sections.push(`## ${p.name}\n`);
+      sections.push(
+        `**Total:** ${totalTokens.toLocaleString()} tokens (${
+          inputRate.toFixed(1)
+        } in/min, ${outputRate.toFixed(1)} out/min)\n`,
+      );
+
+      // Group table
+      const groupLabel = p.fields.groupNameField.charAt(0).toUpperCase() +
+        p.fields.groupNameField.slice(1);
+      sections.push(`| ${groupLabel} | Input | Output | Total | % |`);
+      sections.push("|---------|-------|--------|-------|---|");
+
+      for (const g of groups.slice(0, 10)) {
+        const name = String(g[p.fields.groupNameField] ?? "unknown");
+        const gInput = numField(g, p.fields.inputTokens);
+        const gOutput = numField(g, p.fields.outputTokens);
+        const gTotal = numField(g, p.fields.groupTotalField);
+        const pct = totalTokens > 0
+          ? ((gTotal / totalTokens) * 100).toFixed(1)
+          : "0";
         sections.push(
-          `**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${
-            attrs.totals.inputTokensPerMinute.toFixed(1)
-          } in/min, ${
-            attrs.totals.outputTokensPerMinute.toFixed(1)
-          } out/min)\n`,
+          `| ${name} | ${gInput.toLocaleString()} | ${gOutput.toLocaleString()} | ${gTotal.toLocaleString()} | ${pct}% |`,
         );
-        sections.push("| Account | Input | Output | Total | % |");
-        sections.push("|---------|-------|--------|-------|---|");
-        for (const a of (attrs.accounts || []).slice(0, 10)) {
-          const pct = attrs.totals.totalTokens > 0
-            ? ((a.totalTokens / attrs.totals.totalTokens) * 100).toFixed(1)
-            : "0";
-          sections.push(
-            `| ${a.profile} | ${a.inputTokens.toLocaleString()} | ${a.outputTokens.toLocaleString()} | ${a.totalTokens.toLocaleString()} | ${pct}% |`,
-          );
-        }
-        sections.push("");
-        jsonData.aws = attrs;
       }
-    }
+      sections.push("");
 
-    // --- GCP ---
-    {
-      const data = cachedData["vertex-usage"] ?? [];
-      if (data.length > 0) {
-        const sorted = data.filter((d: Record<string, unknown>) => d.updatedAt)
-          .sort((
-            a: Record<string, unknown>,
-            b: Record<string, unknown>,
-          ) =>
-            new Date(b.updatedAt as string).getTime() -
-            new Date(a.updatedAt as string).getTime()
-          );
-        const latest = sorted[0] ?? data[0];
-        const attrs = latest.attributes as {
-          totals: {
-            inputTokens: number;
-            outputTokens: number;
-            totalTokens: number;
-            inputTokensPerMinute: number;
-            outputTokensPerMinute: number;
-          };
-          projects: Array<
-            {
-              project: string;
-              totalTokens: number;
-              inputTokens: number;
-              outputTokens: number;
-            }
-          >;
-        };
-        grandInput += attrs.totals.inputTokens;
-        grandOutput += attrs.totals.outputTokens;
-
-        sections.push("## GCP Vertex AI\n");
-        sections.push(
-          `**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${
-            attrs.totals.inputTokensPerMinute.toFixed(1)
-          } in/min, ${
-            attrs.totals.outputTokensPerMinute.toFixed(1)
-          } out/min)\n`,
-        );
-        sections.push("| Project | Input | Output | Total |");
-        sections.push("|---------|-------|--------|-------|");
-        for (const p of (attrs.projects || []).slice(0, 10)) {
-          sections.push(
-            `| ${p.project} | ${p.inputTokens.toLocaleString()} | ${p.outputTokens.toLocaleString()} | ${p.totalTokens.toLocaleString()} |`,
-          );
-        }
-        sections.push("");
-        jsonData.gcp = attrs;
-      }
-    }
-
-    // --- Azure ---
-    {
-      const data = cachedData["azure-ai-usage"] ?? [];
-      if (data.length > 0) {
-        const sorted = data.filter((d: Record<string, unknown>) => d.updatedAt)
-          .sort((
-            a: Record<string, unknown>,
-            b: Record<string, unknown>,
-          ) =>
-            new Date(b.updatedAt as string).getTime() -
-            new Date(a.updatedAt as string).getTime()
-          );
-        const latest = sorted[0] ?? data[0];
-        const attrs = latest.attributes as {
-          totals: {
-            promptTokens: number;
-            generatedTokens: number;
-            totalTokens: number;
-            promptTokensPerMinute: number;
-            generatedTokensPerMinute: number;
-          };
-          resources: Array<
-            {
-              resourceName: string;
-              totalTokens: number;
-              promptTokens: number;
-              generatedTokens: number;
-            }
-          >;
-        };
-        grandInput += attrs.totals.promptTokens;
-        grandOutput += attrs.totals.generatedTokens;
-
-        sections.push("## Azure OpenAI\n");
-        sections.push(
-          `**Total:** ${attrs.totals.totalTokens.toLocaleString()} tokens (${
-            attrs.totals.promptTokensPerMinute.toFixed(1)
-          } in/min, ${
-            attrs.totals.generatedTokensPerMinute.toFixed(1)
-          } out/min)\n`,
-        );
-        sections.push("| Resource | Prompt | Generated | Total |");
-        sections.push("|----------|--------|-----------|-------|");
-        for (const r of (attrs.resources || []).slice(0, 10)) {
-          sections.push(
-            `| ${r.resourceName} | ${r.promptTokens.toLocaleString()} | ${r.generatedTokens.toLocaleString()} | ${r.totalTokens.toLocaleString()} |`,
-          );
-        }
-        sections.push("");
-        jsonData.azure = attrs;
-      }
+      jsonData[p.modelName] = attrs;
     }
 
     // --- Grand Totals ---
-    const grandTotal = grandInput + grandOutput;
     sections.push("## Grand Totals\n");
-    sections.push(`| Metric | Value |`);
-    sections.push(`|--------|-------|`);
+    sections.push("| Metric | Value |");
+    sections.push("|--------|-------|");
     sections.push(`| Total Input/Prompt | ${grandInput.toLocaleString()} |`);
     sections.push(
       `| Total Output/Generated | ${grandOutput.toLocaleString()} |`,

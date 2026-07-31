@@ -6,19 +6,36 @@ CognitiveServices resources and provides per-deployment breakdowns.
 
 ## Authentication
 
-Uses `az` CLI authentication (az login). Requires an active session.
+Uses Azure AD client credentials flow (tenant ID + app registration client ID +
+client secret). No `az` CLI dependency.
+
+All three credentials are required global arguments:
+
+- `tenantId` — Azure AD tenant UUID
+- `clientId` — App registration (service principal) UUID
+- `clientSecret` — Client secret value (stored in swamp vault recommended)
 
 ## Required Permissions
 
-- Reader role on target subscriptions
-- `Microsoft.CognitiveServices/accounts/read`
-- `Microsoft.Insights/metrics/read`
+Assign the following to the app registration's service principal on each target
+subscription:
+
+- **Role:** Reader (built-in) on the subscription
+- **Permissions granted by Reader:**
+  - `Microsoft.CognitiveServices/accounts/read` (resource discovery)
+  - `Microsoft.Insights/metrics/read` (token usage metrics)
+
+Reader is the least-privilege built-in role that covers both. Do not grant
+Contributor or Owner.
 
 ## Usage
 
 ```bash
 swamp model create @webframp/azure/openai-usage azure-ai-usage \
-  --global-arg 'subscriptions=["cef96095-...","690e5f6d-..."]'
+  --global-arg 'subscriptions=["cef96095-...","690e5f6d-..."]' \
+  --global-arg 'tenantId=<tenant-uuid>' \
+  --global-arg 'clientId=<app-registration-uuid>' \
+  --global-arg 'clientSecret=<secret-value>'
 
 # Scan all subscriptions
 swamp model method run azure-ai-usage scan_subscriptions
