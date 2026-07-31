@@ -241,6 +241,23 @@ export function createSyncService(
           )
         ),
     );
+    // btree index with text_pattern_ops makes prefix-anchored LIKE queries
+    // use an index scan instead of a sequential scan. The primary key index
+    // uses the default operator class which does not support pattern matching.
+    await sqlSpan(
+      "createPathPrefixIndex",
+      "CREATE INDEX",
+      filesTable,
+      () =>
+        retryable(() =>
+          sql.unsafe(`
+      CREATE INDEX IF NOT EXISTS idx_${
+            filesTable.replaceAll(".", "_")
+          }_path_prefix
+      ON ${filesTable} (path text_pattern_ops)
+    `)
+        ),
+    );
   }
 
   let schemaEnsured = false;
@@ -754,7 +771,9 @@ export function createSyncService(
       }, signal);
     }
 
-    // Fetch remote state for this subtree (escaped LIKE)
+    // Fetch remote state for this subtree. Uses UNION ALL so the planner
+    // evaluates each branch independently: the exact-match branch uses the
+    // primary key, the prefix branch uses the text_pattern_ops index.
     const remoteRows: postgres.Row[] = await sqlSpan(
       "fetchRemoteSubtree",
       "SELECT",
@@ -762,8 +781,9 @@ export function createSyncService(
       async (span) => {
         const rows: postgres.Row[] = await retryable(() =>
           sql.unsafe(
-            `SELECT path, hash, deleted_at, updated_at FROM ${filesTable}
-       WHERE path = $1 OR path LIKE $2 ESCAPE '\\'`,
+            `SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE path = $1
+       UNION ALL
+       SELECT path, hash, deleted_at, updated_at FROM ${filesTable} WHERE path LIKE $2 ESCAPE '\\'`,
             [relPath, escapeLike(relPath) + "/%"],
           )
         );
