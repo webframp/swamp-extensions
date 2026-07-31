@@ -346,8 +346,21 @@ export function createSyncService(
               ),
           );
           if (stateRow) {
-            const dbPushedAt = String(stateRow.value);
-            if (new Date(dbPushedAt) <= new Date(state.lastPulledAt)) {
+            // postgres@3.x auto-parses JSONB scalars, so stateRow.value is
+            // typically the unwrapped string. Guard against a future driver
+            // change that returns raw JSON (with outer quotes) by stripping
+            // them, then validate the Date before trusting the fast-path.
+            let raw = String(stateRow.value);
+            if (raw.startsWith('"') && raw.endsWith('"')) {
+              raw = raw.slice(1, -1);
+            }
+            const dbPushedDate = new Date(raw);
+            if (Number.isNaN(dbPushedDate.getTime())) {
+              console.warn(
+                "postgres-datastore: last_pushed_at watermark is not a valid date, falling back to full scan:",
+                raw,
+              );
+            } else if (dbPushedDate <= new Date(state.lastPulledAt)) {
               trace.summary("pull", 0, { files: 0, skipped: "no_changes" });
               return { changes: 0, pulled: 0, deleted: 0, fastPath: true };
             }
@@ -1003,7 +1016,18 @@ export function createSyncService(
 
           // Selectively clear only the paths we just pushed — preserves any
           // dirty marks added by concurrent recordDirty() during the push.
-          await sidecar.clearPushed(snapshot);
+          // Wrapped in try/catch: the DB push already committed, so a local
+          // filesystem failure in clearPushed only means the next push will
+          // redundantly re-push (upserts are idempotent, not data loss).
+          try {
+            await sidecar.clearPushed(snapshot);
+          } catch (clearErr) {
+            span.setAttribute("datastore.clear_pushed_failed", true);
+            console.warn(
+              "postgres-datastore: clearPushed failed after successful push, next push may re-push:",
+              clearErr instanceof Error ? clearErr.message : clearErr,
+            );
+          }
           // `changes` counts writes and tombstones together, so the file
           // counts are tracked separately to keep each attribute honest and
           // consistent with the other datastore extensions.
@@ -1138,7 +1162,15 @@ export function createSyncService(
 
         if (internal.toPush.length === 0 && internal.toTombstone.length === 0) {
           // Still clear sidecar dirty state even on no-op
-          await sidecar.clearPushed(internal.snapshot);
+          try {
+            await sidecar.clearPushed(internal.snapshot);
+          } catch (clearErr) {
+            span.setAttribute("datastore.clear_pushed_failed", true);
+            console.warn(
+              "postgres-datastore: clearPushed failed (no-op commit), next push may re-push:",
+              clearErr instanceof Error ? clearErr.message : clearErr,
+            );
+          }
           span.setAttributes({
             [Attr.DATASTORE_FAST_PATH_HIT]: true,
             [Attr.DATASTORE_FILES_PUSHED]: 0,
@@ -1207,7 +1239,15 @@ export function createSyncService(
           );
         } catch { /* GC failure is non-fatal */ }
 
-        await sidecar.clearPushed(internal.snapshot);
+        try {
+          await sidecar.clearPushed(internal.snapshot);
+        } catch (clearErr) {
+          span.setAttribute("datastore.clear_pushed_failed", true);
+          console.warn(
+            "postgres-datastore: clearPushed failed after successful commitPush, next push may re-push:",
+            clearErr instanceof Error ? clearErr.message : clearErr,
+          );
+        }
         span.setAttributes({
           [Attr.DATASTORE_FAST_PATH_HIT]: false,
           [Attr.DATASTORE_FILES_PUSHED]: internal.toPush.length,

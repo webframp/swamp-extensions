@@ -1,17 +1,16 @@
-## 2026.07.30.1
+## 2026.07.30.2
 
-**Fixed:** Subtree lookup query in the incremental push path forced sequential
-scans on the `files` table. The `WHERE path = $1 OR path LIKE $2` pattern made
-PostgreSQL unable to use the btree primary key for the LIKE branch, causing
-O(n^2) write latency as the catalog grew past ~30K files.
+**Fixed:** Pull-skip watermark comparison now validates the JSONB timestamp
+before trusting the fast-path. If `postgres@3.x` ever returns the raw JSON
+string (with outer quotes) instead of a pre-parsed scalar, the Date guard
+detects `Invalid Date` and falls through to a full scan rather than silently
+disabling the optimization.
 
-**Changed:** The subtree query now uses `UNION ALL` to split the exact-match and
-prefix-match predicates into independent branches, each with its own query plan.
-A new `text_pattern_ops` btree index on the `path` column is created
-automatically on first connect, enabling index scans for all prefix-anchored
-LIKE queries (both the push and pull paths).
+**Fixed:** `clearPushed` failures after a successful DB push no longer propagate
+exceptions. Since the transaction already committed, a local filesystem error
+only causes redundant re-pushes on the next cycle (upserts are idempotent). The
+failure is logged via `console.warn` for visibility.
 
-**Upgrade note:** The new index is created via `CREATE INDEX IF NOT EXISTS` on
-startup. For large tables (>100K rows) the initial index build may take a few
-seconds on first connection after upgrade. Subsequent connections are
-instantaneous. No manual migration required.
+**Fixed:** Backoff timing test uses `baseDelayMs=100` (was 50) and a widened
+tolerance multiplier (1.2x, was 1.5x) to prevent flapping under CI scheduling
+jitter.
