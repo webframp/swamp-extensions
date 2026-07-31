@@ -289,9 +289,20 @@ async function extractNpmImports(
       continue;
     }
     const npmSpecRe = /npm:([^"'`\s)]+)/g;
+    let inBlockComment = false;
     for (const line of content.split("\n")) {
+      // Track block comment state
+      const trimmed = line.trimStart();
+      if (inBlockComment) {
+        if (trimmed.includes("*/")) inBlockComment = false;
+        continue;
+      }
+      if (trimmed.startsWith("/*")) {
+        if (!trimmed.includes("*/")) inBlockComment = true;
+        continue;
+      }
       // Skip single-line comment lines
-      if (line.trimStart().startsWith("//")) continue;
+      if (trimmed.startsWith("//")) continue;
       for (const m of line.matchAll(npmSpecRe)) {
         const spec = m[1]!; // e.g. @aws-sdk/client-s3@3.1094.0
         const atIdx = spec.lastIndexOf("@");
@@ -1005,6 +1016,9 @@ export const model = {
           }>;
         }).extensions;
 
+        const { repo_root } = context.globalArgs;
+        const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
+
         const entries: z.infer<typeof BumpPlanEntrySchema>[] = [];
         const skipped: Array<{ name: string; dir: string; reason: string }> =
           [];
@@ -1012,7 +1026,24 @@ export const model = {
         for (const ext of extensions) {
           if (!ext.stale) continue;
 
-          const nextVer = nextCalVer(ext.version);
+          // Verify the extension's version against the actual manifest on disk.
+          // The audit snapshot may be stale if the extension was bumped between
+          // audit and plan-bump (e.g. a hotfix). Use the on-disk version as the
+          // source of truth for find-and-replace targets.
+          let currentVersion = ext.version;
+          const onDiskVersion = await readManifestVersion(
+            `${resolvedRoot}/${ext.dir}`,
+          );
+          if (
+            onDiskVersion !== "unknown" && onDiskVersion !== ext.version
+          ) {
+            context.logger.warn(
+              `${ext.name}: audit recorded version ${ext.version} but manifest has ${onDiskVersion} — using on-disk version`,
+            );
+            currentVersion = onDiskVersion;
+          }
+
+          const nextVer = nextCalVer(currentVersion);
           const changes: z.infer<typeof BumpPlanEntrySchema>["changes"] = [];
           const noteLines: string[] = [];
 
@@ -1095,22 +1126,22 @@ export const model = {
           // manifest version bump
           changes.push({
             file: "manifest.yaml",
-            find: `version: "${ext.version}"`,
+            find: `version: "${currentVersion}"`,
             replace: `version: "${nextVer}"`,
             category: "manifest-version",
           });
           changes.push({
             file: "extensions/**/*.ts",
-            find: `version: "${ext.version}"`,
+            find: `version: "${currentVersion}"`,
             replace: `version: "${nextVer}"`,
             category: "source-version",
           });
           // Upgrade chain: the last toVersion must match the new model version.
-          // The current toVersion points at ext.version (the pre-bump version).
+          // The current toVersion points at currentVersion (the pre-bump version).
           // Replace it with nextVer so the chain terminates correctly.
           changes.push({
             file: "extensions/**/*.ts",
-            find: `toVersion: "${ext.version}"`,
+            find: `toVersion: "${currentVersion}"`,
             replace: `toVersion: "${nextVer}"`,
             category: "source-version",
           });
@@ -1120,7 +1151,7 @@ export const model = {
           entries.push({
             name: ext.name,
             dir: ext.dir,
-            currentVersion: ext.version,
+            currentVersion,
             nextVersion: nextVer,
             changes,
             releaseNotes,
