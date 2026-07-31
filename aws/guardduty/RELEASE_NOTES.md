@@ -1,7 +1,9 @@
-## 2026.07.30.1
+## 2026.07.30.2
 
-**Added:** Optional `profile` global argument for multi-account credential resolution.
-When set, credentials resolve via `fromIni` (supports SSO token cache and shared-config
-profiles). When omitted, the default credential chain applies as before. Fully backward
-compatible — no changes required for existing instances.
+**Added:** Pre-flight check with actionable error message when no GuardDuty detector
+exists. The error now names the region, explains that GuardDuty must be enabled, and
+provides the exact swamp commands to create a detector via `@swamp/aws/guardduty/detector`.
 
+**Changed:** Extension description and README clarify that this is a read-only
+observability model. A new Prerequisites section documents the detector requirement
+and links to the infrastructure model for setup.

@@ -1,14 +1,25 @@
 manifestVersion: 1
 name: "@webframp/aws/guardduty"
-version: "2026.07.30.1"
+version: "2026.07.30.2"
 description: |
-  Query and inspect GuardDuty findings from a delegated administrator account,
-  covering all member accounts in an AWS Organization.
+  Read-only observability model for GuardDuty findings. Query and inspect
+  findings from a delegated administrator account, covering all member accounts
+  in an AWS Organization.
+
+  This extension does not manage GuardDuty configuration (detectors, publishing
+  destinations, IP sets). For infrastructure management, use
+  @swamp/aws/guardduty/detector.
+
+  ## Prerequisites
+
+  GuardDuty must be enabled (a detector must exist) in the target region.
+  If no detector is found, methods return an error with setup instructions.
 
   ## Authentication
 
   Uses the default AWS credential chain. Point at the delegated admin account
-  (e.g. via AWS_PROFILE) to see findings across all member accounts.
+  (e.g. via AWS_PROFILE or the `profile` global argument) to see findings
+  across all member accounts.
 
   ## Required IAM Permissions
 
