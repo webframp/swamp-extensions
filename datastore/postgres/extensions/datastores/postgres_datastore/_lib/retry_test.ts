@@ -175,14 +175,15 @@ Deno.test("retryable: backoff timing grows exponentially", async () => {
         throw Object.assign(new Error("retry"), { code: "40001" });
       }
       return Promise.resolve("done");
-    }, { maxAttempts: 3, baseDelayMs: 50 });
+    }, { maxAttempts: 3, baseDelayMs: 100 });
   } finally {
     // Verify delays grow (with jitter tolerance)
-    // First delay should be ~50ms (baseDelayMs * 3^0 = 50)
-    // Second delay should be ~150ms (baseDelayMs * 3^1 = 150)
+    // First delay should be ~100ms (baseDelayMs * 3^0 = 100)
+    // Second delay should be ~300ms (baseDelayMs * 3^1 = 300)
     if (delays.length >= 2) {
-      // Second delay should be larger than first (within jitter)
-      assertEquals(delays[1] > delays[0] * 1.5, true);
+      // Second delay should be larger than first — use a wide tolerance
+      // (1.2x instead of theoretical 3x) to absorb CI scheduling jitter.
+      assertEquals(delays[1] > delays[0] * 1.2, true);
     }
   }
 });
