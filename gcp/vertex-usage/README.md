@@ -6,16 +6,34 @@ input/output direction split and tokens-per-minute rates.
 
 ## Authentication
 
-Uses `gcloud auth print-access-token` (Application Default Credentials).
-Requires an authenticated gcloud CLI session.
+Uses a GCP service account JSON key (signed JWT exchanged for an access token
+with scope `https://www.googleapis.com/auth/monitoring.read`). No `gcloud` CLI
+dependency.
+
+Provide the key contents via:
+
+1. The `serviceAccountJson` global argument (preferred — stored in swamp vault), or
+2. The `GOOGLE_APPLICATION_CREDENTIALS` environment variable pointing to the key
+   file on disk.
 
 ## Required Permissions
 
-- `monitoring.timeSeries.list` on each project
+The service account needs only:
+
+- **Role:** `roles/monitoring.viewer` (Monitoring Viewer) on each target project
+- **Permission:** `monitoring.timeSeries.list`
+
+This is the minimum required. Do not grant broader roles like Editor or Owner.
 
 ## Usage
 
 ```bash
+# With service account JSON inline (or reference a vault secret)
+swamp model create @webframp/gcp/vertex-usage vertex-usage \
+  --global-arg 'projects=["my-project","my-other-project"]' \
+  --global-arg 'serviceAccountJson=<contents of service-account.json>'
+
+# Or rely on GOOGLE_APPLICATION_CREDENTIALS env var
 swamp model create @webframp/gcp/vertex-usage vertex-usage \
   --global-arg 'projects=["my-project","my-other-project"]'
 

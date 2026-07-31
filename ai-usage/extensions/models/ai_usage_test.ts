@@ -100,7 +100,7 @@ Deno.test("generate defaults days to 30", () => {
 });
 
 // =============================================================================
-// Execute-level Tests
+// Status Method Tests
 // =============================================================================
 
 Deno.test({
@@ -136,7 +136,9 @@ Deno.test({
       providers: Array<{
         provider: string;
         configured: boolean;
+        extensionType: string;
         totalTokens: number | null;
+        setup: { command: string; permissions: string[]; authNotes: string };
       }>;
       configuredCount: number;
     };
@@ -146,10 +148,64 @@ Deno.test({
     assertExists(bedrock);
     assertEquals(bedrock.configured, true);
     assertEquals(bedrock.totalTokens, 50000);
+    // Configured providers have blanked setup guidance
+    assertEquals(bedrock.setup.command, "");
+    assertEquals(bedrock.setup.permissions.length, 0);
+  },
+});
+
+Deno.test({
+  name: "status returns setup guidance for unconfigured providers",
+  fn: async () => {
+    const { context, getWrittenResources } = createAiUsageContext({});
+
+    await model.methods.status.execute(
+      {} as Record<string, never>,
+      context as unknown as StatusContext,
+    );
+
+    const resources = getWrittenResources();
+    const data = resources[0].data as {
+      providers: Array<{
+        provider: string;
+        configured: boolean;
+        extensionType: string;
+        setup: { command: string; permissions: string[]; authNotes: string };
+      }>;
+    };
 
     const gcp = data.providers.find((p) => p.provider === "GCP Vertex AI");
     assertExists(gcp);
     assertEquals(gcp.configured, false);
+    assertEquals(gcp.extensionType, "@webframp/gcp/vertex-usage");
+    // Should include actual permissions
+    assertEquals(
+      gcp.setup.permissions.includes("monitoring.timeSeries.list"),
+      true,
+    );
+    // Command should mention serviceAccountJson
+    assertEquals(gcp.setup.command.includes("serviceAccountJson"), true);
+    // authNotes should describe the mechanism
+    assertEquals(gcp.setup.authNotes.includes("service account"), true);
+
+    const azure = data.providers.find((p) => p.provider === "Azure OpenAI");
+    assertExists(azure);
+    assertEquals(azure.configured, false);
+    assertEquals(
+      azure.setup.permissions.includes("Microsoft.Insights/metrics/read"),
+      true,
+    );
+    assertEquals(azure.setup.command.includes("tenantId"), true);
+    assertEquals(azure.setup.command.includes("clientId"), true);
+    assertEquals(azure.setup.command.includes("clientSecret"), true);
+
+    const aws = data.providers.find((p) => p.provider === "AWS Bedrock");
+    assertExists(aws);
+    assertEquals(aws.configured, false);
+    assertEquals(
+      aws.setup.permissions.includes("cloudwatch:GetMetricData"),
+      true,
+    );
   },
 });
 
@@ -216,6 +272,10 @@ Deno.test({
     assertEquals(data.totalProviders, 3);
   },
 });
+
+// =============================================================================
+// Generate Method Tests
+// =============================================================================
 
 Deno.test({
   name: "generate produces unified report from provider data",
@@ -292,7 +352,12 @@ Deno.test({
     const data = resources[0].data as {
       providers: Array<{ name: string; totalTokens: number }>;
       grandTotals: { totalTokens: number };
-      coverage: Array<{ provider: string; configured: boolean }>;
+      coverage: Array<{
+        provider: string;
+        configured: boolean;
+        extensionType: string;
+        setup: { command: string; permissions: string[]; authNotes: string };
+      }>;
       highlights: string[];
     };
 
@@ -304,5 +369,100 @@ Deno.test({
     );
     const azure = data.coverage.find((c) => c.provider === "Azure OpenAI");
     assertEquals(azure?.configured, false);
+    // Unconfigured providers in report coverage should have setup guidance
+    assertExists(azure?.setup.command);
+    assertEquals(azure!.setup.permissions.length > 0, true);
+  },
+});
+
+Deno.test({
+  name: "generate handles Azure field mapping (promptTokens/generatedTokens)",
+  fn: async () => {
+    const { context, getWrittenResources } = createAiUsageContext({
+      "azure-ai-usage": {
+        "scan_results": [
+          {
+            attributes: {
+              scannedAt: "2026-05-01T00:00:00Z",
+              totals: {
+                promptTokens: 40000,
+                generatedTokens: 10000,
+                totalTokens: 50000,
+                promptTokensPerMinute: 0.9,
+                generatedTokensPerMinute: 0.2,
+              },
+              resources: [
+                {
+                  resourceName: "my-openai-east",
+                  totalTokens: 50000,
+                  deployments: [
+                    { deploymentName: "gpt-4o", totalTokens: 50000 },
+                  ],
+                },
+              ],
+            },
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+
+    const result = await model.methods.generate.execute(
+      { days: 30 },
+      context as unknown as GenerateContext,
+    );
+
+    assertExists(result.dataHandles);
+    const resources = getWrittenResources();
+    const data = resources[0].data as {
+      providers: Array<{
+        name: string;
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+        topAccounts: Array<{ name: string }>;
+        topModels: Array<{ modelId: string }>;
+      }>;
+      grandTotals: { inputTokens: number; outputTokens: number };
+    };
+
+    assertEquals(data.providers.length, 1);
+    assertEquals(data.providers[0].name, "Azure OpenAI");
+    assertEquals(data.providers[0].inputTokens, 40000);
+    assertEquals(data.providers[0].outputTokens, 10000);
+    assertEquals(data.providers[0].totalTokens, 50000);
+    assertEquals(data.providers[0].topAccounts[0].name, "my-openai-east");
+    assertEquals(data.providers[0].topModels[0].modelId, "gpt-4o");
+    assertEquals(data.grandTotals.inputTokens, 40000);
+    assertEquals(data.grandTotals.outputTokens, 10000);
+  },
+});
+
+Deno.test({
+  name: "generate handles all providers unconfigured gracefully",
+  fn: async () => {
+    const { context, getWrittenResources } = createAiUsageContext({});
+
+    const result = await model.methods.generate.execute(
+      { days: 7 },
+      context as unknown as GenerateContext,
+    );
+
+    assertExists(result.dataHandles);
+    const resources = getWrittenResources();
+    const data = resources[0].data as {
+      providers: Array<{ name: string }>;
+      grandTotals: { totalTokens: number };
+      coverage: Array<{ configured: boolean }>;
+      days: number;
+      periodMinutes: number;
+    };
+
+    assertEquals(data.providers.length, 0);
+    assertEquals(data.grandTotals.totalTokens, 0);
+    assertEquals(data.coverage.length, 3);
+    assertEquals(data.coverage.every((c) => !c.configured), true);
+    assertEquals(data.days, 7);
+    assertEquals(data.periodMinutes, 7 * 24 * 60);
   },
 });
