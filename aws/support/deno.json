@@ -1,0 +1,20 @@
+{
+  "tasks": {
+    "check": "deno check extensions/models/aws/support.ts extensions/models/aws/support_test.ts",
+    "lint": "deno lint extensions/models/",
+    "fmt": "deno fmt extensions/models/",
+    "fmt:check": "deno fmt --check extensions/models/",
+    "test": "deno test --allow-env --allow-net --allow-sys extensions/models/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix"]
+    }
+  },
+  "fmt": {
+    "exclude": ["CLAUDE.md", "AGENTS.md"]
+  },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
+  }
+}

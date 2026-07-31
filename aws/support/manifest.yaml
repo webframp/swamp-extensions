@@ -1,0 +1,77 @@
+manifestVersion: 1
+name: "@webframp/aws/support"
+version: "2026.07.30.1"
+description: |
+  Manage AWS Support cases across accounts. Query case details, track
+  correspondence, create new cases, and fan-out across profiles for
+  fleet-wide support case inventory.
+
+  ## Authentication
+
+  Uses the default AWS credential chain via named profiles.
+
+  ## Required IAM Permissions
+
+  - `support:DescribeCases`
+  - `support:DescribeCommunications`
+  - `support:CreateCase`
+  - `support:AddCommunicationToCase`
+  - `support:ResolveCase`
+  - `support:DescribeSeverityLevels`
+  - `support:DescribeServices`
+  - `sts:GetCallerIdentity`
+
+  ## Prerequisites
+
+  AWS Support API requires a Business or Enterprise support plan.
+  The API is only available in us-east-1 (global endpoint).
+
+  ## Usage
+
+  ```bash
+  # Create model
+  swamp model create @webframp/aws/support support \
+    --set profiles='["prod-readonly","staging-readonly"]'
+
+  # List open cases
+  swamp model method run support list_cases
+
+  # Get full case details with communications
+  swamp model method run support get_case --input displayId=178317700500245
+
+  # Create a new support case
+  swamp model method run support create_case \
+    --input subject="ECS task placement failure" \
+    --input serviceCode=amazon-elastic-container-service \
+    --input categoryCode=general-guidance \
+    --input severityCode=normal \
+    --input body="We are experiencing intermittent task placement failures..."
+
+  # Add a reply to a case
+  swamp model method run support add_communication \
+    --input caseId=case-123456 \
+    --input body="Here are the requested logs..."
+
+  # Resolve a case
+  swamp model method run support resolve_case \
+    --input caseId=case-123456
+
+  # Fleet-wide scan of open cases
+  swamp model method run support scan_accounts
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/support.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - aws
+  - support
+  - cases
+  - ops
