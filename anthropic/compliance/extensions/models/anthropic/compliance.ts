@@ -253,12 +253,17 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.07.18.1",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.30.1",
+      description: "Groups endpoint moved to top-level path; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -473,9 +478,12 @@ export const model = {
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
+        // Groups endpoint is top-level, not org-scoped — the org-scoped path
+        // (/v1/compliance/organizations/{orgId}/groups) returns 404 as of
+        // July 2026. See: https://github.com/webframp/swamp-extensions/issues/270
         const data = await complianceRequest(
           key,
-          `/v1/compliance/organizations/${orgId}/groups`,
+          `/v1/compliance/groups`,
         );
         const groups = (data.data ?? []).map((g: any) => ({
           id: g.id ?? "",
@@ -526,9 +534,10 @@ export const model = {
 
         let groupName = args.groupId;
         try {
+          // Groups listing is top-level, not org-scoped (see issue #270)
           const groupsData = await complianceRequest(
             key,
-            `/v1/compliance/organizations/${orgId}/groups`,
+            `/v1/compliance/groups`,
           );
           const match = (groupsData.data ?? []).find(
             (g: any) => g.id === args.groupId,
@@ -608,6 +617,8 @@ export const model = {
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         const handles: { name: string }[] = [];
 
+        // Users and roles remain org-scoped as of July 2026; only groups
+        // moved to the top-level path (see issue #270).
         const { items: userItems, hasMore: usersHasMore } = await paginateAll(
           key,
           `/v1/compliance/organizations/${orgId}/users`,
@@ -650,9 +661,10 @@ export const model = {
           }),
         );
 
+        // Groups endpoint is top-level, not org-scoped (see issue #270)
         const groupsData = await complianceRequest(
           key,
-          `/v1/compliance/organizations/${orgId}/groups`,
+          `/v1/compliance/groups`,
         );
         const groups = (groupsData.data ?? []).map((g: any) => ({
           id: g.id ?? "",
