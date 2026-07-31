@@ -151,11 +151,21 @@ function parseRelativeTime(timeStr: string): Date {
 async function getDetectorId(
   client: GuardDutyClient,
   logger?: { info: (msg: string, props: Record<string, unknown>) => void },
+  region?: string,
 ): Promise<string> {
   const resp = await client.send(new ListDetectorsCommand({}));
   const ids = resp.DetectorIds || [];
   if (ids.length === 0) {
-    throw new Error("No GuardDuty detector found in this region/account");
+    const regionLabel = region ?? "the configured region";
+    throw new Error(
+      `No GuardDuty detector found in ${regionLabel}.\n\n` +
+        "GuardDuty must be enabled before querying findings. " +
+        "Create a detector using the infrastructure model:\n\n" +
+        "  swamp model create @swamp/aws/guardduty/detector my-detector " +
+        `--global-arg region=${region ?? "us-east-1"}\n` +
+        "  swamp model method run my-detector create\n\n" +
+        "Then retry this command.",
+    );
   }
   if (ids.length > 1 && logger) {
     logger.info("Multiple detectors found, using {id}", { id: ids[0] });
@@ -219,12 +229,17 @@ function mapMember(m: Member): z.infer<typeof MemberSchema> {
  */
 export const model = {
   type: "@webframp/aws/guardduty",
-  version: "2026.07.30.1",
+  version: "2026.07.30.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.30.1",
       description: "Add optional profile global argument for multi-account use",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.30.2",
+      description: "Improve pre-flight error when no GuardDuty detector exists",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -309,7 +324,11 @@ export const model = {
           makeClientConfig(context.globalArgs),
         );
         try {
-          const detectorId = await getDetectorId(client, context.logger);
+          const detectorId = await getDetectorId(
+            client,
+            context.logger,
+            context.globalArgs.region,
+          );
 
           const startTime = parseRelativeTime(args.startTime);
           const endTime = args.endTime
@@ -441,7 +460,11 @@ export const model = {
           makeClientConfig(context.globalArgs),
         );
         try {
-          const detectorId = await getDetectorId(client, context.logger);
+          const detectorId = await getDetectorId(
+            client,
+            context.logger,
+            context.globalArgs.region,
+          );
 
           const ids = args.findingIds.slice(0, 50);
 
@@ -516,7 +539,11 @@ export const model = {
           makeClientConfig(context.globalArgs),
         );
         try {
-          const detectorId = await getDetectorId(client, context.logger);
+          const detectorId = await getDetectorId(
+            client,
+            context.logger,
+            context.globalArgs.region,
+          );
 
           const members: z.infer<typeof MemberSchema>[] = [];
           let nextToken: string | undefined;

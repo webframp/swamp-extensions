@@ -1,7 +1,11 @@
 // AWS GuardDuty Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { GuardDutyClient } from "npm:@aws-sdk/client-guardduty@3.1096.0";
 import { model } from "./guardduty.ts";
@@ -83,6 +87,52 @@ Deno.test("model has 3 resources", () => {
 
 Deno.test("model has 3 methods", () => {
   assertEquals(Object.keys(model.methods).length, 3);
+});
+
+// =============================================================================
+// Pre-flight Check Tests
+// =============================================================================
+
+Deno.test({
+  name:
+    "list_findings throws actionable error when no detector exists in region",
+  // GuardDutyClient opens a connection pool that outlives the test
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockGuardDuty((command) => {
+      const name = command.constructor.name;
+      if (name === "ListDetectorsCommand") {
+        return { DetectorIds: [] };
+      }
+      return {};
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { region: "eu-west-1" },
+      });
+
+      const err = await assertRejects(
+        () =>
+          model.methods.list_findings.execute(
+            { startTime: "24h", limit: 50 },
+            context as unknown as Parameters<
+              typeof model.methods.list_findings.execute
+            >[1],
+          ),
+        Error,
+      );
+
+      // Error names the specific region
+      assertMatch(err.message, /eu-west-1/);
+      // Error mentions the infrastructure model
+      assertMatch(err.message, /@swamp\/aws\/guardduty\/detector/);
+      // Error provides actionable commands
+      assertMatch(err.message, /swamp model method run/);
+    } finally {
+      restore();
+    }
+  },
 });
 
 // =============================================================================
