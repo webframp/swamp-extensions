@@ -20,12 +20,12 @@ import {
   BatchUpdateFindingsCommand,
   GetFindingsCommand,
   SecurityHubClient,
-} from "npm:@aws-sdk/client-securityhub@3.1096.0";
+} from "npm:@aws-sdk/client-securityhub@3.1100.0";
 import {
   ListAccountsCommand,
   OrganizationsClient,
-} from "npm:@aws-sdk/client-organizations@3.1096.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
+} from "npm:@aws-sdk/client-organizations@3.1100.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1100.0";
 
 // =============================================================================
 // Schemas
@@ -297,7 +297,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.07.30.1",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

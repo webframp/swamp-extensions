@@ -1,3 +1,7 @@
+## 2026.07.31.1
+
+**Changed:** Bump @aws-sdk/credential-providers 3.1096.0 → 3.1100.0
+
 ## 2026.07.27.4
 
 **Fixed:** `apply-bump` lockfile regeneration now uses `deno cache` on all

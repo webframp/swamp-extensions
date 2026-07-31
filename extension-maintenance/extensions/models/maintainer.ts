@@ -280,22 +280,41 @@ async function extractNpmImports(
 
   for (const file of findCmd.stdout.trim().split("\n")) {
     if (!file) continue;
-    const grepCmd = await run(["grep", "-oh", 'npm:[^"]*', file]);
-    if (!grepCmd.success) continue;
-    for (const match of grepCmd.stdout.trim().split("\n")) {
-      if (!match) continue;
-      // npm:@aws-sdk/client-s3@3.1094.0 → @aws-sdk/client-s3, 3.1094.0
-      const atIdx = match.lastIndexOf("@");
-      if (atIdx <= 4) {
-        // Unversioned import (e.g. npm:zod) — flag it
-        if (warnings) {
-          warnings.push(`Unversioned npm import: ${match} in ${file}`);
+    // Read the file and extract npm: specifiers from non-comment lines.
+    // This avoids false positives from code examples in documentation comments.
+    let content: string;
+    try {
+      content = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    }
+    const npmSpecRe = /npm:([^"'`\s)]+)/g;
+    for (const line of content.split("\n")) {
+      // Skip single-line comment lines
+      if (line.trimStart().startsWith("//")) continue;
+      for (const m of line.matchAll(npmSpecRe)) {
+        const spec = m[1]!; // e.g. @aws-sdk/client-s3@3.1094.0
+        const atIdx = spec.lastIndexOf("@");
+        if (atIdx <= 0) {
+          // Unversioned import (e.g. just "zod") — flag it
+          if (warnings) {
+            warnings.push(`Unversioned npm import: npm:${spec} in ${file}`);
+          }
+          continue;
         }
-        continue;
+        const pkg = spec.slice(0, atIdx);
+        const ver = spec.slice(atIdx + 1);
+        // Validate version looks like semver — reject garbage
+        if (!/^\d+\.\d+\.\d+/.test(ver)) {
+          if (warnings) {
+            warnings.push(
+              `Skipping non-semver version "${ver}" for ${pkg} in ${file}`,
+            );
+          }
+          continue;
+        }
+        imports.set(pkg, ver);
       }
-      const pkg = match.slice(4, atIdx); // strip "npm:"
-      const ver = match.slice(atIdx + 1);
-      imports.set(pkg, ver);
     }
   }
   return imports;
@@ -722,7 +741,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.27.4",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {

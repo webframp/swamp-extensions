@@ -19,8 +19,8 @@ import {
   ListFindingsCommand,
   ListMembersCommand,
   type Member,
-} from "npm:@aws-sdk/client-guardduty@3.1096.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
+} from "npm:@aws-sdk/client-guardduty@3.1100.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1100.0";
 
 // =============================================================================
 // Schemas
@@ -229,7 +229,7 @@ function mapMember(m: Member): z.infer<typeof MemberSchema> {
  */
 export const model = {
   type: "@webframp/aws/guardduty",
-  version: "2026.07.30.2",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
