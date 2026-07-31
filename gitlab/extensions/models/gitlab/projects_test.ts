@@ -829,6 +829,9 @@ Deno.test("get_merge_request reports a mergeable MR with no blockers", async () 
           title: "x",
           state: "opened",
           draft: false,
+          sourceBranch: "feature/add-login",
+          targetBranch: "main",
+          webUrl: "https://git.example.org/g/p/-/merge_requests/5",
           detailedMergeStatus: "MERGEABLE",
           mergeable: true,
           conflicts: false,
@@ -850,6 +853,9 @@ Deno.test("get_merge_request reports a mergeable MR with no blockers", async () 
     assertEquals(d.mergeable, true);
     assertEquals(d.blockers.length, 0);
     assertEquals(d.summary.includes("is mergeable"), true);
+    assertEquals(d.sourceBranch, "feature/add-login");
+    assertEquals(d.targetBranch, "main");
+    assertEquals(d.webUrl, "https://git.example.org/g/p/-/merge_requests/5");
   } finally {
     restore();
   }
