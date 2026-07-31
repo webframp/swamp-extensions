@@ -22,6 +22,7 @@ interface GlobalArgs {
   clientSecret: string;
   accessToken: string;
   refreshToken: string;
+  hasBroadcasterAuth: boolean;
 }
 
 function credsFrom(globalArgs: GlobalArgs): TwitchCredentials {
@@ -97,6 +98,9 @@ const GlobalArgsSchema = z.object({
   ),
   refreshToken: z.string().meta({ sensitive: true }).describe(
     "OAuth2 refresh token",
+  ),
+  hasBroadcasterAuth: z.boolean().default(false).describe(
+    "Set true if the broadcaster authorized this app (enables ban list and mod event reads)",
   ),
 });
 
@@ -190,13 +194,13 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.07.18.2",
+  version: "2026.07.30.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
-      toVersion: "2026.07.18.2",
-      description: "No schema changes",
+      toVersion: "2026.07.30.1",
+      description: "Added hasBroadcasterAuth global arg (default false)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -391,10 +395,19 @@ export const model = {
     },
 
     get_banned_users: {
-      description: "Get all banned users in the configured channel",
+      description:
+        "Get all banned users in the configured channel (requires broadcaster authorization)",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const { channel } = context.globalArgs;
+        const { channel, hasBroadcasterAuth } = context.globalArgs;
+
+        if (!hasBroadcasterAuth) {
+          throw new Error(
+            "get_banned_users requires broadcaster authorization. " +
+              "Set hasBroadcasterAuth=true if the broadcaster has OAuth'd this app.",
+          );
+        }
+
         const creds = credsFrom(context.globalArgs);
         const broadcasterId = await getBroadcasterId(creds, channel);
 
@@ -561,10 +574,18 @@ export const model = {
 
     get_mod_events: {
       description:
-        "Get moderator add/remove events for the configured channel (uses legacy endpoint; may return empty on newer channels)",
+        "Get moderator add/remove events for the configured channel (requires broadcaster authorization; uses legacy endpoint, may return empty on newer channels)",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
-        const { channel } = context.globalArgs;
+        const { channel, hasBroadcasterAuth } = context.globalArgs;
+
+        if (!hasBroadcasterAuth) {
+          throw new Error(
+            "get_mod_events requires broadcaster authorization. " +
+              "Set hasBroadcasterAuth=true if the broadcaster has OAuth'd this app.",
+          );
+        }
+
         const creds = credsFrom(context.globalArgs);
         const broadcasterId = await getBroadcasterId(creds, channel);
 

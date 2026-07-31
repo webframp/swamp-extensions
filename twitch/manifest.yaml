@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/twitch"
-version: "2026.07.18.2"
+version: "2026.07.30.1"
 description: |
   Twitch Moderation Toolkit — cross-channel moderation visibility for Twitch moderators.
 
@@ -18,6 +18,12 @@ description: |
   swamp model create @webframp/twitch mod-drongo \
     --global-arg channel=drongo \
     --global-arg moderatorId=YOUR_TWITCH_USER_ID
+
+  # If the broadcaster has OAuth'd your app, enable ban/mod-event reads:
+  swamp model create @webframp/twitch mod-drongo \
+    --global-arg channel=drongo \
+    --global-arg moderatorId=YOUR_TWITCH_USER_ID \
+    --global-arg hasBroadcasterAuth=true
 
   # Run the cross-channel audit
   swamp workflow run @webframp/twitch-mod-audit
@@ -39,7 +45,7 @@ description: |
 
   ```bash
   # 1. Open in browser (replace YOUR_CLIENT_ID):
-  # https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=code&scope=moderator:read:chatters+moderation:read+moderator:manage:banned_users+user:write:chat+channel:read:editors+moderator:read:suspicious_users+moderator:read:warnings
+  # https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=code&scope=moderator:read:chatters+moderator:read:banned_users+moderator:manage:banned_users+user:write:chat+channel:read:editors+moderator:read:suspicious_users+moderator:read:warnings
 
   # 2. Copy the code from the redirect URL, then exchange for tokens:
   curl -X POST 'https://id.twitch.tv/oauth2/token' \
@@ -54,14 +60,39 @@ description: |
 
   The model refreshes expired access tokens automatically using the refresh token.
 
+  ## Methods by Auth Level
+
+  ### Moderator auth (works with any moderator token)
+
+  | Method | Scope | Purpose |
+  |--------|-------|---------|
+  | get_channel | channel:read:editors | Channel metadata |
+  | get_chatters | moderator:read:chatters | List users in chat |
+  | get_user | (none) | User profile and account age |
+  | ban_user / unban_user | moderator:manage:banned_users | Issue/remove bans |
+  | send_message | user:write:chat | Send chat messages |
+
+  ### Broadcaster auth (broadcaster must have OAuth'd the app)
+
+  | Method | Scope | Purpose |
+  |--------|-------|---------|
+  | get_banned_users | moderator:read:banned_users | Read full ban list |
+  | get_mod_events | moderator:read:banned_users | Mod add/remove events |
+
+  Set `hasBroadcasterAuth=true` on model instances where the broadcaster has
+  authorized your application. Methods that require broadcaster auth throw a
+  clear error when the flag is false.
+
   ## Scopes
 
   Request all scopes during app registration to avoid re-authorization later.
+  Note: the deprecated `moderation:read` scope has been replaced by the
+  granular `moderator:read:banned_users` scope.
 
   | Scope | Used by | Purpose |
   |-------|---------|---------|
   | moderator:read:chatters | get_chatters | List users in chat |
-  | moderation:read | get_banned_users, get_mod_events | Read bans and mod activity |
+  | moderator:read:banned_users | get_banned_users, get_mod_events | Read bans and mod activity |
   | moderator:manage:banned_users | ban_user, unban_user | Issue bans/timeouts and unban |
   | user:write:chat | send_message | Send chat messages as your user |
   | channel:read:editors | get_channel | Read channel metadata |

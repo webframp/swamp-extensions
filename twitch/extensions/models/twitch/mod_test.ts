@@ -404,7 +404,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: GLOBAL_ARGS,
+        globalArgs: { ...GLOBAL_ARGS, hasBroadcasterAuth: true },
         definition: DEFINITION,
       });
 
@@ -617,7 +617,7 @@ Deno.test({
 
     try {
       const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: GLOBAL_ARGS,
+        globalArgs: { ...GLOBAL_ARGS, hasBroadcasterAuth: true },
         definition: DEFINITION,
       });
 
@@ -651,3 +651,53 @@ Deno.test({
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Broadcaster Auth Guard Tests
+// ---------------------------------------------------------------------------
+
+import { assertRejects } from "jsr:@std/assert@1.0.19";
+
+Deno.test(
+  "twitch model: get_banned_users throws when hasBroadcasterAuth is false",
+  async () => {
+    const { context } = createModelTestContext({
+      globalArgs: { ...GLOBAL_ARGS, hasBroadcasterAuth: false },
+      definition: DEFINITION,
+    });
+
+    await assertRejects(
+      () =>
+        model.methods.get_banned_users.execute(
+          {},
+          context as unknown as Parameters<
+            typeof model.methods.get_banned_users.execute
+          >[1],
+        ),
+      Error,
+      "requires broadcaster authorization",
+    );
+  },
+);
+
+Deno.test(
+  "twitch model: get_mod_events throws when hasBroadcasterAuth is false",
+  async () => {
+    const { context } = createModelTestContext({
+      globalArgs: { ...GLOBAL_ARGS, hasBroadcasterAuth: false },
+      definition: DEFINITION,
+    });
+
+    await assertRejects(
+      () =>
+        model.methods.get_mod_events.execute(
+          {},
+          context as unknown as Parameters<
+            typeof model.methods.get_mod_events.execute
+          >[1],
+        ),
+      Error,
+      "requires broadcaster authorization",
+    );
+  },
+);

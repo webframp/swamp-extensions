@@ -41,7 +41,7 @@ jobs:
         allowFailure: true
 
       - name: get-banned-users
-        description: Get current bans and timeouts
+        description: "Get current bans and timeouts (requires broadcaster auth — skipped unless hasBroadcasterAuth=true)"
         task:
           type: model_method
           modelIdOrName: "*"
@@ -49,7 +49,7 @@ jobs:
         allowFailure: true
 
       - name: get-mod-events
-        description: Get recent moderation actions (legacy endpoint, may return empty)
+        description: "Get recent moderation actions (requires broadcaster auth — skipped unless hasBroadcasterAuth=true; legacy endpoint, may return empty)"
         task:
           type: model_method
           modelIdOrName: "*"
