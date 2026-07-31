@@ -1309,3 +1309,120 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "stale lock is force-stolen after staleLockThresholdMs",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+
+    try {
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      // Inject a stale lock directly into the mock server with a Created
+      // timestamp older than the staleLockThresholdMs (default 60s).
+      const staleLockStateName = "swamp--lock----test--path";
+      const staleCreated = new Date(Date.now() - 120_000).toISOString(); // 2 minutes ago
+      mock.locks.set(staleLockStateName, {
+        ID: "stale-nonce-123",
+        Operation: "swamp",
+        Info: "holder=stale@host, pid=99999",
+        Who: "stale@host",
+        Version: "1",
+        Created: staleCreated,
+        Path: staleLockStateName,
+      });
+
+      // Acquire with a short maxWaitMs — if stale detection works, this should
+      // succeed quickly by force-stealing the stale lock, not by timing out.
+      const lock = provider.createLock("/test/path", {
+        ttlMs: 5_000,
+        retryIntervalMs: 100,
+        maxWaitMs: 5_000,
+        staleLockThresholdMs: 60_000,
+      });
+
+      const start = Date.now();
+      await lock.acquire();
+      const elapsed = Date.now() - start;
+
+      // Should have acquired almost instantly (stale lock stolen on first retry)
+      // rather than waiting the full maxWaitMs
+      assertEquals(
+        elapsed < 2_000,
+        true,
+        `Expected fast acquire, took ${elapsed}ms`,
+      );
+
+      // Verify we hold the lock now
+      const info = await lock.inspect();
+      assertExists(info);
+
+      await lock.release();
+    } finally {
+      await mock.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "live lock within staleLockThresholdMs is NOT stolen",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+
+    try {
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      // Inject a lock that is NOT stale (Created 5s ago, threshold 60s)
+      const lockStateName = "swamp--lock----test--path";
+      const recentCreated = new Date(Date.now() - 5_000).toISOString();
+      mock.locks.set(lockStateName, {
+        ID: "live-nonce-456",
+        Operation: "swamp",
+        Info: "holder=live@host, pid=12345",
+        Who: "live@host",
+        Version: "1",
+        Created: recentCreated,
+        Path: lockStateName,
+      });
+
+      // Try to acquire with short timeout — should NOT steal the live lock
+      const lock = provider.createLock("/test/path", {
+        ttlMs: 5_000,
+        retryIntervalMs: 50,
+        maxWaitMs: 300,
+        staleLockThresholdMs: 60_000,
+      });
+
+      let threw = false;
+      try {
+        await lock.acquire();
+      } catch (e) {
+        threw = true;
+        assertEquals(
+          (e as Error).message.includes("Lock timeout"),
+          true,
+        );
+      }
+      assertEquals(
+        threw,
+        true,
+        "Should have timed out without stealing live lock",
+      );
+
+      // The original lock should still be held
+      assertEquals(mock.locks.has(lockStateName), true);
+    } finally {
+      await mock.server.shutdown();
+    }
+  },
+});

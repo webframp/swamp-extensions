@@ -31,6 +31,7 @@ interface LockOptions {
   ttlMs?: number;
   retryIntervalMs?: number;
   maxWaitMs?: number;
+  staleLockThresholdMs?: number;
 }
 
 interface DistributedLock {
@@ -671,7 +672,7 @@ function fromGitLabLockInfo(gitlabInfo: GitLabLockInfo): LockInfo {
     hostname,
     pid: 0, // Not available from GitLab
     acquiredAt: gitlabInfo.Created,
-    ttlMs: 30_000, // Default TTL
+    ttlMs: 10_000, // Default TTL (informational — GitLab has no server-side TTL)
     nonce: gitlabInfo.ID,
   };
 }
@@ -685,6 +686,7 @@ class GitLabLock implements DistributedLock {
   private readonly ttlMs: number;
   private readonly retryIntervalMs: number;
   private readonly maxWaitMs: number;
+  private readonly staleLockThresholdMs: number;
   private lockInfo: LockInfo | null = null;
   private heartbeatId: ReturnType<typeof setInterval> | undefined;
 
@@ -698,6 +700,11 @@ class GitLabLock implements DistributedLock {
     this.ttlMs = options?.ttlMs ?? 10_000;
     this.retryIntervalMs = options?.retryIntervalMs ?? 500;
     this.maxWaitMs = options?.maxWaitMs ?? 30_000;
+    // Stale threshold is independent of TTL because the heartbeat does not
+    // refresh the lock in GitLab — only local memory is updated. A push that
+    // takes >20s would be force-stolen if this derived from 2×TTL (20s).
+    // 60s matches the pre-fix behavior and exceeds worst-case push latency.
+    this.staleLockThresholdMs = options?.staleLockThresholdMs ?? 60_000;
   }
 
   async acquire(): Promise<void> {
@@ -741,8 +748,9 @@ class GitLabLock implements DistributedLock {
           span.setAttribute(Attr.LOCK_HOLDER, existing.Who);
           const createdAt = new Date(existing.Created).getTime();
           const age = Date.now() - createdAt;
-          // Consider lock stale if older than 2x TTL (GitLab doesn't have TTL, so we use our default)
-          if (age > this.ttlMs * 2) {
+          // Consider lock stale if older than staleLockThresholdMs (decoupled
+          // from TTL because GitLab locks have no server-side refresh)
+          if (age > this.staleLockThresholdMs) {
             // Force release stale lock
             await this.client.unlock(this.stateName, existing);
             attempt++;
@@ -833,12 +841,12 @@ class GitLabLock implements DistributedLock {
   }
 
   private startHeartbeat(): void {
-    // GitLab locks don't have built-in TTL/heartbeat, but we refresh the lock
-    // periodically to update the Created timestamp for stale detection
+    // Local-only heartbeat — updates in-memory acquiredAt for diagnostics.
+    // Does NOT refresh the lock in GitLab; other processes use the original
+    // Created timestamp for stale detection via staleLockThresholdMs.
     this.heartbeatId = setInterval(() => {
       if (this.lockInfo) {
         this.lockInfo.acquiredAt = new Date().toISOString();
-        // Note: GitLab doesn't support lock refresh, so we just track locally
       }
     }, this.ttlMs / 3);
     // Unref so a held lock doesn't keep the process alive if release is never
