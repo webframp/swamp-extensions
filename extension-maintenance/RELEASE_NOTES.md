@@ -1,6 +1,6 @@
 ## 2026.07.31.1
 
-**Changed:** Bump @opentelemetry/api 1.9.1`) that bypass → 1.9.1
+**Changed:** Bump @aws-sdk/credential-providers 3.1096.0 → 3.1100.0
 
 ## 2026.07.27.4
 
