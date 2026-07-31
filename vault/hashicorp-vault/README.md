@@ -109,6 +109,16 @@ span without it is close to useless for debugging. Treat key names as visible to
 anyone with access to your trace backend, and do not encode sensitive
 information in them.
 
+**Verified against the runtime.** The no-token/no-body guarantee was empirically
+confirmed against swamp `20260725.210408.0` and Deno 2.7.14: Deno's fetch
+auto-instrumentation is present in the binary but inactive, so `X-Vault-Token`
+and request bodies never enter a span. This property depends on fetch
+instrumentation remaining disabled in the swamp host. If a future swamp or Deno
+release activates it, the token becomes a span attribute that nothing in this
+extension can suppress. See
+[#276](https://github.com/webframp/swamp-extensions/issues/276) for the full
+probe methodology and residual risk inventory.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.
