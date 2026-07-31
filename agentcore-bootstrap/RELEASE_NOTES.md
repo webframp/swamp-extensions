@@ -1,3 +1,7 @@
+## 2026.07.31.1
+
+**Changed:** Bump @webframp/agentcore 2026.07.27.1 → 2026.07.27.2
+
 ## 2026.07.27.2
 
 **Changed:** Bump @webframp/agentcore 2026.07.21.1 → 2026.07.27.1

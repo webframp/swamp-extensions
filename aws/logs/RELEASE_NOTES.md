@@ -1,3 +1,7 @@
+## 2026.07.31.1
+
+**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (2 packages)
+
 ## 2026.07.30.2
 
 **Fixed:** The `query` and `find_errors` methods now fail when a Logs Insights query

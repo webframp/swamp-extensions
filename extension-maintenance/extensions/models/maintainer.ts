@@ -722,7 +722,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.27.4",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {

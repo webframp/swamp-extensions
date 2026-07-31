@@ -19,8 +19,8 @@ import {
   ListFindingsCommand,
   ListMembersCommand,
   type Member,
-} from "npm:@aws-sdk/client-guardduty@3.1096.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
+} from "npm:@aws-sdk/client-guardduty@3.1100.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1100.0";
 
 // =============================================================================
 // Schemas

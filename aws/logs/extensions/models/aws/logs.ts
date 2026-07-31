@@ -19,8 +19,8 @@ import {
   GetQueryResultsCommand,
   StartQueryCommand,
   StopQueryCommand,
-} from "npm:@aws-sdk/client-cloudwatch-logs@3.1096.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
+} from "npm:@aws-sdk/client-cloudwatch-logs@3.1100.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1100.0";
 
 // =============================================================================
 // Schemas
@@ -268,7 +268,7 @@ async function waitForQueryCompletion(
  */
 export const model = {
   type: "@webframp/aws/logs",
-  version: "2026.07.30.2",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

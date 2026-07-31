@@ -15,12 +15,12 @@ import {
   DescribeAlarmsCommand,
   GetMetricStatisticsCommand,
   type MetricAlarm,
-} from "npm:@aws-sdk/client-cloudwatch@3.1096.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1100.0";
 import {
   ListSubscriptionsByTopicCommand,
   SNSClient,
-} from "npm:@aws-sdk/client-sns@3.1096.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1096.0";
+} from "npm:@aws-sdk/client-sns@3.1100.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1100.0";
 
 const MAX_PAGES = 10;
 
@@ -370,7 +370,7 @@ async function enrichAlarm(
  */
 export const model = {
   type: "@webframp/aws/alarm-investigation",
-  version: "2026.07.30.1",
+  version: "2026.07.31.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
