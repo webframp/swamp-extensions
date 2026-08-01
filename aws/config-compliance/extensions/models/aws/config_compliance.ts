@@ -146,11 +146,16 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.07.31.1",
+  version: "2026.08.01.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
       description: "Add optional profile global argument for multi-account use",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.01.1",
+      description: "Version bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
