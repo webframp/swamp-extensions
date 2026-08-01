@@ -752,7 +752,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.07.31.1",
+  version: "2026.08.01.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1340,11 +1340,25 @@ export const model = {
               }
             }
 
-            // Reaching here means every write for this entry completed. A
-            // deno.lock regeneration failure above does not unset this: the
-            // files were written, only the lock is stale. On a dry run nothing
-            // was written, so nothing was bumped.
-            if (!args.dry_run) extensionsBumped++;
+            // Self-verify the upgrade chain this apply just wrote. quality-gate
+            // checks this too, but only if the sweep workflow's verify step
+            // actually runs — an ad-hoc audit→plan-bump→apply-bump invocation
+            // that skips the workflow (as happened in #298 and again in #322,
+            // breaking 19 and then 21 more extensions) would otherwise ship a
+            // broken chain undetected. Catch it here, at the point of writing,
+            // regardless of what runs after.
+            const chainError = !args.dry_run
+              ? await checkUpgradeChain(extDir)
+              : null;
+            if (chainError) {
+              errors.push({ extension: entry.name, error: chainError });
+            } else if (!args.dry_run) {
+              // Reaching here means every write for this entry completed and
+              // the chain it wrote is valid. A deno.lock regeneration failure
+              // above does not unset this: the files were written, only the
+              // lock is stale.
+              extensionsBumped++;
+            }
           } catch (err: unknown) {
             errors.push({
               extension: entry.name,

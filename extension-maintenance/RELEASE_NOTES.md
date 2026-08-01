@@ -1,3 +1,17 @@
+## 2026.08.01.1
+
+**Fixed:** `apply-bump` now self-verifies the upgrade chain it just wrote before
+counting an extension as bumped. The `plan-bump` fix from `2026.07.29` (it adds
+the matching `toVersion` alongside a `version` bump) only helps when
+`apply-bump` runs through the full `extension-maintenance-sweep` workflow, whose
+`verify` step calls `quality-gate`. Two sweeps since then were run as ad-hoc
+`audit` → `plan-bump` → `apply-bump` invocations that skipped `verify` entirely,
+so a broken chain shipped undetected both times — 19 extensions after the
+`2026.07.27.1` sweep, then 21 more after the AWS SDK bump on `2026.07.31`.
+`apply-bump` now runs the same `checkUpgradeChain` check `quality-gate` uses
+immediately after writing each extension's files, so a broken chain is caught
+and reported in `current-apply` even when `verify` never runs.
+
 ## 2026.07.31.1
 
 **Changed:** Bump @aws-sdk/credential-providers 3.1096.0 → 3.1100.0
