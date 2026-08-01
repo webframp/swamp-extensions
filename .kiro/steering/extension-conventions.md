@@ -95,24 +95,17 @@ Missing any of these causes distinct CI failures:
 
 ### 2. Quality gates (in extension directory)
 
+Refer to the swamp skill for the canonical commands. At minimum:
+
 ```bash
 deno task check && deno task lint && deno task fmt:check && deno task test
-swamp extension fmt manifest.yaml --check
-swamp extension quality manifest.yaml --json
 ```
 
-### 3. ci-discover compatibility
+### 3. Manifest validation
 
-The manifest `name` field MUST use double quotes (not single quotes, not
-unquoted). The ci-discover regex only handles `"` or bare values:
-
-```yaml
-# WRONG:
-name: '@webframp/my-ext'
-
-# RIGHT:
-name: "@webframp/my-ext"
-```
+The swamp skill covers manifest validation. Always run it locally before
+pushing — the "Validate manifests" CI job runs it on every manifest in the
+repo.
 
 ### 4. Adversarial review
 
