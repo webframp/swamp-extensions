@@ -1,5 +1,5 @@
 manifestVersion: 1
-name: '@webframp/cost-projection'
+name: "@webframp/cost-projection"
 version: 2026.07.31.1
 description: |
   GPU inference cost projection across cloud, rental, and capex scenarios.
@@ -78,7 +78,7 @@ description: |
   `estimatedTokensPerGpuHour` (from vLLM benchmarks or model card throughput
   figures) when recording a scenario. The projection will compute the monthly
   token volume at which self-hosting breaks even.
-repository: 'https://github.com/webframp/swamp-extensions'
+repository: "https://github.com/webframp/swamp-extensions"
 models:
   - cost-projection/gpu_cloud.ts
   - cost-projection/gpu_rental.ts
