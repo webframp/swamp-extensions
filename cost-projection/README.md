@@ -36,7 +36,16 @@ swamp model method run my-cloud-scenario record \
   --input instanceRatePerHour=98.32
 
 # Compare all recorded scenarios
-swamp report run webframp/cost-projection-comparison
+swamp report run @webframp/cost-projection-comparison
+```
+
+## Sensitivity Analysis (capex)
+
+```bash
+# Run across utilization × useful-life matrix
+swamp model method run my-capex-scenario sensitivity \
+  --input 'usefulLifeMonthsRange=[24,36,48,60]' \
+  --input 'utilizationPctRange=[60,75,85,95]'
 ```
 
 ## Design Principles
