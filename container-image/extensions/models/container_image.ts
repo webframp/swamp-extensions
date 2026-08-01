@@ -113,12 +113,17 @@ async function runCommand(
 /** Container image model definition. */
 export const model = {
   type: "@webframp/container-image",
-  version: "2026.07.27.1",
+  version: "2026.08.01.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.01.1",
+      description: "Version bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

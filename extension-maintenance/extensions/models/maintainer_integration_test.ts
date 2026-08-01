@@ -227,6 +227,64 @@ Deno.test("apply-bump includes test files in glob replacements", async () => {
   await cleanup();
 });
 
+Deno.test("apply-bump reports an error and skips extensionsBumped when the written chain is broken", async () => {
+  // Mirrors the real bug (#298, #322): a plan that bumps `version` but omits
+  // the matching `toVersion` change, leaving the chain one step short.
+  const { root, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.1",
+  upgrades: [
+    {
+      toVersion: "2026.01.01.1",
+      description: "initial",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
+};
+`,
+  });
+
+  const plan = {
+    plannedAt: "2026-07-27T00:00:00Z",
+    totalEntries: 1,
+    entries: [
+      {
+        name: "@test/ext",
+        dir: "test-ext",
+        currentVersion: "2026.01.01.1",
+        nextVersion: "2026.07.27.1",
+        changes: [
+          {
+            file: "extensions/**/*.ts",
+            find: 'version: "2026.01.01.1"',
+            replace: 'version: "2026.07.27.1"',
+            category: "source-version",
+          },
+          // Deliberately no matching `toVersion` change — this is the bug.
+        ],
+        releaseNotes: "## 2026.07.27.1\n\n**Changed:** Bumped something.\n",
+      },
+    ],
+    skipped: [],
+  };
+
+  const { context, written } = mockContext(root, plan);
+  await model.methods["apply-bump"].execute({}, context);
+
+  const applyResult = written.find((w) => w.spec === "apply")
+    ?.data as Record<string, unknown>;
+  const errors = applyResult.errors as Array<
+    { extension: string; error: string }
+  >;
+
+  assertEquals(applyResult.extensionsBumped, 0);
+  assertEquals(errors.length, 1);
+  assertEquals(errors[0].extension, "@test/ext");
+  assertStringIncludes(errors[0].error, "upgrade chain broken");
+
+  await cleanup();
+});
+
 Deno.test("apply-bump regenerates deno.lock with direct specifiers", async () => {
   // Use a real npm package that exists — zod is a safe bet
   const { root, cleanup } = await createFixture({

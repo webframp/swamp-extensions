@@ -472,11 +472,16 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.07.31.1",
+  version: "2026.08.01.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
       description: "Add optional profile global argument for multi-account use",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.01.1",
+      description: "Version bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
