@@ -21,7 +21,7 @@ import { z } from "npm:zod@4.4.3";
 // Schemas
 // =============================================================================
 
-const DepreciationMethodEnum = z.enum(["straight-line", "declining-balance"]);
+const DepreciationMethodEnum = z.enum(["straight-line"]);
 
 const ScenarioSchema = z.object({
   name: z.string().min(1),
@@ -170,7 +170,7 @@ function computeProjection(s: ScenarioInput) {
 
   let breakEvenTokensPerMonth: number | undefined;
   let breakEvenRequestsPerMonth: number | undefined;
-  if (s.apiComparisonRatePerMToken && s.estimatedTokensPerGpuHour) {
+  if (s.apiComparisonRatePerMToken) {
     breakEvenTokensPerMonth = monthlyTotalCost /
       (s.apiComparisonRatePerMToken / 1_000_000);
     breakEvenRequestsPerMonth = Math.ceil(breakEvenTokensPerMonth / 4000);

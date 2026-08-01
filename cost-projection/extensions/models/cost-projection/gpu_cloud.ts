@@ -127,7 +127,7 @@ function computeProjection(s: ScenarioInput) {
 
   let breakEvenTokensPerMonth: number | undefined;
   let breakEvenRequestsPerMonth: number | undefined;
-  if (s.apiComparisonRatePerMToken && s.estimatedTokensPerGpuHour) {
+  if (s.apiComparisonRatePerMToken) {
     // Break-even: at what monthly token volume does self-hosting equal API
     // monthlyTotalCost = tokens * apiRate / 1M
     breakEvenTokensPerMonth = monthlyTotalCost /

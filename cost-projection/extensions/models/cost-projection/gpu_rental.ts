@@ -116,7 +116,7 @@ function computeProjection(s: ScenarioInput) {
 
   let breakEvenTokensPerMonth: number | undefined;
   let breakEvenRequestsPerMonth: number | undefined;
-  if (s.apiComparisonRatePerMToken && s.estimatedTokensPerGpuHour) {
+  if (s.apiComparisonRatePerMToken) {
     breakEvenTokensPerMonth = monthlyTotalCost /
       (s.apiComparisonRatePerMToken / 1_000_000);
     breakEvenRequestsPerMonth = Math.ceil(breakEvenTokensPerMonth / 4000);
