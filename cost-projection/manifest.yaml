@@ -1,0 +1,109 @@
+manifestVersion: 1
+name: '@webframp/cost-projection'
+version: 2026.07.31.1
+description: |
+  GPU inference cost projection across cloud, rental, and capex scenarios.
+
+  Three model types store scenario inputs (instance rates, hardware costs,
+  facility expenses) and compute normalized $/GPU-hour projections. A
+  comparison report queries all scenarios and produces a ranked table with
+  crossover analysis.
+
+  No live API calls — rates are manually entered from quotes, pricing pages,
+  or account team conversations. All scenarios in a comparison must share a
+  currency.
+
+  ## Model Types
+
+  - **gpu-cloud** — Hyperscaler GPU instances (AWS, Azure, GCP) under various
+    capacity models: on-demand, reserved, FTP, Capacity Blocks, etc.
+  - **gpu-rental** — Third-party providers (CoreWeave, Lambda Labs, RunPod)
+    with simpler per-GPU-hour pricing and optional commitment discounts.
+  - **gpu-capex** — On-premises/colo hardware. Amortizes a capital purchase
+    into synthetic recurring cost, adds facility/staff/maintenance, and
+    normalizes to $/GPU-hour. Includes sensitivity analysis across utilization
+    and useful-life assumptions.
+
+  ## Usage
+
+  ```bash
+  swamp extension pull @webframp/cost-projection
+
+  # Cloud scenario
+  swamp model create @webframp/cost-projection/gpu-cloud kimi-k3-hyperpod
+  swamp model method run kimi-k3-hyperpod record \
+    --input name=kimi-k3-hyperpod \
+    --input provider=aws \
+    --input region=us-east-1 \
+    --input instanceType=ml.p6-b300.48xlarge \
+    --input gpuCount=8 \
+    --input gpuModel="NVIDIA B300" \
+    --input capacityModel=flexible-training-plan \
+    --input instanceRatePerHour=98.50
+
+  # Rental scenario
+  swamp model create @webframp/cost-projection/gpu-rental kimi-k3-coreweave
+  swamp model method run kimi-k3-coreweave record \
+    --input name=kimi-k3-coreweave \
+    --input provider=coreweave \
+    --input gpuModel="NVIDIA H100 SXM" \
+    --input gpuCount=8 \
+    --input ratePerGpuHour=2.49
+
+  # Capex scenario
+  swamp model create @webframp/cost-projection/gpu-capex dc-east-b300
+  swamp model method run dc-east-b300 record \
+    --input name=dc-east-b300 \
+    --input gpuModel="NVIDIA B300" \
+    --input gpuCount=8 \
+    --input gpuCostPerUnit=35000 \
+    --input serverCost=45000 \
+    --input networkingCost=15000 \
+    --input totalHardwareCost=340000 \
+    --input usefulLifeMonths=36 \
+    --input coloCostPerKwMonth=150 \
+    --input powerDrawKw=10.5
+
+  # Run sensitivity analysis
+  swamp model method run dc-east-b300 sensitivity
+
+  # Compare all scenarios
+  swamp report run webframp/cost-projection-comparison
+  ```
+
+  ## Per-Token Break-Even (Optional)
+
+  To compare self-hosted cost against per-token API pricing, provide
+  `apiComparisonRatePerMToken` ($/million tokens from the API provider) and
+  `estimatedTokensPerGpuHour` (from vLLM benchmarks or model card throughput
+  figures) when recording a scenario. The projection will compute the monthly
+  token volume at which self-hosting breaks even.
+repository: 'https://github.com/webframp/swamp-extensions'
+models:
+  - cost-projection/gpu_cloud.ts
+  - cost-projection/gpu_rental.ts
+  - cost-projection/gpu_capex.ts
+workflows: []
+vaults: []
+drivers: []
+datastores: []
+reports:
+  - scenario_comparison.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - gpu
+  - cost
+  - projection
+  - finops
+  - inference
+  - capex
+  - cloud
+  - comparison
+dependencies: []
