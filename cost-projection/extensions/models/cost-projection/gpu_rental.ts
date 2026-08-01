@@ -143,9 +143,10 @@ function computeProjection(s: ScenarioInput) {
 // Model
 // =============================================================================
 
+/** GPU rental inference cost projection model. */
 export const model = {
   type: "@webframp/cost-projection/gpu-rental",
-  version: "2026.07.31.1",
+  version: "2026.08.01.1",
   globalArguments: z.object({}),
 
   resources: {

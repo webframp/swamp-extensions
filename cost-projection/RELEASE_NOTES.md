@@ -1,5 +1,10 @@
 # Release Notes
 
+## 2026.08.01.1
+
+**Fixed:** Report name now uses collective prefix (`@webframp/cost-projection-comparison`).
+Previous name (`webframp/cost-projection-comparison`) failed publish validation.
+
 ## 2026.07.31.1
 
 Initial release.

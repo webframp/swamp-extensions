@@ -48,8 +48,9 @@ function formatLargeUsd(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+/** Cross-scenario GPU inference cost comparison report. */
 export const report = {
-  name: "webframp/cost-projection-comparison",
+  name: "@webframp/cost-projection-comparison",
   description:
     "Cross-scenario GPU inference cost comparison, normalized to $/GPU-hour. " +
     "Queries all cost-projection model instances and produces a ranked table " +
