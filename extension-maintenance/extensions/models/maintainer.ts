@@ -141,7 +141,7 @@ const ApplyResultSchema = z.object({
   extensionsBumped: z
     .number()
     .describe(
-      "Extensions whose file writes completed. 0 on a dry run. Excludes entries that threw mid-write; a deno.lock regeneration failure still counts as bumped because the files were written.",
+      "Extensions whose file writes completed with a valid upgrade chain. 0 on a dry run. Excludes entries that threw mid-write and entries where the written upgrade chain fails checkUpgradeChain (see errors); a deno.lock regeneration failure still counts as bumped because the files were written.",
     ),
   filesModified: z
     .number()
@@ -638,7 +638,7 @@ async function checkUpgradeChain(extDir: string): Promise<string | null> {
         "*.ts",
         "-not",
         "-name",
-        "*test*",
+        "*_test.ts",
       ],
       extDir,
     );
