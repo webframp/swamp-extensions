@@ -12,3 +12,8 @@
 .claude/scheduled_tasks.lock
 .claude/scheduled_tasks.json
 # END swamp managed section
+
+# Local swamp repo state (not part of published extension)
+/models/
+/vaults/
+/workflows/
