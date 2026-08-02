@@ -38,6 +38,20 @@ interactions, data flows, and pain points:
 swamp model method run adoption discover
 ```
 
+### Converting an existing skill instead
+
+If you already have a skill (a `SKILL.md` or similar agent instructions) that
+you're trying to formalize rather than mapping a domain from scratch, `discover`
+will ask upfront whether that's the case. Answering yes routes you to
+`import_skill`, which seeds both `landscape` and `extensionDesign` directly from
+the skill's content — skipping the systems interview:
+
+```bash
+swamp model method run adoption import_skill --arg sourceSkill=.claude/skills/deploy-checklist/SKILL.md
+```
+
+From there, `scaffold` and `next` work the same as the `design`-driven path.
+
 ### Design an extension
 
 After discovery, `design` helps you shape a swamp extension for the highest-pain
@@ -68,12 +82,13 @@ swamp model method run adoption next
 
 ## Methods
 
-| Method     | Description                                                       |
-| ---------- | ----------------------------------------------------------------- |
-| `discover` | Structured interview to map systems, interactions, and data flows |
-| `design`   | Shape an extension design from landscape analysis                 |
-| `scaffold` | Generate implementation files from a design                       |
-| `next`     | Suggest the next extension to build based on remaining pain       |
+| Method         | Description                                                        |
+| -------------- | -------------------------------------------------------------------- |
+| `discover`     | Structured interview to map systems, interactions, and data flows    |
+| `import_skill` | Convert an existing skill into a landscape stub and extension design |
+| `design`       | Shape an extension design from landscape analysis                    |
+| `scaffold`     | Generate implementation files from a design                          |
+| `next`         | Suggest the next extension to build based on remaining pain          |
 
 ## Resources
 

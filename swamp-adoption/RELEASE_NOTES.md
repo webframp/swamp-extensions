@@ -1,11 +1,24 @@
-## 2026.07.26.1
+## 2026.08.01.1
 
-**Changed:** Extensions scaffolded by this model now pin
-`@systeminit/swamp-testing` at `0.20260604.20`, the current release, instead of
-`0.20260504.10`. The old pin was hard-coded in the generated `deno.json`, so every
-extension created through the adoption workflow started life on a test library
-that was three releases behind and inconsistent with the rest of the repo.
+**Added:** New `import_skill` method. If you already have a skill (`SKILL.md`
+or similar agent instructions) that you're trying to formalize into a swamp
+extension, this method converts it directly — seeding both `landscape` and
+`extensionDesign` from the skill's structure instead of running a full systems
+interview. `scaffold` and `next` work unchanged from either path.
 
-**Upgrade note:** Nothing to do for extensions already scaffolded — they keep the
-pin they were created with. Update their `deno.json` and regenerate `deno.lock`
-with `deno install` if you want them on the current version.
+**Changed:** `discover`'s interview now opens with a phase 0 question asking
+whether you have an existing skill to convert. Answering yes routes to
+`import_skill` and skips the systems interview; answering no continues as
+before. Existing `discover` behavior for users starting from scratch is
+unchanged.
+
+**Fixed:** `scaffold` no longer splices the extension design's `name` field
+into generated files unescaped. A design name containing a newline or a
+double quote (reachable via `design`'s free-text `system` argument, and now
+also via `import_skill`'s skill-path-derived name) could break out of the
+quoted `name:` line in the generated `manifest.yaml` and inject arbitrary
+YAML, or break the generated `mod.ts`/`mod_test.ts` string literals. The name
+is now sanitized the same way the description field already was.
+
+**Upgrade note:** No `globalArguments` changes — this is an additive method
+only. Existing `adoption` model instances upgrade with a no-op transform.
