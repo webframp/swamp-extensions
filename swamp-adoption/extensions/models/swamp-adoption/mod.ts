@@ -146,11 +146,16 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.07.18.2",
+  version: "2026.08.01.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.01.1",
+      description: "Add import_skill method, no globalArguments changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -185,6 +190,13 @@ export const model = {
         `Conduct a structured discovery interview to map the user's domain landscape.
 
 Guide the conversation through these phases:
+
+0. SKILL CHECK
+   Ask: "Do you already have a skill (SKILL.md or similar agent instructions)
+   you're trying to convert into a swamp extension, rather than starting from
+   a blank domain?" If yes, stop here and run the 'import_skill' method
+   instead — it seeds both the landscape and extensionDesign directly from the
+   skill's content, and skips the systems interview below. If no, continue.
 
 1. SYSTEMS INVENTORY
    Ask: "What systems do you interact with daily? Include APIs, databases,
@@ -342,6 +354,153 @@ Write the extensionDesign resource with the full specification.`,
       },
     },
 
+    import_skill: {
+      description:
+        `Convert an existing skill (a SKILL.md file or similar agent instructions)
+into an extension design, and seed a landscape stub so 'next' has something to
+rank against. This is the alternate entry point reached from discover's phase 0
+skill-check question — it replaces the systems interview, not the design step.
+
+Guide the conversation through these phases:
+
+1. LOCATE THE SKILL
+   Ask: "What skill are you converting? Give me its name or file path (e.g.,
+   .claude/skills/<name>/SKILL.md or skills/<name>.md)." Never guess the
+   skill's identity silently. If the user doesn't have the path handy, help
+   them find it — check .claude/skills/ and skills/ in their repo, or ask what
+   task or workflow prompted them to write it in the first place.
+
+2. READ AND MAP STRUCTURE
+   Read the skill's frontmatter and body yourself, then propose a mapping:
+   - Frontmatter parameters/config -> globalArguments (name, type, required,
+     sensitive, description)
+   - Sequential phases or checklist steps -> methods (name, description,
+     arguments, writesResource)
+   - State the skill tracks, writes, or accumulates across runs -> resources
+     (name, description, lifetime, fields)
+   Skill prose is often ambiguous about types and required-ness — present the
+   mapping and ask the user to confirm or correct each part rather than
+   asserting it.
+
+3. SEED THE LANDSCAPE STUB
+   Derive a best-guess system entry from the skill's domain: a name, a type
+   from (api, database, saas, cli-tool, infrastructure, internal-service,
+   other), and interactions (verb, direction, frequency, pain) inferred from
+   the skill's phases. Skills rarely state frequency or pain explicitly —
+   propose your best guess for those two fields specifically and ask the user
+   to confirm or adjust; don't silently assert a frequency or pain level you
+   inferred from wording alone.
+
+4. DEPENDENCY CHECK
+   Same as design: ask whether this needs vault secrets or depends on other
+   extensions (e.g., does the skill shell out to an authenticated CLI?).
+
+Write both the landscape resource (system stub) and the extensionDesign
+resource with the full specification.`,
+      arguments: z.object({
+        sourceSkill: z.string().trim().min(1).optional().describe(
+          "Name or path of the skill being converted (e.g., .claude/skills/foo/SKILL.md)",
+        ),
+      }),
+      execute: async (
+        args: { sourceSkill?: string },
+        context: MethodContext,
+      ) => {
+        const sourceSkill = args.sourceSkill ?? "unknown-skill";
+        const segments = sourceSkill.split("/").filter(Boolean);
+        const lastSegment = segments[segments.length - 1] ?? sourceSkill;
+        // ".../<name>/SKILL.md" names the skill via its parent directory,
+        // not the generic "SKILL.md" filename itself.
+        const derivedName = /^skill\.md$/i.test(lastSegment)
+          ? segments[segments.length - 2] ?? lastSegment.replace(/\.md$/i, "")
+          : lastSegment.replace(/\.md$/i, "");
+        // Inputs like ".md" or "foo/.md" strip down to an empty name.
+        const shortName = derivedName.length > 0
+          ? derivedName
+          : "unknown-skill";
+
+        const landscape = {
+          systems: [
+            {
+              name: shortName,
+              type: "other" as const,
+              interactions: [] as z.infer<typeof InteractionSchema>[],
+            },
+          ],
+          dataFlows: [] as z.infer<typeof DataFlowSchema>[],
+          suggestedFirstExtension: shortName,
+          reasoning:
+            `Seeded from imported skill "${sourceSkill}". Run this method ` +
+            "with an agent to map the skill's phases into interactions and " +
+            "confirm the system type.",
+          discoveredAt: new Date().toISOString(),
+        };
+
+        const design = {
+          name: `@webframp/${shortName}`,
+          description: `Extension converted from skill "${sourceSkill}"`,
+          globalArguments: [] as Array<{
+            name: string;
+            type: string;
+            required: boolean;
+            sensitive: boolean;
+            description: string;
+          }>,
+          methods: [] as Array<{
+            name: string;
+            description: string;
+            arguments: Array<{
+              name: string;
+              type: string;
+              required: boolean;
+            }>;
+            writesResource: string;
+          }>,
+          resources: [] as Array<{
+            name: string;
+            description: string;
+            lifetime: string;
+            garbageCollection: number;
+            fields: Array<{ name: string; type: string }>;
+          }>,
+          dependencies: [] as string[],
+          vaultNeeded: false,
+          labels: [shortName, "imported-skill"],
+          designedAt: new Date().toISOString(),
+        };
+
+        const landscapeHandle = await context.writeResource(
+          "landscape",
+          "current",
+          landscape as unknown as Record<string, unknown>,
+        );
+
+        let designHandle;
+        try {
+          designHandle = await context.writeResource(
+            "extensionDesign",
+            "current-design",
+            design as unknown as Record<string, unknown>,
+          );
+        } catch (err) {
+          context.logger.info(
+            "landscape stub for {sourceSkill} was written, but the " +
+              "extensionDesign write failed — landscape and extensionDesign " +
+              "are now inconsistent. Re-run import_skill to retry.",
+            { sourceSkill },
+          );
+          throw err;
+        }
+
+        context.logger.info(
+          "Imported skill {sourceSkill}: seeded landscape and extension design",
+          { sourceSkill },
+        );
+
+        return { dataHandles: [landscapeHandle, designHandle] };
+      },
+    },
+
     scaffold: {
       description: `Generate implementation files from an extension design.
 
@@ -381,12 +540,26 @@ Each generated file includes TODO comments marking where the user adds real logi
 
         const calver = new Date().toISOString().slice(0, 10).replace(/-/g, ".");
 
+        // Escape backslashes first — otherwise a trailing "\" lets the
+        // template's own closing quote be swallowed as an escaped
+        // character in both the target YAML scalar and TS string literal,
+        // corrupting everything after it. Ordinary Windows-style paths
+        // (e.g. "C:\Users\me\SKILL.md") hit this without any adversarial
+        // intent. \u2028/\u2029 (LINE SEPARATOR/PARAGRAPH SEPARATOR) are
+        // included because the TS lexer treats them as line terminators
+        // too, so they'd end the "// ... Model" header comment early and
+        // corrupt the generated mod.ts the same way a raw \n would.
         const sanitizeYamlString = (s: string): string =>
-          s.replace(/[\n\r]/g, " ").replace(/"/g, "'");
+          s.replace(/\\/g, "\\\\").replace(/[\n\r\u2028\u2029]/g, " ")
+            .replace(/"/g, "'");
+        // extName is embedded inside double-quoted YAML and TS string
+        // literals below — strip newlines/quotes so it can't break out of
+        // either and inject YAML keys or TS source.
+        const safeExtName = sanitizeYamlString(extName);
 
         const manifestContent = [
           "manifestVersion: 1",
-          `name: "${extName}"`,
+          `name: "${safeExtName}"`,
           `version: "${calver}.1"`,
           `description: "${
             sanitizeYamlString(
@@ -405,7 +578,7 @@ Each generated file includes TODO comments marking where the user adds real logi
         ].join("\n");
 
         const modContent = [
-          `// ${extName} Model`,
+          `// ${safeExtName} Model`,
           "// SPDX-License-Identifier: Apache-2.0",
           "",
           'import { z } from "npm:zod@4.4.3";',
@@ -415,7 +588,7 @@ Each generated file includes TODO comments marking where the user adds real logi
           "});",
           "",
           "export const model = {",
-          `  type: "${extName}",`,
+          `  type: "${safeExtName}",`,
           `  version: "${calver}.1",`,
           "  globalArguments: GlobalArgsSchema,",
           "  resources: {},",
@@ -428,7 +601,7 @@ Each generated file includes TODO comments marking where the user adds real logi
           `import { model } from "./mod.ts";`,
           "",
           'Deno.test("model has correct type", () => {',
-          `  assertEquals(model.type, "${extName}");`,
+          `  assertEquals(model.type, "${safeExtName}");`,
           "});",
           "",
           'Deno.test("model defines resources", () => {',

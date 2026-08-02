@@ -55,6 +55,7 @@ Deno.test("model defines expected resources", () => {
 
 Deno.test("model defines expected methods", () => {
   assertExists(model.methods.discover);
+  assertExists(model.methods.import_skill);
   assertExists(model.methods.design);
   assertExists(model.methods.scaffold);
   assertExists(model.methods.next);
@@ -66,6 +67,10 @@ Deno.test("model defines expected methods", () => {
 
 Deno.test("discover method has execute function", () => {
   assertEquals(typeof model.methods.discover.execute, "function");
+});
+
+Deno.test("import_skill method has execute function", () => {
+  assertEquals(typeof model.methods.import_skill.execute, "function");
 });
 
 Deno.test("design method has execute function", () => {
@@ -105,6 +110,18 @@ Deno.test("scaffold resource has 24h lifetime", () => {
 
 Deno.test("discover accepts empty object", () => {
   const result = model.methods.discover.arguments.safeParse({});
+  assertEquals(result.success, true);
+});
+
+Deno.test("import_skill accepts optional sourceSkill string", () => {
+  const result = model.methods.import_skill.arguments.safeParse({
+    sourceSkill: ".claude/skills/foo/SKILL.md",
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("import_skill accepts empty object (sourceSkill is optional)", () => {
+  const result = model.methods.import_skill.arguments.safeParse({});
   assertEquals(result.success, true);
 });
 
@@ -217,6 +234,125 @@ Deno.test("discover writes landscape resource", async () => {
   assertExists(data.discoveredAt);
   assertEquals(Array.isArray(data.systems), true);
   assertEquals(Array.isArray(data.dataFlows), true);
+});
+
+Deno.test("import_skill writes both landscape and extensionDesign resources", async () => {
+  const { context, getWrittenResources } = createAdoptionContext();
+
+  const result = await model.methods.import_skill.execute(
+    { sourceSkill: ".claude/skills/deploy-checklist/SKILL.md" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertExists(result.dataHandles);
+  assertEquals(result.dataHandles.length, 2);
+
+  const resources = getWrittenResources();
+  assertEquals(resources.length, 2);
+  const specNames = resources.map((r) => r.specName).sort();
+  assertEquals(specNames, ["extensionDesign", "landscape"]);
+
+  const landscapeData = resources.find((r) => r.specName === "landscape")
+    ?.data as {
+      systems: Array<{ name: string; type: string }>;
+      suggestedFirstExtension: string;
+    };
+  assertEquals(landscapeData.systems.length, 1);
+  assertEquals(landscapeData.systems[0].name, "deploy-checklist");
+  assertEquals(landscapeData.systems[0].type, "other");
+  assertEquals(landscapeData.suggestedFirstExtension, "deploy-checklist");
+
+  const designData = resources.find((r) => r.specName === "extensionDesign")
+    ?.data as { name: string; labels: string[] };
+  assertEquals(designData.name, "@webframp/deploy-checklist");
+  assertEquals(designData.labels.includes("imported-skill"), true);
+});
+
+Deno.test("import_skill falls back to unknown-skill when sourceSkill omitted", async () => {
+  const { context, getWrittenResources } = createAdoptionContext();
+
+  // deno-lint-ignore no-explicit-any
+  await model.methods.import_skill.execute({}, context as any);
+
+  const resources = getWrittenResources();
+  const landscapeData = resources.find((r) => r.specName === "landscape")
+    ?.data as { systems: Array<{ name: string }> };
+  assertEquals(landscapeData.systems[0].name, "unknown-skill");
+});
+
+Deno.test("import_skill derives short name from parent dir when file is literally SKILL.md", async () => {
+  const { context, getWrittenResources } = createAdoptionContext();
+
+  await model.methods.import_skill.execute(
+    { sourceSkill: ".claude/skills/deploy-checklist/SKILL.md" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const designData = resources.find((r) => r.specName === "extensionDesign")
+    ?.data as { name: string };
+  assertEquals(designData.name, "@webframp/deploy-checklist");
+});
+
+Deno.test("import_skill strips .md from a bare SKILL.md with no parent dir", async () => {
+  const { context, getWrittenResources } = createAdoptionContext();
+
+  await model.methods.import_skill.execute(
+    { sourceSkill: "SKILL.md" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const designData = resources.find((r) => r.specName === "extensionDesign")
+    ?.data as { name: string };
+  assertEquals(designData.name, "@webframp/SKILL");
+});
+
+Deno.test("import_skill falls back to unknown-skill when derived name is empty", async () => {
+  const { context, getWrittenResources } = createAdoptionContext();
+
+  await model.methods.import_skill.execute(
+    { sourceSkill: ".md" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const designData = resources.find((r) => r.specName === "extensionDesign")
+    ?.data as { name: string };
+  assertEquals(designData.name, "@webframp/unknown-skill");
+});
+
+Deno.test("import_skill rejects whitespace-only sourceSkill", () => {
+  const result = model.methods.import_skill.arguments.safeParse({
+    sourceSkill: "   ",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("import_skill rejects empty string sourceSkill", () => {
+  const result = model.methods.import_skill.arguments.safeParse({
+    sourceSkill: "",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("import_skill derives short name from a bare skill name (no path, no extension)", async () => {
+  const { context, getWrittenResources } = createAdoptionContext();
+
+  await model.methods.import_skill.execute(
+    { sourceSkill: "deploy-checklist" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  const designData = resources.find((r) => r.specName === "extensionDesign")
+    ?.data as { name: string };
+  assertEquals(designData.name, "@webframp/deploy-checklist");
 });
 
 Deno.test("design writes extensionDesign resource", async () => {
@@ -402,6 +538,152 @@ Deno.test("scaffold sanitizes newlines and quotes in description", async () => {
   assertEquals(modelsCount, 1);
   // Quotes should be escaped to single quotes
   assertEquals(descLine.includes("'quotes'"), true);
+});
+
+Deno.test("scaffold sanitizes newlines and quotes in design name", async () => {
+  const { context, getWrittenResources } = createAdoptionContext({
+    "current-design": {
+      name: '@webframp/evil\nlabels:\n  - injected\nwith "quotes"',
+      description: "Fine",
+      globalArguments: [],
+      methods: [],
+      resources: [],
+      dependencies: [],
+      vaultNeeded: false,
+      labels: ["evil"],
+      designedAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  const result = await model.methods.scaffold.execute(
+    { outputFormat: "resource" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertExists(result.dataHandles);
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    files: Array<{ path: string; content: string }>;
+  };
+
+  const manifest = data.files.find((f) => f.path === "manifest.yaml");
+  assertExists(manifest);
+  const nameLine = manifest.content.split("\n").find((l) =>
+    l.startsWith("name:")
+  );
+  assertExists(nameLine);
+  assertEquals(nameLine.includes("\n"), false);
+  // No injected "labels:" stanza from the name field — the real labels
+  // stanza (from shortName) should appear exactly once.
+  const labelsCount =
+    manifest.content.split("\n").filter((l) => l.startsWith("labels:"))
+      .length;
+  assertEquals(labelsCount, 1);
+
+  const modFile = data.files.find((f) => f.path.endsWith("mod.ts"));
+  assertExists(modFile);
+  const typeLine = modFile.content.split("\n").find((l) =>
+    l.trim().startsWith("type:")
+  );
+  assertExists(typeLine);
+  assertEquals(typeLine.includes("\n"), false);
+  assertEquals(typeLine.includes("'quotes'"), true);
+
+  const testFile = data.files.find((f) => f.path.endsWith("mod_test.ts"));
+  assertExists(testFile);
+  const assertLine = testFile.content.split("\n").find((l) =>
+    l.includes("assertEquals(model.type")
+  );
+  assertExists(assertLine);
+  assertEquals(assertLine.includes("\n"), false);
+});
+
+Deno.test("scaffold escapes backslashes in design name and description", async () => {
+  const { context, getWrittenResources } = createAdoptionContext({
+    "current-design": {
+      name: "@webframp/foo\\",
+      description: "back\\slash",
+      globalArguments: [],
+      methods: [],
+      resources: [],
+      dependencies: [],
+      vaultNeeded: false,
+      labels: ["foo"],
+      designedAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  const result = await model.methods.scaffold.execute(
+    { outputFormat: "resource" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertExists(result.dataHandles);
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    files: Array<{ path: string; content: string }>;
+  };
+
+  const manifest = data.files.find((f) => f.path === "manifest.yaml");
+  assertExists(manifest);
+  const nameLine = manifest.content.split("\n").find((l) =>
+    l.startsWith("name:")
+  );
+  assertExists(nameLine);
+  // A trailing backslash must be doubled, not left dangling before the
+  // closing quote — a lone "\" would escape the quote and corrupt the file.
+  assertEquals(nameLine, 'name: "@webframp/foo\\\\"');
+  const descLine = manifest.content.split("\n").find((l) =>
+    l.startsWith("description:")
+  );
+  assertExists(descLine);
+  assertEquals(descLine, 'description: "back\\\\slash"');
+
+  const modFile = data.files.find((f) => f.path.endsWith("mod.ts"));
+  assertExists(modFile);
+  const typeLine = modFile.content.split("\n").find((l) =>
+    l.trim().startsWith("type:")
+  );
+  assertExists(typeLine);
+  assertEquals(typeLine, '  type: "@webframp/foo\\\\",');
+});
+
+Deno.test("scaffold strips Unicode line separators from design name", async () => {
+  // U+2028 (LINE SEPARATOR) terminates a TS line comment just like "\n"
+  // does, even though it isn't matched by a naive /[\n\r]/ strip.
+  const { context, getWrittenResources } = createAdoptionContext({
+    "current-design": {
+      name: "@webframp/foo bar",
+      description: "Fine",
+      globalArguments: [],
+      methods: [],
+      resources: [],
+      dependencies: [],
+      vaultNeeded: false,
+      labels: ["foo"],
+      designedAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  const result = await model.methods.scaffold.execute(
+    { outputFormat: "resource" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  assertExists(result.dataHandles);
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    files: Array<{ path: string; content: string }>;
+  };
+
+  const modFile = data.files.find((f) => f.path.endsWith("mod.ts"));
+  assertExists(modFile);
+  assertEquals(modFile.content.includes(" "), false);
+  const headerLine = modFile.content.split("\n")[0];
+  assertEquals(headerLine, "// @webframp/foo bar Model");
 });
 
 Deno.test("scaffold throws when no design exists", async () => {
