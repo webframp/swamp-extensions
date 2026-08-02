@@ -35,8 +35,21 @@ swamp model method run my-cloud-scenario record \
   --input capacityModel=on-demand \
   --input instanceRatePerHour=98.32
 
-# Compare all recorded scenarios
-swamp report run @webframp/cost-projection-comparison
+# Record a second scenario for comparison
+swamp model create @webframp/cost-projection/gpu-cloud my-capacity-block-scenario
+swamp model method run my-capacity-block-scenario record \
+  --input name=my-capacity-block-scenario \
+  --input provider=aws \
+  --input region=us-east-1 \
+  --input instanceType=p5.48xlarge \
+  --input gpuCount=8 \
+  --input gpuModel="NVIDIA H100" \
+  --input capacityModel=capacity-block \
+  --input instanceRatePerHour=61.00
+
+# The comparison report runs automatically after any method call on any
+# gpu-cloud, gpu-rental, or gpu-capex instance. Retrieve its latest output:
+swamp report get @webframp/cost-projection-comparison --model my-capacity-block-scenario --markdown
 ```
 
 ## Sensitivity Analysis (capex)
@@ -67,9 +80,12 @@ for capex). The capex model adds `sensitivity` for multi-assumption analysis.
 
 ## Report
 
-`webframp/cost-projection-comparison` — workspace-scoped report that queries all
-cost-projection model instances and produces a ranked comparison table with
-crossover analysis.
+`@webframp/cost-projection-comparison` — model-scoped report attached by
+default to `gpu-cloud`, `gpu-rental`, and `gpu-capex`. It runs automatically
+after any method call on any instance of the three types, scans every
+cost-projection instance in the repo, and produces a ranked comparison table
+with crossover analysis. Retrieve it with
+`swamp report get @webframp/cost-projection-comparison --model <any-instance>`.
 
 ## License
 

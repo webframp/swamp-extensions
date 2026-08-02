@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cost-projection"
-version: 2026.08.01.1
+version: 2026.08.02.1
 description: |
   GPU inference cost projection across cloud, rental, and capex scenarios.
 
@@ -67,8 +67,9 @@ description: |
   # Run sensitivity analysis
   swamp model method run dc-east-b300 sensitivity
 
-  # Compare all scenarios
-  swamp report run webframp/cost-projection-comparison
+  # The comparison report runs automatically after any method call on any
+  # gpu-cloud, gpu-rental, or gpu-capex instance. Retrieve its latest output:
+  swamp report get @webframp/cost-projection-comparison --model dc-east-b300 --markdown
   ```
 
   ## Per-Token Break-Even (Optional)

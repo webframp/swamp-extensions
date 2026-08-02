@@ -162,6 +162,7 @@ export const model = {
   type: "@webframp/cost-projection/gpu-cloud",
   version: "2026.08.01.1",
   globalArguments: z.object({}),
+  reports: ["@webframp/cost-projection-comparison"],
 
   resources: {
     scenario: {

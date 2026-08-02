@@ -1,9 +1,12 @@
 /**
  * Scenario Comparison Report — cross-scenario GPU inference cost comparison.
  *
- * Queries all instances of gpu-cloud, gpu-rental, and gpu-capex in the
- * workspace, reads their latest projection resources, normalizes to
- * $/GPU-hour, and produces a comparison table with optional crossover analysis.
+ * Runs at model scope on each of the three cost-projection model types.
+ * Every run scans all gpu-cloud, gpu-rental, and gpu-capex instances in the
+ * repo (not just the instance that triggered it) via
+ * `dataRepository.findAllGlobal()`, reads their latest projection resources,
+ * normalizes to $/GPU-hour, and produces a comparison table with optional
+ * crossover analysis.
  *
  * @module
  */
@@ -11,6 +14,12 @@
 // deno-lint-ignore-file no-explicit-any
 
 const STALE_DAYS = 90;
+
+const MODEL_TYPES: Record<string, "cloud" | "rental" | "capex"> = {
+  "@webframp/cost-projection/gpu-cloud": "cloud",
+  "@webframp/cost-projection/gpu-rental": "rental",
+  "@webframp/cost-projection/gpu-capex": "capex",
+};
 
 interface ScenarioRow {
   name: string;
@@ -55,7 +64,7 @@ export const report = {
     "Cross-scenario GPU inference cost comparison, normalized to $/GPU-hour. " +
     "Queries all cost-projection model instances and produces a ranked table " +
     "with crossover analysis when multiple scenarios exist.",
-  scope: "workspace" as const,
+  scope: "model" as const,
   labels: ["gpu", "cost", "projection", "comparison", "finops"],
 
   async execute(
@@ -64,29 +73,42 @@ export const report = {
     const scenarios: ScenarioRow[] = [];
     const warnings: string[] = [];
 
-    // Collect all projection data from any cost-projection models
-    const handles = context.dataHandles ?? [];
+    // Scan every cost-projection instance across all three model types —
+    // not just the instance whose method run triggered this report. This
+    // runs on every method call across three model types, so a failure here
+    // must degrade gracefully rather than throw: an uncaught error would
+    // mark the *triggering* method run (which already succeeded) as failed.
+    let allData: Array<{ data: any; modelType: unknown; modelId: string }>;
+    try {
+      allData = await context.dataRepository.findAllGlobal();
+    } catch (err) {
+      return {
+        markdown:
+          "Unable to scan cost projection scenarios — the comparison could " +
+          `not run this time (${String(err)}).`,
+        json: {
+          scenarios: [],
+          warnings: [`findAllGlobal failed: ${String(err)}`],
+        },
+      };
+    }
 
-    for (const handle of handles) {
+    const projectionRows = allData.filter((row) =>
+      row.data?.name === "projection" && String(row.modelType) in MODEL_TYPES
+    );
+
+    // Reads across instances are independent, so fetch them concurrently
+    // rather than paying O(rows) sequential round-trips.
+    const results = await Promise.all(projectionRows.map(async (row) => {
       try {
-        const typeArg = {
-          raw: handle.modelType ?? context.modelType,
-          toDirectoryPath: () => String(handle.modelType ?? context.modelType),
-          toString: () => String(handle.modelType ?? context.modelType),
-        };
+        const type = MODEL_TYPES[String(row.modelType)];
         const raw = await context.dataRepository.getContent(
-          typeArg,
-          handle.modelId ?? context.modelId,
-          handle.name,
-          handle.version,
+          row.modelType,
+          row.modelId,
+          "projection",
         );
-        if (!raw) continue;
+        if (!raw) return null;
         const data = JSON.parse(new TextDecoder().decode(raw));
-
-        // Determine type from the data or handle metadata
-        let type: "cloud" | "rental" | "capex" = "cloud";
-        if (data.monthlyDepreciation !== undefined) type = "capex";
-        else if (data.costPerGpuHourListRate !== undefined) type = "rental";
 
         // Extract GPU model from scenario if available
         let gpuModel = "unknown";
@@ -97,10 +119,9 @@ export const report = {
         // Try to read the scenario resource for metadata
         try {
           const scenarioRaw = await context.dataRepository.getContent(
-            typeArg,
-            handle.modelId ?? context.modelId,
+            row.modelType,
+            row.modelId,
             "scenario",
-            undefined,
           );
           if (scenarioRaw) {
             const scenario = JSON.parse(new TextDecoder().decode(scenarioRaw));
@@ -126,8 +147,8 @@ export const report = {
 
         const stale = daysSince(quotedAt) > STALE_DAYS;
 
-        scenarios.push({
-          name: data.scenarioName ?? handle.name ?? "unnamed",
+        const row_: ScenarioRow = {
+          name: data.scenarioName ?? row.modelId ?? "unnamed",
           type,
           gpuModel,
           costPerGpuHour: type === "capex"
@@ -139,9 +160,13 @@ export const report = {
           quotedAt,
           stale,
           currency,
-        });
-      } catch { /* skip unreadable handles */ }
-    }
+        };
+        return row_;
+      } catch {
+        return null; // skip unreadable instances
+      }
+    }));
+    scenarios.push(...results.filter((r): r is ScenarioRow => r !== null));
 
     if (scenarios.length === 0) {
       return {
