@@ -1,3 +1,9 @@
+## 2026.08.02.1
+
+**Changed:** Bump @webframp/container-image 2026.07.18.1 → 2026.08.01.1
+
+**Changed:** Bump @webframp/agentcore 2026.07.27.2 → 2026.07.31.1
+
 ## 2026.08.01.1
 
 **Fixed:** Broken model-upgrade chain. The prior version bump (to
