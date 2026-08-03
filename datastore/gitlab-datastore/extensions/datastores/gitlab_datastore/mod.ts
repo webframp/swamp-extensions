@@ -278,11 +278,21 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     return Promise.reject(signal.reason ?? new Error("Aborted"));
   }
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    // `{ once: true }` only detaches `onAbort` when the abort event fires —
+    // on the normal (timer-wins) path it must be removed explicitly, or a
+    // long-lived signal (an iteration's AbortSignal.timeout(), a sync
+    // operation's shared cancellation signal) keeps this listener attached
+    // long after the sleep resolved, which for AbortSignal.timeout() keeps
+    // its underlying timer — and the process — alive until it fires.
+    const onAbort = () => {
       clearTimeout(timer);
-      reject(signal.reason ?? new Error("Aborted"));
-    }, { once: true });
+      reject(signal!.reason ?? new Error("Aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -544,11 +554,12 @@ class GitLabStateClient {
   /**
    * Delete state
    */
-  async deleteState(stateName: string): Promise<void> {
+  async deleteState(stateName: string, signal?: AbortSignal): Promise<void> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
     const response = await this.request("deleteState", url, {
       method: "DELETE",
       headers: this.headers(),
+      signal,
     }, { stateName, expected: [404] });
 
     if (!response.ok && response.status !== 404) {
@@ -1516,7 +1527,7 @@ class GitLabSyncService implements TwoPhaseSyncService {
       const deleteOne = async (relPath: string): Promise<void> => {
         signal?.throwIfAborted();
         const stateName = encodeStateName(this.prefix, relPath);
-        await this.client.deleteState(stateName);
+        await this.client.deleteState(stateName, signal);
         // Clean up sidecar entries for the deleted path
         delete syncState.hashes[relPath];
         delete syncState.pathMeta[relPath];
@@ -1796,7 +1807,7 @@ class GitLabSyncService implements TwoPhaseSyncService {
         const deleteOne = async (relPath: string): Promise<void> => {
           signal?.throwIfAborted();
           const stateName = encodeStateName(this.prefix, relPath);
-          await this.client.deleteState(stateName);
+          await this.client.deleteState(stateName, signal);
           delete freshState.hashes[relPath];
           delete freshState.pathMeta[relPath];
           deletedCount++;
