@@ -1,3 +1,7 @@
+## 2026.08.02.1
+
+**Changed:** Bump ioredis 5.11.1 → 6.0.0
+
 ## 2026.07.29.1
 
 **Added:** Incremental pull via sorted-set scores. Pull now fetches only paths

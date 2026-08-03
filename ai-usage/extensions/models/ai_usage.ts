@@ -327,7 +327,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.07.31.2",
+  version: "2026.08.02.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -336,7 +336,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.07.31.2",
+      toVersion: "2026.08.02.1",
       description:
         "Breaking: hint field replaced with setup object containing command, permissions, authNotes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
