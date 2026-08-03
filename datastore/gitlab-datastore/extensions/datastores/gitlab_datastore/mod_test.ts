@@ -44,13 +44,37 @@ function createMockGitLabServer(): {
   port: number;
   states: Map<string, Uint8Array>;
   locks: Map<string, unknown>;
+  /** path -> remaining 429 responses to return before falling through to normal routing. */
+  rateLimitCounts: Map<string, number>;
+  /** path -> `Retry-After` header value sent with each simulated 429 for that path. */
+  rateLimitRetryAfter: Map<string, string>;
+  /** path -> total requests received, counted regardless of rate limiting. */
+  requestCounts: Map<string, number>;
 } {
   const states = new Map<string, Uint8Array>();
   const locks = new Map<string, unknown>();
+  const rateLimitCounts = new Map<string, number>();
+  const rateLimitRetryAfter = new Map<string, string>();
+  const requestCounts = new Map<string, number>();
 
   const handler = async (req: Request): Promise<Response> => {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    requestCounts.set(path, (requestCounts.get(path) ?? 0) + 1);
+
+    const rateLimitRemaining = rateLimitCounts.get(path) ?? 0;
+    if (rateLimitRemaining > 0) {
+      rateLimitCounts.set(path, rateLimitRemaining - 1);
+      const headers: Record<string, string> = {};
+      const retryAfter = rateLimitRetryAfter.get(path);
+      if (retryAfter !== undefined) headers["Retry-After"] = retryAfter;
+      return new Response("Retry later", {
+        status: 429,
+        statusText: "Too Many Requests",
+        headers,
+      });
+    }
 
     // Health check - project info
     if (path.match(/\/api\/v4\/projects\/[^/]+$/) && req.method === "GET") {
@@ -158,7 +182,15 @@ function createMockGitLabServer(): {
   const server = Deno.serve({ port: 0, onListen() {} }, handler);
   const addr = server.addr as Deno.NetAddr;
 
-  return { server, port: addr.port, states, locks };
+  return {
+    server,
+    port: addr.port,
+    states,
+    locks,
+    rateLimitCounts,
+    rateLimitRetryAfter,
+    requestCounts,
+  };
 }
 
 Deno.test("datastore export has required fields", () => {
@@ -1421,6 +1453,92 @@ Deno.test({
 
       // The original lock should still be held
       assertEquals(mock.locks.has(lockStateName), true);
+    } finally {
+      await mock.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "request retries on 429 honoring Retry-After and then succeeds",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+
+    try {
+      const healthPath = "/api/v4/projects/123";
+      // Two rate-limited responses before the request is allowed through.
+      mock.rateLimitCounts.set(healthPath, 2);
+      mock.rateLimitRetryAfter.set(healthPath, "0");
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const result = await provider.createVerifier().verify();
+
+      assertEquals(result.healthy, true);
+      // 2 rate-limited attempts + 1 that succeeds.
+      assertEquals(mock.requestCounts.get(healthPath), 3);
+    } finally {
+      await mock.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "request falls back to exponential backoff without Retry-After",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+
+    try {
+      const healthPath = "/api/v4/projects/123";
+      mock.rateLimitCounts.set(healthPath, 1);
+      // No Retry-After set — the client must fall back to backoff on its own.
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const result = await provider.createVerifier().verify();
+
+      assertEquals(result.healthy, true);
+      assertEquals(mock.requestCounts.get(healthPath), 2);
+    } finally {
+      await mock.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "request exhausts retries and surfaces the 429 failure",
+  sanitizeResources: false,
+  fn: async () => {
+    const mock = createMockGitLabServer();
+
+    try {
+      const healthPath = "/api/v4/projects/123";
+      // Always rate-limited — retries must give up rather than loop forever.
+      mock.rateLimitCounts.set(healthPath, Number.MAX_SAFE_INTEGER);
+      mock.rateLimitRetryAfter.set(healthPath, "0");
+
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${mock.port}`,
+      });
+
+      const result = await provider.createVerifier().verify();
+
+      assertEquals(result.healthy, false);
+      assertEquals(result.message, "HTTP 429: Too Many Requests");
+      // Initial attempt + 5 retries, matching MAX_RATE_LIMIT_RETRIES.
+      assertEquals(mock.requestCounts.get(healthPath), 6);
     } finally {
       await mock.server.shutdown();
     }

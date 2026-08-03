@@ -1,18 +1,14 @@
-## 2026.07.30.1
+## 2026.08.03.1
 
-**Fixed:** Lock contention on back-to-back model operations. Previously all
-lock paths mapped to a single GitLab Terraform state (`{prefix}--lock`),
-causing the second operation's sync push to time out waiting for the first to
-release. Locks are now per-path — each datastore path gets its own lock state
-(`{prefix}--lock--{sanitized-path}`), eliminating cross-model contention
-entirely.
+**Fixed:** GitLab API calls that hit a `429 Too Many Requests` response failed
+immediately instead of retrying, which reliably interrupted `swamp datastore
+setup` migrations that push hundreds of state objects in quick succession. All
+GitLab API calls now retry a 429 up to 5 times before giving up: the client
+honors a `Retry-After` header when GitLab sends one, and otherwise backs off
+exponentially (1s, 2s, 4s, ...), with jitter either way so many concurrent
+callers don't retry in lockstep. Only after exhausting retries does the call
+fail with the same error message as before.
 
-**Changed:** Default lock timing constants tuned for actual push latency.
-TTL reduced from 30s to 10s, retry interval from 1s to 500ms, max wait from
-60s to 30s. Stale lock detection remains at 60s (threshold is now configurable
-via `staleLockThresholdMs` and decoupled from TTL).
-
-**Upgrade note:** Existing locks held under the old single-state name
-(`{prefix}--lock`) will not conflict with the new per-path names. No migration
-required — old lock states become orphaned and can be cleaned up via the GitLab
-Terraform states UI if desired.
+**Upgrade note:** No action required. Retries are internal to the GitLab API
+client and transparent to every caller (lock, sync, verifier) — no config or
+call-site changes.

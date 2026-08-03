@@ -93,8 +93,11 @@ Three layers are instrumented:
 Non-2xx responses mark their span as an error, except where the status is normal
 control flow: a 404 from `getState` means the state does not exist, a 409 or 423
 from `lock` means another holder has it, and a 404 or 204 from `getLockInfo`
-means the state is unlocked. Lock retries appear as `retry` events with
-`retry.reason` set to either `lock_contended` or `stale_lock_stolen`.
+means the state is unlocked. Retries appear as `retry` events with
+`retry.reason` set to `lock_contended`, `stale_lock_stolen`, or — for a `429`
+rate-limited API call — `rate_limited`. Rate-limited calls retry up to 5 times,
+honoring the `Retry-After` header when GitLab sends one and otherwise backing
+off exponentially, before the call is allowed to fail.
 
 The access token is never recorded. Every request carries a PRIVATE-TOKEN header
 and bodies carry file content; span attributes hold only the operation name,

@@ -218,6 +218,54 @@ interface GitLabResponse {
   body: string;
 }
 
+/** Retry attempts for a 429 before the request is allowed to fail. */
+const MAX_RATE_LIMIT_RETRIES = 5;
+/** Base delay for exponential backoff on 429s that carry no `Retry-After`. */
+const RATE_LIMIT_BASE_DELAY_MS = 1000;
+/** Backoff ceiling — caps both the exponential fallback and a runaway `Retry-After`. */
+const RATE_LIMIT_MAX_DELAY_MS = 30_000;
+
+/**
+ * Parse a `Retry-After` header into milliseconds.
+ * Accepts either form the HTTP spec allows: an integer number of seconds, or
+ * an HTTP date. Returns null when the header is absent or unparseable, so
+ * the caller falls back to exponential backoff.
+ */
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+  const dateMs = Date.parse(header);
+  if (!Number.isNaN(dateMs)) {
+    return Math.max(0, dateMs - Date.now());
+  }
+  return null;
+}
+
+/**
+ * Compute the delay before the next 429 retry.
+ *
+ * When the server sent a `Retry-After`, its wait is honored as a floor (never
+ * shortened) with a small jitter added on top so concurrent callers don't all
+ * wake at once. Otherwise the delay is exponential backoff (1s, 2s, 4s, ...)
+ * with full jitter, so many callers retrying together spread out rather than
+ * retrying in lockstep. Either way the result is capped at
+ * `RATE_LIMIT_MAX_DELAY_MS`.
+ */
+function computeRateLimitDelayMs(
+  attempt: number,
+  retryAfterMs: number | null,
+): number {
+  if (retryAfterMs !== null) {
+    return Math.min(retryAfterMs, RATE_LIMIT_MAX_DELAY_MS) +
+      Math.random() * 250;
+  }
+  const exponential = RATE_LIMIT_BASE_DELAY_MS * 2 ** (attempt - 1);
+  return Math.random() * Math.min(exponential, RATE_LIMIT_MAX_DELAY_MS);
+}
+
 /**
  * GitLab Terraform State API client
  */
@@ -269,6 +317,13 @@ class GitLabStateClient {
    * Anything else marks the span as an error, because this client inspects
    * `response.status` by hand instead of throwing, so without this the span
    * would report success on a 500.
+   *
+   * A 429 is retried in place, up to `MAX_RATE_LIMIT_RETRIES` times, with
+   * backoff computed by `computeRateLimitDelayMs`. This is transparent to
+   * every caller — none of them special-case 429 today, so retrying here
+   * once rather than in each of `getState`/`putState`/etc. keeps that true.
+   * Only the exhausted-retries case surfaces to the caller, as a plain 429
+   * response exactly like before this existed.
    */
   private request(
     op: string,
@@ -285,12 +340,35 @@ class GitLabStateClient {
       [Attr.SERVER_ADDRESS]: this.serverAddress,
       ...(opts?.stateName ? { [Attr.GITLAB_STATE_NAME]: opts.stateName } : {}),
     }, async (span) => {
-      const response = await fetch(url, init);
-      // The body is always read, even when the caller ignores it: an unread
-      // response body holds its connection open, and several call sites decide
-      // purely on the status. Reading it here also means the span covers the
-      // transfer rather than just the headers.
-      const body = await response.text();
+      const signal = init.signal ?? undefined;
+      let response: Response;
+      let body: string;
+      let attempt = 0;
+
+      while (true) {
+        response = await fetch(url, init);
+        // The body is always read, even when the caller ignores it: an unread
+        // response body holds its connection open, and several call sites decide
+        // purely on the status. Reading it here also means the span covers the
+        // transfer rather than just the headers.
+        body = await response.text();
+
+        if (response.status !== 429 || attempt >= MAX_RATE_LIMIT_RETRIES) {
+          break;
+        }
+
+        attempt++;
+        const delayMs = computeRateLimitDelayMs(
+          attempt,
+          parseRetryAfterMs(response.headers.get("Retry-After")),
+        );
+        recordRetry(attempt, Math.round(delayMs), {
+          "retry.reason": "rate_limited",
+        });
+        signal?.throwIfAborted();
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
       span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, response.status);
       span.setAttribute(Attr.HTTP_RESPONSE_BODY_SIZE, body.length);
       if (!response.ok && !(opts?.expected ?? []).includes(response.status)) {
