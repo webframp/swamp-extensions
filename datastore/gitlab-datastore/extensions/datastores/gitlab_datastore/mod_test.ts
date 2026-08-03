@@ -1544,3 +1544,63 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "lock acquire respects maxWaitMs even when every attempt is 429'd",
+  sanitizeResources: false,
+  fn: async () => {
+    // A dedicated server rather than createMockGitLabServer: it needs to
+    // rate-limit every lock POST regardless of the exact (double
+    // percent-encoded) state name in the URL, with a Retry-After far larger
+    // than maxWaitMs. Without a per-call deadline, client.lock()'s own 429
+    // retry loop would honor that Retry-After and block for tens of seconds
+    // per attempt — this asserts acquire() gives up within maxWaitMs instead
+    // of within the server's requested retry window.
+    const handler = (req: Request): Response => {
+      const url = new URL(req.url);
+      if (url.pathname.endsWith("/lock") && req.method === "POST") {
+        return new Response("Retry later", {
+          status: 429,
+          statusText: "Too Many Requests",
+          headers: { "Retry-After": "60" },
+        });
+      }
+      return new Response(null, { status: 404 });
+    };
+    const server = Deno.serve({ port: 0, onListen() {} }, handler);
+    const addr = server.addr as Deno.NetAddr;
+
+    try {
+      const provider = datastore.createProvider({
+        projectId: "123",
+        token: "test-token",
+        baseUrl: `http://localhost:${addr.port}`,
+      });
+
+      const lock = provider.createLock("/test/path", {
+        maxWaitMs: 300,
+        retryIntervalMs: 50,
+      });
+
+      const start = Date.now();
+      let threw = false;
+      try {
+        await lock.acquire();
+      } catch (e) {
+        threw = true;
+        assertEquals((e as Error).message.includes("Lock timeout"), true);
+      }
+      const elapsed = Date.now() - start;
+
+      assertEquals(threw, true, "Should have timed out, not acquired");
+      // Bounded by maxWaitMs (300ms), not by the server's 60s Retry-After.
+      assertEquals(
+        elapsed < 5_000,
+        true,
+        `expected acquire() to give up quickly, took ${elapsed}ms`,
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});

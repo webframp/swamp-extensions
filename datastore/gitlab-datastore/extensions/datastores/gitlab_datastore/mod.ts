@@ -267,6 +267,26 @@ function computeRateLimitDelayMs(
 }
 
 /**
+ * Sleep for `ms`, rejecting early if `signal` aborts first.
+ *
+ * Used for both rate-limit backoff and lock-contention polling so a caller's
+ * cancellation (or a lock's `maxWaitMs` deadline) is observed as soon as it
+ * fires rather than only after the current wait finishes on its own.
+ */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new Error("Aborted"));
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(signal.reason ?? new Error("Aborted"));
+    }, { once: true });
+  });
+}
+
+/**
  * GitLab Terraform State API client
  */
 class GitLabStateClient {
@@ -365,8 +385,7 @@ class GitLabStateClient {
         recordRetry(attempt, Math.round(delayMs), {
           "retry.reason": "rate_limited",
         });
-        signal?.throwIfAborted();
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await sleep(delayMs, signal);
       }
 
       span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, response.status);
@@ -607,12 +626,17 @@ class GitLabStateClient {
   /**
    * Acquire lock on a state
    */
-  async lock(stateName: string, lockInfo: GitLabLockInfo): Promise<boolean> {
+  async lock(
+    stateName: string,
+    lockInfo: GitLabLockInfo,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
     const response = await this.request("lock", url, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(lockInfo),
+      signal,
       // 409/423 mean another holder has the lock — normal contention, not a
       // failure.
     }, { stateName, expected: [409, 423] });
@@ -634,12 +658,17 @@ class GitLabStateClient {
   /**
    * Release lock on a state
    */
-  async unlock(stateName: string, lockInfo: GitLabLockInfo): Promise<boolean> {
+  async unlock(
+    stateName: string,
+    lockInfo: GitLabLockInfo,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
     const response = await this.request("unlock", url, {
       method: "DELETE",
       headers: this.headers(),
       body: JSON.stringify(lockInfo),
+      signal,
       // 409 means the lock ID didn't match, 404 means there was no lock —
       // both are answers, not failures.
     }, { stateName, expected: [404, 409] });
@@ -666,11 +695,15 @@ class GitLabStateClient {
   /**
    * Get current lock info
    */
-  async getLockInfo(stateName: string): Promise<GitLabLockInfo | null> {
+  async getLockInfo(
+    stateName: string,
+    signal?: AbortSignal,
+  ): Promise<GitLabLockInfo | null> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
     const response = await this.request("getLockInfo", url, {
       method: "GET",
       headers: this.headers(),
+      signal,
       // 404/204 mean the state is not locked.
     }, { stateName, expected: [204, 404] });
 
@@ -795,53 +828,80 @@ class GitLabLock implements DistributedLock {
       let contended = false;
       let attempt = 0;
 
-      while (Date.now() - start < this.maxWaitMs) {
-        const info: LockInfo = {
-          holder: `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`,
-          hostname: Deno.hostname(),
-          pid: Deno.pid,
-          acquiredAt: new Date().toISOString(),
-          ttlMs: this.ttlMs,
-          nonce: crypto.randomUUID(),
-        };
+      while (true) {
+        const remainingMs = this.maxWaitMs - (Date.now() - start);
+        if (remainingMs <= 0) break;
 
-        const gitlabLockInfo = toGitLabLockInfo(info, this.stateName);
-        const acquired = await this.client.lock(this.stateName, gitlabLockInfo);
+        // Every GitLab call this iteration makes is bounded to what's left
+        // of maxWaitMs. Without this, a run of 429 retries inside
+        // request() (each call can retry up to MAX_RATE_LIMIT_RETRIES times
+        // with backoff) could block well past the caller's declared
+        // timeout before this loop gets a chance to notice.
+        const deadline = AbortSignal.timeout(remainingMs);
 
-        if (acquired) {
-          this.lockInfo = info;
-          this.startHeartbeat();
-          span.setAttributes({
-            [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
-            [Attr.LOCK_CONTENDED]: contended,
-          });
-          return;
-        }
+        try {
+          const info: LockInfo = {
+            holder: `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`,
+            hostname: Deno.hostname(),
+            pid: Deno.pid,
+            acquiredAt: new Date().toISOString(),
+            ttlMs: this.ttlMs,
+            nonce: crypto.randomUUID(),
+          };
 
-        contended = true;
+          const gitlabLockInfo = toGitLabLockInfo(info, this.stateName);
+          const acquired = await this.client.lock(
+            this.stateName,
+            gitlabLockInfo,
+            deadline,
+          );
 
-        // Check if existing lock is stale
-        const existing = await this.client.getLockInfo(this.stateName);
-        if (existing) {
-          span.setAttribute(Attr.LOCK_HOLDER, existing.Who);
-          const createdAt = new Date(existing.Created).getTime();
-          const age = Date.now() - createdAt;
-          // Consider lock stale if older than staleLockThresholdMs (decoupled
-          // from TTL because GitLab locks have no server-side refresh)
-          if (age > this.staleLockThresholdMs) {
-            // Force release stale lock
-            await this.client.unlock(this.stateName, existing);
-            attempt++;
-            recordRetry(attempt, 0, { "retry.reason": "stale_lock_stolen" });
-            continue;
+          if (acquired) {
+            this.lockInfo = info;
+            this.startHeartbeat();
+            span.setAttributes({
+              [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+              [Attr.LOCK_CONTENDED]: contended,
+            });
+            return;
           }
-        }
 
-        attempt++;
-        recordRetry(attempt, this.retryIntervalMs, {
-          "retry.reason": "lock_contended",
-        });
-        await new Promise((r) => setTimeout(r, this.retryIntervalMs));
+          contended = true;
+
+          // Check if existing lock is stale
+          const existing = await this.client.getLockInfo(
+            this.stateName,
+            deadline,
+          );
+          if (existing) {
+            span.setAttribute(Attr.LOCK_HOLDER, existing.Who);
+            const createdAt = new Date(existing.Created).getTime();
+            const age = Date.now() - createdAt;
+            // Consider lock stale if older than staleLockThresholdMs
+            // (decoupled from TTL because GitLab locks have no
+            // server-side refresh)
+            if (age > this.staleLockThresholdMs) {
+              // Force release stale lock
+              await this.client.unlock(this.stateName, existing, deadline);
+              attempt++;
+              recordRetry(attempt, 0, { "retry.reason": "stale_lock_stolen" });
+              continue;
+            }
+          }
+
+          attempt++;
+          recordRetry(attempt, this.retryIntervalMs, {
+            "retry.reason": "lock_contended",
+          });
+          await sleep(this.retryIntervalMs, deadline);
+        } catch (error) {
+          // The deadline firing surfaces as this iteration's fetch or sleep
+          // rejecting — fall through to the standard timeout error below
+          // rather than leaking an AbortError. Any other failure is real and
+          // propagates as-is.
+          if (deadline.aborted) break;
+          throw error;
+        }
       }
 
       span.setAttributes({
