@@ -111,6 +111,7 @@ const ProvisionResultSchema = z.object({
     .describe("PostgreSQL connection string for datastore config"),
   datastoreConfig: z
     .string()
+    .optional()
     .describe("JSON config for swamp datastore setup command"),
   provisionedAt: z.string().describe("ISO 8601 timestamp"),
   durationMs: z.number().describe("Total provisioning duration in ms"),

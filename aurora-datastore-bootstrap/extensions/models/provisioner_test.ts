@@ -432,5 +432,9 @@ Deno.test("provision encodes password in connection string", async () => {
     assertEquals(connStr.includes("p%40ss%2Fw0rd%26special%3Dchars"), true);
     assertEquals(connStr.startsWith("postgresql://swamp:"), true);
     assertEquals(connStr.endsWith(":5432/swamp"), true);
+
+    const config = JSON.parse(written[0]!.data.datastoreConfig as string);
+    assertEquals(config.connectionString, connStr);
+    assertEquals(config.ssl, "require");
   });
 });
