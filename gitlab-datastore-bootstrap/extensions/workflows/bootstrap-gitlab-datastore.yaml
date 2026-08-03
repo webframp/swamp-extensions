@@ -64,6 +64,8 @@ jobs:
           modelIdOrName: swamp-gitlab-setup
           methodName: execute
           inputs:
+            env:
+              DATASTORE_CONFIG: ${{ data.latest("swamp-gitlab-provisioner", "main").attributes.datastoreConfig }}
             run: |
               swamp datastore setup extension @webframp/gitlab-datastore \
-                --config '${{ data.latest("swamp-gitlab-provisioner", "state").attributes.datastoreConfig }}'
+                --config "$DATASTORE_CONFIG"

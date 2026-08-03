@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aurora-datastore-bootstrap"
-version: "2026.07.27.1"
+version: "2026.08.02.1"
 description: |
   One-shot bootstrap for @webframp/postgres-datastore targeting AWS Aurora
   Serverless v2 (PostgreSQL). Creates an Aurora cluster with a serverless

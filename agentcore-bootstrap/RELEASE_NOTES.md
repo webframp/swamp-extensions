@@ -1,34 +1,13 @@
-## 2026.08.02.1
+## 2026.08.02.2
 
-**Changed:** Bump @webframp/container-image 2026.07.18.1 → 2026.08.01.1
+**Fixed:** The workflow's documentation comment told users to configure the
+driver with `data.latest("agentcore-provisioner", "provision")`. That example
+was wrong — the provisioner writes its resource under the instance name `"main"`
+(via `writeResource("provision", "main", ...)`), and `data.latest()`'s second
+argument matches the resource's instance name, not its spec name. Following the
+old example would have produced `Invalid expression: No such key: attributes`.
+The doc comment now reads `data.latest("agentcore-provisioner", "main")`.
 
-**Changed:** Bump @webframp/agentcore 2026.07.27.2 → 2026.07.31.1
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to
-`2026.07.31.1`) updated `version` but left the `upgrades` array terminating one
-step short, which blocks `swamp extension push` ("model upgrade chain errors").
-That version never actually published — the registry was still serving
-`2026.07.24.1`. This release closes the chain with a no-op upgrade entry and
-republishes everything that had accumulated since `2026.07.24.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @webframp/agentcore 2026.07.27.1 → 2026.07.27.2
-
-## 2026.07.27.2
-
-**Changed:** Bump @webframp/agentcore 2026.07.21.1 → 2026.07.27.1
-
-## 2026.07.27.1
-
-**Changed:** Reformatted files that had drifted from `deno fmt`. No code
-behavior changes.
-
-**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
-are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
-so `deno task fmt:check` could fail locally on a file CI does not have.
-
-**Upgrade note:** Tooling and formatting only. No model, method, schema, or
-behavior change — nothing to do on upgrade.
+**Upgrade note:** Documentation-only fix. No model, method, or schema change —
+nothing to do on upgrade beyond re-reading the corrected example if you copied
+the old one.

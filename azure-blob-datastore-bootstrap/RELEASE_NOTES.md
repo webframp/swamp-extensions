@@ -1,16 +1,18 @@
-## 2026.07.27.1
+## 2026.08.02.1
 
-**Fixed:** The `fmt` task ran `deno fmt --check`, so `deno task fmt` verified
-formatting instead of applying it and there was no way to format the extension
-through its own task. `fmt` now formats and a new `fmt:check` verifies, matching
-every other extension in the repository.
+**Fixed:** The `configure` job in `@webframp/bootstrap-azure-blob-datastore`
+failed with `Invalid expression: No such key: attributes`. The workflow queried
+`data.latest("swamp-azure-blob-provisioner", "state")`, but the provisioner
+writes its resource under the instance name `"main"` (via
+`writeResource("state", "main", ...)`) — `data.latest()`'s second argument
+matches the resource's instance name, not its spec name. The `configure` job now
+queries `data.latest("swamp-azure-blob-provisioner", "main")`, which resolves
+correctly.
 
-**Changed:** Reformatted files that had drifted from `deno fmt`. No code
-behavior changes.
+**Changed:** The `run-setup` step now passes the provisioner's `datastoreConfig`
+through a `DATASTORE_CONFIG` environment variable instead of interpolating it
+directly into a single-quoted shell string. The prior pattern could allow a
+config value containing a single quote to break out of shell quoting.
 
-**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
-are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
-so `deno task fmt:check` could fail locally on a file CI does not have.
-
-**Upgrade note:** Tooling and formatting only. No model, method, schema, or
-behavior change — nothing to do on upgrade.
+**Upgrade note:** No action needed beyond `swamp extension pull` — the workflow
+file is re-pulled with the extension.

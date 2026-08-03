@@ -250,6 +250,12 @@ Deno.test("provision creates all resources when none exist", async () => {
       written[0]!.data.connectionString,
       "postgresql://swamp:testpass123@test-cluster.cluster-xxx.us-east-1.rds.amazonaws.com:5432/swamp",
     );
+    const config = JSON.parse(written[0]!.data.datastoreConfig as string);
+    assertEquals(
+      config.connectionString,
+      "postgresql://swamp:testpass123@test-cluster.cluster-xxx.us-east-1.rds.amazonaws.com:5432/swamp",
+    );
+    assertEquals(config.ssl, "require");
   });
 });
 
