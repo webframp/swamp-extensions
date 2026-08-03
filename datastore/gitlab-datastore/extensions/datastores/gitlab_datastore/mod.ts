@@ -218,6 +218,84 @@ interface GitLabResponse {
   body: string;
 }
 
+/** Retry attempts for a 429 before the request is allowed to fail. */
+const MAX_RATE_LIMIT_RETRIES = 5;
+/** Base delay for exponential backoff on 429s that carry no `Retry-After`. */
+const RATE_LIMIT_BASE_DELAY_MS = 1000;
+/** Backoff ceiling — caps both the exponential fallback and a runaway `Retry-After`. */
+const RATE_LIMIT_MAX_DELAY_MS = 30_000;
+
+/**
+ * Parse a `Retry-After` header into milliseconds.
+ * Accepts either form the HTTP spec allows: an integer number of seconds, or
+ * an HTTP date. Returns null when the header is absent or unparseable, so
+ * the caller falls back to exponential backoff.
+ */
+function parseRetryAfterMs(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+  const dateMs = Date.parse(header);
+  if (!Number.isNaN(dateMs)) {
+    return Math.max(0, dateMs - Date.now());
+  }
+  return null;
+}
+
+/**
+ * Compute the delay before the next 429 retry.
+ *
+ * When the server sent a `Retry-After`, its wait is honored as a floor (never
+ * shortened) with a small jitter added on top so concurrent callers don't all
+ * wake at once. Otherwise the delay is exponential backoff (1s, 2s, 4s, ...)
+ * with full jitter, so many callers retrying together spread out rather than
+ * retrying in lockstep. Either way the result is capped at
+ * `RATE_LIMIT_MAX_DELAY_MS`.
+ */
+function computeRateLimitDelayMs(
+  attempt: number,
+  retryAfterMs: number | null,
+): number {
+  if (retryAfterMs !== null) {
+    return Math.min(retryAfterMs, RATE_LIMIT_MAX_DELAY_MS) +
+      Math.random() * 250;
+  }
+  const exponential = RATE_LIMIT_BASE_DELAY_MS * 2 ** (attempt - 1);
+  return Math.random() * Math.min(exponential, RATE_LIMIT_MAX_DELAY_MS);
+}
+
+/**
+ * Sleep for `ms`, rejecting early if `signal` aborts first.
+ *
+ * Used for both rate-limit backoff and lock-contention polling so a caller's
+ * cancellation (or a lock's `maxWaitMs` deadline) is observed as soon as it
+ * fires rather than only after the current wait finishes on its own.
+ */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new Error("Aborted"));
+  }
+  return new Promise((resolve, reject) => {
+    // `{ once: true }` only detaches `onAbort` when the abort event fires —
+    // on the normal (timer-wins) path it must be removed explicitly, or a
+    // long-lived signal (an iteration's AbortSignal.timeout(), a sync
+    // operation's shared cancellation signal) keeps this listener attached
+    // long after the sleep resolved, which for AbortSignal.timeout() keeps
+    // its underlying timer — and the process — alive until it fires.
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal!.reason ?? new Error("Aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 /**
  * GitLab Terraform State API client
  */
@@ -269,6 +347,13 @@ class GitLabStateClient {
    * Anything else marks the span as an error, because this client inspects
    * `response.status` by hand instead of throwing, so without this the span
    * would report success on a 500.
+   *
+   * A 429 is retried in place, up to `MAX_RATE_LIMIT_RETRIES` times, with
+   * backoff computed by `computeRateLimitDelayMs`. This is transparent to
+   * every caller — none of them special-case 429 today, so retrying here
+   * once rather than in each of `getState`/`putState`/etc. keeps that true.
+   * Only the exhausted-retries case surfaces to the caller, as a plain 429
+   * response exactly like before this existed.
    */
   private request(
     op: string,
@@ -285,12 +370,34 @@ class GitLabStateClient {
       [Attr.SERVER_ADDRESS]: this.serverAddress,
       ...(opts?.stateName ? { [Attr.GITLAB_STATE_NAME]: opts.stateName } : {}),
     }, async (span) => {
-      const response = await fetch(url, init);
-      // The body is always read, even when the caller ignores it: an unread
-      // response body holds its connection open, and several call sites decide
-      // purely on the status. Reading it here also means the span covers the
-      // transfer rather than just the headers.
-      const body = await response.text();
+      const signal = init.signal ?? undefined;
+      let response: Response;
+      let body: string;
+      let attempt = 0;
+
+      while (true) {
+        response = await fetch(url, init);
+        // The body is always read, even when the caller ignores it: an unread
+        // response body holds its connection open, and several call sites decide
+        // purely on the status. Reading it here also means the span covers the
+        // transfer rather than just the headers.
+        body = await response.text();
+
+        if (response.status !== 429 || attempt >= MAX_RATE_LIMIT_RETRIES) {
+          break;
+        }
+
+        attempt++;
+        const delayMs = computeRateLimitDelayMs(
+          attempt,
+          parseRetryAfterMs(response.headers.get("Retry-After")),
+        );
+        recordRetry(attempt, Math.round(delayMs), {
+          "retry.reason": "rate_limited",
+        });
+        await sleep(delayMs, signal);
+      }
+
       span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, response.status);
       span.setAttribute(Attr.HTTP_RESPONSE_BODY_SIZE, body.length);
       if (!response.ok && !(opts?.expected ?? []).includes(response.status)) {
@@ -447,11 +554,12 @@ class GitLabStateClient {
   /**
    * Delete state
    */
-  async deleteState(stateName: string): Promise<void> {
+  async deleteState(stateName: string, signal?: AbortSignal): Promise<void> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}`;
     const response = await this.request("deleteState", url, {
       method: "DELETE",
       headers: this.headers(),
+      signal,
     }, { stateName, expected: [404] });
 
     if (!response.ok && response.status !== 404) {
@@ -529,12 +637,17 @@ class GitLabStateClient {
   /**
    * Acquire lock on a state
    */
-  async lock(stateName: string, lockInfo: GitLabLockInfo): Promise<boolean> {
+  async lock(
+    stateName: string,
+    lockInfo: GitLabLockInfo,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
     const response = await this.request("lock", url, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(lockInfo),
+      signal,
       // 409/423 mean another holder has the lock — normal contention, not a
       // failure.
     }, { stateName, expected: [409, 423] });
@@ -556,12 +669,17 @@ class GitLabStateClient {
   /**
    * Release lock on a state
    */
-  async unlock(stateName: string, lockInfo: GitLabLockInfo): Promise<boolean> {
+  async unlock(
+    stateName: string,
+    lockInfo: GitLabLockInfo,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
     const response = await this.request("unlock", url, {
       method: "DELETE",
       headers: this.headers(),
       body: JSON.stringify(lockInfo),
+      signal,
       // 409 means the lock ID didn't match, 404 means there was no lock —
       // both are answers, not failures.
     }, { stateName, expected: [404, 409] });
@@ -588,11 +706,15 @@ class GitLabStateClient {
   /**
    * Get current lock info
    */
-  async getLockInfo(stateName: string): Promise<GitLabLockInfo | null> {
+  async getLockInfo(
+    stateName: string,
+    signal?: AbortSignal,
+  ): Promise<GitLabLockInfo | null> {
     const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
     const response = await this.request("getLockInfo", url, {
       method: "GET",
       headers: this.headers(),
+      signal,
       // 404/204 mean the state is not locked.
     }, { stateName, expected: [204, 404] });
 
@@ -717,53 +839,80 @@ class GitLabLock implements DistributedLock {
       let contended = false;
       let attempt = 0;
 
-      while (Date.now() - start < this.maxWaitMs) {
-        const info: LockInfo = {
-          holder: `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`,
-          hostname: Deno.hostname(),
-          pid: Deno.pid,
-          acquiredAt: new Date().toISOString(),
-          ttlMs: this.ttlMs,
-          nonce: crypto.randomUUID(),
-        };
+      while (true) {
+        const remainingMs = this.maxWaitMs - (Date.now() - start);
+        if (remainingMs <= 0) break;
 
-        const gitlabLockInfo = toGitLabLockInfo(info, this.stateName);
-        const acquired = await this.client.lock(this.stateName, gitlabLockInfo);
+        // Every GitLab call this iteration makes is bounded to what's left
+        // of maxWaitMs. Without this, a run of 429 retries inside
+        // request() (each call can retry up to MAX_RATE_LIMIT_RETRIES times
+        // with backoff) could block well past the caller's declared
+        // timeout before this loop gets a chance to notice.
+        const deadline = AbortSignal.timeout(remainingMs);
 
-        if (acquired) {
-          this.lockInfo = info;
-          this.startHeartbeat();
-          span.setAttributes({
-            [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
-            [Attr.LOCK_CONTENDED]: contended,
-          });
-          return;
-        }
+        try {
+          const info: LockInfo = {
+            holder: `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`,
+            hostname: Deno.hostname(),
+            pid: Deno.pid,
+            acquiredAt: new Date().toISOString(),
+            ttlMs: this.ttlMs,
+            nonce: crypto.randomUUID(),
+          };
 
-        contended = true;
+          const gitlabLockInfo = toGitLabLockInfo(info, this.stateName);
+          const acquired = await this.client.lock(
+            this.stateName,
+            gitlabLockInfo,
+            deadline,
+          );
 
-        // Check if existing lock is stale
-        const existing = await this.client.getLockInfo(this.stateName);
-        if (existing) {
-          span.setAttribute(Attr.LOCK_HOLDER, existing.Who);
-          const createdAt = new Date(existing.Created).getTime();
-          const age = Date.now() - createdAt;
-          // Consider lock stale if older than staleLockThresholdMs (decoupled
-          // from TTL because GitLab locks have no server-side refresh)
-          if (age > this.staleLockThresholdMs) {
-            // Force release stale lock
-            await this.client.unlock(this.stateName, existing);
-            attempt++;
-            recordRetry(attempt, 0, { "retry.reason": "stale_lock_stolen" });
-            continue;
+          if (acquired) {
+            this.lockInfo = info;
+            this.startHeartbeat();
+            span.setAttributes({
+              [Attr.LOCK_WAIT_DURATION_MS]: Date.now() - start,
+              [Attr.LOCK_CONTENDED]: contended,
+            });
+            return;
           }
-        }
 
-        attempt++;
-        recordRetry(attempt, this.retryIntervalMs, {
-          "retry.reason": "lock_contended",
-        });
-        await new Promise((r) => setTimeout(r, this.retryIntervalMs));
+          contended = true;
+
+          // Check if existing lock is stale
+          const existing = await this.client.getLockInfo(
+            this.stateName,
+            deadline,
+          );
+          if (existing) {
+            span.setAttribute(Attr.LOCK_HOLDER, existing.Who);
+            const createdAt = new Date(existing.Created).getTime();
+            const age = Date.now() - createdAt;
+            // Consider lock stale if older than staleLockThresholdMs
+            // (decoupled from TTL because GitLab locks have no
+            // server-side refresh)
+            if (age > this.staleLockThresholdMs) {
+              // Force release stale lock
+              await this.client.unlock(this.stateName, existing, deadline);
+              attempt++;
+              recordRetry(attempt, 0, { "retry.reason": "stale_lock_stolen" });
+              continue;
+            }
+          }
+
+          attempt++;
+          recordRetry(attempt, this.retryIntervalMs, {
+            "retry.reason": "lock_contended",
+          });
+          await sleep(this.retryIntervalMs, deadline);
+        } catch (error) {
+          // The deadline firing surfaces as this iteration's fetch or sleep
+          // rejecting — fall through to the standard timeout error below
+          // rather than leaking an AbortError. Any other failure is real and
+          // propagates as-is.
+          if (deadline.aborted) break;
+          throw error;
+        }
       }
 
       span.setAttributes({
@@ -1378,7 +1527,7 @@ class GitLabSyncService implements TwoPhaseSyncService {
       const deleteOne = async (relPath: string): Promise<void> => {
         signal?.throwIfAborted();
         const stateName = encodeStateName(this.prefix, relPath);
-        await this.client.deleteState(stateName);
+        await this.client.deleteState(stateName, signal);
         // Clean up sidecar entries for the deleted path
         delete syncState.hashes[relPath];
         delete syncState.pathMeta[relPath];
@@ -1658,7 +1807,7 @@ class GitLabSyncService implements TwoPhaseSyncService {
         const deleteOne = async (relPath: string): Promise<void> => {
           signal?.throwIfAborted();
           const stateName = encodeStateName(this.prefix, relPath);
-          await this.client.deleteState(stateName);
+          await this.client.deleteState(stateName, signal);
           delete freshState.hashes[relPath];
           delete freshState.pathMeta[relPath];
           deletedCount++;
