@@ -1,34 +1,21 @@
-## 2026.08.02.1
+## 2026.08.02.2
 
-**Changed:** Bump @webframp/container-image 2026.07.18.1 → 2026.08.01.1
+**Fixed:** The workflow's `description` field embedded a live
+`data.latest("agentcore-provisioner", "provision")` CEL expression as
+"documentation." Swamp evaluates every `${{ ... }}` expression found anywhere in
+a workflow definition — including inside `description` text — eagerly and
+strictly, before any job runs. Since the referenced resource does not exist
+until the `provision` job completes, this expression threw
+`Invalid expression: No such key: attributes` on every fresh bootstrap, aborting
+the workflow before job 1 ever started. The `description` field no longer
+contains a live expression; it points to the README for the exact CEL snippet to
+use in a driver config instead.
 
-**Changed:** Bump @webframp/agentcore 2026.07.27.2 → 2026.07.31.1
+**Fixed:** The README's "After Bootstrap" example used the same wrong instance
+name (`"provision"` instead of `"main"`, the actual `writeResource()` instance
+name) that issue #330 identified in the sibling datastore-bootstrap extensions.
+A user who copied that snippet into their own `driverConfig` would hit the same
+"No such key: attributes" error.
 
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to
-`2026.07.31.1`) updated `version` but left the `upgrades` array terminating one
-step short, which blocks `swamp extension push` ("model upgrade chain errors").
-That version never actually published — the registry was still serving
-`2026.07.24.1`. This release closes the chain with a no-op upgrade entry and
-republishes everything that had accumulated since `2026.07.24.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @webframp/agentcore 2026.07.27.1 → 2026.07.27.2
-
-## 2026.07.27.2
-
-**Changed:** Bump @webframp/agentcore 2026.07.21.1 → 2026.07.27.1
-
-## 2026.07.27.1
-
-**Changed:** Reformatted files that had drifted from `deno fmt`. No code
-behavior changes.
-
-**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
-are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
-so `deno task fmt:check` could fail locally on a file CI does not have.
-
-**Upgrade note:** Tooling and formatting only. No model, method, schema, or
-behavior change — nothing to do on upgrade.
+**Upgrade note:** No schema or model change. Re-pull to get a workflow that
+actually completes a fresh run, and a correct README example.

@@ -63,15 +63,16 @@ swamp model method run agentcore-provisioner provision \
 
 ## After Bootstrap
 
-The provisioner writes a `provision` resource containing the `runtimeArn` and
-`bucketName`. Use these to configure the `@webframp/agentcore` driver:
+The provisioner writes a `provision` resource under the instance name `main`,
+containing the `runtimeArn` and `bucketName`. Use these to configure the
+`@webframp/agentcore` driver:
 
 ```yaml
 driver: "@webframp/agentcore"
 driverConfig:
-  runtimeArn: ${{ data.latest("agentcore-provisioner", "provision").attributes.runtimeArn }}
-  region: ${{ data.latest("agentcore-provisioner", "provision").attributes.region }}
-  s3Bucket: ${{ data.latest("agentcore-provisioner", "provision").attributes.bucketName }}
+  runtimeArn: ${{ data.latest("agentcore-provisioner", "main").attributes.runtimeArn }}
+  region: ${{ data.latest("agentcore-provisioner", "main").attributes.region }}
+  s3Bucket: ${{ data.latest("agentcore-provisioner", "main").attributes.bucketName }}
 ```
 
 Or extract values directly:

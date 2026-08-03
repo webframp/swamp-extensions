@@ -68,6 +68,8 @@ jobs:
           modelIdOrName: swamp-valkey-setup
           methodName: execute
           inputs:
+            env:
+              DATASTORE_CONFIG: ${{ data.latest("swamp-valkey-provisioner", "main").attributes.datastoreConfig }}
             run: |
               swamp datastore setup extension @webframp/valkey-datastore \
-                --config '${{ data.latest("swamp-valkey-provisioner", "state").attributes.datastoreConfig }}'
+                --config "$DATASTORE_CONFIG"

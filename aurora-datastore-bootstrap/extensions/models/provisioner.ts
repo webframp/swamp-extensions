@@ -109,6 +109,10 @@ const ProvisionResultSchema = z.object({
   connectionString: z
     .string()
     .describe("PostgreSQL connection string for datastore config"),
+  datastoreConfig: z
+    .string()
+    .optional()
+    .describe("JSON config for swamp datastore setup command"),
   provisionedAt: z.string().describe("ISO 8601 timestamp"),
   durationMs: z.number().describe("Total provisioning duration in ms"),
 });
@@ -595,6 +599,11 @@ export const model = {
           encodeURIComponent(master_password)
         }@${clusterEndpoint}:${clusterPort}/${database_name}`;
 
+        const datastoreConfig = JSON.stringify({
+          connectionString,
+          ssl: "require",
+        });
+
         const durationMs = Date.now() - startMs;
 
         // 7. Write result
@@ -614,6 +623,7 @@ export const model = {
           policyArn,
           policyCreated,
           connectionString,
+          datastoreConfig,
           provisionedAt: new Date().toISOString(),
           durationMs,
         });

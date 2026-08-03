@@ -56,6 +56,8 @@ jobs:
           modelIdOrName: swamp-azure-blob-setup
           methodName: execute
           inputs:
+            env:
+              DATASTORE_CONFIG: ${{ data.latest("swamp-azure-blob-provisioner", "main").attributes.datastoreConfig }}
             run: |
               swamp datastore setup extension @webframp/azure-blob-datastore \
-                --config '${{ data.latest("swamp-azure-blob-provisioner", "state").attributes.datastoreConfig }}'
+                --config "$DATASTORE_CONFIG"

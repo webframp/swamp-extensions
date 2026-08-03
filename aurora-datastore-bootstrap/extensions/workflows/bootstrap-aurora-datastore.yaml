@@ -82,6 +82,8 @@ jobs:
           modelIdOrName: swamp-aurora-setup
           methodName: execute
           inputs:
+            env:
+              DATASTORE_CONFIG: ${{ data.latest("swamp-aurora-provisioner", "main").attributes.datastoreConfig }}
             run: |
               swamp datastore setup extension @webframp/postgres-datastore \
-                --config '{"connectionString":"${{ data.latest("swamp-aurora-provisioner", "state").attributes.connectionString }}","ssl":"require"}'
+                --config "$DATASTORE_CONFIG"

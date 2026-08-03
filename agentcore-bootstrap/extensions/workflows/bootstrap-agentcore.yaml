@@ -6,9 +6,9 @@ description: |
   IAM role, and AgentCore runtime.
 
   After completion, configure the driver with the output runtimeArn and
-  bucket name:
-    runtimeArn: ${{ data.latest("agentcore-provisioner", "provision").attributes.runtimeArn }}
-    s3Bucket: ${{ data.latest("agentcore-provisioner", "provision").attributes.bucketName }}
+  bucket name — read resource "provision", instance "main" from model
+  "agentcore-provisioner" (fields: runtimeArn, bucketName). See the README
+  for the exact CEL snippet to paste into your driverConfig.
 version: 1
 tags:
   extension: "@webframp/agentcore-bootstrap"
