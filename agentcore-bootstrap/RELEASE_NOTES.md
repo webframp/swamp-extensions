@@ -1,13 +1,21 @@
 ## 2026.08.02.2
 
-**Fixed:** The workflow's documentation comment told users to configure the
-driver with `data.latest("agentcore-provisioner", "provision")`. That example
-was wrong — the provisioner writes its resource under the instance name `"main"`
-(via `writeResource("provision", "main", ...)`), and `data.latest()`'s second
-argument matches the resource's instance name, not its spec name. Following the
-old example would have produced `Invalid expression: No such key: attributes`.
-The doc comment now reads `data.latest("agentcore-provisioner", "main")`.
+**Fixed:** The workflow's `description` field embedded a live
+`data.latest("agentcore-provisioner", "provision")` CEL expression as
+"documentation." Swamp evaluates every `${{ ... }}` expression found anywhere in
+a workflow definition — including inside `description` text — eagerly and
+strictly, before any job runs. Since the referenced resource does not exist
+until the `provision` job completes, this expression threw
+`Invalid expression: No such key: attributes` on every fresh bootstrap, aborting
+the workflow before job 1 ever started. The `description` field no longer
+contains a live expression; it points to the README for the exact CEL snippet to
+use in a driver config instead.
 
-**Upgrade note:** Documentation-only fix. No model, method, or schema change —
-nothing to do on upgrade beyond re-reading the corrected example if you copied
-the old one.
+**Fixed:** The README's "After Bootstrap" example used the same wrong instance
+name (`"provision"` instead of `"main"`, the actual `writeResource()` instance
+name) that issue #330 identified in the sibling datastore-bootstrap extensions.
+A user who copied that snippet into their own `driverConfig` would hit the same
+"No such key: attributes" error.
+
+**Upgrade note:** No schema or model change. Re-pull to get a workflow that
+actually completes a fresh run, and a correct README example.
