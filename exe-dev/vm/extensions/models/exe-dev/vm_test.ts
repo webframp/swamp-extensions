@@ -253,6 +253,25 @@ Deno.test("assertEmail: rejects missing @", () => {
   assertEquals(threw, true);
 });
 
+Deno.test("assertEmail: rejects shell metacharacters", () => {
+  const badEmails = [
+    "user@example.com;ls",
+    "user@example.com|cat",
+    "user@example.com&bg",
+    "user@example.com`id`",
+    "user@$HOME.com",
+  ];
+  for (const email of badEmails) {
+    let threw = false;
+    try {
+      assertEmail(email);
+    } catch {
+      threw = true;
+    }
+    assertEquals(threw, true, `Expected rejection of: ${email}`);
+  }
+});
+
 Deno.test("buildCreateCmd: rejects invalid VM name", () => {
   let threw = false;
   try {

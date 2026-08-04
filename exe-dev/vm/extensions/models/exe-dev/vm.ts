@@ -187,7 +187,8 @@ export function assertVmName(name: string): void {
 
 /**
  * Validate an email address before interpolating it into a command string.
- * Rejects whitespace and flag-prefix patterns that could inject arguments.
+ * Rejects whitespace, flag-prefix patterns, and shell metacharacters that
+ * could inject arguments or be interpreted as control characters.
  */
 export function assertEmail(email: string): void {
   if (/\s/.test(email) || email.startsWith("-")) {
@@ -198,6 +199,12 @@ export function assertEmail(email: string): void {
   if (!email.includes("@")) {
     throw new Error(
       `Invalid email "${email}": must contain an "@" character.`,
+    );
+  }
+  if (/[;|&`$"'\\(){}]/.test(email)) {
+    throw new Error(
+      `Invalid email "${email}": contains shell metacharacters that are ` +
+        `not permitted. Use a plain email address.`,
     );
   }
 }
@@ -253,6 +260,53 @@ function requireToken(globalArgs: GlobalArgs): string {
     );
   }
   return globalArgs.token;
+}
+
+/**
+ * Run an SSH command with a hard execution timeout. Spawns the process,
+ * sends SIGTERM after timeoutSec, then SIGKILL 2 seconds later if still alive.
+ * Returns the command output (stdout + stderr) and exit code.
+ */
+async function sshWithTimeout(
+  args: string[],
+  timeoutSec: number,
+): Promise<{ stdout: string; stderr: string; code: number }> {
+  const cmd = new Deno.Command("ssh", {
+    args,
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const child = cmd.spawn();
+
+  let killed = false;
+  const termTimer = setTimeout(() => {
+    killed = true;
+    try {
+      child.kill("SIGTERM");
+    } catch { /* already exited */ }
+  }, timeoutSec * 1000);
+
+  const killTimer = setTimeout(() => {
+    try {
+      child.kill("SIGKILL");
+    } catch { /* already exited */ }
+  }, (timeoutSec + 2) * 1000);
+
+  let result: Deno.CommandOutput;
+  try {
+    result = await child.output();
+  } finally {
+    clearTimeout(termTimer);
+    clearTimeout(killTimer);
+  }
+
+  const stdout = new TextDecoder().decode(result.stdout);
+  const stderr = new TextDecoder().decode(result.stderr);
+  return {
+    stdout,
+    stderr,
+    code: killed && result.code === 0 ? 124 : result.code,
+  };
 }
 
 /** Build the `new` command string from create arguments. */
@@ -998,8 +1052,8 @@ export const model = {
         },
       ) => {
         assertVmName(args.name);
-        const sshCmd = new Deno.Command("ssh", {
-          args: [
+        const { stdout, stderr, code } = await sshWithTimeout(
+          [
             "-o",
             "StrictHostKeyChecking=accept-new",
             "-o",
@@ -1007,33 +1061,14 @@ export const model = {
             `${args.name}.exe.xyz`,
             args.command,
           ],
-          stdout: "piped",
-          stderr: "piped",
-        });
+          args.timeout,
+        );
 
-        const child = sshCmd.spawn();
-        const timer = setTimeout(() => {
-          try {
-            child.kill("SIGTERM");
-          } catch {
-            // Process may have already exited
-          }
-        }, args.timeout * 1000);
-
-        let result: Deno.CommandOutput;
-        try {
-          result = await child.output();
-        } finally {
-          clearTimeout(timer);
-        }
-
-        const stdout = new TextDecoder().decode(result.stdout);
-        const stderr = new TextDecoder().decode(result.stderr);
         const output = stdout + (stderr ? `\n${stderr}` : "");
 
         ctx.logger.info("exe.dev exec on {name}: exit {code}", {
           name: args.name,
-          code: result.code,
+          code,
         });
 
         // Instance name is a hash of vm+command for deterministic dedup.
@@ -1057,7 +1092,7 @@ export const model = {
             command: args.command,
             executedAt: new Date().toISOString(),
             output,
-            exitCode: result.code,
+            exitCode: code,
           },
         );
         return { dataHandles: [handle] };
@@ -1282,8 +1317,8 @@ export const model = {
           const batchResults = await Promise.all(
             batch.map(async (vmName) => {
               try {
-                const cmd = new Deno.Command("ssh", {
-                  args: [
+                const { stdout } = await sshWithTimeout(
+                  [
                     "-o",
                     "StrictHostKeyChecking=accept-new",
                     "-o",
@@ -1291,20 +1326,18 @@ export const model = {
                     `${vmName}.exe.xyz`,
                     "claude --version 2>/dev/null || echo NOT_INSTALLED",
                   ],
-                  stdout: "piped",
-                  stderr: "piped",
-                });
-                const result = await cmd.output();
-                const stdout = new TextDecoder().decode(result.stdout).trim();
+                  15,
+                );
+                const trimmed = stdout.trim();
 
-                if (stdout === "NOT_INSTALLED" || !stdout) {
+                if (trimmed === "NOT_INSTALLED" || !trimmed) {
                   return { vmName, version: null, error: "not installed" };
                 }
                 // Parse "2.1.85 (Claude Code)" -> "2.1.85"
-                const verMatch = stdout.match(/^([\d.]+)/);
+                const verMatch = trimmed.match(/^([\d.]+)/);
                 return {
                   vmName,
-                  version: verMatch ? verMatch[1] : stdout,
+                  version: verMatch ? verMatch[1] : trimmed,
                 };
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
@@ -1320,8 +1353,14 @@ export const model = {
           .map((r) => r.version)
           .filter((v): v is string => v !== null);
         const sorted = [...versions].sort((a, b) => {
-          const pa = a.split(".").map((s) => parseInt(s, 10) || 0);
-          const pb = b.split(".").map((s) => parseInt(s, 10) || 0);
+          const pa = a.split(".").map((s) => {
+            const n = parseInt(s, 10);
+            return isNaN(n) ? 0 : n;
+          });
+          const pb = b.split(".").map((s) => {
+            const n = parseInt(s, 10);
+            return isNaN(n) ? 0 : n;
+          });
           for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
             const diff = (pb[i] ?? 0) - (pa[i] ?? 0);
             if (diff !== 0) return diff;
@@ -1427,9 +1466,9 @@ export const model = {
 
         for (const vmName of vmNames) {
           try {
-            // Check current version first
-            const verCmd = new Deno.Command("ssh", {
-              args: [
+            // Check current version first (with execution timeout)
+            const { stdout: verOut } = await sshWithTimeout(
+              [
                 "-o",
                 "StrictHostKeyChecking=accept-new",
                 "-o",
@@ -1437,12 +1476,9 @@ export const model = {
                 `${vmName}.exe.xyz`,
                 "claude --version 2>/dev/null || echo NOT_INSTALLED",
               ],
-              stdout: "piped",
-              stderr: "piped",
-            });
-            const verResult = await verCmd.output();
-            const verOut = new TextDecoder().decode(verResult.stdout).trim();
-            const verMatch = verOut.match(/^([\d.]+)/);
+              15,
+            );
+            const verMatch = verOut.trim().match(/^([\d.]+)/);
             const previousVersion = verMatch ? verMatch[1] : null;
 
             // Run shelley install via exe.dev API
@@ -1494,7 +1530,18 @@ export const model = {
         const upgradedCount = results.filter((r) => r.upgraded).length;
         const failedCount = results.filter((r) => !r.upgraded).length;
 
-        const handle = await ctx.writeResource("shelleyUpgrade", "run", {
+        // Instance name is a hash of the sorted target VM names for dedup
+        const sortedNames = [...vmNames].sort().join(",");
+        const upgradeHash = Array.from(
+          new Uint8Array(
+            await crypto.subtle.digest(
+              "SHA-1",
+              new TextEncoder().encode(sortedNames),
+            ),
+          ),
+        ).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 8);
+
+        const handle = await ctx.writeResource("shelleyUpgrade", upgradeHash, {
           executedAt: new Date().toISOString(),
           results,
           upgradedCount,
