@@ -163,9 +163,13 @@ interface ExeApiResponse {
   body: string;
 }
 
-/** Escape embedded double-quotes in a value before interpolation into a quoted command string. */
+/** Escape characters that could break the exe.dev line-delimited text protocol. */
 export function escapeQuotes(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
 }
 
 /**
@@ -305,7 +309,7 @@ async function sshWithTimeout(
   return {
     stdout,
     stderr,
-    code: killed && result.code === 0 ? 124 : result.code,
+    code: killed ? 124 : result.code,
   };
 }
 
@@ -408,6 +412,9 @@ export function buildTagCmd(
   remove: boolean,
 ): string {
   assertVmName(name);
+  for (const t of tags) {
+    assertFlagValue(t, "tag");
+  }
   const quotedTags = tags.map((t) => `"${escapeQuotes(t)}"`).join(" ");
   return remove
     ? `tag --json -d ${name} ${quotedTags}`

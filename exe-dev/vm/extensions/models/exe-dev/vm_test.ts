@@ -120,8 +120,28 @@ Deno.test("tag remove: each tag is individually quoted", () => {
 });
 
 Deno.test("tag add: tag with spaces is safely quoted", () => {
-  const cmd = buildTagCmd("my-vm", ["my tag"], false);
-  assertEquals(cmd, 'tag --json my-vm "my tag"');
+  const cmd = buildTagCmd("my-vm", ["my-tag"], false);
+  assertEquals(cmd, 'tag --json my-vm "my-tag"');
+});
+
+Deno.test("buildTagCmd: rejects tag with spaces", () => {
+  let threw = false;
+  try {
+    buildTagCmd("my-vm", ["bad tag"], false);
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildTagCmd: rejects tag with leading dash", () => {
+  let threw = false;
+  try {
+    buildTagCmd("my-vm", ["--delete-all"], false);
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
 });
 
 // =============================================================================
@@ -140,6 +160,19 @@ Deno.test("escapeQuotes: backslash before quote both escaped", () => {
   assertEquals(escapeQuotes('a\\"b'), 'a\\\\\\"b');
 });
 
+Deno.test("escapeQuotes: newlines are escaped", () => {
+  assertEquals(escapeQuotes("line1\nline2"), "line1\\nline2");
+});
+
+Deno.test("escapeQuotes: carriage returns are escaped", () => {
+  assertEquals(escapeQuotes("line1\r\nline2"), "line1\\r\\nline2");
+});
+
+Deno.test("escapeQuotes: multi-line setupScript is safe", () => {
+  const cmd = buildCreateCmd({ setupScript: "#!/bin/bash\napt update" });
+  assertStringIncludes(cmd, '--setup-script="#!/bin/bash\\napt update"');
+});
+
 Deno.test("create: comment with embedded quotes cannot inject flags", () => {
   const cmd = buildCreateCmd({ comment: 'hello" --name=pwned' });
   // The quote must be escaped so it cannot close the --comment value
@@ -154,9 +187,14 @@ Deno.test("create: env value with embedded quotes is escaped", () => {
   assertStringIncludes(cmd, '--env X="val\\"ue"');
 });
 
-Deno.test("tag add: tag with embedded quotes is escaped", () => {
-  const cmd = buildTagCmd("my-vm", ['tag"break'], false);
-  assertEquals(cmd, 'tag --json my-vm "tag\\"break"');
+Deno.test("tag add: tag with embedded quotes is rejected", () => {
+  let threw = false;
+  try {
+    buildTagCmd("my-vm", ['tag"break'], false);
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
 });
 
 Deno.test("comment: text with embedded quotes is escaped", () => {
