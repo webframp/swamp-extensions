@@ -11,6 +11,8 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import {
   assertEmail,
+  assertEnvKey,
+  assertFlagValue,
   assertVmName,
   buildCommentCmd,
   buildCreateCmd,
@@ -265,6 +267,127 @@ Deno.test("buildResizeCmd: rejects invalid VM name", () => {
   let threw = false;
   try {
     buildResizeCmd({ name: "--all" });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+// =============================================================================
+// Tests: env key validation
+// =============================================================================
+
+Deno.test("assertEnvKey: valid keys pass", () => {
+  assertEnvKey("HOME");
+  assertEnvKey("MY_VAR_123");
+  assertEnvKey("_private");
+});
+
+Deno.test("assertEnvKey: rejects spaces", () => {
+  let threw = false;
+  try {
+    assertEnvKey("MY VAR");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertEnvKey: rejects flag injection", () => {
+  let threw = false;
+  try {
+    assertEnvKey("FOO --name=pwned");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertEnvKey: rejects leading digit", () => {
+  let threw = false;
+  try {
+    assertEnvKey("9VAR");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildCreateCmd: rejects invalid env key", () => {
+  let threw = false;
+  try {
+    buildCreateCmd({ env: { "BAD KEY": "value" } });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+// =============================================================================
+// Tests: flag value validation (image, memory, disk, integrations)
+// =============================================================================
+
+Deno.test("assertFlagValue: valid values pass", () => {
+  assertFlagValue("ubuntu:22.04", "image");
+  assertFlagValue("8GB", "memory");
+  assertFlagValue("50G", "disk");
+  assertFlagValue("github", "integration");
+});
+
+Deno.test("assertFlagValue: rejects spaces", () => {
+  let threw = false;
+  try {
+    assertFlagValue("ubuntu --inject", "image");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertFlagValue: rejects flag prefix", () => {
+  let threw = false;
+  try {
+    assertFlagValue("--inject", "image");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertFlagValue: rejects quotes", () => {
+  let threw = false;
+  try {
+    assertFlagValue('val"ue', "image");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildCreateCmd: rejects invalid image", () => {
+  let threw = false;
+  try {
+    buildCreateCmd({ image: "ubuntu --name=pwned" });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildCreateCmd: rejects invalid integration", () => {
+  let threw = false;
+  try {
+    buildCreateCmd({ integrations: ["github", "--inject flag"] });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildResizeCmd: rejects invalid memory", () => {
+  let threw = false;
+  try {
+    buildResizeCmd({ name: "my-vm", memory: "8GB --inject" });
   } catch {
     threw = true;
   }

@@ -202,6 +202,44 @@ export function assertEmail(email: string): void {
   }
 }
 
+/** Environment variable keys must follow POSIX conventions. */
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * Validate an environment variable key before interpolating it into a command.
+ * Rejects anything that isn't a standard env var identifier.
+ */
+export function assertEnvKey(key: string): void {
+  if (!ENV_KEY_RE.test(key)) {
+    throw new Error(
+      `Invalid env key "${key}": must match [A-Za-z_][A-Za-z0-9_]* ` +
+        `(POSIX environment variable naming).`,
+    );
+  }
+}
+
+/**
+ * Validate a value that will be interpolated as an unquoted flag argument.
+ * Rejects whitespace, quotes, and flag prefixes that could inject tokens.
+ */
+export function assertFlagValue(value: string, label: string): void {
+  if (/\s/.test(value)) {
+    throw new Error(
+      `Invalid ${label} "${value}": must not contain whitespace.`,
+    );
+  }
+  if (value.startsWith("-")) {
+    throw new Error(
+      `Invalid ${label} "${value}": must not start with "-".`,
+    );
+  }
+  if (/["'\\]/.test(value)) {
+    throw new Error(
+      `Invalid ${label} "${value}": must not contain quotes or backslashes.`,
+    );
+  }
+}
+
 /**
  * Require a non-empty token from globalArgs. Throws an actionable error if
  * the token is missing (not yet bootstrapped).
@@ -235,10 +273,19 @@ export function buildCreateCmd(args: {
     assertVmName(args.name);
     parts.push(`--name=${args.name}`);
   }
-  if (args.image) parts.push(`--image=${args.image}`);
+  if (args.image) {
+    assertFlagValue(args.image, "image");
+    parts.push(`--image=${args.image}`);
+  }
   if (args.cpu) parts.push(`--cpu=${args.cpu}`);
-  if (args.memory) parts.push(`--memory=${args.memory}`);
-  if (args.disk) parts.push(`--disk=${args.disk}`);
+  if (args.memory) {
+    assertFlagValue(args.memory, "memory");
+    parts.push(`--memory=${args.memory}`);
+  }
+  if (args.disk) {
+    assertFlagValue(args.disk, "disk");
+    parts.push(`--disk=${args.disk}`);
+  }
   if (args.comment) {
     parts.push(`--comment="${escapeQuotes(args.comment)}"`);
   }
@@ -250,10 +297,14 @@ export function buildCreateCmd(args: {
   }
   if (args.env) {
     for (const [k, v] of Object.entries(args.env)) {
+      assertEnvKey(k);
       parts.push(`--env ${k}="${escapeQuotes(v)}"`);
     }
   }
   if (args.integrations?.length) {
+    for (const name of args.integrations) {
+      assertFlagValue(name, "integration");
+    }
     parts.push(`--integration=${args.integrations.join(",")}`);
   }
   return parts.join(" ");
@@ -269,8 +320,14 @@ export function buildResizeCmd(args: {
   assertVmName(args.name);
   const parts: string[] = [`resize ${args.name} --json`];
   if (args.cpu) parts.push(`--cpu=${args.cpu}`);
-  if (args.memory) parts.push(`--memory=${args.memory}`);
-  if (args.disk) parts.push(`--disk=${args.disk}`);
+  if (args.memory) {
+    assertFlagValue(args.memory, "memory");
+    parts.push(`--memory=${args.memory}`);
+  }
+  if (args.disk) {
+    assertFlagValue(args.disk, "disk");
+    parts.push(`--disk=${args.disk}`);
+  }
   return parts.join(" ");
 }
 
@@ -913,8 +970,8 @@ export const model = {
       arguments: z.object({
         name: z.string().min(1).describe("VM name to execute on"),
         command: z.string().min(1).describe("Shell command to run"),
-        timeout: z.number().default(30).describe(
-          "SSH command timeout in seconds",
+        timeout: z.number().min(1).max(300).default(30).describe(
+          "SSH command timeout in seconds (max 300)",
         ),
       }),
       execute: async (
@@ -1202,40 +1259,50 @@ export const model = {
           count: vmNames.length,
         });
 
-        // Fan out — check all VMs in parallel
-        const results = await Promise.all(
-          vmNames.map(async (vmName) => {
-            try {
-              const cmd = new Deno.Command("ssh", {
-                args: [
-                  "-o",
-                  "StrictHostKeyChecking=accept-new",
-                  "-o",
-                  "ConnectTimeout=5",
-                  `${vmName}.exe.xyz`,
-                  "claude --version 2>/dev/null || echo NOT_INSTALLED",
-                ],
-                stdout: "piped",
-                stderr: "piped",
-              });
-              const result = await cmd.output();
-              const stdout = new TextDecoder().decode(result.stdout).trim();
+        // Fan out with bounded concurrency (max 10 concurrent SSH connections)
+        const CONCURRENCY = 10;
+        const results: Array<{
+          vmName: string;
+          version: string | null;
+          error?: string;
+        }> = [];
+        for (let i = 0; i < vmNames.length; i += CONCURRENCY) {
+          const batch = vmNames.slice(i, i + CONCURRENCY);
+          const batchResults = await Promise.all(
+            batch.map(async (vmName) => {
+              try {
+                const cmd = new Deno.Command("ssh", {
+                  args: [
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    "-o",
+                    "ConnectTimeout=5",
+                    `${vmName}.exe.xyz`,
+                    "claude --version 2>/dev/null || echo NOT_INSTALLED",
+                  ],
+                  stdout: "piped",
+                  stderr: "piped",
+                });
+                const result = await cmd.output();
+                const stdout = new TextDecoder().decode(result.stdout).trim();
 
-              if (stdout === "NOT_INSTALLED" || !stdout) {
-                return { vmName, version: null, error: "not installed" };
+                if (stdout === "NOT_INSTALLED" || !stdout) {
+                  return { vmName, version: null, error: "not installed" };
+                }
+                // Parse "2.1.85 (Claude Code)" -> "2.1.85"
+                const verMatch = stdout.match(/^([\d.]+)/);
+                return {
+                  vmName,
+                  version: verMatch ? verMatch[1] : stdout,
+                };
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                return { vmName, version: null, error: msg };
               }
-              // Parse "2.1.85 (Claude Code)" -> "2.1.85"
-              const verMatch = stdout.match(/^([\d.]+)/);
-              return {
-                vmName,
-                version: verMatch ? verMatch[1] : stdout,
-              };
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              return { vmName, version: null, error: msg };
-            }
-          }),
-        );
+            }),
+          );
+          results.push(...batchResults);
+        }
 
         // Determine latest observed version
         const versions = results
