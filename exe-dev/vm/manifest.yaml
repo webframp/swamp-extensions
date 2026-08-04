@@ -1,0 +1,40 @@
+manifestVersion: 1
+name: "@webframp/exe-dev/vm"
+version: "2026.08.04.1"
+description: |
+  exe.dev VM lifecycle model. Wraps the exe.dev HTTPS API to manage VMs as
+  typed swamp resources — create, destroy, restart, resize, observe fleet
+  state, execute commands, manage sharing, and track Shelley versions.
+
+  ## Authentication
+
+  Uses a bearer token generated via `ssh exe.dev ssh-key generate-api-key`.
+  Run the `setup` method to generate a token with the correct permissions and
+  store it in your vault automatically.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/exe-dev/vm
+  swamp model create @webframp/exe-dev/vm exe-dev
+  # Edit model YAML to set: token: '${{ vault.get("vault-name", "exe-dev-api-token") }}'
+  swamp model method run exe-dev setup
+  swamp model method run exe-dev sync
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - exe-dev/vm.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - exe-dev
+  - vm
+  - cloud
+  - infrastructure
+  - ssh
