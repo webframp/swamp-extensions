@@ -100,6 +100,7 @@ const ExecResultSchema = z.object({
   executedAt: z.string(),
   output: z.string(),
   exitCode: z.number(),
+  truncated: z.boolean(),
 });
 
 const ShelleyVersionSchema = z.object({
@@ -269,12 +270,15 @@ function requireToken(globalArgs: GlobalArgs): string {
 /**
  * Run an SSH command with a hard execution timeout. Spawns the process,
  * sends SIGTERM after timeoutSec, then SIGKILL 2 seconds later if still alive.
- * Returns the command output (stdout + stderr) and exit code.
+ * Returns the command output (stdout + stderr, capped at 10MB) and exit code.
  */
 async function sshWithTimeout(
   args: string[],
   timeoutSec: number,
-): Promise<{ stdout: string; stderr: string; code: number }> {
+): Promise<
+  { stdout: string; stderr: string; code: number; truncated: boolean }
+> {
+  const MAX_OUTPUT_BYTES = 10 * 1024 * 1024; // 10MB cap per stream
   const cmd = new Deno.Command("ssh", {
     args,
     stdout: "piped",
@@ -304,12 +308,25 @@ async function sshWithTimeout(
     clearTimeout(killTimer);
   }
 
-  const stdout = new TextDecoder().decode(result.stdout);
-  const stderr = new TextDecoder().decode(result.stderr);
+  const rawStdout = result.stdout;
+  const rawStderr = result.stderr;
+  const truncated = rawStdout.byteLength > MAX_OUTPUT_BYTES ||
+    rawStderr.byteLength > MAX_OUTPUT_BYTES;
+  const stdout = new TextDecoder().decode(
+    rawStdout.byteLength > MAX_OUTPUT_BYTES
+      ? rawStdout.slice(0, MAX_OUTPUT_BYTES)
+      : rawStdout,
+  );
+  const stderr = new TextDecoder().decode(
+    rawStderr.byteLength > MAX_OUTPUT_BYTES
+      ? rawStderr.slice(0, MAX_OUTPUT_BYTES)
+      : rawStderr,
+  );
   return {
     stdout,
     stderr,
     code: killed ? 124 : result.code,
+    truncated,
   };
 }
 
@@ -331,20 +348,20 @@ export function buildCreateCmd(args: {
     assertVmName(args.name);
     parts.push(`--name=${args.name}`);
   }
-  if (args.image) {
+  if (args.image != null) {
     assertFlagValue(args.image, "image");
     parts.push(`--image=${args.image}`);
   }
   if (args.cpu != null) parts.push(`--cpu=${args.cpu}`);
-  if (args.memory) {
+  if (args.memory != null) {
     assertFlagValue(args.memory, "memory");
     parts.push(`--memory=${args.memory}`);
   }
-  if (args.disk) {
+  if (args.disk != null) {
     assertFlagValue(args.disk, "disk");
     parts.push(`--disk=${args.disk}`);
   }
-  if (args.comment) {
+  if (args.comment != null) {
     parts.push(`--comment="${escapeQuotes(args.comment)}"`);
   }
   if (args.tags?.length) {
@@ -386,11 +403,11 @@ export function buildResizeCmd(args: {
   assertVmName(args.name);
   const parts: string[] = [`resize ${args.name} --json`];
   if (args.cpu != null) parts.push(`--cpu=${args.cpu}`);
-  if (args.memory) {
+  if (args.memory != null) {
     assertFlagValue(args.memory, "memory");
     parts.push(`--memory=${args.memory}`);
   }
-  if (args.disk) {
+  if (args.disk != null) {
     assertFlagValue(args.disk, "disk");
     parts.push(`--disk=${args.disk}`);
   }
@@ -422,16 +439,28 @@ export function buildTagCmd(
 }
 
 async function exeApi(token: string, command: string): Promise<ExeApiResponse> {
-  const resp = await fetch("https://exe.dev/exec", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "text/plain",
-    },
-    body: command,
-  });
-  const body = await resp.text();
-  return { ok: resp.ok, status: resp.status, body };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const resp = await fetch("https://exe.dev/exec", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "text/plain",
+      },
+      body: command,
+      signal: controller.signal,
+    });
+    const body = await resp.text();
+    return { ok: resp.ok, status: resp.status, body };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("exe.dev API request timed out after 30 seconds");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
@@ -442,13 +471,14 @@ async function exeApi(token: string, command: string): Promise<ExeApiResponse> {
 function parseJsonResponse<T>(resp: ExeApiResponse, command?: string): T {
   if (resp.status === 403) {
     const baseCmd = (command ?? "unknown").split(" ")[0];
-    const allCmds = [...REQUIRED_CMDS, ...REQUIRED_SUBCOMMANDS];
+    const quotedSubs = REQUIRED_SUBCOMMANDS.map((s) => `"${s}"`);
+    const cmdsValue = [...REQUIRED_CMDS, ...quotedSubs].join(",");
     throw new Error(
       `exe.dev API returned 403 (command not allowed): "${baseCmd}" is not ` +
         `permitted by the current token. Fix: run the "setup" method to ` +
         `generate a token with full permissions, or manually regenerate with:\n` +
         `  ssh exe.dev ssh-key generate-api-key --exp=30d ` +
-        `--cmds=${allCmds.join(",")}`,
+        `'--cmds=${cmdsValue}'`,
     );
   }
   if (!resp.ok) {
@@ -507,10 +537,10 @@ export function mapVm(raw: RawVm): z.infer<typeof VmSchema> {
     status: raw.status,
     image: raw.image,
     allocatedCpus: raw.allocated_cpus,
-    memoryGb: raw.memory_capacity_bytes
+    memoryGb: raw.memory_capacity_bytes != null
       ? raw.memory_capacity_bytes / (1024 * 1024 * 1024)
       : undefined,
-    diskGb: raw.disk_capacity_bytes
+    diskGb: raw.disk_capacity_bytes != null
       ? raw.disk_capacity_bytes / (1024 * 1024 * 1024)
       : undefined,
     proxyPort: raw.proxy_port,
@@ -612,7 +642,9 @@ export const model = {
         "After running, ensure your model YAML " +
         'has: token: \'${{ vault.get("<vaultName>", "<secretKey>") }}\'',
       arguments: z.object({
-        expiry: z.string().default("30d").describe(
+        expiry: z.string().regex(/^\d+[dhms]$/, {
+          message: "Must be a number followed by d, h, m, or s (e.g. 30d, 24h)",
+        }).default("30d").describe(
           "Token lifetime (e.g. 7d, 30d, 90d)",
         ),
         vaultName: z.string().default("gitlab").describe(
@@ -645,25 +677,22 @@ export const model = {
         // Generate the token via SSH
         // SSH concatenates positional args after the host into the remote command
         const label = `swamp-${Date.now()}`;
-        const sshCmd = new Deno.Command("ssh", {
-          args: [
-            "exe.dev",
-            "ssh-key",
-            "generate-api-key",
-            `--exp=${args.expiry}`,
-            `--cmds=${cmds}`,
-            `--label=${label}`,
-          ],
-          stdout: "piped",
-          stderr: "piped",
-        });
-        const sshResult = await sshCmd.output();
-        const sshStdout = new TextDecoder().decode(sshResult.stdout);
-        const sshStderr = new TextDecoder().decode(sshResult.stderr);
+        const { stdout: sshStdout, stderr: sshStderr, code: sshCode } =
+          await sshWithTimeout(
+            [
+              "exe.dev",
+              "ssh-key",
+              "generate-api-key",
+              `--exp=${args.expiry}`,
+              `--cmds=${cmds}`,
+              `--label=${label}`,
+            ],
+            30,
+          );
 
-        if (!sshResult.success) {
+        if (sshCode !== 0) {
           throw new Error(
-            `Failed to generate exe.dev API token (exit ${sshResult.code}): ` +
+            `Failed to generate exe.dev API token (exit ${sshCode}): ` +
               `${sshStderr || sshStdout}`,
           );
         }
@@ -693,10 +722,20 @@ export const model = {
           stderr: "piped",
         });
         const vaultChild = vaultCmd.spawn();
+        const vaultTimer = setTimeout(() => {
+          try {
+            vaultChild.kill("SIGTERM");
+          } catch { /* already exited */ }
+        }, 15_000);
         const writer = vaultChild.stdin.getWriter();
         await writer.write(new TextEncoder().encode(token));
         await writer.close();
-        const vaultResult = await vaultChild.output();
+        let vaultResult: Deno.CommandOutput;
+        try {
+          vaultResult = await vaultChild.output();
+        } finally {
+          clearTimeout(vaultTimer);
+        }
 
         if (!vaultResult.success) {
           const vaultStderr = new TextDecoder().decode(vaultResult.stderr);
@@ -1038,7 +1077,9 @@ export const model = {
         "versioned data for downstream consumption.",
       arguments: z.object({
         name: z.string().min(1).describe("VM name to execute on"),
-        command: z.string().min(1).describe("Shell command to run"),
+        command: z.string().min(1).max(65536).describe(
+          "Shell command to run (max 64KB)",
+        ),
         timeout: z.number().min(1).max(300).default(30).describe(
           "SSH command timeout in seconds (max 300)",
         ),
@@ -1059,7 +1100,7 @@ export const model = {
         },
       ) => {
         assertVmName(args.name);
-        const { stdout, stderr, code } = await sshWithTimeout(
+        const { stdout, stderr, code, truncated } = await sshWithTimeout(
           [
             "-o",
             "StrictHostKeyChecking=accept-new",
@@ -1100,6 +1141,7 @@ export const model = {
             executedAt: new Date().toISOString(),
             output,
             exitCode: code,
+            truncated,
           },
         );
         return { dataHandles: [handle] };
