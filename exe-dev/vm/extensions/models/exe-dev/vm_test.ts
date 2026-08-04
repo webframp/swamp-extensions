@@ -395,6 +395,49 @@ Deno.test("buildResizeCmd: rejects invalid memory", () => {
 });
 
 // =============================================================================
+// Tests: tag validation in buildCreateCmd
+// =============================================================================
+
+Deno.test("buildCreateCmd: rejects tag with spaces", () => {
+  let threw = false;
+  try {
+    buildCreateCmd({ tags: ["good", "my tag"] });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildCreateCmd: rejects tag with comma", () => {
+  let threw = false;
+  try {
+    buildCreateCmd({ tags: ["tag,inject"] });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildCreateCmd: valid tags pass", () => {
+  const cmd = buildCreateCmd({ tags: ["worker", "ephemeral"] });
+  assertStringIncludes(cmd, "--tag=worker,ephemeral");
+});
+
+// =============================================================================
+// Tests: cpu=0 edge case
+// =============================================================================
+
+Deno.test("buildCreateCmd: cpu=0 is included in command", () => {
+  const cmd = buildCreateCmd({ cpu: 0 });
+  assertStringIncludes(cmd, "--cpu=0");
+});
+
+Deno.test("buildResizeCmd: cpu=0 is included in command", () => {
+  const cmd = buildResizeCmd({ name: "my-vm", cpu: 0 });
+  assertStringIncludes(cmd, "--cpu=0");
+});
+
+// =============================================================================
 // Tests: 403 error detection
 // =============================================================================
 

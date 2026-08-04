@@ -277,7 +277,7 @@ export function buildCreateCmd(args: {
     assertFlagValue(args.image, "image");
     parts.push(`--image=${args.image}`);
   }
-  if (args.cpu) parts.push(`--cpu=${args.cpu}`);
+  if (args.cpu != null) parts.push(`--cpu=${args.cpu}`);
   if (args.memory) {
     assertFlagValue(args.memory, "memory");
     parts.push(`--memory=${args.memory}`);
@@ -290,6 +290,14 @@ export function buildCreateCmd(args: {
     parts.push(`--comment="${escapeQuotes(args.comment)}"`);
   }
   if (args.tags?.length) {
+    for (const tag of args.tags) {
+      assertFlagValue(tag, "tag");
+      if (tag.includes(",")) {
+        throw new Error(
+          `Invalid tag "${tag}": must not contain commas (tags are comma-separated in the protocol).`,
+        );
+      }
+    }
     parts.push(`--tag=${args.tags.join(",")}`);
   }
   if (args.setupScript) {
@@ -319,7 +327,7 @@ export function buildResizeCmd(args: {
 }): string {
   assertVmName(args.name);
   const parts: string[] = [`resize ${args.name} --json`];
-  if (args.cpu) parts.push(`--cpu=${args.cpu}`);
+  if (args.cpu != null) parts.push(`--cpu=${args.cpu}`);
   if (args.memory) {
     assertFlagValue(args.memory, "memory");
     parts.push(`--memory=${args.memory}`);
@@ -1255,6 +1263,9 @@ export const model = {
           vmNames = fleet.vms.map((v) => v.vmName);
         }
 
+        // Re-validate vmNames from stored data before interpolating into SSH args
+        vmNames.forEach(assertVmName);
+
         ctx.logger.info("Checking Shelley version on {count} VMs", {
           count: vmNames.length,
         });
@@ -1309,8 +1320,8 @@ export const model = {
           .map((r) => r.version)
           .filter((v): v is string => v !== null);
         const sorted = [...versions].sort((a, b) => {
-          const pa = a.split(".").map(Number);
-          const pb = b.split(".").map(Number);
+          const pa = a.split(".").map((s) => parseInt(s, 10) || 0);
+          const pb = b.split(".").map((s) => parseInt(s, 10) || 0);
           for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
             const diff = (pb[i] ?? 0) - (pa[i] ?? 0);
             if (diff !== 0) return diff;
@@ -1398,6 +1409,9 @@ export const model = {
             return {};
           }
         }
+
+        // Re-validate vmNames from stored data before interpolating into commands
+        vmNames.forEach(assertVmName);
 
         ctx.logger.info("Upgrading Shelley on {count} VMs", {
           count: vmNames.length,
