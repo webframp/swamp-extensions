@@ -10,6 +10,8 @@
 
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import {
+  assertEmail,
+  assertVmName,
   buildCommentCmd,
   buildCreateCmd,
   buildResizeCmd,
@@ -158,6 +160,115 @@ Deno.test("tag add: tag with embedded quotes is escaped", () => {
 Deno.test("comment: text with embedded quotes is escaped", () => {
   const cmd = buildCommentCmd("my-vm", 'say "hi"');
   assertEquals(cmd, 'comment --json my-vm "say \\"hi\\""');
+});
+
+// =============================================================================
+// Tests: VM name validation
+// =============================================================================
+
+Deno.test("assertVmName: valid names pass", () => {
+  assertVmName("my-vm");
+  assertVmName("worker1");
+  assertVmName("a");
+  assertVmName("test-vm-123");
+});
+
+Deno.test("assertVmName: rejects spaces", () => {
+  let threw = false;
+  try {
+    assertVmName("my vm");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertVmName: rejects flag prefix", () => {
+  let threw = false;
+  try {
+    assertVmName("--all");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertVmName: rejects uppercase", () => {
+  let threw = false;
+  try {
+    assertVmName("MyVm");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertVmName: rejects quotes", () => {
+  let threw = false;
+  try {
+    assertVmName('vm"inject');
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+// =============================================================================
+// Tests: email validation
+// =============================================================================
+
+Deno.test("assertEmail: valid email passes", () => {
+  assertEmail("user@example.com");
+});
+
+Deno.test("assertEmail: rejects whitespace (flag injection)", () => {
+  let threw = false;
+  try {
+    assertEmail("user@example.com --root");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertEmail: rejects leading dash", () => {
+  let threw = false;
+  try {
+    assertEmail("-user@example.com");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("assertEmail: rejects missing @", () => {
+  let threw = false;
+  try {
+    assertEmail("notanemail");
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildCreateCmd: rejects invalid VM name", () => {
+  let threw = false;
+  try {
+    buildCreateCmd({ name: "my vm --inject" });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
+});
+
+Deno.test("buildResizeCmd: rejects invalid VM name", () => {
+  let threw = false;
+  try {
+    buildResizeCmd({ name: "--all" });
+  } catch {
+    threw = true;
+  }
+  assertEquals(threw, true);
 });
 
 // =============================================================================

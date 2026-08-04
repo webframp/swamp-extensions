@@ -33,8 +33,10 @@ import { z } from "npm:zod@4.4.3";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  token: z.string().min(1).describe(
-    "exe.dev API bearer token (use vault reference). Generate with: ssh exe.dev ssh-key generate-api-key --exp=30d",
+  token: z.string().optional().describe(
+    "exe.dev API bearer token (use vault reference). Generate with the " +
+      "setup method or: ssh exe.dev ssh-key generate-api-key --exp=30d. " +
+      "Required for all methods except setup.",
   ),
 });
 
@@ -166,6 +168,55 @@ export function escapeQuotes(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+/**
+ * exe.dev VM names are DNS-label-like: lowercase alphanumeric and hyphens,
+ * no spaces, no flag prefixes. Rejects anything that could split into multiple
+ * tokens or inject flags in the text-based API protocol.
+ */
+const VM_NAME_RE = /^[a-z0-9][a-z0-9\-]*[a-z0-9]$|^[a-z0-9]$/;
+
+/** Validate a VM name before interpolating it into a command string. */
+export function assertVmName(name: string): void {
+  if (!VM_NAME_RE.test(name)) {
+    throw new Error(
+      `Invalid VM name "${name}": must be lowercase alphanumeric with hyphens, ` +
+        `no spaces, no leading dashes. Examples: "my-vm", "worker1".`,
+    );
+  }
+}
+
+/**
+ * Validate an email address before interpolating it into a command string.
+ * Rejects whitespace and flag-prefix patterns that could inject arguments.
+ */
+export function assertEmail(email: string): void {
+  if (/\s/.test(email) || email.startsWith("-")) {
+    throw new Error(
+      `Invalid email "${email}": must not contain whitespace or start with "-".`,
+    );
+  }
+  if (!email.includes("@")) {
+    throw new Error(
+      `Invalid email "${email}": must contain an "@" character.`,
+    );
+  }
+}
+
+/**
+ * Require a non-empty token from globalArgs. Throws an actionable error if
+ * the token is missing (not yet bootstrapped).
+ */
+function requireToken(globalArgs: GlobalArgs): string {
+  if (!globalArgs.token) {
+    throw new Error(
+      "No API token configured. Run the setup method first to generate " +
+        "and vault a token, then set your model config to: " +
+        'token: \'${{ vault.get("<vaultName>", "<secretKey>") }}\'',
+    );
+  }
+  return globalArgs.token;
+}
+
 /** Build the `new` command string from create arguments. */
 export function buildCreateCmd(args: {
   name?: string;
@@ -180,7 +231,10 @@ export function buildCreateCmd(args: {
   integrations?: string[];
 }): string {
   const parts: string[] = ["new --json"];
-  if (args.name) parts.push(`--name=${args.name}`);
+  if (args.name) {
+    assertVmName(args.name);
+    parts.push(`--name=${args.name}`);
+  }
   if (args.image) parts.push(`--image=${args.image}`);
   if (args.cpu) parts.push(`--cpu=${args.cpu}`);
   if (args.memory) parts.push(`--memory=${args.memory}`);
@@ -212,6 +266,7 @@ export function buildResizeCmd(args: {
   memory?: string;
   disk?: string;
 }): string {
+  assertVmName(args.name);
   const parts: string[] = [`resize ${args.name} --json`];
   if (args.cpu) parts.push(`--cpu=${args.cpu}`);
   if (args.memory) parts.push(`--memory=${args.memory}`);
@@ -221,6 +276,7 @@ export function buildResizeCmd(args: {
 
 /** Build the `comment` command string. */
 export function buildCommentCmd(name: string, text: string): string {
+  assertVmName(name);
   return text
     ? `comment --json ${name} "${escapeQuotes(text)}"`
     : `comment --json ${name} ""`;
@@ -232,6 +288,7 @@ export function buildTagCmd(
   tags: string[],
   remove: boolean,
 ): string {
+  assertVmName(name);
   const quotedTags = tags.map((t) => `"${escapeQuotes(t)}"`).join(" ");
   return remove
     ? `tag --json -d ${name} ${quotedTags}`
@@ -495,20 +552,25 @@ export const model = {
         }
         const token = tokenMatch[1];
 
-        // Store in vault via swamp CLI
+        // Store in vault via swamp CLI (pass token on stdin to avoid process table exposure)
         const vaultCmd = new Deno.Command("swamp", {
           args: [
             "vault",
             "put",
             args.vaultName,
             args.secretKey,
-            token,
+            "--stdin",
             "--yes",
           ],
+          stdin: "piped",
           stdout: "piped",
           stderr: "piped",
         });
-        const vaultResult = await vaultCmd.output();
+        const vaultChild = vaultCmd.spawn();
+        const writer = vaultChild.stdin.getWriter();
+        await writer.write(new TextEncoder().encode(token));
+        await writer.close();
+        const vaultResult = await vaultChild.output();
 
         if (!vaultResult.success) {
           const vaultStderr = new TextDecoder().decode(vaultResult.stderr);
@@ -548,7 +610,7 @@ export const model = {
           };
         },
       ) => {
-        const resp = await exeApi(ctx.globalArgs.token, "ls -l --json");
+        const resp = await exeApi(requireToken(ctx.globalArgs), "ls -l --json");
         const raw = parseJsonResponse<{ vms: RawVm[] }>(resp, "ls -l --json");
         const vms = (raw.vms ?? []).map(mapVm);
 
@@ -620,7 +682,7 @@ export const model = {
         },
       ) => {
         const cmd = buildCreateCmd(args);
-        const resp = await exeApi(ctx.globalArgs.token, cmd);
+        const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
         const raw = parseJsonResponse<RawVm>(resp, "new");
         const vm = mapVm(raw);
 
@@ -652,8 +714,9 @@ export const model = {
           };
         },
       ) => {
+        args.names.forEach(assertVmName);
         const resp = await exeApi(
-          ctx.globalArgs.token,
+          requireToken(ctx.globalArgs),
           `rm --json ${args.names.join(" ")}`,
         );
         parseJsonResponse<unknown>(resp, "rm");
@@ -683,15 +746,19 @@ export const model = {
           };
         },
       ) => {
+        assertVmName(args.name);
         const resp = await exeApi(
-          ctx.globalArgs.token,
+          requireToken(ctx.globalArgs),
           `restart --json ${args.name}`,
         );
         parseJsonResponse<unknown>(resp, "restart");
         ctx.logger.info("exe.dev VM restarted: {name}", { name: args.name });
 
         // Re-fetch VM state after restart
-        const lsResp = await exeApi(ctx.globalArgs.token, "ls -l --json");
+        const lsResp = await exeApi(
+          requireToken(ctx.globalArgs),
+          "ls -l --json",
+        );
         const lsData = parseJsonResponse<{ vms: RawVm[] }>(lsResp, "ls");
         const found = lsData.vms?.find((v) => v.vm_name === args.name);
         if (found) {
@@ -732,12 +799,15 @@ export const model = {
         },
       ) => {
         const cmd = buildResizeCmd(args);
-        const resp = await exeApi(ctx.globalArgs.token, cmd);
+        const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
         parseJsonResponse<unknown>(resp, "resize");
         ctx.logger.info("exe.dev VM resized: {name}", { name: args.name });
 
         // Re-fetch state
-        const lsResp = await exeApi(ctx.globalArgs.token, "ls -l --json");
+        const lsResp = await exeApi(
+          requireToken(ctx.globalArgs),
+          "ls -l --json",
+        );
         const lsData = parseJsonResponse<{ vms: RawVm[] }>(lsResp, "ls");
         const found = lsData.vms?.find((v) => v.vm_name === args.name);
         if (found) {
@@ -775,8 +845,9 @@ export const model = {
           };
         },
       ) => {
+        assertVmName(args.name);
         const resp = await exeApi(
-          ctx.globalArgs.token,
+          requireToken(ctx.globalArgs),
           `stat --json ${args.name} --range=${args.range}`,
         );
         const metrics = parseJsonResponse<unknown>(resp, "stat");
@@ -814,7 +885,7 @@ export const model = {
       ) => {
         if (args.add?.length) {
           const cmd = buildTagCmd(args.name, args.add, false);
-          const resp = await exeApi(ctx.globalArgs.token, cmd);
+          const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
           parseJsonResponse<unknown>(resp, "tag");
           ctx.logger.info("exe.dev tags added to {name}: {tags}", {
             name: args.name,
@@ -824,7 +895,7 @@ export const model = {
 
         if (args.remove?.length) {
           const cmd = buildTagCmd(args.name, args.remove, true);
-          const resp = await exeApi(ctx.globalArgs.token, cmd);
+          const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
           parseJsonResponse<unknown>(resp, "tag");
           ctx.logger.info("exe.dev tags removed from {name}: {tags}", {
             name: args.name,
@@ -861,6 +932,7 @@ export const model = {
           };
         },
       ) => {
+        assertVmName(args.name);
         const sshCmd = new Deno.Command("ssh", {
           args: [
             "-o",
@@ -899,8 +971,8 @@ export const model = {
           code: result.code,
         });
 
-        // Instance name uses a hash of vm+command for deterministic dedup,
-        // suffixed with a short timestamp to allow re-runs of the same command.
+        // Instance name is a hash of vm+command for deterministic dedup.
+        // Re-running the same command on the same VM overwrites the previous result.
         const instanceName = `${args.name}-${
           Array.from(
             new Uint8Array(
@@ -945,7 +1017,7 @@ export const model = {
         },
       ) => {
         const cmd = buildCommentCmd(args.name, args.text);
-        const resp = await exeApi(ctx.globalArgs.token, cmd);
+        const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
         parseJsonResponse<unknown>(resp, "comment");
 
         ctx.logger.info("exe.dev comment set on {name}", { name: args.name });
@@ -998,6 +1070,10 @@ export const model = {
           };
         },
       ) => {
+        assertVmName(args.name);
+        if (args.email) {
+          assertEmail(args.email);
+        }
         let cmd: string;
 
         switch (args.action) {
@@ -1037,7 +1113,10 @@ export const model = {
             break;
           case "show": {
             // Re-fetch full VM state (includes sharing details) via ls -l
-            const lsResp = await exeApi(ctx.globalArgs.token, "ls -l --json");
+            const lsResp = await exeApi(
+              requireToken(ctx.globalArgs),
+              "ls -l --json",
+            );
             const lsData = parseJsonResponse<{ vms: RawVm[] }>(lsResp, "ls");
             const found = lsData.vms?.find((v) => v.vm_name === args.name);
             if (!found) {
@@ -1059,7 +1138,7 @@ export const model = {
             throw new Error(`Unknown share action: ${args.action}`);
         }
 
-        const resp = await exeApi(ctx.globalArgs.token, cmd);
+        const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
         parseJsonResponse<unknown>(resp, `share ${args.action}`);
 
         ctx.logger.info("exe.dev share {action} on {name}", {
@@ -1103,6 +1182,7 @@ export const model = {
         // Determine which VMs to check
         let vmNames: string[];
         if (args.filter?.length) {
+          args.filter.forEach(assertVmName);
           vmNames = args.filter;
         } else {
           // Read from latest fleet sync (instance name is "all")
@@ -1224,6 +1304,7 @@ export const model = {
       ) => {
         let vmNames: string[];
         if (args.names?.length) {
+          args.names.forEach(assertVmName);
           vmNames = args.names;
         } else {
           // Default: upgrade all outdated VMs from the latest version check
@@ -1285,7 +1366,7 @@ export const model = {
 
             // Run shelley install via exe.dev API
             const resp = await exeApi(
-              ctx.globalArgs.token,
+              requireToken(ctx.globalArgs),
               `shelley install ${vmName}`,
             );
 
