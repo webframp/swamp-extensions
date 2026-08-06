@@ -10,7 +10,7 @@ import {
   PutCommand,
   QueryCommand,
   UpdateCommand,
-} from "npm:@aws-sdk/lib-dynamodb@3.1101.0";
+} from "npm:@aws-sdk/lib-dynamodb@3.1104.0";
 import { Sidecar } from "./sidecar.ts";
 import { retryable } from "./_lib/retry.ts";
 import {

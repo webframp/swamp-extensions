@@ -7,7 +7,7 @@ import {
   assertMatch,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { XRayClient } from "npm:@aws-sdk/client-xray@3.1101.0";
+import { XRayClient } from "npm:@aws-sdk/client-xray@3.1104.0";
 import { model } from "./traces.ts";
 
 // =============================================================================

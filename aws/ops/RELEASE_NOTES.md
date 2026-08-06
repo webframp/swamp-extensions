@@ -1,3 +1,21 @@
+## 2026.08.05.1
+
+**Changed:** Bump @webframp/aws/logs 2026.08.01.1 → 2026.08.02.1
+
+**Changed:** Bump @webframp/aws/metrics 2026.08.01.1 → 2026.08.02.1
+
+**Changed:** Bump @webframp/aws/alarms 2026.08.01.1 → 2026.08.02.1
+
+**Changed:** Bump @webframp/aws/traces 2026.08.01.1 → 2026.08.02.1
+
+**Changed:** Bump @webframp/aws/inventory 2026.08.01.1 → 2026.08.02.1
+
+**Changed:** Bump @webframp/aws/networking 2026.08.01.1 → 2026.08.02.1
+
+**Changed:** Bump @webframp/aws/alarm-investigation 2026.08.01.1 → 2026.08.02.1
+
+**Changed:** Bump @webframp/aws/cost-explorer 2026.08.01.1 → 2026.08.02.1
+
 ## 2026.08.02.1
 
 **Changed:** Bump @webframp/aws/logs 2026.07.30.2 → 2026.08.01.1

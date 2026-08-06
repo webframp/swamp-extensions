@@ -22,12 +22,12 @@ import {
   ListRolesCommand,
   ListUserPoliciesCommand,
   ListUsersCommand,
-} from "npm:@aws-sdk/client-iam@3.1101.0";
+} from "npm:@aws-sdk/client-iam@3.1104.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1101.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1101.0";
+} from "npm:@aws-sdk/client-sts@3.1104.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1104.0";
 
 // =============================================================================
 // Schemas
@@ -313,7 +313,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.08.02.1",
+  version: "2026.08.05.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -322,7 +322,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.02.1",
+      toVersion: "2026.08.05.1",
       description: "Version bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
