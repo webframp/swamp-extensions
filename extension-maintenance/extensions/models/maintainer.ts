@@ -621,13 +621,60 @@ async function readManifestName(extDir: string): Promise<string> {
   }
 }
 
+/**
+ * Read the model version string(s) from non-test .ts source files in an
+ * extension directory. Returns a map of file path → version string for every
+ * file that exports a model/driver/vault with a CalVer `version:` field.
+ *
+ * This reads the *actual* source content rather than trusting the manifest,
+ * which may have drifted if a prior bump partially applied.
+ */
+async function readSourceVersions(
+  extDir: string,
+): Promise<Map<string, string>> {
+  const versions = new Map<string, string>();
+  const findResult = await run([
+    "find",
+    `${extDir}/extensions`,
+    "-name",
+    "*.ts",
+    "-not",
+    "-name",
+    "*_test.ts",
+  ]);
+  if (!findResult.success) return versions;
+
+  for (const file of findResult.stdout.trim().split("\n")) {
+    if (!file) continue;
+    let content: string;
+    try {
+      content = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    }
+    // Match the version field in a model/driver/vault export.
+    // The pattern targets `version: "YYYY.MM.DD.N"` inside an export object.
+    const match = content.match(
+      /version:\s*["'](\d{4}\.\d{2}\.\d{2}\.\d+)["']/,
+    );
+    if (match) {
+      versions.set(file, match[1]!);
+    }
+  }
+  return versions;
+}
+
 // =============================================================================
 // Validation Checks
 // =============================================================================
 
-/** Checks that the last upgrade chain entry's toVersion matches the model version.
+/** Checks that the last upgrade chain entry's toVersion matches the model version,
+ * AND that the model version matches the manifest version (if provided).
  * Returns an error message if broken, null if valid or no upgrades present. */
-async function checkUpgradeChain(extDir: string): Promise<string | null> {
+async function checkUpgradeChain(
+  extDir: string,
+  manifestVersion?: string,
+): Promise<string | null> {
   const tsFiles: string[] = [];
   try {
     const findResult = await run(
@@ -675,6 +722,15 @@ async function checkUpgradeChain(extDir: string): Promise<string | null> {
     const lastToVersion = toVersionMatches[toVersionMatches.length - 1][1];
     if (lastToVersion !== modelVersion) {
       return `upgrade chain broken: last toVersion "${lastToVersion}" != model version "${modelVersion}"`;
+    }
+
+    // Cross-check: source model version must match manifest version.
+    // A mismatch means apply-bump failed to update the source file (e.g.
+    // because the find pattern was built from the manifest, which had already
+    // drifted from the source).
+    if (manifestVersion && modelVersion !== manifestVersion) {
+      const relFile = file.slice(extDir.length + 1);
+      return `source/manifest version mismatch: ${relFile} has version "${modelVersion}" but manifest.yaml has "${manifestVersion}"`;
     }
   }
   return null;
@@ -752,7 +808,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.08.01.1",
+  version: "2026.08.06.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1130,21 +1186,74 @@ export const model = {
             replace: `version: "${nextVer}"`,
             category: "manifest-version",
           });
-          changes.push({
-            file: "extensions/**/*.ts",
-            find: `version: "${currentVersion}"`,
-            replace: `version: "${nextVer}"`,
-            category: "source-version",
-          });
-          // Upgrade chain: the last toVersion must match the new model version.
-          // The current toVersion points at currentVersion (the pre-bump version).
-          // Replace it with nextVer so the chain terminates correctly.
-          changes.push({
-            file: "extensions/**/*.ts",
-            find: `toVersion: "${currentVersion}"`,
-            replace: `toVersion: "${nextVer}"`,
-            category: "source-version",
-          });
+
+          // Source version bump: read the actual version strings from .ts files
+          // rather than assuming they match the manifest. A prior partial bump
+          // may have left the source at a different version than the manifest.
+          const sourceVersions = await readSourceVersions(
+            `${resolvedRoot}/${ext.dir}`,
+          );
+          const uniqueSourceVersions = new Set(sourceVersions.values());
+
+          if (uniqueSourceVersions.size === 0) {
+            // No CalVer version fields found in source — fall back to manifest
+            // version for the find pattern (extension may not have a version
+            // field, e.g. workflow-only extensions).
+            changes.push({
+              file: "extensions/**/*.ts",
+              find: `version: "${currentVersion}"`,
+              replace: `version: "${nextVer}"`,
+              category: "source-version",
+            });
+            changes.push({
+              file: "extensions/**/*.ts",
+              find: `toVersion: "${currentVersion}"`,
+              replace: `toVersion: "${nextVer}"`,
+              category: "source-version",
+            });
+          } else {
+            // Emit a find/replace for each distinct source version found.
+            // This handles the case where the source drifted from the manifest.
+            for (const srcVer of uniqueSourceVersions) {
+              if (srcVer === nextVer) continue; // Already at target — skip
+              changes.push({
+                file: "extensions/**/*.ts",
+                find: `version: "${srcVer}"`,
+                replace: `version: "${nextVer}"`,
+                category: "source-version",
+              });
+              changes.push({
+                file: "extensions/**/*.ts",
+                find: `toVersion: "${srcVer}"`,
+                replace: `toVersion: "${nextVer}"`,
+                category: "source-version",
+              });
+            }
+            // If the manifest version differs from all source versions, also
+            // emit a pattern for it — covers files that DO match the manifest.
+            if (!uniqueSourceVersions.has(currentVersion)) {
+              changes.push({
+                file: "extensions/**/*.ts",
+                find: `version: "${currentVersion}"`,
+                replace: `version: "${nextVer}"`,
+                category: "source-version",
+              });
+              changes.push({
+                file: "extensions/**/*.ts",
+                find: `toVersion: "${currentVersion}"`,
+                replace: `toVersion: "${nextVer}"`,
+                category: "source-version",
+              });
+            }
+            // Warn if source versions are inconsistent across files
+            if (uniqueSourceVersions.size > 1) {
+              context.logger.warn(
+                `${ext.name}: found multiple source versions (${
+                  [...uniqueSourceVersions].join(", ")
+                }); emitting find patterns for all`,
+              );
+            }
+          }
 
           const releaseNotes = `## ${nextVer}\n\n${noteLines.join("\n\n")}\n`;
 
@@ -1348,7 +1457,7 @@ export const model = {
             // broken chain undetected. Catch it here, at the point of writing,
             // regardless of what runs after.
             const chainError = !args.dry_run
-              ? await checkUpgradeChain(extDir)
+              ? await checkUpgradeChain(extDir, entry.nextVersion)
               : null;
             if (chainError) {
               errors.push({ extension: entry.name, error: chainError });
@@ -1457,7 +1566,11 @@ export const model = {
           if (!extFmtResult.success) errors.push("extension fmt failed");
 
           // Upgrade chain: last toVersion must match model version
-          const upgradeChainResult = await checkUpgradeChain(dir);
+          const manifestVer = await readManifestVersion(dir);
+          const upgradeChainResult = await checkUpgradeChain(
+            dir,
+            manifestVer !== "unknown" ? manifestVer : undefined,
+          );
           if (upgradeChainResult) errors.push(upgradeChainResult);
 
           // Release notes: current version must have an entry
