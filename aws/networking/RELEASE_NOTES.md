@@ -1,3 +1,7 @@
+## 2026.08.05.1
+
+**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (4 packages)
+
 ## 2026.08.02.1
 
 **Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (4 packages)

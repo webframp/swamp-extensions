@@ -1,3 +1,7 @@
+## 2026.08.05.1
+
+**Changed:** Bump @webframp/agentcore 2026.07.31.1 → 2026.08.02.1
+
 ## 2026.08.02.2
 
 **Fixed:** The workflow's `description` field embedded a live

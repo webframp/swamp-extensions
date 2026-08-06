@@ -1,3 +1,7 @@
+## 2026.08.05.1
+
+**Changed:** Bump @webframp/aws/bedrock-usage 2026.08.01.1 → 2026.08.02.1
+
 ## 2026.08.02.1
 
 **Changed:** Bump @webframp/aws/bedrock-usage 2026.07.29.1 → 2026.08.01.1
