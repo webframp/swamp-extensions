@@ -48,9 +48,13 @@ globalArguments:
 | `approve_mr`    | Approve MR without commenting                | `project`, `iid`            |
 | `unapprove_mr`  | Remove approval (request changes)            | `project`, `iid`            |
 | `post_review`   | Post draft as comment, optionally approve    | `project`, `iid`, `action?` |
+| `post_line_comment` | Post a comment positioned on a file/line in the diff | `project`, `iid`, `body`, `newPath`, `newLine?`, `oldPath?`, `oldLine?` |
 
 The `action` parameter on `post_review` accepts: `comment` (default), `approve`,
 or `request_changes`.
+
+`post_line_comment` requires at least one of `newLine` (added/changed lines) or
+`oldLine` (deleted lines); `oldPath` defaults to `newPath` when omitted.
 
 ## Resources
 
@@ -59,6 +63,7 @@ or `request_changes`.
 | `mrDiff`       | MR metadata and file diffs | 7d, 5 versions  |
 | `reviewDraft`  | Draft comment (editable)   | 7d, 10 versions |
 | `reviewPosted` | Record of posted comments  | 30d, 5 versions |
+| `lineComment`  | Record of diff-positioned comments | 30d, 20 versions |
 
 The `reviewDraft` retains 10 versions. Compare drafts before approving:
 

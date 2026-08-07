@@ -29,6 +29,7 @@ Deno.test("model has all expected methods", () => {
     "approve_mr",
     "edit_draft",
     "get_mr_diff",
+    "post_line_comment",
     "post_review",
     "unapprove_mr",
     "update_review",
@@ -38,6 +39,7 @@ Deno.test("model has all expected methods", () => {
 Deno.test("model has all expected resources", () => {
   const resourceNames = Object.keys(model.resources);
   assertEquals(resourceNames.sort(), [
+    "lineComment",
     "mrDiff",
     "reviewDraft",
     "reviewPosted",
@@ -782,6 +784,259 @@ Deno.test("approve_mr rejects closed MR", async () => {
       () =>
         model.methods.approve_mr.execute(
           { project: "group/repo", iid: 50 },
+          context as any,
+        ),
+      Error,
+      "is closed",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_line_comment argument schema accepts newLine-only, oldLine-only, or both", () => {
+  const withNewLine = model.methods.post_line_comment.arguments.safeParse({
+    project: "group/repo",
+    iid: 1,
+    body: "nit",
+    newPath: "file.ts",
+    newLine: 42,
+  });
+  assertEquals(withNewLine.success, true);
+
+  const withOldLine = model.methods.post_line_comment.arguments.safeParse({
+    project: "group/repo",
+    iid: 1,
+    body: "nit",
+    newPath: "file.ts",
+    oldLine: 10,
+  });
+  assertEquals(withOldLine.success, true);
+});
+
+Deno.test("post_line_comment rejects when neither newLine nor oldLine is provided", async () => {
+  const restore = mockFetch({});
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.post_line_comment.execute(
+          {
+            project: "group/repo",
+            iid: 1,
+            body: "nit",
+            newPath: "file.ts",
+          },
+          context as any,
+        ),
+      Error,
+      "at least one of newLine or oldLine must be provided",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_line_comment posts a positioned discussion", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/merge_requests/1/versions": {
+      status: 200,
+      body: [{
+        base_commit_sha: "base123",
+        start_commit_sha: "start123",
+        head_commit_sha: "head123",
+      }],
+    },
+    "POST /api/v4/projects/group%2Frepo/merge_requests/1/discussions": {
+      status: 201,
+      body: {
+        id: "abc123discussion",
+        notes: [{ id: 555, body: "nice catch" }],
+      },
+    },
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await model.methods.post_line_comment.execute(
+      {
+        project: "group/repo",
+        iid: 1,
+        body: "nice catch",
+        newPath: "src/file.ts",
+        newLine: 42,
+      },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    const data = resources[0].data as any;
+    assertEquals(data.discussionId, "abc123discussion");
+    assertEquals(data.noteId, 555);
+    assertEquals(data.newPath, "src/file.ts");
+    assertEquals(data.newLine, 42);
+    assertEquals(data.oldLine, null);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_line_comment keys distinct positions on the same MR as separate resource instances", async () => {
+  let discussionCall = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const method = init?.method ?? "GET";
+
+    if (method === "GET" && url.includes("/versions")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([{
+            base_commit_sha: "base123",
+            start_commit_sha: "start123",
+            head_commit_sha: "head123",
+          }]),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    if (method === "POST" && url.includes("/discussions")) {
+      discussionCall++;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: `discussion-${discussionCall}`,
+            notes: [{ id: discussionCall }],
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await model.methods.post_line_comment.execute(
+      {
+        project: "group/repo",
+        iid: 1,
+        body: "first",
+        newPath: "src/a.ts",
+        newLine: 10,
+      },
+      context as any,
+    );
+    await model.methods.post_line_comment.execute(
+      {
+        project: "group/repo",
+        iid: 1,
+        body: "second",
+        newPath: "src/b.ts",
+        newLine: 20,
+      },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 2);
+    const names = resources.map((r) => r.name);
+    assertEquals(new Set(names).size, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("post_line_comment throws when no diff versions exist", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/merge_requests/1/versions": {
+      status: 200,
+      body: [],
+    },
+  });
+
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.post_line_comment.execute(
+          {
+            project: "group/repo",
+            iid: 1,
+            body: "nice catch",
+            newPath: "src/file.ts",
+            newLine: 42,
+          },
+          context as any,
+        ),
+      Error,
+      "no diff versions found",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_line_comment rejects closed MR", async () => {
+  const restore = mockFetch({});
+
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-50`]: {
+        project: "group/repo",
+        iid: 50,
+        title: "Closed MR",
+        state: "closed",
+        description: null,
+        sourceBranch: "a",
+        targetBranch: "b",
+        author: "x",
+        diffs: [],
+        fetchedAt: "2026-01-01T00:00:00Z",
+        truncated: false,
+      },
+    },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.post_line_comment.execute(
+          {
+            project: "group/repo",
+            iid: 50,
+            body: "nice catch",
+            newPath: "src/file.ts",
+            newLine: 42,
+          },
           context as any,
         ),
       Error,
