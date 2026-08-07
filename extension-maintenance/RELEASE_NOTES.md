@@ -1,3 +1,19 @@
+## 2026.08.06.1
+
+**Fixed:** `plan-bump` no longer assumes that source file version strings match
+`manifest.yaml`. It now reads the actual `version:` fields from `.ts` source
+files via a new `readSourceVersions` helper and emits find/replace patterns for
+each distinct version found. This fixes silent no-ops during `apply-bump` when a
+prior partial bump left source and manifest versions out of sync (as happened
+with `agentcore-bootstrap/provisioner.ts` in the 2026.08.05 sweep).
+
+**Fixed:** `checkUpgradeChain` now cross-validates that each source file's model
+version matches the manifest version. Previously it only checked internal
+consistency (last `toVersion` == `version:` within the same file), so a file
+whose version drifted from the manifest passed silently. Both `apply-bump` and
+`quality-gate` now pass the expected manifest version to catch this class of
+mismatch.
+
 ## 2026.08.01.1
 
 **Fixed:** `apply-bump` now self-verifies the upgrade chain it just wrote before
