@@ -57,6 +57,17 @@ const ReviewPostedSchema = z.object({
   postedAt: z.string(),
 });
 
+const LineCommentSchema = z.object({
+  project: z.string(),
+  iid: z.number(),
+  discussionId: z.string(),
+  noteId: z.number(),
+  newPath: z.string(),
+  newLine: z.number().int().positive().nullable(),
+  oldLine: z.number().int().positive().nullable(),
+  postedAt: z.string(),
+});
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -258,12 +269,18 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.07.18.1",
+  version: "2026.08.07.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.07.1",
+      description:
+        "Additive: new lineComment resource, no changes to existing resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -285,6 +302,12 @@ export const model = {
       schema: ReviewPostedSchema,
       lifetime: "30d" as const,
       garbageCollection: 5,
+    },
+    lineComment: {
+      description: "Record of a diff-positioned line comment",
+      schema: LineCommentSchema,
+      lifetime: "30d" as const,
+      garbageCollection: 20,
     },
   },
   methods: {
@@ -686,6 +709,127 @@ export const model = {
           iid: args.iid,
           noteId,
           action: args.action,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    post_line_comment: {
+      description:
+        "Post a comment positioned on a specific file/line in an MR diff " +
+        "(GitLab REST discussions API — position requires the MR's current diff versions).",
+      arguments: z.object({
+        project: z.string().describe("Project path"),
+        iid: z.number().describe("Merge request IID"),
+        body: z.string().describe("Comment body (markdown)"),
+        newPath: z.string().describe("File path on the new side of the diff"),
+        oldPath: z.string().optional().describe(
+          "File path on the old side of the diff (defaults to newPath — " +
+            "pass explicitly for renamed files, especially when commenting " +
+            "on a deleted line via oldLine)",
+        ),
+        newLine: z.number().int().positive().optional().describe(
+          "Line number on the new side (added/changed lines)",
+        ),
+        oldLine: z.number().int().positive().optional().describe(
+          "Line number on the old side (deleted lines)",
+        ),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          iid: number;
+          body: string;
+          newPath: string;
+          oldPath?: string;
+          newLine?: number;
+          oldLine?: number;
+        },
+        context: ModelContext,
+      ) => {
+        if (args.newLine === undefined && args.oldLine === undefined) {
+          throw new Error(
+            `post_line_comment ${args.project}!${args.iid}: at least one of newLine or oldLine must be provided`,
+          );
+        }
+        await assertMrOpen(context, args.project, args.iid);
+        const { host, token } = context.globalArgs;
+        const pid = encodeProject(args.project);
+
+        const versionsResp = await contextFetch(
+          `post_line_comment ${args.project}!${args.iid} versions`,
+          host,
+          token,
+          `/projects/${pid}/merge_requests/${args.iid}/versions`,
+        );
+        const versions = await versionsResp.json();
+        const latest = Array.isArray(versions) ? versions[0] : undefined;
+        if (!latest?.base_commit_sha) {
+          throw new Error(
+            `post_line_comment ${args.project}!${args.iid}: no diff versions found`,
+          );
+        }
+
+        const position: Record<string, unknown> = {
+          position_type: "text",
+          base_sha: latest.base_commit_sha,
+          start_sha: latest.start_commit_sha,
+          head_sha: latest.head_commit_sha,
+          new_path: args.newPath,
+          old_path: args.oldPath ?? args.newPath,
+        };
+        if (args.newLine !== undefined) position.new_line = args.newLine;
+        if (args.oldLine !== undefined) position.old_line = args.oldLine;
+
+        const discussionResp = await contextFetch(
+          `post_line_comment ${args.project}!${args.iid} discussion`,
+          host,
+          token,
+          `/projects/${pid}/merge_requests/${args.iid}/discussions`,
+          {
+            method: "POST",
+            body: JSON.stringify({ body: args.body, position }),
+          },
+        );
+        const discussion = await discussionResp.json();
+        const note = Array.isArray(discussion?.notes)
+          ? discussion.notes[0]
+          : undefined;
+        if (!discussion?.id || !note?.id) {
+          throw new Error(
+            `post_line_comment ${args.project}!${args.iid}: unexpected discussion response`,
+          );
+        }
+
+        const data = {
+          project: args.project,
+          iid: args.iid,
+          discussionId: String(discussion.id),
+          noteId: note.id,
+          newPath: args.newPath,
+          newLine: args.newLine ?? null,
+          oldLine: args.oldLine ?? null,
+          postedAt: new Date().toISOString(),
+        };
+        // Keyed by position (not just project+iid) — a single MR can carry many
+        // line comments, each its own instance, unlike reviewPosted's one-per-MR
+        // singular semantics.
+        const positionKey = `${encodeURIComponent(args.newPath)}-${
+          args.newLine ?? "x"
+        }-${args.oldLine ?? "x"}`;
+        const handle = await context.writeResource(
+          "lineComment",
+          `${
+            instanceName("lineComment", args.project, args.iid)
+          }-${positionKey}`,
+          data,
+        );
+        context.logger.info("Posted line comment", {
+          project: args.project,
+          iid: args.iid,
+          newPath: args.newPath,
+          newLine: args.newLine ?? null,
+          oldLine: args.oldLine ?? null,
         });
         return { dataHandles: [handle] };
       },
