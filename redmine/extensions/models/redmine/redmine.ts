@@ -210,7 +210,7 @@ type MethodContext = {
   globalArgs: {
     host: string;
     apiKey: string;
-    project: string;
+    project?: string;
     username?: string;
   };
   writeResource: (
@@ -230,7 +230,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.07.18.1",
+  version: "2026.08.10.1",
 
   upgrades: [
     {
@@ -256,6 +256,12 @@ export const model = {
       description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.10.1",
+      description:
+        "Make project global arg optional for cross-project queries (list_issues, search)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: z.object({
@@ -265,7 +271,9 @@ export const model = {
     apiKey: z.string().meta({ sensitive: true }).describe(
       "Redmine API key (40-character hex string)",
     ),
-    project: z.string().describe("Default project identifier"),
+    project: z.string().optional().describe(
+      "Default project identifier (omit for cross-project queries)",
+    ),
     username: z.string().optional().describe(
       "Redmine username for X-Redmine-Username header (required by some ingress configurations)",
     ),
@@ -674,6 +682,11 @@ export const model = {
       ) => {
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
+        if (!project) {
+          throw new Error(
+            "list_users requires a project identifier (pass as argument or set globally)",
+          );
+        }
 
         const rawMemberships = await redmineApiPaginated<RawMembership>(
           host,
@@ -797,7 +810,9 @@ export const model = {
         const params: Record<string, string> = {};
 
         const projectId = args.project ?? context.globalArgs.project;
-        params.project_id = projectId;
+        if (projectId) {
+          params.project_id = projectId;
+        }
 
         if (args.trackerId !== undefined) {
           params.tracker_id = String(args.trackerId);
@@ -829,11 +844,20 @@ export const model = {
 
         // Build instance name from active filters
         const filterParts: string[] = [];
+        if (projectId) {
+          filterParts.push(projectId);
+        }
+        if (args.assignedToId !== undefined) {
+          filterParts.push(String(args.assignedToId));
+        }
         if (args.statusId !== undefined) {
           filterParts.push(String(args.statusId));
         }
         if (args.trackerId !== undefined) {
           filterParts.push(String(args.trackerId));
+        }
+        if (args.parentId !== undefined) {
+          filterParts.push(`parent-${args.parentId}`);
         }
         const instanceName = filterParts.length > 0
           ? filterParts.join("-")
@@ -920,8 +944,14 @@ export const model = {
         const { host, apiKey, username } = context.globalArgs;
 
         // Build payload with only defined fields
+        const project = args.project ?? context.globalArgs.project;
+        if (!project) {
+          throw new Error(
+            "create_issue requires a project identifier (pass as argument or set globally)",
+          );
+        }
         const issuePayload: Record<string, unknown> = {
-          project_id: args.project ?? context.globalArgs.project,
+          project_id: project,
           subject: args.subject,
         };
         if (args.trackerId !== undefined) {
@@ -1262,6 +1292,11 @@ export const model = {
       ) => {
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
+        if (!project) {
+          throw new Error(
+            "list_versions requires a project identifier (pass as argument or set globally)",
+          );
+        }
 
         interface RawVersion {
           id: number;
@@ -1671,6 +1706,11 @@ export const model = {
       ) => {
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
+        if (!project) {
+          throw new Error(
+            "create_version requires a project identifier (pass as argument or set globally)",
+          );
+        }
 
         const payload: Record<string, unknown> = { name: args.name };
         if (args.description !== undefined) {
@@ -1860,6 +1900,11 @@ export const model = {
       ) => {
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
+        if (!project) {
+          throw new Error(
+            "list_issue_categories requires a project identifier (pass as argument or set globally)",
+          );
+        }
 
         const data = await redmineApi<{
           issue_categories: Array<{

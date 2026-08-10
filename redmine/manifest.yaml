@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/redmine"
-version: "2026.07.18.1"
+version: "2026.08.10.1"
 description: |
   Redmine issue tracker integration — workflow-agnostic CRUD model.
 
@@ -21,6 +21,11 @@ description: |
     --global-arg apiKey=YOUR_API_KEY \
     --global-arg project=your-project
   ```
+
+  The `project` global arg is now optional. Omit it for cross-project queries
+  (e.g. `list_issues` with `assignedToId: "me"` across all projects). Methods
+  that require a project (list_users, create_issue, list_versions, create_version,
+  list_issue_categories) throw a clear error if none is provided.
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - redmine/redmine.ts
