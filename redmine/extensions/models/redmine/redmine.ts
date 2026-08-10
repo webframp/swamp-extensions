@@ -842,22 +842,23 @@ export const model = {
 
         const issues = rawIssues.map(mapIssue);
 
-        // Build instance name from active filters
+        // Build instance name from active filters (prefixed to avoid collisions
+        // between hyphenated project identifiers and downstream field values)
         const filterParts: string[] = [];
         if (projectId) {
-          filterParts.push(projectId);
+          filterParts.push(`p:${projectId}`);
         }
         if (args.assignedToId !== undefined) {
-          filterParts.push(String(args.assignedToId));
+          filterParts.push(`a:${args.assignedToId}`);
         }
         if (args.statusId !== undefined) {
-          filterParts.push(String(args.statusId));
+          filterParts.push(`s:${args.statusId}`);
         }
         if (args.trackerId !== undefined) {
-          filterParts.push(String(args.trackerId));
+          filterParts.push(`t:${args.trackerId}`);
         }
         if (args.parentId !== undefined) {
-          filterParts.push(`parent-${args.parentId}`);
+          filterParts.push(`parent:${args.parentId}`);
         }
         const instanceName = filterParts.length > 0
           ? filterParts.join("-")
