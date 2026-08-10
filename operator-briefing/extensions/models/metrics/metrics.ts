@@ -47,6 +47,10 @@ const Row = z.object({
   connectors: z.number().optional(),
   quotaOverCount: z.number().optional(),
   pendingCount: z.number().optional(),
+  redmineIssueCount: z.number().optional(),
+  criticalFindingCount: z.number().optional(),
+  highFindingCount: z.number().optional(),
+  awsCostTotal7d: z.number().optional(),
 });
 
 /** The whole append-only series: the latest version holds all rows. */
@@ -74,6 +78,10 @@ const METRIC_KEYS = [
   "connectors",
   "quotaOverCount",
   "pendingCount",
+  "redmineIssueCount",
+  "criticalFindingCount",
+  "highFindingCount",
+  "awsCostTotal7d",
 ] as const;
 
 // =============================================================================
@@ -158,6 +166,10 @@ type AppendArgs = {
   connectors?: number;
   quotaOverCount?: number;
   pendingCount?: number;
+  redmineIssueCount?: number;
+  criticalFindingCount?: number;
+  highFindingCount?: number;
+  awsCostTotal7d?: number;
   backfill?: RowT[];
 };
 
@@ -168,13 +180,19 @@ type AppendArgs = {
 /** Durable append-only time-series accumulator for operator-briefing trends. */
 export const model = {
   type: "@webframp/operator-briefing/metrics",
-  version: "2026.07.18.2",
+  version: "2026.08.10.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.10.1",
+      description:
+        "Add redmineIssueCount, criticalFindingCount, highFindingCount, awsCostTotal7d to series rows",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -223,6 +241,18 @@ export const model = {
         ),
         pendingCount: z.number().optional().describe(
           "Count of pending quota-increase requests.",
+        ),
+        redmineIssueCount: z.number().optional().describe(
+          "Count of open Redmine issues assigned to the operator.",
+        ),
+        criticalFindingCount: z.number().optional().describe(
+          "Count of CRITICAL Security Hub findings (24h window).",
+        ),
+        highFindingCount: z.number().optional().describe(
+          "Count of HIGH Security Hub findings (24h window).",
+        ),
+        awsCostTotal7d: z.number().optional().describe(
+          "Total AWS cost (USD) for the trailing 7-day window.",
         ),
         backfill: z.array(Row).optional().describe(
           "Optional prior rows to seed once. Applied before the current run's row; incoming values win on a shared date.",

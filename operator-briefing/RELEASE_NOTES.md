@@ -1,3 +1,24 @@
+## 2026.08.10.1
+
+**Added:** Three new briefing sources and four new metrics fields.
+
+Sources:
+- `@webframp/aws/securityhub-findings` — Security Hub severity summary
+  (CRITICAL/HIGH/MEDIUM/LOW counts) as an ops signal.
+- `@webframp/aws/cost-explorer` — consolidated AWS cost trend (7-day total +
+  direction) as an ops signal.
+- `@webframp/redmine` — open issues assigned to the operator across all projects,
+  surfaced as tier-1 queue items plus an ops signal with the total count.
+
+Metrics (`append_metrics` schema):
+- `redmineIssueCount` — open Redmine issues assigned to the operator.
+- `criticalFindingCount` — CRITICAL Security Hub findings (24h).
+- `highFindingCount` — HIGH Security Hub findings (24h).
+- `awsCostTotal7d` — total AWS cost (USD) for the trailing 7-day window.
+
+All new fields are optional and merge non-destructively with existing rows.
+Existing model instances upgrade via identity function (no data migration).
+
 ## 2026.07.18.2
 
 **Added:** An `upgrades` array entry (no-op) to `metrics.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
