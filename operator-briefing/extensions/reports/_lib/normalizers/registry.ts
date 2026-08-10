@@ -14,12 +14,18 @@ import { gitlabNormalizer } from "./gitlab.ts";
 import { analyticsNormalizer } from "./anthropic_analytics.ts";
 import { complianceNormalizer } from "./anthropic_compliance.ts";
 import { awsQuotasNormalizer } from "./aws_quotas.ts";
+import { securityhubFindingsNormalizer } from "./securityhub_findings.ts";
+import { costExplorerNormalizer } from "./cost_explorer.ts";
+import { redmineNormalizer } from "./redmine.ts";
 
 export const registry: Record<string, Normalizer> = {
   "@webframp/gitlab": gitlabNormalizer,
   "@webframp/anthropic/analytics": analyticsNormalizer,
   "@webframp/anthropic/compliance": complianceNormalizer,
   "@webframp/aws/service-quotas": awsQuotasNormalizer,
+  "@webframp/aws/securityhub-findings": securityhubFindingsNormalizer,
+  "@webframp/aws/cost-explorer": costExplorerNormalizer,
+  "@webframp/redmine": redmineNormalizer,
 };
 
 /**

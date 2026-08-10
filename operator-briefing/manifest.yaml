@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/operator-briefing"
-version: "2026.07.18.2"
+version: "2026.08.10.1"
 description: |
   Unified daily operator briefing report. A workflow-scope report over the
   `daily-briefing` workflow that loops the run's step executions, dispatches
@@ -23,6 +23,12 @@ description: |
   - `@webframp/aws/service-quotas` — per-service quota utilization over threshold
     and pending increase requests, with `failedProfiles` degradation (including
     the `sso-login-required` re-auth hint).
+  - `@webframp/aws/securityhub-findings` — Security Hub severity summary across
+    the AWS Organization (CRITICAL/HIGH/MEDIUM/LOW counts, 24h window).
+  - `@webframp/aws/cost-explorer` — consolidated AWS cost trend (7-day window)
+    from the payer account with direction indicator.
+  - `@webframp/redmine` — open issues assigned to the operator across all
+    projects (equivalent to /my/page), surfaced as tier-1 queue items.
 
   Adding a source is one workflow step plus one normalizer plus one registry
   line; the render / tiering / freshness core does not change.
