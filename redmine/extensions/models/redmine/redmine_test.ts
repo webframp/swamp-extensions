@@ -5,6 +5,7 @@ import {
   assertEquals,
   assertExists,
   assertMatch,
+  assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./redmine.ts";
@@ -59,7 +60,7 @@ Deno.test("redmine model: globalArguments validates host, apiKey, project", () =
   assertExists(shape.apiKey);
   assertExists(shape.project);
 
-  // Valid parse
+  // Valid parse with project
   const result = model.globalArguments.parse({
     host: "https://redmine.example.com",
     apiKey: "a".repeat(40),
@@ -67,6 +68,14 @@ Deno.test("redmine model: globalArguments validates host, apiKey, project", () =
   });
   assertEquals(result.host, "https://redmine.example.com");
   assertEquals(result.project, "my-project");
+
+  // Valid parse without project (cross-project mode)
+  const crossProject = model.globalArguments.parse({
+    host: "https://redmine.example.com",
+    apiKey: "a".repeat(40),
+  });
+  assertEquals(crossProject.host, "https://redmine.example.com");
+  assertEquals(crossProject.project, undefined);
 });
 
 Deno.test("redmine model: has all 7 resources", () => {
@@ -111,6 +120,16 @@ function makeContext() {
       host: TEST_HOST,
       apiKey: TEST_API_KEY,
       project: TEST_PROJECT,
+    },
+    definition: { id: "test-id", name: "test-redmine", version: 1, tags: {} },
+  });
+}
+
+function makeNoProjectContext() {
+  return createModelTestContext({
+    globalArgs: {
+      host: TEST_HOST,
+      apiKey: TEST_API_KEY,
     },
     definition: { id: "test-id", name: "test-redmine", version: 1, tags: {} },
   });
@@ -1427,4 +1446,83 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+// ---------------------------------------------------------------------------
+// Cross-Project Guard Tests
+// ---------------------------------------------------------------------------
+
+Deno.test("redmine model: list_users throws without project", async () => {
+  const { context } = makeNoProjectContext();
+  await assertRejects(
+    () =>
+      model.methods.list_users.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.list_users.execute
+        >[1],
+      ),
+    Error,
+    "list_users requires a project identifier",
+  );
+});
+
+Deno.test("redmine model: create_issue throws without project", async () => {
+  const { context } = makeNoProjectContext();
+  await assertRejects(
+    () =>
+      model.methods.create_issue.execute(
+        { subject: "test" },
+        context as unknown as Parameters<
+          typeof model.methods.create_issue.execute
+        >[1],
+      ),
+    Error,
+    "create_issue requires a project identifier",
+  );
+});
+
+Deno.test("redmine model: list_versions throws without project", async () => {
+  const { context } = makeNoProjectContext();
+  await assertRejects(
+    () =>
+      model.methods.list_versions.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.list_versions.execute
+        >[1],
+      ),
+    Error,
+    "list_versions requires a project identifier",
+  );
+});
+
+Deno.test("redmine model: create_version throws without project", async () => {
+  const { context } = makeNoProjectContext();
+  await assertRejects(
+    () =>
+      model.methods.create_version.execute(
+        { name: "v1" },
+        context as unknown as Parameters<
+          typeof model.methods.create_version.execute
+        >[1],
+      ),
+    Error,
+    "create_version requires a project identifier",
+  );
+});
+
+Deno.test("redmine model: list_issue_categories throws without project", async () => {
+  const { context } = makeNoProjectContext();
+  await assertRejects(
+    () =>
+      model.methods.list_issue_categories.execute(
+        {},
+        context as unknown as Parameters<
+          typeof model.methods.list_issue_categories.execute
+        >[1],
+      ),
+    Error,
+    "list_issue_categories requires a project identifier",
+  );
 });
