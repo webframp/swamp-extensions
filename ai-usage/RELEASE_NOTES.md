@@ -9,6 +9,15 @@ and `getContent` (raw bytes) are available there. The call threw a
 so every provider always fell back to "unconfigured" regardless of actual
 scan state.
 
+**Fixed:** The replacement `findAllForModel`-based lookup sorted results by
+calling `.localeCompare()` on `createdAt`, assuming it was a string — but
+swamp's real `Data.createdAt` is a `Date` object, so this threw on every
+invocation with scan data present. Sorting now uses `Date.getTime()`, and
+`generate`'s error path now logs failures via `context.logger.warn` like
+`status` already did. Added a runtime shape guard on `createdAt` so a
+future mismatch between this extension's local type guess and swamp's
+actual API surfaces as a clear error instead of a silent miscalculation.
+
 **Upgrade note:** No schema or behavioral changes to the `status`/`report`
 resource shapes — this is purely an internal data-access fix. Re-run
 `swamp model method run ai-usage status` after upgrading to see accurate

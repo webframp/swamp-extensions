@@ -293,6 +293,60 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "status treats malformed createdAt as unconfigured rather than crashing",
+  fn: async () => {
+    // Guards against interface drift: findAllForModel's real createdAt is a
+    // Date, but the local DataMeta interface is an unverified guess at that
+    // shape. If a future swamp version (or a mock bug) hands back a
+    // non-Date, non-undefined createdAt, fetchLatestScanData's runtime
+    // guard must throw, and status must catch that and report unconfigured
+    // instead of letting the error propagate.
+    const { context, getWrittenResources } = createAiUsageContext({
+      "bedrock-usage": {
+        "scan_results": [
+          {
+            attributes: { totals: { totalTokens: 10000 } },
+            updatedAt: "2026-04-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+
+    const patched = context as unknown as {
+      dataRepository: { findAllForModel: unknown };
+    };
+    patched.dataRepository.findAllForModel = (
+      _modelType: string,
+      modelId: string,
+    ) => {
+      if (modelId !== "bedrock-usage") return Promise.resolve([]);
+      return Promise.resolve([
+        {
+          name: "scan_results-0",
+          version: 1,
+          tags: { specName: "scan_results" },
+          createdAt: "2026-04-01T00:00:00Z" as unknown as Date,
+        },
+      ]);
+    };
+
+    const result = await model.methods.status.execute(
+      {} as Record<string, never>,
+      context as unknown as StatusContext,
+    );
+
+    assertExists(result.dataHandles);
+    const resources = getWrittenResources();
+    const data = resources[0].data as {
+      providers: Array<{ provider: string; configured: boolean }>;
+    };
+    const bedrock = data.providers.find((p) => p.provider === "AWS Bedrock");
+    assertEquals(bedrock?.configured, false);
+  },
+});
+
+Deno.test({
   name: "status handles all providers unconfigured",
   fn: async () => {
     const { context, getWrittenResources } = createAiUsageContext({});
