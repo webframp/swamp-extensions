@@ -28,6 +28,13 @@ type StoredData = Record<
   >
 >;
 
+/**
+ * Mocks the real `context.dataRepository` shape: `findAllForModel` returns
+ * metadata only (name, version, tags), `getContent` returns raw bytes for a
+ * given (modelType, modelId, name, version). There is no `findBySpec` on the
+ * method-execution context — that's a modeling mistake this test factory
+ * used to bake in, matching the model's own bug.
+ */
 function createAiUsageContext(storedData: StoredData = {}) {
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: {},
@@ -37,12 +44,45 @@ function createAiUsageContext(storedData: StoredData = {}) {
   // Patch dataRepository onto the context
   const patched = context as unknown as Record<string, unknown>;
   patched.dataRepository = {
-    findBySpec: (modelName: string, specName: string) => {
-      const modelData = storedData[modelName];
-      if (!modelData) {
-        return Promise.reject(new Error(`Model ${modelName} not found`));
+    findAllForModel: (_modelType: string, modelId: string) => {
+      const modelData = storedData[modelId];
+      if (!modelData) return Promise.resolve([]);
+      const entries: Array<
+        {
+          name: string;
+          version: number;
+          tags: Record<string, string>;
+          createdAt?: Date;
+        }
+      > = [];
+      for (const [specName, items] of Object.entries(modelData)) {
+        items.forEach((item, i) => {
+          entries.push({
+            name: `${specName}-${i}`,
+            version: 1,
+            tags: { specName },
+            createdAt: item.updatedAt ? new Date(item.updatedAt) : undefined,
+          });
+        });
       }
-      return Promise.resolve(modelData[specName] || []);
+      return Promise.resolve(entries);
+    },
+    getContent: (
+      _modelType: string,
+      modelId: string,
+      dataName: string,
+    ) => {
+      const modelData = storedData[modelId];
+      if (!modelData) return Promise.resolve(null);
+      for (const [specName, items] of Object.entries(modelData)) {
+        const idx = items.findIndex((_, i) => `${specName}-${i}` === dataName);
+        if (idx !== -1) {
+          return Promise.resolve(
+            new TextEncoder().encode(JSON.stringify(items[idx].attributes)),
+          );
+        }
+      }
+      return Promise.resolve(null);
     },
   };
 
@@ -249,6 +289,60 @@ Deno.test({
 
     const bedrock = data.providers.find((p) => p.provider === "AWS Bedrock");
     assertEquals(bedrock?.totalTokens, 99000);
+  },
+});
+
+Deno.test({
+  name:
+    "status treats malformed createdAt as unconfigured rather than crashing",
+  fn: async () => {
+    // Guards against interface drift: findAllForModel's real createdAt is a
+    // Date, but the local DataMeta interface is an unverified guess at that
+    // shape. If a future swamp version (or a mock bug) hands back a
+    // non-Date, non-undefined createdAt, fetchLatestScanData's runtime
+    // guard must throw, and status must catch that and report unconfigured
+    // instead of letting the error propagate.
+    const { context, getWrittenResources } = createAiUsageContext({
+      "bedrock-usage": {
+        "scan_results": [
+          {
+            attributes: { totals: { totalTokens: 10000 } },
+            updatedAt: "2026-04-01T00:00:00Z",
+          },
+        ],
+      },
+    });
+
+    const patched = context as unknown as {
+      dataRepository: { findAllForModel: unknown };
+    };
+    patched.dataRepository.findAllForModel = (
+      _modelType: string,
+      modelId: string,
+    ) => {
+      if (modelId !== "bedrock-usage") return Promise.resolve([]);
+      return Promise.resolve([
+        {
+          name: "scan_results-0",
+          version: 1,
+          tags: { specName: "scan_results" },
+          createdAt: "2026-04-01T00:00:00Z" as unknown as Date,
+        },
+      ]);
+    };
+
+    const result = await model.methods.status.execute(
+      {} as Record<string, never>,
+      context as unknown as StatusContext,
+    );
+
+    assertExists(result.dataHandles);
+    const resources = getWrittenResources();
+    const data = resources[0].data as {
+      providers: Array<{ provider: string; configured: boolean }>;
+    };
+    const bedrock = data.providers.find((p) => p.provider === "AWS Bedrock");
+    assertEquals(bedrock?.configured, false);
   },
 });
 
