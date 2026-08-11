@@ -267,7 +267,7 @@ interface DataMeta {
   name: string;
   version: number;
   tags: Record<string, string>;
-  createdAt?: string;
+  createdAt?: Date;
 }
 
 /** Context shape expected by both methods. */
@@ -317,7 +317,26 @@ async function fetchLatestScanData(
   const matching = all.filter((d) => d.tags?.specName === p.scanSpec);
   if (matching.length === 0) return null;
 
-  matching.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  // `DataMeta` is a locally-declared guess at findAllForModel's real return
+  // shape (extensions have no SDK package to import swamp's actual Data type
+  // from). Assert createdAt's runtime shape here rather than trust the TS
+  // type — a silent shape mismatch is exactly how the last version of this
+  // function broke (it assumed createdAt was a string and called
+  // .localeCompare() on what is actually a Date).
+  for (const d of matching) {
+    if (d.createdAt !== undefined && !(d.createdAt instanceof Date)) {
+      throw new Error(
+        `Unexpected createdAt shape from findAllForModel: expected Date or undefined, got ${typeof d
+          .createdAt} (value: ${
+          String(d.createdAt)
+        }). DataMeta interface may be out of sync with swamp's real Data type.`,
+      );
+    }
+  }
+
+  matching.sort(
+    (a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0),
+  );
   const latest = matching[0];
 
   const bytes = await context.dataRepository.getContent(
@@ -332,7 +351,7 @@ async function fetchLatestScanData(
     string,
     unknown
   >;
-  return { attributes, updatedAt: latest.createdAt };
+  return { attributes, updatedAt: latest.createdAt?.toISOString() };
 }
 
 /**
@@ -575,7 +594,11 @@ export const model = {
                 } tokens)`,
               );
             }
-          } catch {
+          } catch (err) {
+            context.logger.warn("Failed to query provider data", {
+              provider: p.name,
+              error: String(err),
+            });
             coverage.push({
               provider: p.name,
               configured: false,

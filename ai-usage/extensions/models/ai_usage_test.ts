@@ -52,7 +52,7 @@ function createAiUsageContext(storedData: StoredData = {}) {
           name: string;
           version: number;
           tags: Record<string, string>;
-          createdAt?: string;
+          createdAt?: Date;
         }
       > = [];
       for (const [specName, items] of Object.entries(modelData)) {
@@ -61,7 +61,7 @@ function createAiUsageContext(storedData: StoredData = {}) {
             name: `${specName}-${i}`,
             version: 1,
             tags: { specName },
-            createdAt: item.updatedAt,
+            createdAt: item.updatedAt ? new Date(item.updatedAt) : undefined,
           });
         });
       }
