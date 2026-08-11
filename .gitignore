@@ -20,3 +20,7 @@
 
 # Session scratch files
 next-prompt.md
+
+# Agent-generated design docs and iterative artifacts (see docs/README.md)
+# Kept as local reference, not project documentation, not committed.
+/docs/
