@@ -247,11 +247,14 @@ Deno.test({
         data: {
           dataPoints: Array<{ date: string; amount: number }>;
           trend: string;
+          totalCost: number;
         };
       };
       assertEquals(data.queryType, "cost_trend");
       assertEquals(data.data.dataPoints.length, 6);
       assertEquals(data.data.trend, "increasing");
+      // 10 + 11 + 12 + 20 + 22 + 25 = 100
+      assertEquals(data.data.totalCost, 100);
     } finally {
       restore();
     }
@@ -480,4 +483,102 @@ Deno.test({
       restore();
     }
   },
+});
+
+// =============================================================================
+// upgradeAttributes Tests (2026.08.10.1 — totalCost backfill)
+// =============================================================================
+
+const upgradeHandler = model.upgrades[model.upgrades.length - 1];
+
+Deno.test("upgrade 2026.08.10.1: backfills totalCost for cost_trend resource", () => {
+  const old = {
+    region: "us-east-1",
+    queryType: "cost_trend",
+    data: {
+      dataPoints: [
+        { date: "2026-08-01", amount: 10.5 },
+        { date: "2026-08-02", amount: 20.25 },
+        { date: "2026-08-03", amount: 5.0 },
+      ],
+      trend: "decreasing",
+    },
+    fetchedAt: "2026-08-04T00:00:00Z",
+  };
+
+  const result = upgradeHandler.upgradeAttributes(old);
+  const data = result.data as { totalCost: number; dataPoints: unknown[] };
+  // 10.5 + 20.25 + 5.0 = 35.75
+  assertEquals(data.totalCost, 35.75);
+});
+
+Deno.test("upgrade 2026.08.10.1: skips non-cost_trend resources", () => {
+  const old = {
+    region: "us-east-1",
+    queryType: "cost_by_service",
+    data: {
+      services: [{ service: "EC2", amount: 100 }],
+    },
+    fetchedAt: "2026-08-04T00:00:00Z",
+  };
+
+  const result = upgradeHandler.upgradeAttributes(old);
+  const data = result.data as Record<string, unknown>;
+  assertEquals("totalCost" in data, false);
+});
+
+Deno.test("upgrade 2026.08.10.1: idempotent — does not overwrite existing totalCost", () => {
+  const old = {
+    region: "us-east-1",
+    queryType: "cost_trend",
+    data: {
+      dataPoints: [
+        { date: "2026-08-01", amount: 10 },
+        { date: "2026-08-02", amount: 20 },
+      ],
+      trend: "stable",
+      totalCost: 99.99, // pre-existing value
+    },
+    fetchedAt: "2026-08-04T00:00:00Z",
+  };
+
+  const result = upgradeHandler.upgradeAttributes(old);
+  const data = result.data as { totalCost: number };
+  assertEquals(data.totalCost, 99.99); // should NOT be overwritten
+});
+
+Deno.test("upgrade 2026.08.10.1: handles empty dataPoints", () => {
+  const old = {
+    region: "us-east-1",
+    queryType: "cost_trend",
+    data: {
+      dataPoints: [],
+      trend: "stable",
+    },
+    fetchedAt: "2026-08-04T00:00:00Z",
+  };
+
+  const result = upgradeHandler.upgradeAttributes(old);
+  const data = result.data as { totalCost: number };
+  assertEquals(data.totalCost, 0);
+});
+
+Deno.test("upgrade 2026.08.10.1: handles NaN amount gracefully", () => {
+  const old = {
+    region: "us-east-1",
+    queryType: "cost_trend",
+    data: {
+      dataPoints: [
+        { date: "2026-08-01", amount: 10 },
+        { date: "2026-08-02", amount: NaN },
+        { date: "2026-08-03", amount: 5 },
+      ],
+      trend: "stable",
+    },
+    fetchedAt: "2026-08-04T00:00:00Z",
+  };
+
+  const result = upgradeHandler.upgradeAttributes(old);
+  const data = result.data as { totalCost: number };
+  assertEquals(data.totalCost, 15); // NaN skipped, 10 + 5 = 15
 });

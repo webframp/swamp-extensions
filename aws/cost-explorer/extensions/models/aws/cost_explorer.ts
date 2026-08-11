@@ -74,6 +74,7 @@ const CostTrendDataPointSchema = z.object({
 const CostTrendSchema = z.object({
   dataPoints: z.array(CostTrendDataPointSchema),
   trend: z.string(),
+  totalCost: z.number(),
 });
 
 const CostDriverSchema = z.object({
@@ -137,7 +138,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.08.05.1",
+  version: "2026.08.10.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -150,6 +151,30 @@ export const model = {
       toVersion: "2026.08.05.1",
       description: "Version bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.10.1",
+      description:
+        "Add totalCost field to get_cost_trend output (sum of dataPoints)",
+      upgradeAttributes: (old: Record<string, unknown>) => {
+        // Backfill totalCost into cached cost_trend resources written before
+        // this version. Without this, data.totalCost would be undefined until
+        // the next fresh fetch. Only applies to cost_trend resources.
+        if (old.queryType !== "cost_trend") return old;
+        const data = old.data as Record<string, unknown> | undefined;
+        if (data && Array.isArray(data.dataPoints) && !("totalCost" in data)) {
+          const sum = (data.dataPoints as Array<{ amount?: number }>).reduce(
+            (acc, p) =>
+              acc +
+              (typeof p.amount === "number" && Number.isFinite(p.amount)
+                ? p.amount
+                : 0),
+            0,
+          );
+          data.totalCost = Math.round(sum * 100) / 100;
+        }
+        return old;
+      },
     },
   ],
 
@@ -382,7 +407,16 @@ export const model = {
             }
           }
 
-          const data: z.infer<typeof CostTrendSchema> = { dataPoints, trend };
+          const data: z.infer<typeof CostTrendSchema> = {
+            dataPoints,
+            trend,
+            totalCost: Math.round(
+              dataPoints.reduce(
+                (s, p) => s + (Number.isFinite(p.amount) ? p.amount : 0),
+                0,
+              ) * 100,
+            ) / 100,
+          };
 
           const handle = await context.writeResource(
             "costs",
