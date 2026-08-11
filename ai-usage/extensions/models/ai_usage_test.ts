@@ -28,6 +28,13 @@ type StoredData = Record<
   >
 >;
 
+/**
+ * Mocks the real `context.dataRepository` shape: `findAllForModel` returns
+ * metadata only (name, version, tags), `getContent` returns raw bytes for a
+ * given (modelType, modelId, name, version). There is no `findBySpec` on the
+ * method-execution context — that's a modeling mistake this test factory
+ * used to bake in, matching the model's own bug.
+ */
 function createAiUsageContext(storedData: StoredData = {}) {
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: {},
@@ -37,12 +44,45 @@ function createAiUsageContext(storedData: StoredData = {}) {
   // Patch dataRepository onto the context
   const patched = context as unknown as Record<string, unknown>;
   patched.dataRepository = {
-    findBySpec: (modelName: string, specName: string) => {
-      const modelData = storedData[modelName];
-      if (!modelData) {
-        return Promise.reject(new Error(`Model ${modelName} not found`));
+    findAllForModel: (_modelType: string, modelId: string) => {
+      const modelData = storedData[modelId];
+      if (!modelData) return Promise.resolve([]);
+      const entries: Array<
+        {
+          name: string;
+          version: number;
+          tags: Record<string, string>;
+          createdAt?: string;
+        }
+      > = [];
+      for (const [specName, items] of Object.entries(modelData)) {
+        items.forEach((item, i) => {
+          entries.push({
+            name: `${specName}-${i}`,
+            version: 1,
+            tags: { specName },
+            createdAt: item.updatedAt,
+          });
+        });
       }
-      return Promise.resolve(modelData[specName] || []);
+      return Promise.resolve(entries);
+    },
+    getContent: (
+      _modelType: string,
+      modelId: string,
+      dataName: string,
+    ) => {
+      const modelData = storedData[modelId];
+      if (!modelData) return Promise.resolve(null);
+      for (const [specName, items] of Object.entries(modelData)) {
+        const idx = items.findIndex((_, i) => `${specName}-${i}` === dataName);
+        if (idx !== -1) {
+          return Promise.resolve(
+            new TextEncoder().encode(JSON.stringify(items[idx].attributes)),
+          );
+        }
+      }
+      return Promise.resolve(null);
     },
   };
 

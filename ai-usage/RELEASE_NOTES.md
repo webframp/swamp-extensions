@@ -1,3 +1,19 @@
+## 2026.08.11.1
+
+**Fixed:** `status` and `generate` always reported every provider as
+unconfigured, even with valid scan data present. Both methods called
+`context.dataRepository.findBySpec(modelName, specName)`, which does not
+exist on the method-execution context — only `findAllForModel` (metadata)
+and `getContent` (raw bytes) are available there. The call threw a
+`TypeError` on every invocation, silently caught and logged as a warning,
+so every provider always fell back to "unconfigured" regardless of actual
+scan state.
+
+**Upgrade note:** No schema or behavioral changes to the `status`/`report`
+resource shapes — this is purely an internal data-access fix. Re-run
+`swamp model method run ai-usage status` after upgrading to see accurate
+coverage.
+
 ## 2026.08.05.1
 
 **Changed:** Bump @webframp/aws/bedrock-usage 2026.08.01.1 → 2026.08.02.1

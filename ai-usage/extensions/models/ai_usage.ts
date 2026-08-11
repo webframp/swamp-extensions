@@ -262,6 +262,14 @@ const ReportSchema = z.object({
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Metadata for a single data entry, as returned by `findAllForModel`. */
+interface DataMeta {
+  name: string;
+  version: number;
+  tags: Record<string, string>;
+  createdAt?: string;
+}
+
 /** Context shape expected by both methods. */
 interface MethodContext {
   globalArgs: Record<string, never>;
@@ -271,12 +279,16 @@ interface MethodContext {
     data: unknown,
   ) => Promise<{ name: string }>;
   dataRepository: {
-    findBySpec: (
-      modelName: string,
-      specName: string,
-    ) => Promise<
-      Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
-    >;
+    findAllForModel: (
+      modelType: string,
+      modelId: string,
+    ) => Promise<DataMeta[]>;
+    getContent: (
+      modelType: string,
+      modelId: string,
+      dataName: string,
+      version?: number,
+    ) => Promise<Uint8Array | null>;
   };
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
@@ -285,18 +297,42 @@ interface MethodContext {
 }
 
 /**
- * Given an array of data entries, return the most recent one by updatedAt.
+ * Fetches the most recent `scanSpec` resource for a provider's model instance.
+ *
+ * `context.dataRepository` only exposes `findAllForModel` (metadata) and
+ * `getContent` (raw bytes) — there is no `findBySpec` on the method-execution
+ * context (that richer query API exists only for CEL expression resolution in
+ * workflow YAML). So this fetches metadata for every data item owned by the
+ * provider's model instance, filters by the `specName` tag, picks the latest
+ * by `createdAt`, then fetches and parses that item's content.
  */
-function pickLatest(
-  data: Array<{ attributes: Record<string, unknown>; updatedAt?: string }>,
-): { attributes: Record<string, unknown>; updatedAt?: string } {
-  const withTimestamp = data.filter((d) => d.updatedAt);
-  if (withTimestamp.length === 0) return data[0];
-  withTimestamp.sort(
-    (a, b) =>
-      new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime(),
+async function fetchLatestScanData(
+  context: MethodContext,
+  p: ProviderDefinition,
+): Promise<{ attributes: Record<string, unknown>; updatedAt?: string } | null> {
+  const all = await context.dataRepository.findAllForModel(
+    p.extensionType,
+    p.modelName,
   );
-  return withTimestamp[0];
+  const matching = all.filter((d) => d.tags?.specName === p.scanSpec);
+  if (matching.length === 0) return null;
+
+  matching.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+  const latest = matching[0];
+
+  const bytes = await context.dataRepository.getContent(
+    p.extensionType,
+    p.modelName,
+    latest.name,
+    latest.version,
+  );
+  if (!bytes) return null;
+
+  const attributes = JSON.parse(new TextDecoder().decode(bytes)) as Record<
+    string,
+    unknown
+  >;
+  return { attributes, updatedAt: latest.createdAt };
 }
 
 /**
@@ -376,13 +412,9 @@ export const model = {
           let totalTokens: number | null = null;
 
           try {
-            const data = await context.dataRepository.findBySpec(
-              p.modelName,
-              p.scanSpec,
-            );
-            if (data.length > 0) {
+            const latest = await fetchLatestScanData(context, p);
+            if (latest) {
               configured = true;
-              const latest = pickLatest(data);
               lastScanned = (latest.attributes.scannedAt as string) ??
                 latest.updatedAt ??
                 null;
@@ -447,12 +479,9 @@ export const model = {
 
         for (const p of PROVIDERS) {
           try {
-            const data = await context.dataRepository.findBySpec(
-              p.modelName,
-              p.scanSpec,
-            );
+            const latest = await fetchLatestScanData(context, p);
 
-            if (data.length === 0) {
+            if (!latest) {
               coverage.push({
                 provider: p.name,
                 configured: false,
@@ -465,7 +494,6 @@ export const model = {
               continue;
             }
 
-            const latest = pickLatest(data);
             const attrs = latest.attributes as Record<string, unknown>;
             const totals = (attrs.totals ?? {}) as Record<string, unknown>;
             const groups = (attrs[p.fields.groupKey] ?? []) as Array<
