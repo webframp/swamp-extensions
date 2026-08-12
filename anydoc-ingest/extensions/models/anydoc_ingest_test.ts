@@ -1,8 +1,8 @@
 /**
  * Unit tests for the anydoc-ingest model.
  *
- * Uses createModelTestContext and injectable command runner to avoid
- * any real file system or CLI dependency.
+ * Uses createModelTestContext and injectable DocumentConverter to avoid
+ * any real file system or library dependency for conversion.
  *
  * @module
  */
@@ -10,7 +10,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { type CommandRunner, model } from "./anydoc_ingest.ts";
+import { type DocumentConverter, model } from "./anydoc_ingest.ts";
 
 // ---------------------------------------------------------------------------
 // Type aliases
@@ -45,36 +45,21 @@ async function withTestDocuments(
   }
 }
 
-/** Mock command runner that simulates successful anydoc conversion. */
-const successRunner: CommandRunner = (
-  _cmd: string,
-  args: string[],
-): Promise<
-  { success: boolean; stdout: string; stderr: string; code: number }
-> => {
-  const filePath = args[args.length - 1];
+/** Mock converter that simulates successful anydoc conversion. */
+const successConverter: DocumentConverter = (
+  filePath: string,
+): Promise<string> => {
   const fileName = filePath.split("/").pop() ?? "unknown";
-  return Promise.resolve({
-    success: true,
-    stdout: `# ${fileName}\n\nConverted markdown content from ${fileName}.`,
-    stderr: "",
-    code: 0,
-  });
+  return Promise.resolve(
+    `# ${fileName}\n\nConverted markdown content from ${fileName}.`,
+  );
 };
 
-/** Mock command runner that simulates conversion failure. */
-const failureRunner: CommandRunner = (
-  _cmd: string,
-  _args: string[],
-): Promise<
-  { success: boolean; stdout: string; stderr: string; code: number }
-> => {
-  return Promise.resolve({
-    success: false,
-    stdout: "",
-    stderr: "Error: encrypted document",
-    code: 1,
-  });
+/** Mock converter that simulates conversion failure. */
+const failureConverter: DocumentConverter = (
+  _filePath: string,
+): Promise<string> => {
+  return Promise.reject(new Error("encrypted document"));
 };
 
 // ---------------------------------------------------------------------------
@@ -238,7 +223,7 @@ Deno.test("ingest - converts documents and writes resources", async () => {
     });
 
     await model.methods.ingest.execute(
-      { force: false, _runner: successRunner },
+      { force: false, _converter: successConverter },
       context as unknown as IngestContext,
     );
 
@@ -286,7 +271,7 @@ Deno.test("ingest - handles conversion errors gracefully", async () => {
     });
 
     await model.methods.ingest.execute(
-      { force: false, _runner: failureRunner },
+      { force: false, _converter: failureConverter },
       context as unknown as IngestContext,
     );
 
@@ -294,7 +279,7 @@ Deno.test("ingest - handles conversion errors gracefully", async () => {
     const docs = resources.filter((r) => r.specName === "document");
     assertEquals(docs.length, 1);
     const docData = docs[0].data as Record<string, unknown>;
-    assertEquals(docData.error, "Error: encrypted document");
+    assertEquals(docData.error, "encrypted document");
     assertEquals(docData.markdown, "");
 
     const status = resources.find((r) => r.specName === "status");
@@ -338,12 +323,13 @@ Deno.test("ingest - skips unchanged documents (idempotent)", async () => {
         [instanceName]: {
           contentHash: expectedHash,
           markdown: "# Already converted",
+          error: null, // No error — successful previous run
         },
       },
     });
 
     await model.methods.ingest.execute(
-      { force: false, _runner: successRunner },
+      { force: false, _converter: successConverter },
       context as unknown as IngestContext,
     );
 
@@ -393,12 +379,13 @@ Deno.test("ingest - force flag overrides hash check", async () => {
         [instanceName]: {
           contentHash: expectedHash,
           markdown: "# Old version",
+          error: null,
         },
       },
     });
 
     await model.methods.ingest.execute(
-      { force: true, _runner: successRunner },
+      { force: true, _converter: successConverter },
       context as unknown as IngestContext,
     );
 
@@ -468,4 +455,168 @@ Deno.test("status - returns previous state when data exists", async () => {
   assertEquals(data.lastRunAt, "2026-08-12T10:00:00Z");
   assertEquals(data.totalIngested, 5);
   assertEquals(data.totalErrors, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Regression tests for CI adversarial review findings
+// ---------------------------------------------------------------------------
+
+Deno.test("HIGH-1: per-document exception does not abort run or lose status", async () => {
+  // Create a directory structure where one file becomes unreadable
+  // between discovery (readDir + stat) and hashFile (readFile)
+  const dir = await Deno.makeTempDir({ prefix: "anydoc-toctou-" });
+  try {
+    // Write two files
+    await Deno.writeTextFile(`${dir}/good.docx`, "good content");
+    await Deno.writeTextFile(`${dir}/bad.pdf`, "bad content");
+
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: {
+        documentsDir: dir,
+        recursive: true,
+        maxFileSizeMb: 50,
+        includePatterns: [],
+        excludePatterns: [],
+      },
+    });
+
+    // Make bad.pdf unreadable AFTER discovery can find it.
+    // We chmod 000 so stat succeeds (in walkDir) but readFile (in hashFile) fails.
+    await Deno.chmod(`${dir}/bad.pdf`, 0o000);
+
+    // Should NOT throw — the error is caught per-document
+    await model.methods.ingest.execute(
+      { force: false, _converter: successConverter },
+      context as unknown as IngestContext,
+    );
+
+    const resources = getWrittenResources();
+    // Status resource MUST exist (this was the bug: no status on exception)
+    const status = resources.find((r) => r.specName === "status");
+    assertExists(status);
+    const statusData = status!.data as Record<string, unknown>;
+    // The unreadable PDF should appear in errors
+    assertEquals(statusData.totalErrors, 1);
+    // The good docx should still be ingested
+    assertEquals(statusData.totalIngested, 1);
+  } finally {
+    // Restore permissions for cleanup
+    await Deno.chmod(`${dir}/bad.pdf`, 0o644).catch(() => {});
+    await Deno.remove(dir, { recursive: true }).catch(() => {});
+  }
+});
+
+Deno.test("HIGH-2: previously-failed documents are retried on next run", async () => {
+  await withTestDocuments([
+    { name: "retry.docx", content: "retry content" },
+  ], async (dir) => {
+    // Compute the content hash and instance name
+    const content = new TextEncoder().encode("retry content");
+    const hashBuffer = await crypto.subtle.digest("SHA-256", content);
+    const expectedHash = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    const pathBytes = new TextEncoder().encode("retry.docx");
+    const nameHash = await crypto.subtle.digest("SHA-1", pathBytes);
+    const nameHashHex = Array.from(new Uint8Array(nameHash))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const readable = "retry.docx".replace(/[^a-zA-Z0-9_\-.]/g, "_").slice(
+      0,
+      80,
+    );
+    const instanceName = `document-${readable}-${nameHashHex.slice(0, 12)}`;
+
+    // Seed a stored resource WITH an error (previous failed conversion)
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: {
+        documentsDir: dir,
+        recursive: true,
+        maxFileSizeMb: 50,
+        includePatterns: [],
+        excludePatterns: [],
+      },
+      storedResources: {
+        [instanceName]: {
+          contentHash: expectedHash,
+          markdown: "",
+          error: "Error: network timeout downloading anydoc binary",
+        },
+      },
+    });
+
+    await model.methods.ingest.execute(
+      { force: false, _converter: successConverter },
+      context as unknown as IngestContext,
+    );
+
+    const resources = getWrittenResources();
+    // The document MUST be re-processed (not skipped)
+    const docs = resources.filter((r) => r.specName === "document");
+    assertEquals(docs.length, 1);
+    const docData = docs[0].data as Record<string, unknown>;
+    // Should have new successful markdown, not empty
+    assertEquals((docData.markdown as string).length > 0, true);
+    assertEquals(docData.error, null);
+
+    const status = resources.find((r) => r.specName === "status");
+    const statusData = status!.data as Record<string, unknown>;
+    assertEquals(statusData.totalIngested, 1);
+    assertEquals(statusData.totalSkipped, 0);
+  });
+});
+
+Deno.test("MEDIUM-1: glob * does not cross path separators", async () => {
+  await withTestDocuments([
+    { name: "top.pptx", content: "top level" },
+    { name: "sub/nested.pptx", content: "nested" },
+    { name: "top.docx", content: "keep" },
+  ], async (dir) => {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: {
+        documentsDir: dir,
+        recursive: true,
+        maxFileSizeMb: 50,
+        includePatterns: [],
+        excludePatterns: ["*.pptx"], // Should only exclude top-level pptx
+      },
+    });
+
+    await model.methods.scan.execute(
+      {} as Record<string, never>,
+      context as unknown as ScanContext,
+    );
+
+    const data = getWrittenResources()[0].data as Record<string, unknown>;
+    // *.pptx excludes top.pptx but NOT sub/nested.pptx
+    assertEquals(data.totalFiles, 2); // sub/nested.pptx + top.docx
+  });
+});
+
+Deno.test("MEDIUM-1: glob ** crosses path separators", async () => {
+  await withTestDocuments([
+    { name: "top.pptx", content: "top level" },
+    { name: "sub/nested.pptx", content: "nested" },
+    { name: "top.docx", content: "keep" },
+  ], async (dir) => {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: {
+        documentsDir: dir,
+        recursive: true,
+        maxFileSizeMb: 50,
+        includePatterns: [],
+        excludePatterns: ["**.pptx"], // Should exclude ALL pptx at any depth
+      },
+    });
+
+    await model.methods.scan.execute(
+      {} as Record<string, never>,
+      context as unknown as ScanContext,
+    );
+
+    const data = getWrittenResources()[0].data as Record<string, unknown>;
+    // **.pptx excludes both top.pptx and sub/nested.pptx
+    assertEquals(data.totalFiles, 1); // only top.docx
+  });
 });

@@ -159,23 +159,43 @@ async function toInstanceName(relativePath: string): Promise<string> {
   return `${readable}-${hashHex.slice(0, 12)}`;
 }
 
-/** Escape regex special characters except glob wildcards. */
-function escapeRegexChar(char: string): string {
-  return /[.+^${}()|[\]\\]/.test(char) ? `\\${char}` : char;
+/** Escape a string for use in a regex, preserving no special meaning. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Check if a path matches any of the given glob patterns (simple matching). */
+/**
+ * Check if a path matches any of the given glob patterns.
+ *
+ * Glob semantics:
+ * - `*` matches any characters except `/` (single path segment)
+ * - `**` matches any characters including `/` (cross-segment)
+ * - `?` matches exactly one character except `/`
+ */
 function matchesPattern(path: string, patterns: string[]): boolean {
   if (patterns.length === 0) return false;
   return patterns.some((pattern) => {
-    // Escape regex-special chars, then convert glob wildcards
-    const escaped = pattern.split("").map((c) => {
-      if (c === "*") return ".*";
-      if (c === "?") return ".";
-      return escapeRegexChar(c);
-    }).join("");
-    const regex = new RegExp("^" + escaped + "$");
-    return regex.test(path);
+    // Convert glob to regex: handle ** before * to avoid double-conversion
+    let regexStr = "";
+    let i = 0;
+    while (i < pattern.length) {
+      if (pattern[i] === "*" && pattern[i + 1] === "*") {
+        regexStr += ".*";
+        i += 2;
+        // Skip trailing / after ** (e.g., **/ matches zero or more dirs)
+        if (pattern[i] === "/") i++;
+      } else if (pattern[i] === "*") {
+        regexStr += "[^/]*";
+        i++;
+      } else if (pattern[i] === "?") {
+        regexStr += "[^/]";
+        i++;
+      } else {
+        regexStr += escapeRegex(pattern[i]);
+        i++;
+      }
+    }
+    return new RegExp("^" + regexStr + "$").test(path);
   });
 }
 
@@ -257,51 +277,43 @@ async function* walkDir(
 }
 
 /**
- * Convert a document to markdown using the anydoc CLI.
+ * Convert a document to markdown.
  *
- * Uses `npx @firecrawl/anydoc` which downloads the native binary on first run.
- * Accepts an optional command runner for testability.
+ * Default implementation invokes the anydoc CLI (a native Rust binary
+ * distributed via npm). The CLI approach is required because the npm package
+ * ships platform-specific NAPI addons that can't be bundled by swamp's
+ * JS bundler or loaded directly in Deno without special configuration.
+ *
+ * Accepts an optional converter function for testability.
  */
 async function convertDocument(
   filePath: string,
-  options?: { runner?: CommandRunner },
+  converter?: DocumentConverter,
 ): Promise<{ markdown: string; error: string | null }> {
-  const runner = options?.runner ?? defaultCommandRunner;
+  const convert = converter ?? defaultConverter;
   try {
-    const result = await runner(
-      "npx",
-      ["--yes", "@firecrawl/anydoc@0.1.8", filePath],
-    );
-    if (result.success) {
-      return { markdown: result.stdout, error: null };
-    }
-    return {
-      markdown: "",
-      error: result.stderr || `Exit code: ${result.code}`,
-    };
+    const markdown = await convert(filePath);
+    return { markdown, error: null };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { markdown: "", error: message };
   }
 }
 
-/** Command runner signature for dependency injection in tests. */
-export type CommandRunner = (
-  cmd: string,
-  args: string[],
-) => Promise<
-  { success: boolean; stdout: string; stderr: string; code: number }
->;
+/** Converter function signature for dependency injection in tests. */
+export type DocumentConverter = (filePath: string) => Promise<string>;
 
-/** Default command runner using Deno.Command with timeout. */
-const defaultCommandRunner: CommandRunner = async (
-  cmd: string,
-  args: string[],
-): Promise<
-  { success: boolean; stdout: string; stderr: string; code: number }
-> => {
-  const command = new Deno.Command(cmd, {
-    args,
+/**
+ * Default converter using the anydoc CLI with a timeout.
+ *
+ * Spawns `npx @firecrawl/anydoc@<version>` which auto-downloads the
+ * platform-native binary on first run.
+ */
+const defaultConverter: DocumentConverter = async (
+  filePath: string,
+): Promise<string> => {
+  const command = new Deno.Command("npx", {
+    args: ["--yes", `@firecrawl/anydoc@${ANYDOC_VERSION}`, filePath],
     stdout: "piped",
     stderr: "piped",
   });
@@ -313,18 +325,17 @@ const defaultCommandRunner: CommandRunner = async (
       try {
         child.kill();
       } catch { /* already exited */ }
-      reject(new Error(`Command timed out after ${CONVERT_TIMEOUT_MS}ms`));
+      reject(new Error(`Conversion timed out after ${CONVERT_TIMEOUT_MS}ms`));
     }, CONVERT_TIMEOUT_MS);
   });
 
   try {
     const result = await Promise.race([child.output(), timeout]);
-    return {
-      success: result.success,
-      stdout: new TextDecoder().decode(result.stdout),
-      stderr: new TextDecoder().decode(result.stderr),
-      code: result.code,
-    };
+    if (result.success) {
+      return new TextDecoder().decode(result.stdout);
+    }
+    const stderr = new TextDecoder().decode(result.stderr);
+    throw new Error(stderr || `anydoc exited with code ${result.code}`);
   } finally {
     clearTimeout(timerId);
   }
@@ -447,15 +458,13 @@ export const model = {
       arguments: z.object({
         force: z.boolean().default(false)
           .describe("Force re-conversion even if content hash matches"),
-        _runner: z.any().optional()
-          .describe("Injectable command runner for testing"),
       }),
       execute: async (
-        args: { force?: boolean; _runner?: CommandRunner },
+        args: { force?: boolean; _converter?: DocumentConverter },
         context: MethodContext,
       ): Promise<{ dataHandles: Array<{ name: string }> }> => {
         const { globalArgs } = context;
-        const runner = args._runner;
+        const converter = args._converter;
         const handles: Array<{ name: string }> = [];
         const errors: Array<{ path: string; error: string }> = [];
         let ingested = 0;
@@ -480,76 +489,89 @@ export const model = {
             break;
           }
 
-          const instanceName = `document-${await toInstanceName(
-            doc.relativePath,
-          )}`;
+          try {
+            const instanceName = `document-${await toInstanceName(
+              doc.relativePath,
+            )}`;
 
-          // Compute content hash for idempotency
-          const contentHash = await hashFile(doc.path);
+            // Compute content hash for idempotency
+            const contentHash = await hashFile(doc.path);
 
-          // Check if already ingested with same hash (unless forced)
-          if (!args.force && context.readResource) {
-            const existing = await context.readResource(instanceName);
-            if (
-              existing && typeof existing === "object" &&
-              existing.contentHash === contentHash
-            ) {
-              skipped++;
-              context.logger.debug("Skipping unchanged {path}", {
-                path: doc.relativePath,
-              });
-              continue;
+            // Check if already ingested with same hash (unless forced)
+            // Skip only if the previous run succeeded (no error)
+            if (!args.force && context.readResource) {
+              const existing = await context.readResource(instanceName);
+              if (
+                existing && typeof existing === "object" &&
+                existing.contentHash === contentHash &&
+                !existing.error
+              ) {
+                skipped++;
+                context.logger.debug("Skipping unchanged {path}", {
+                  path: doc.relativePath,
+                });
+                continue;
+              }
             }
-          }
 
-          // Convert
-          context.logger.info("Converting {path} ({format})", {
-            path: doc.relativePath,
-            format: doc.format,
-          });
-
-          const { markdown, error } = await convertDocument(doc.path, {
-            runner,
-          });
-
-          if (error) {
-            context.logger.warn("Conversion failed for {path}: {error}", {
+            // Convert
+            context.logger.info("Converting {path} ({format})", {
               path: doc.relativePath,
-              error,
-            });
-            errors.push({ path: doc.relativePath, error });
-          }
-
-          const now = new Date().toISOString();
-          const id = `anydoc:${contentHash.slice(0, 16)}`;
-
-          const handle = await context.writeResource(
-            "document",
-            instanceName,
-            {
-              id,
-              kind: "document",
-              sourcePath: doc.path,
-              relativePath: doc.relativePath,
               format: doc.format,
-              sizeBytes: doc.sizeBytes,
-              contentHash,
-              markdown,
-              markdownLength: markdown.length,
-              convertedAt: now,
-              provenance: {
-                asOf: now,
-                source: doc.path,
-                tool: "@firecrawl/anydoc",
-                toolVersion: ANYDOC_VERSION,
-              },
-              error,
-            },
-          );
+            });
 
-          handles.push(handle);
-          ingested++;
-          byFormat[doc.format] = (byFormat[doc.format] ?? 0) + 1;
+            const { markdown, error } = await convertDocument(
+              doc.path,
+              converter,
+            );
+
+            if (error) {
+              context.logger.warn("Conversion failed for {path}: {error}", {
+                path: doc.relativePath,
+                error,
+              });
+              errors.push({ path: doc.relativePath, error });
+            }
+
+            const now = new Date().toISOString();
+            const id = `anydoc:${contentHash.slice(0, 16)}`;
+
+            const handle = await context.writeResource(
+              "document",
+              instanceName,
+              {
+                id,
+                kind: "document",
+                sourcePath: doc.path,
+                relativePath: doc.relativePath,
+                format: doc.format,
+                sizeBytes: doc.sizeBytes,
+                contentHash,
+                markdown,
+                markdownLength: markdown.length,
+                convertedAt: now,
+                provenance: {
+                  asOf: now,
+                  source: doc.path,
+                  tool: "@firecrawl/anydoc",
+                  toolVersion: ANYDOC_VERSION,
+                },
+                error,
+              },
+            );
+
+            handles.push(handle);
+            ingested++;
+            byFormat[doc.format] = (byFormat[doc.format] ?? 0) + 1;
+          } catch (err) {
+            // Per-document failure: log, record error, continue processing
+            const message = err instanceof Error ? err.message : String(err);
+            context.logger.warn(
+              "Failed to process {path}: {error}",
+              { path: doc.relativePath, error: message },
+            );
+            errors.push({ path: doc.relativePath, error: message });
+          }
         }
 
         // Write status
