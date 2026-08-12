@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno check extensions/models/anydoc_ingest.ts",
+    "check": "deno check extensions/models/anydoc_ingest.ts extensions/models/anydoc_ingest_test.ts",
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",
@@ -15,6 +15,7 @@
     }
   },
   "imports": {
+    "@std/assert": "jsr:@std/assert@1.0.19",
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
   }
 }

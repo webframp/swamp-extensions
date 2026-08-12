@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
+import { assertEquals, assertExists } from "@std/assert";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { type DocumentConverter, model } from "./anydoc_ingest.ts";
 
