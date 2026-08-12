@@ -1,3 +1,21 @@
+## 2026.08.12.1
+
+**Added:** `list_my_merge_requests` now includes `pipelineStatus` on each MR in
+the dashboard resource. The value is the head pipeline's status normalized to
+lowercase (`success`, `failed`, `running`, etc.) or `null` when no pipeline
+exists. This enables downstream consumers to make triage decisions based on
+pipeline state — for example, auto-approving Renovate MRs with a passing
+pipeline.
+
+**Technical details:** The `DASHBOARD_QUERY` GraphQL fragments now request
+`headPipeline { status }` on all three MR connection types (reviewing, assigned,
+authored). The field is added to `DashboardMRSchema` as
+`z.string().nullable().optional()` for backward compatibility with stored data.
+
+**Upgrade note:** Schema is additive only — one new optional nullable field.
+Existing stored dashboard resources validate without modification. No
+reconfiguration required.
+
 ## 2026.07.30.1
 
 **Fixed:** `list_merge_requests` and `list_issues` fail with "Variable $state

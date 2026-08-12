@@ -1800,6 +1800,7 @@ const MOCK_GRAPHQL_RESPONSE = {
               ],
             },
             notes: { nodes: [{ author: { username: "testuser" } }] },
+            headPipeline: { status: "SUCCESS" },
           },
         ],
         pageInfo: { hasNextPage: false },
@@ -1815,6 +1816,7 @@ const MOCK_GRAPHQL_RESPONSE = {
             project: { fullPath: "team/svc" },
             author: { username: "bob" },
             labels: { nodes: [] },
+            headPipeline: null,
           },
         ],
         pageInfo: { hasNextPage: false },
@@ -1830,6 +1832,7 @@ const MOCK_GRAPHQL_RESPONSE = {
             project: { fullPath: "group/proj" },
             author: { username: "testuser" },
             labels: { nodes: [{ title: "enhancement" }] },
+            headPipeline: { status: "RUNNING" },
           },
         ],
         pageInfo: { hasNextPage: false },
@@ -1973,8 +1976,14 @@ Deno.test("list_my_merge_requests writes dashboard resource with all roles", asy
     assertEquals(data.reviewing[0].approvedByMe, true);
     assertEquals(data.reviewing[0].myReviewState, "approved");
     assertEquals(data.reviewing[0].commented, true);
+    // Verify pipelineStatus mapping (SUCCESS → "success")
+    assertEquals(data.reviewing[0].pipelineStatus, "success");
     // Verify assigned draft detection
     assertEquals(data.assigned[0].draft, true);
+    // Verify null headPipeline → null pipelineStatus
+    assertEquals(data.assigned[0].pipelineStatus, null);
+    // Verify authored pipeline status (RUNNING → "running")
+    assertEquals(data.authored[0].pipelineStatus, "running");
     // Verify todo mapping
     assertEquals(data.todos[0].action, "mentioned");
     assertEquals(data.todos[0].targetType, "MERGEREQUEST");
@@ -2189,6 +2198,53 @@ Deno.test("list_my_merge_requests throws on null currentUser", async () => {
       Error,
       "currentUser is null",
     );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_my_merge_requests maps pipelineStatus null when headPipeline key absent", async () => {
+  const response = {
+    data: {
+      currentUser: {
+        username: "testuser",
+        reviewRequestedMergeRequests: {
+          nodes: [
+            {
+              iid: 999,
+              title: "No pipeline MR",
+              webUrl: "https://git.example.org/group/proj/-/merge_requests/999",
+              updatedAt: "2026-06-10T10:00:00Z",
+              draft: false,
+              project: { fullPath: "group/proj" },
+              author: { username: "renovate" },
+              labels: { nodes: [] },
+              approvedBy: { nodes: [] },
+              reviewers: { nodes: [] },
+              notes: { nodes: [] },
+              // headPipeline key intentionally absent
+            },
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+        assignedMergeRequests: { nodes: [], pageInfo: { hasNextPage: false } },
+        authoredMergeRequests: { nodes: [], pageInfo: { hasNextPage: false } },
+        todos: { nodes: [] },
+      },
+    },
+  };
+  const restore = mockGraphqlFetch(response);
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_my_merge_requests.execute(
+      { role: "all", state: "opened", includeArchived: false },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as any;
+    // headPipeline absent → pipelineStatus should be null
+    assertEquals(data.reviewing[0].pipelineStatus, null);
   } finally {
     restore();
   }
