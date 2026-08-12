@@ -28,6 +28,17 @@ jobs:
         with:
           # Full history required for git diff against the base branch.
           fetch-depth: 0
+      # Cache the Deno binary in the runner tool cache so downstream jobs skip
+      # the download. denoland/setup-deno's install() short-circuits when
+      # tc.find("deno", version) already resolves — see src/install.ts. This
+      # protects us from GitHub's release-CDN flakes, which have failed dozens
+      # of parallel jobs at once (PRs #347, #349). Cache key includes the Deno
+      # version so a version bump invalidates automatically.
+      - name: Cache Deno binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/deno
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: "2.9.5"
@@ -63,6 +74,11 @@ jobs:
         working-directory: ${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Deno binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/deno
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: "2.9.5"
@@ -80,6 +96,11 @@ jobs:
     # service container cannot be declared per-step. Collapsing the tasks into
     # one job still cuts four container startups to one -- and that startup is
     # what flaked on #284.
+    #
+    # needs: [discover] serialises this job behind the discover job, which
+    # populates the Deno tool cache. Cold-cache workflow runs then have a
+    # single Deno download (in discover) instead of one-per-parallel-job.
+    needs: [discover]
     name: datastore/valkey
     runs-on: ubuntu-latest
     defaults:
@@ -99,6 +120,11 @@ jobs:
       VALKEY_TEST_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Deno binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/deno
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: "2.9.5"
@@ -116,6 +142,10 @@ jobs:
     # cloudflare extensions and shipping their own test files. A single
     # misclassification in cloudflare-codegen produced seven uncompilable or
     # failing extensions with nothing to catch it.
+    #
+    # needs: [discover] serialises this job behind the discover job's Deno
+    # download, keeping the cold-cache CDN footprint to a single request.
+    needs: [discover]
     name: scripts/${{ matrix.dir }} - ${{ matrix.task }}
     runs-on: ubuntu-latest
     strategy:
@@ -128,6 +158,11 @@ jobs:
         working-directory: scripts/${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Deno binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/deno
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: "2.9.5"
