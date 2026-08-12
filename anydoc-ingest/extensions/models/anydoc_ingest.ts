@@ -79,7 +79,14 @@ const DocumentSchema = z.object({
 const StatusSchema = z.object({
   lastRunAt: z.string().nullable(),
   documentsDir: z.string(),
-  totalIngested: z.number().int().min(0),
+  totalIngested: z.number().int().min(0)
+    .describe(
+      "Documents for which a `document` resource was written this run — includes both successful conversions and conversion failures (empty markdown + error field). Use `totalConverted` for the successful-only count.",
+    ),
+  totalConverted: z.number().int().min(0).default(0)
+    .describe(
+      "Documents that produced non-empty markdown (conversion succeeded).",
+    ),
   totalErrors: z.number().int().min(0),
   totalSkipped: z.number().int().min(0),
   truncated: z.boolean(),
@@ -259,7 +266,16 @@ async function* discoverDocuments(
   }
 }
 
-/** Recursively walk a directory, yielding file entries with size. Skips symlinks. */
+/**
+ * Recursively walk a directory, yielding file entries with size. Skips symlinks.
+ *
+ * `Deno.stat` on an entry can race with concurrent deletion (temp cleaners,
+ * user tools) and throw `NotFound`. A permission change can throw
+ * `PermissionDenied`. Since this is an async generator, a throw here bypasses
+ * the per-document try/catch inside `ingest` and aborts the entire run,
+ * dropping the status writeResource. Skip such entries instead — they'll show
+ * up as missing on the next run, which is the correct semantic.
+ */
 async function* walkDir(
   dir: string,
   recursive: boolean,
@@ -268,7 +284,18 @@ async function* walkDir(
     const fullPath = `${dir}/${entry.name}`;
     if (entry.isSymlink) continue; // Avoid symlink loops
     if (entry.isFile) {
-      const stat = await Deno.stat(fullPath);
+      let stat: Deno.FileInfo;
+      try {
+        stat = await Deno.stat(fullPath);
+      } catch (err) {
+        if (
+          err instanceof Deno.errors.NotFound ||
+          err instanceof Deno.errors.PermissionDenied
+        ) {
+          continue;
+        }
+        throw err;
+      }
       yield { path: fullPath, sizeBytes: stat.size };
     } else if (entry.isDirectory && recursive) {
       yield* walkDir(fullPath, recursive);
@@ -371,7 +398,7 @@ interface MethodContext {
 /** Document ingestion model powered by anydoc. */
 export const model = {
   type: "@webframp/anydoc-ingest",
-  version: "2026.08.12.1",
+  version: "2026.08.12.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     "scan": {
@@ -468,6 +495,7 @@ export const model = {
         const handles: Array<{ name: string }> = [];
         const errors: Array<{ path: string; error: string }> = [];
         let ingested = 0;
+        let converted = 0;
         let skipped = 0;
         let truncated = false;
         const byFormat: Record<string, number> = {};
@@ -479,8 +507,12 @@ export const model = {
         for await (
           const doc of discoverDocuments(globalArgs.documentsDir, globalArgs)
         ) {
-          // Bounded pagination: cap total documents processed
-          if (ingested + skipped >= MAX_INGEST_FILES) {
+          // Bounded pagination: cap total documents processed. Include
+          // `errors.length` so files that fail in the outer catch (hashFile
+          // PermissionDenied, writeResource failures) still count against the
+          // cap. Otherwise a directory of unreadable files could iterate
+          // without bound while every doc lands only in `errors`.
+          if (ingested + skipped + errors.length >= MAX_INGEST_FILES) {
             truncated = true;
             context.logger.warn(
               "Reached ingestion cap ({cap} files). Remaining documents skipped.",
@@ -562,6 +594,7 @@ export const model = {
 
             handles.push(handle);
             ingested++;
+            if (error === null) converted++;
             byFormat[doc.format] = (byFormat[doc.format] ?? 0) + 1;
           } catch (err) {
             // Per-document failure: log, record error, continue processing
@@ -579,6 +612,7 @@ export const model = {
           lastRunAt: new Date().toISOString(),
           documentsDir: globalArgs.documentsDir,
           totalIngested: ingested,
+          totalConverted: converted,
           totalErrors: errors.length,
           totalSkipped: skipped,
           truncated,
@@ -588,8 +622,13 @@ export const model = {
         handles.push(statusHandle);
 
         context.logger.info(
-          "Ingestion complete: {ingested} converted, {skipped} skipped, {errors} errors",
-          { ingested, skipped, errors: errors.length },
+          "Ingestion complete: {ingested} written ({converted} converted, {failed} with errors), {skipped} skipped",
+          {
+            ingested,
+            converted,
+            failed: ingested - converted,
+            skipped,
+          },
         );
 
         return { dataHandles: handles };
@@ -614,6 +653,7 @@ export const model = {
             lastRunAt: null,
             documentsDir: context.globalArgs.documentsDir,
             totalIngested: 0,
+            totalConverted: 0,
             totalErrors: 0,
             totalSkipped: 0,
             truncated: false,
@@ -628,12 +668,17 @@ export const model = {
           total: existing.totalIngested,
         });
 
-        // Re-write to keep resource versioned for trend tracking
+        // Re-write to keep resource versioned for trend tracking.
+        // `totalConverted` was added in 2026.08.12.2; fall back to
+        // `totalIngested` for status resources written by earlier versions
+        // so existing timelines don't show a synthetic drop to zero.
         const handle = await context.writeResource("status", "status", {
           lastRunAt: existing.lastRunAt,
           documentsDir: existing.documentsDir ??
             context.globalArgs.documentsDir,
           totalIngested: existing.totalIngested ?? 0,
+          totalConverted: existing.totalConverted ??
+            existing.totalIngested ?? 0,
           totalErrors: existing.totalErrors ?? 0,
           totalSkipped: existing.totalSkipped ?? 0,
           truncated: existing.truncated ?? false,

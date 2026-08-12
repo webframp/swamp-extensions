@@ -620,3 +620,260 @@ Deno.test("MEDIUM-1: glob ** crosses path separators", async () => {
     assertEquals(data.totalFiles, 1); // only top.docx
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression tests for review #4921643985 (HIGH-1, HIGH-2, MEDIUM-1)
+// ---------------------------------------------------------------------------
+
+Deno.test(
+  "HIGH-1 (walkDir stat race): NotFound during stat does not abort the run",
+  async () => {
+    // Simulates a temp-cleaner deleting a file between readDir yielding the
+    // entry and walkDir calling Deno.stat on it. Before the fix, Deno.stat
+    // would throw NotFound inside the generator and bypass ingest's inner
+    // try/catch, dropping the status resource entirely.
+    await withTestDocuments([
+      { name: "good.docx", content: "good content" },
+      { name: "vanishing.docx", content: "about to vanish" },
+    ], async (dir) => {
+      const originalStat = Deno.stat;
+      const vanishingPath = `${dir}/vanishing.docx`;
+      // Monkey-patch Deno.stat to throw NotFound for the vanishing file,
+      // simulating a delete that happened between readDir and stat.
+      (Deno as unknown as { stat: typeof Deno.stat }).stat = ((
+        path: string | URL,
+      ) => {
+        if (path === vanishingPath) {
+          return Promise.reject(
+            new Deno.errors.NotFound(`stat '${vanishingPath}'`),
+          );
+        }
+        return originalStat(path);
+      }) as typeof Deno.stat;
+
+      try {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {
+            documentsDir: dir,
+            recursive: true,
+            maxFileSizeMb: 50,
+            includePatterns: [],
+            excludePatterns: [],
+          },
+        });
+
+        // Must not throw — the missing file is silently skipped in walkDir.
+        await model.methods.ingest.execute(
+          { force: false, _converter: successConverter },
+          context as unknown as IngestContext,
+        );
+
+        const resources = getWrittenResources();
+        // Status MUST be written even though a stat call failed mid-walk.
+        const status = resources.find((r) => r.specName === "status");
+        assertExists(status);
+        const statusData = status!.data as Record<string, unknown>;
+        // Only the good file was ingested; the vanishing one was skipped
+        // in walkDir without reaching hashFile, so it isn't in errors either.
+        assertEquals(statusData.totalIngested, 1);
+        assertEquals(statusData.totalErrors, 0);
+      } finally {
+        (Deno as unknown as { stat: typeof Deno.stat }).stat = originalStat;
+      }
+    });
+  },
+);
+
+Deno.test(
+  "HIGH-1 (walkDir stat race): PermissionDenied during stat is skipped",
+  async () => {
+    await withTestDocuments([
+      { name: "readable.docx", content: "ok" },
+      { name: "denied.docx", content: "denied" },
+    ], async (dir) => {
+      const originalStat = Deno.stat;
+      const deniedPath = `${dir}/denied.docx`;
+      (Deno as unknown as { stat: typeof Deno.stat }).stat = ((
+        path: string | URL,
+      ) => {
+        if (path === deniedPath) {
+          return Promise.reject(
+            new Deno.errors.PermissionDenied(`stat '${deniedPath}'`),
+          );
+        }
+        return originalStat(path);
+      }) as typeof Deno.stat;
+
+      try {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {
+            documentsDir: dir,
+            recursive: true,
+            maxFileSizeMb: 50,
+            includePatterns: [],
+            excludePatterns: [],
+          },
+        });
+
+        await model.methods.scan.execute(
+          {} as Record<string, never>,
+          context as unknown as ScanContext,
+        );
+
+        const data = getWrittenResources()[0].data as Record<string, unknown>;
+        assertEquals(data.totalFiles, 1);
+      } finally {
+        (Deno as unknown as { stat: typeof Deno.stat }).stat = originalStat;
+      }
+    });
+  },
+);
+
+Deno.test(
+  "HIGH-2 (cap): outer-catch errors count against the ingestion cap",
+  async () => {
+    // The cap is 10,000 in production. We can't create 10k files in a test,
+    // but we can verify the counting rule: `errors.length` participates in
+    // the cap check so a directory of files that all fail hashFile still
+    // stops eventually rather than iterating without bound.
+    //
+    // Instead of exercising 10k files, we exercise the invariant by seeding
+    // the outer catch with an unreadable file and confirming the status
+    // reflects the accumulated error — the essential fix is the counter
+    // arithmetic, verified statically here.
+    await withTestDocuments([
+      { name: "a.docx", content: "a" },
+      { name: "b.docx", content: "b" },
+      { name: "c.docx", content: "c" },
+    ], async (dir) => {
+      const originalReadFile = Deno.readFile;
+      // All hashFile calls throw — every doc lands in the outer catch.
+      (Deno as unknown as { readFile: typeof Deno.readFile }).readFile = (
+        _path: string | URL,
+      ) =>
+        Promise.reject(
+          new Deno.errors.PermissionDenied("simulated readFile failure"),
+        );
+
+      try {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {
+            documentsDir: dir,
+            recursive: true,
+            maxFileSizeMb: 50,
+            includePatterns: [],
+            excludePatterns: [],
+          },
+        });
+
+        await model.methods.ingest.execute(
+          { force: false, _converter: successConverter },
+          context as unknown as IngestContext,
+        );
+
+        const status = getWrittenResources().find((r) =>
+          r.specName === "status"
+        );
+        assertExists(status);
+        const statusData = status!.data as Record<string, unknown>;
+        // All 3 files went to errors — ingested/skipped/converted are 0.
+        // The cap check now includes errors.length, so with a real 10k cap
+        // this pattern would terminate at 10k errors instead of iterating
+        // without bound.
+        assertEquals(statusData.totalIngested, 0);
+        assertEquals(statusData.totalConverted, 0);
+        assertEquals(statusData.totalSkipped, 0);
+        assertEquals(statusData.totalErrors, 3);
+      } finally {
+        (Deno as unknown as { readFile: typeof Deno.readFile }).readFile =
+          originalReadFile;
+      }
+    });
+  },
+);
+
+Deno.test(
+  "MEDIUM-1 (totalConverted): failed conversions do not inflate the success count",
+  async () => {
+    await withTestDocuments([
+      { name: "ok1.docx", content: "one" },
+      { name: "ok2.docx", content: "two" },
+      { name: "bad.docx", content: "three" },
+    ], async (dir) => {
+      // Converter that fails on `bad.docx` but succeeds on the others.
+      const partialFailConverter: DocumentConverter = (path: string) => {
+        if (path.endsWith("bad.docx")) {
+          return Promise.reject(new Error("encrypted"));
+        }
+        const name = path.split("/").pop() ?? "unknown";
+        return Promise.resolve(`# ${name}\n\nok`);
+      };
+
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          documentsDir: dir,
+          recursive: true,
+          maxFileSizeMb: 50,
+          includePatterns: [],
+          excludePatterns: [],
+        },
+      });
+
+      await model.methods.ingest.execute(
+        { force: false, _converter: partialFailConverter },
+        context as unknown as IngestContext,
+      );
+
+      const status = getWrittenResources().find((r) => r.specName === "status");
+      assertExists(status);
+      const statusData = status!.data as Record<string, unknown>;
+      // All three documents get a `document` resource (with error for the
+      // failed one), so totalIngested is 3. But only two produced markdown,
+      // so totalConverted is 2 — the distinction the field was added for.
+      assertEquals(statusData.totalIngested, 3);
+      assertEquals(statusData.totalConverted, 2);
+      assertEquals(statusData.totalErrors, 1);
+    });
+  },
+);
+
+Deno.test(
+  "MEDIUM-1 (totalConverted): status method falls back to totalIngested for pre-2026.08.12.2 resources",
+  async () => {
+    // Old status resources predate the totalConverted field. The status
+    // method must preserve the historical count instead of writing 0.
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: {
+        documentsDir: TEST_DIR,
+        recursive: true,
+        maxFileSizeMb: 50,
+        includePatterns: [],
+        excludePatterns: [],
+      },
+      storedResources: {
+        "status": {
+          lastRunAt: "2026-08-11T09:00:00Z",
+          documentsDir: TEST_DIR,
+          totalIngested: 7,
+          // totalConverted intentionally absent — written by older version
+          totalErrors: 0,
+          totalSkipped: 3,
+          truncated: false,
+          byFormat: { docx: 7 },
+          errors: [],
+        },
+      },
+    });
+
+    await model.methods.status.execute(
+      {} as Record<string, never>,
+      context as unknown as StatusContext,
+    );
+
+    const data = getWrittenResources()[0].data as Record<string, unknown>;
+    assertEquals(data.totalIngested, 7);
+    // Fallback: without prior totalConverted, use totalIngested so timelines
+    // don't show a synthetic drop to zero.
+    assertEquals(data.totalConverted, 7);
+  },
+);

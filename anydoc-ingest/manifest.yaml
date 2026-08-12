@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/anydoc-ingest"
-version: "2026.08.12.1"
+version: "2026.08.12.2"
 description: |
   Document-to-knowledge ingestion pipeline powered by Firecrawl's anydoc.
   Converts Word, PowerPoint, Excel, OpenDocument, RTF, EPUB, CSV, and PDF
