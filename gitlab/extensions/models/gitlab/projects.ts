@@ -330,6 +330,10 @@ const DashboardMRSchema = z.object({
   myReviewState: z
     .enum(["pending", "reviewed", "approved", "unapproved"])
     .nullable(),
+  // Head pipeline status (success, failed, running, etc.) — null when no
+  // pipeline exists. Optional for read-back parity with dashboards written
+  // before this field existed.
+  pipelineStatus: z.string().nullable().optional(),
 });
 
 const TodoSchema = z.object({
@@ -503,15 +507,15 @@ query dashboard($mrState: MergeRequestState, $perPage: Int!, $includeArchived: B
   currentUser {
     username
     reviewRequestedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } headPipeline { status } }
       pageInfo { hasNextPage }
     }
     assignedMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } headPipeline { status } }
       pageInfo { hasNextPage }
     }
     authoredMergeRequests(state: $mrState, first: $perPage, includeArchived: $includeArchived, sort: UPDATED_DESC) {
-      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } }
+      nodes { iid title webUrl updatedAt draft project { fullPath } author { username } labels { nodes { title } } notes(last: 5) { nodes { author { username } } } approvedBy { nodes { username } } reviewers { nodes { username mergeRequestInteraction { reviewState } } } headPipeline { status } }
       pageInfo { hasNextPage }
     }
     todos(state: pending, first: 20) {
@@ -589,6 +593,9 @@ function mapDashboardMR(
     commented: currentUser ? noteAuthors.includes(currentUser) : false,
     approvedByMe: currentUser ? approvers.includes(currentUser) : false,
     myReviewState,
+    pipelineStatus: node.headPipeline?.status
+      ? String(node.headPipeline.status).toLowerCase()
+      : null,
   };
 }
 
@@ -1177,7 +1184,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.07.30.1",
+  version: "2026.08.12.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1195,6 +1202,12 @@ export const model = {
         targetBranch: null,
         webUrl: null,
       }),
+    },
+    {
+      toVersion: "2026.08.12.1",
+      description:
+        "Add pipelineStatus to dashboard MR entries (null for older data)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
   reports: ["@webframp/review-dashboard"],
