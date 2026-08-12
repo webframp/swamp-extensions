@@ -28,9 +28,9 @@ jobs:
         with:
           # Full history required for git diff against the base branch.
           fetch-depth: 0
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.7.14"
+          deno-version: "2.9.5"
       - name: Run ci-discover
         id: discover
         working-directory: scripts/ci-discover
@@ -63,9 +63,9 @@ jobs:
         working-directory: ${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.7.14"
+          deno-version: "2.9.5"
       - name: deno check
         run: deno task check
       - name: deno lint
@@ -99,9 +99,9 @@ jobs:
       VALKEY_TEST_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.7.14"
+          deno-version: "2.9.5"
       - name: deno check
         run: deno task check
       - name: deno lint
@@ -128,9 +128,9 @@ jobs:
         working-directory: scripts/${{ matrix.dir }}
     steps:
       - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.7.14"
+          deno-version: "2.9.5"
       - name: deno ${{ matrix.task }}
         # Every generator defines all four tasks with identical names, so no
         # per-task branching is needed here. datadog-codegen and snyk-codegen
