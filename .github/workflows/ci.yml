@@ -13,6 +13,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Single source of truth for the Deno version. Referenced by every setup-deno
+# invocation AND by the actions/cache key so bumping this one value stays
+# consistent across both. Hardcoding the version in the cache key while
+# bumping only setup-deno's input would produce a permanent silent regression:
+# the cache would hit on the old key (skipping the save of the new binary),
+# setup-deno's tc.find would miss on the new version, and every run would
+# re-download from the CDN forever. One string, one diff line to review.
+env:
+  DENO_VERSION: "2.9.5"
+
 jobs:
   discover:
     # Derive the extension matrix from the filesystem. On pull requests, scope
@@ -38,10 +48,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/deno
-          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.9.5"
+          deno-version: ${{ env.DENO_VERSION }}
       - name: Run ci-discover
         id: discover
         working-directory: scripts/ci-discover
@@ -78,10 +88,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/deno
-          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.9.5"
+          deno-version: ${{ env.DENO_VERSION }}
       - name: deno check
         run: deno task check
       - name: deno lint
@@ -124,10 +134,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/deno
-          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.9.5"
+          deno-version: ${{ env.DENO_VERSION }}
       - name: deno check
         run: deno task check
       - name: deno lint
@@ -162,10 +172,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.tool_cache }}/deno
-          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-2.9.5
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: "2.9.5"
+          deno-version: ${{ env.DENO_VERSION }}
       - name: deno ${{ matrix.task }}
         # Every generator defines all four tasks with identical names, so no
         # per-task branching is needed here. datadog-codegen and snyk-codegen
