@@ -1,9 +1,16 @@
 /**
  * Normalizer: @webframp/aws/securityhub-findings -> OpsSignal[].
  *
- * `get_severity_summary` produces a severity breakdown (CRITICAL, HIGH, MEDIUM,
- * LOW, INFORMATIONAL counts). The briefing surfaces CRITICAL and HIGH counts
- * as the primary security signal.
+ * Handles two data specs from this model type:
+ *
+ * 1. `severity_summary` (from `get_severity_summary`) — flat top-level counts:
+ *    `{ critical, high, medium, low, informational, total, truncated,
+ *    accountBreakdown, fetchedAt }`.
+ *
+ * 2. `finding_list` (from `list_findings` / `list_all_findings`) — an array of
+ *    finding summaries with a string `severity` field per finding.
+ *
+ * Contract reference: `swamp model type describe @webframp/aws/securityhub-findings --json`
  *
  * SPDX-License-Identifier: Apache-2.0
  * @module
@@ -14,6 +21,28 @@ import type { Contribution, OpsSignal, SourceInput } from "../shapes.ts";
 
 const SOURCE = "security-hub";
 const MAX_AGE_HOURS = 24;
+
+/**
+ * Identify `severity_summary` spec by its required fields:
+ * critical, high, medium, low, total (all numbers at top level).
+ */
+function isSeveritySummary(data: Record<string, unknown>): boolean {
+  return (
+    typeof data.critical === "number" &&
+    typeof data.high === "number" &&
+    typeof data.medium === "number" &&
+    typeof data.low === "number" &&
+    typeof data.total === "number"
+  );
+}
+
+/**
+ * Identify `finding_list` or `full_export` spec by its required fields:
+ * findings (array), count (number).
+ */
+function isFindingList(data: Record<string, unknown>): boolean {
+  return Array.isArray(data.findings) && typeof data.count === "number";
+}
 
 export function securityhubFindingsNormalizer(
   inputs: SourceInput[],
@@ -27,7 +56,8 @@ export function securityhubFindingsNormalizer(
       : null;
     const { stale } = freshness(fetchedAt, MAX_AGE_HOURS);
 
-    // Check for degraded state
+    // Degradation: the severity_summary spec does not carry failedProfiles
+    // today, but guard for future addition.
     const failedProfiles = Array.isArray(data.failedProfiles)
       ? data.failedProfiles
       : [];
@@ -36,19 +66,13 @@ export function securityhubFindingsNormalizer(
       ? `${failedProfiles.length} accounts unreachable`
       : undefined;
 
-    // get_severity_summary produces a summary object with severity counts
-    const summary = data.summary as
-      | Record<string, number>
-      | undefined;
-
-    if (summary && typeof summary === "object") {
-      const critical = typeof summary.CRITICAL === "number"
-        ? summary.CRITICAL
-        : 0;
-      const high = typeof summary.HIGH === "number" ? summary.HIGH : 0;
-      const medium = typeof summary.MEDIUM === "number" ? summary.MEDIUM : 0;
-      const low = typeof summary.LOW === "number" ? summary.LOW : 0;
-      const total = critical + high + medium + low;
+    if (isSeveritySummary(data)) {
+      // severity_summary spec: flat lowercase counts at top level
+      const critical = data.critical as number;
+      const high = data.high as number;
+      const medium = data.medium as number;
+      const low = data.low as number;
+      const total = data.total as number;
 
       const severity = critical > 0 ? "critical" : high > 0 ? "warn" : "ok";
 
@@ -58,9 +82,10 @@ export function securityhubFindingsNormalizer(
       if (medium > 0) parts.push(`${medium} MEDIUM`);
       if (low > 0) parts.push(`${low} LOW`);
 
+      const truncatedNote = data.truncated === true ? ", truncated" : "";
       const detail = total === 0
         ? "no active findings (24h)"
-        : parts.join(", ") + ` (${total} total, 24h)`;
+        : parts.join(", ") + ` (${total} total, 24h${truncatedNote})`;
 
       ops.push({
         source: SOURCE,
@@ -72,16 +97,15 @@ export function securityhubFindingsNormalizer(
         degraded,
         degradedReason,
       });
-    } else if (Array.isArray(data.findings)) {
-      // list_findings output — count by severity from the array
-      const findings = data.findings as Array<{
-        severity?: { label?: string };
-      }>;
+    } else if (isFindingList(data)) {
+      // finding_list / full_export spec: array of finding summaries
+      // Each finding has `severity: string` (e.g. "CRITICAL", "HIGH")
+      const findings = data.findings as Array<{ severity?: string }>;
       const critical = findings.filter(
-        (f) => f.severity?.label === "CRITICAL",
+        (f) => f.severity === "CRITICAL",
       ).length;
       const high = findings.filter(
-        (f) => f.severity?.label === "HIGH",
+        (f) => f.severity === "HIGH",
       ).length;
       const total = findings.length;
 

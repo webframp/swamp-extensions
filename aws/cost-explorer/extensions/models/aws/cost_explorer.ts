@@ -53,41 +53,86 @@ function makeClientConfig(
   };
 }
 
-const CostByServiceSchema = z.object({
-  service: z.string(),
-  amount: z.number(),
-  unit: z.string(),
-  percentage: z.number(),
-});
-
-const CostByUsageTypeSchema = z.object({
-  usageType: z.string(),
-  amount: z.number(),
-  unit: z.string(),
-});
+// --- Per-spec schemas (flat, typed, one per query shape) ---
 
 const CostTrendDataPointSchema = z.object({
   date: z.string(),
   amount: z.number(),
 });
 
-const CostTrendSchema = z.object({
+const CostTrendOutputSchema = z.object({
   dataPoints: z.array(CostTrendDataPointSchema),
   trend: z.string(),
   totalCost: z.number(),
+  days: z.number(),
+  fetchedAt: z.string(),
 });
 
-const CostDriverSchema = z.object({
+const CostByServiceItemSchema = z.object({
+  service: z.string(),
+  amount: z.number(),
+  unit: z.string(),
+  percentage: z.number(),
+});
+
+const CostByServiceOutputSchema = z.object({
+  services: z.array(CostByServiceItemSchema),
+  totalCost: z.number(),
+  days: z.number(),
+  fetchedAt: z.string(),
+});
+
+const CostByUsageTypeItemSchema = z.object({
+  usageType: z.string(),
+  amount: z.number(),
+  unit: z.string(),
+});
+
+const CostByUsageTypeOutputSchema = z.object({
+  service: z.string(),
+  usageTypes: z.array(CostByUsageTypeItemSchema),
+  totalCost: z.number(),
+  days: z.number(),
+  fetchedAt: z.string(),
+});
+
+const CostDriverItemSchema = z.object({
   service: z.string(),
   usageType: z.string(),
   amount: z.number(),
   unit: z.string(),
 });
 
-const CostResultSchema = z.object({
-  region: z.string(),
-  queryType: z.string(),
-  data: z.unknown(),
+const CostDriversOutputSchema = z.object({
+  drivers: z.array(CostDriverItemSchema),
+  totalCost: z.number(),
+  days: z.number(),
+  fetchedAt: z.string(),
+});
+
+const CostComparisonServiceSchema = z.object({
+  service: z.string(),
+  currentAmount: z.number(),
+  previousAmount: z.number(),
+  delta: z.number(),
+  deltaPercent: z.number(),
+});
+
+const CostComparisonOutputSchema = z.object({
+  currentPeriod: z.object({
+    start: z.string(),
+    end: z.string(),
+    total: z.number(),
+  }),
+  previousPeriod: z.object({
+    start: z.string(),
+    end: z.string(),
+    total: z.number(),
+  }),
+  totalDelta: z.number(),
+  totalDeltaPercent: z.number(),
+  services: z.array(CostComparisonServiceSchema),
+  days: z.number(),
   fetchedAt: z.string(),
 });
 
@@ -138,7 +183,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.08.10.1",
+  version: "2026.08.13.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -157,9 +202,6 @@ export const model = {
       description:
         "Add totalCost field to get_cost_trend output (sum of dataPoints)",
       upgradeAttributes: (old: Record<string, unknown>) => {
-        // Backfill totalCost into cached cost_trend resources written before
-        // this version. Without this, data.totalCost would be undefined until
-        // the next fresh fetch. Only applies to cost_trend resources.
         if (old.queryType !== "cost_trend") return old;
         const data = old.data as Record<string, unknown> | undefined;
         if (data && Array.isArray(data.dataPoints) && !("totalCost" in data)) {
@@ -176,12 +218,121 @@ export const model = {
         return old;
       },
     },
+    {
+      toVersion: "2026.08.13.1",
+      description:
+        "Flatten output: replace polymorphic 'costs' spec with typed per-query " +
+        "specs (costTrend, costByService, costByUsageType, costDrivers, " +
+        "costComparison). Existing cached 'costs' resources are migrated to " +
+        "their new spec shape by extracting the nested 'data' field to top level.",
+      upgradeAttributes: (old: Record<string, unknown>) => {
+        // Migrate old envelope shape { region, queryType, data, fetchedAt }
+        // to the new flat shape by picking known fields to top level.
+        // Resources already in the new shape (no queryType) pass through unchanged.
+        if (!("queryType" in old) || !("data" in old)) return old;
+        const data = old.data;
+        const fetchedAt = typeof old.fetchedAt === "string"
+          ? old.fetchedAt
+          : new Date().toISOString();
+
+        // Guard: data must be a usable value. If null/undefined/primitive,
+        // leave the resource as-is for the legacy normalizer branch to handle.
+        if (data == null || typeof data !== "object") return old;
+
+        if (old.queryType === "cost_trend" && !Array.isArray(data)) {
+          const d = data as Record<string, unknown>;
+          return {
+            dataPoints: d.dataPoints,
+            trend: d.trend,
+            totalCost: typeof d.totalCost === "number" ? d.totalCost : 0,
+            days: typeof d.days === "number" ? d.days : 7,
+            fetchedAt,
+          };
+        }
+        if (old.queryType === "cost_by_service" && Array.isArray(data)) {
+          const totalCost = (data as Array<{ amount?: number }>).reduce(
+            (s, i) => s + (typeof i.amount === "number" ? i.amount : 0),
+            0,
+          );
+          return {
+            services: data,
+            totalCost: Math.round(totalCost * 100) / 100,
+            days: 30,
+            fetchedAt,
+          };
+        }
+        if (old.queryType === "cost_by_usage_type" && Array.isArray(data)) {
+          const totalCost = (data as Array<{ amount?: number }>).reduce(
+            (s, i) => s + (typeof i.amount === "number" ? i.amount : 0),
+            0,
+          );
+          return {
+            service: "",
+            usageTypes: data,
+            totalCost: Math.round(totalCost * 100) / 100,
+            days: 30,
+            fetchedAt,
+          };
+        }
+        if (old.queryType === "top_cost_drivers" && Array.isArray(data)) {
+          const totalCost = (data as Array<{ amount?: number }>).reduce(
+            (s, i) => s + (typeof i.amount === "number" ? i.amount : 0),
+            0,
+          );
+          return {
+            drivers: data,
+            totalCost: Math.round(totalCost * 100) / 100,
+            days: 30,
+            fetchedAt,
+          };
+        }
+        if (
+          old.queryType === "cost_comparison" && !Array.isArray(data)
+        ) {
+          const d = data as Record<string, unknown>;
+          return {
+            currentPeriod: d.currentPeriod,
+            previousPeriod: d.previousPeriod,
+            totalDelta: d.totalDelta,
+            totalDeltaPercent: d.totalDeltaPercent,
+            services: d.services,
+            days: typeof d.days === "number" ? d.days : 30,
+            fetchedAt,
+          };
+        }
+        return old;
+      },
+    },
   ],
 
   resources: {
-    costs: {
-      description: "AWS Cost Explorer query results",
-      schema: CostResultSchema,
+    costTrend: {
+      description: "Daily cost trend with direction indicator",
+      schema: CostTrendOutputSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 10,
+    },
+    costByService: {
+      description: "Cost breakdown by AWS service",
+      schema: CostByServiceOutputSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 10,
+    },
+    costByUsageType: {
+      description: "Cost breakdown by usage type for a single service",
+      schema: CostByUsageTypeOutputSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 10,
+    },
+    costDrivers: {
+      description: "Top cost drivers by service and usage type combination",
+      schema: CostDriversOutputSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 10,
+    },
+    costComparison: {
+      description: "Period-over-period cost comparison by service",
+      schema: CostComparisonOutputSchema,
       lifetime: "1h" as const,
       garbageCollection: 10,
     },
@@ -233,32 +384,32 @@ export const model = {
             }
           }
 
-          const total = items.reduce((sum, i) => sum + i.amount, 0);
-          const data: z.infer<typeof CostByServiceSchema>[] = items
+          const totalCost = items.reduce((sum, i) => sum + i.amount, 0);
+          const services = items
             .map((i) => ({
               service: i.service,
               amount: Math.round(i.amount * 100) / 100,
               unit: i.unit,
-              percentage: total > 0
-                ? Math.round((i.amount / total) * 10000) / 100
+              percentage: totalCost > 0
+                ? Math.round((i.amount / totalCost) * 10000) / 100
                 : 0,
             }))
             .sort((a, b) => b.amount - a.amount);
 
           const handle = await context.writeResource(
-            "costs",
-            `by-service-${args.days}d`,
+            "costByService",
+            `${args.days}d`,
             {
-              region: context.globalArgs.region,
-              queryType: "cost_by_service",
-              data,
+              services,
+              totalCost: Math.round(totalCost * 100) / 100,
+              days: args.days,
               fetchedAt: new Date().toISOString(),
             },
           );
 
           context.logger.info(
             "Found {count} services with spend in last {days} days",
-            { count: data.length, days: args.days },
+            { count: services.length, days: args.days },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -316,7 +467,7 @@ export const model = {
             }
           }
 
-          const data: z.infer<typeof CostByUsageTypeSchema>[] = items
+          const usageTypes = items
             .map((i) => ({
               usageType: i.usageType,
               amount: Math.round(i.amount * 100) / 100,
@@ -324,20 +475,27 @@ export const model = {
             }))
             .sort((a, b) => b.amount - a.amount);
 
+          const totalCost = items.reduce((s, i) => s + i.amount, 0);
+
           const handle = await context.writeResource(
-            "costs",
-            `by-usage-type-${args.days}d`,
+            "costByUsageType",
+            `${args.days}d`,
             {
-              region: context.globalArgs.region,
-              queryType: "cost_by_usage_type",
-              data,
+              service: args.service,
+              usageTypes,
+              totalCost: Math.round(totalCost * 100) / 100,
+              days: args.days,
               fetchedAt: new Date().toISOString(),
             },
           );
 
           context.logger.info(
             "Found {count} usage types for {service} in last {days} days",
-            { count: data.length, service: args.service, days: args.days },
+            {
+              count: usageTypes.length,
+              service: args.service,
+              days: args.days,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -407,24 +565,21 @@ export const model = {
             }
           }
 
-          const data: z.infer<typeof CostTrendSchema> = {
-            dataPoints,
-            trend,
-            totalCost: Math.round(
-              dataPoints.reduce(
-                (s, p) => s + (Number.isFinite(p.amount) ? p.amount : 0),
-                0,
-              ) * 100,
-            ) / 100,
-          };
+          const totalCost = Math.round(
+            dataPoints.reduce(
+              (s, p) => s + (Number.isFinite(p.amount) ? p.amount : 0),
+              0,
+            ) * 100,
+          ) / 100;
 
           const handle = await context.writeResource(
-            "costs",
-            `trend-${args.days}d`,
+            "costTrend",
+            `${args.days}d`,
             {
-              region: context.globalArgs.region,
-              queryType: "cost_trend",
-              data,
+              dataPoints,
+              trend,
+              totalCost,
+              days: args.days,
               fetchedAt: new Date().toISOString(),
             },
           );
@@ -501,7 +656,7 @@ export const model = {
             }
           }
 
-          const data: z.infer<typeof CostDriverSchema>[] = items
+          const drivers = items
             .map((i) => ({
               service: i.service,
               usageType: i.usageType,
@@ -511,20 +666,22 @@ export const model = {
             .sort((a, b) => b.amount - a.amount)
             .slice(0, args.limit);
 
+          const totalCost = items.reduce((s, i) => s + i.amount, 0);
+
           const handle = await context.writeResource(
-            "costs",
-            `top-drivers-${args.days}d`,
+            "costDrivers",
+            `${args.days}d`,
             {
-              region: context.globalArgs.region,
-              queryType: "top_cost_drivers",
-              data,
+              drivers,
+              totalCost: Math.round(totalCost * 100) / 100,
+              days: args.days,
               fetchedAt: new Date().toISOString(),
             },
           );
 
           context.logger.info(
             "Found top {limit} cost drivers over {days} days",
-            { limit: data.length, days: args.days },
+            { limit: drivers.length, days: args.days },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -598,13 +755,7 @@ export const model = {
             ...previousServices.keys(),
           ]);
 
-          const services: Array<{
-            service: string;
-            currentAmount: number;
-            previousAmount: number;
-            delta: number;
-            deltaPercent: number;
-          }> = [];
+          const services: z.infer<typeof CostComparisonServiceSchema>[] = [];
 
           let currentTotal = 0;
           let previousTotal = 0;
@@ -642,29 +793,24 @@ export const model = {
             ) / 100
             : 0;
 
-          const data = {
-            currentPeriod: {
-              start: fmt(currentStart),
-              end: fmt(now),
-              total: Math.round(currentTotal * 100) / 100,
-            },
-            previousPeriod: {
-              start: fmt(previousStart),
-              end: fmt(currentStart),
-              total: Math.round(previousTotal * 100) / 100,
-            },
-            totalDelta,
-            totalDeltaPercent,
-            services,
-          };
-
           const handle = await context.writeResource(
-            "costs",
-            `comparison-${args.days}d`,
+            "costComparison",
+            `${args.days}d`,
             {
-              region: context.globalArgs.region,
-              queryType: "cost_comparison",
-              data,
+              currentPeriod: {
+                start: fmt(currentStart),
+                end: fmt(now),
+                total: Math.round(currentTotal * 100) / 100,
+              },
+              previousPeriod: {
+                start: fmt(previousStart),
+                end: fmt(currentStart),
+                total: Math.round(previousTotal * 100) / 100,
+              },
+              totalDelta,
+              totalDeltaPercent,
+              services,
+              days: args.days,
               fetchedAt: new Date().toISOString(),
             },
           );

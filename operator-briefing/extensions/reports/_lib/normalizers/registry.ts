@@ -41,4 +41,5 @@ export const registry: Record<string, Normalizer> = {
  */
 export const nonSourceModelTypes = new Set<string>([
   "@webframp/operator-briefing/metrics",
+  "@webframp/gitlab/operator-board",
 ]);
