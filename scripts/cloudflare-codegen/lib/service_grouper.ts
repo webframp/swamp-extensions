@@ -205,6 +205,11 @@ function extractOperation(
   // These require hand-written implementations that handle raw bytes.
   if (hasNonJsonSuccessResponse(operation)) return null;
 
+  // Skip endpoints whose request body is exclusively non-JSON (multipart/form-data,
+  // octet-stream). These require hand-written implementations with FormData or
+  // raw byte handling that cfApi's JSON serialization cannot support.
+  if (hasNonJsonRequestBody(operation)) return null;
+
   const allParams = [
     ...pathLevelParams,
     ...(operation.parameters ?? []),
@@ -342,4 +347,21 @@ function hasNonJsonSuccessResponse(operation: OperationObject): boolean {
   }
 
   return false;
+}
+
+/**
+ * Detect if an operation's request body is exclusively non-JSON.
+ * Endpoints requiring multipart/form-data (file uploads, Workers script content)
+ * or application/octet-stream cannot be served by cfApi's JSON serialization.
+ * If the request body has BOTH JSON and non-JSON content types, the JSON path
+ * is usable and the endpoint is kept.
+ */
+function hasNonJsonRequestBody(operation: OperationObject): boolean {
+  if (!operation.requestBody?.content) return false;
+
+  const contentTypes = Object.keys(operation.requestBody.content);
+  if (contentTypes.length === 0) return false;
+
+  const hasJson = contentTypes.some((t) => t.includes("json"));
+  return !hasJson;
 }
