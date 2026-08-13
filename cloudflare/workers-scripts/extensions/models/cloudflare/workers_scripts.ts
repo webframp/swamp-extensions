@@ -87,49 +87,6 @@ const ListWorkerScriptSearchWorkersSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const UpdateWorkerScriptUploadWorkerModuleSchema = z.object({
-  cache_options: z.unknown().optional(),
-  compatibility_date: z.unknown().optional(),
-  compatibility_flags: z.unknown().optional(),
-  created_on: z.unknown().optional(),
-  etag: z.unknown().optional(),
-  exports: z.unknown().optional().describe(
-    "Declarative exports for the Worker's most recent version, including Durable Object classes (with ...",
-  ),
-  handlers: z.array(z.string()).optional().describe(
-    "The names of handlers exported as part of the default export.",
-  ),
-  has_assets: z.unknown().optional(),
-  has_modules: z.unknown().optional(),
-  id: z.string().optional().describe("The name used to identify the script."),
-  last_deployed_from: z.string().optional().describe(
-    "The client most recently used to deploy this Worker.",
-  ),
-  logpush: z.unknown().optional(),
-  migration_tag: z.string().optional().describe(
-    "The tag of the Durable Object migration that was most recently applied for this Worker.",
-  ),
-  modified_on: z.unknown().optional(),
-  named_handlers: z.array(z.object({
-    handlers: z.array(z.string()).optional(),
-    name: z.string().optional(),
-  })).optional().describe(
-    "Named exports, such as Durable Object class implementations and named entrypoints.",
-  ),
-  observability: z.unknown().optional(),
-  placement: z.unknown().optional(),
-  placement_mode: z.unknown().optional(),
-  placement_status: z.unknown().optional(),
-  tag: z.string().optional().describe("The immutable ID of the script."),
-  tags: z.unknown().optional(),
-  tail_consumers: z.unknown().optional(),
-  usage_model: z.unknown().optional(),
-  entry_point: z.string().optional().describe(
-    "The entry point for the script.",
-  ),
-  startup_time_ms: z.number().int(),
-});
-
 const CreateAssetsUploadSessionSchema = z.object({
   buckets: z.array(z.array(z.string())).optional().describe(
     "The requests to make to upload assets.",
@@ -239,56 +196,6 @@ const ListVersionsSchema = z.object({
   items: z.array(z.unknown()).optional(),
 });
 
-const WorkerVersionsUploadVersionSchema = z.object({
-  id: z.string().optional().describe("Unique identifier for the version."),
-  metadata: z.object({
-    author_email: z.string().optional(),
-    author_id: z.string().optional(),
-    created_on: z.string().optional(),
-    hasPreview: z.boolean().optional(),
-    modified_on: z.string().optional(),
-    source: z.enum([
-      "unknown",
-      "api",
-      "wrangler",
-      "terraform",
-      "dash",
-      "cf_cli",
-      "dash_template",
-      "integration",
-      "quick_editor",
-      "playground",
-      "workersci",
-    ]).optional(),
-  }).optional(),
-  number: z.number().optional().describe("Sequential version number."),
-  resources: z.object({
-    bindings: z.unknown().optional(),
-    script: z.object({
-      etag: z.string().optional(),
-      handlers: z.array(z.string()).optional(),
-      last_deployed_from: z.string().optional(),
-      named_handlers: z.array(z.object({
-        handlers: z.array(z.string()).optional(),
-        name: z.string().optional(),
-      })).optional(),
-    }).optional(),
-    script_runtime: z.object({
-      compatibility_date: z.string().optional(),
-      compatibility_flags: z.array(z.string()).optional(),
-      exports: z.unknown().optional(),
-      limits: z.object({
-        cpu_ms: z.number().int().optional(),
-      }).optional(),
-      migration_tag: z.string().optional(),
-      usage_model: z.enum(["bundled", "unbound", "standard"]).optional(),
-    }).optional(),
-  }),
-  startup_time_ms: z.number().int().optional().describe(
-    "Time in milliseconds spent on [Worker startup](https://developers.cloudflare.com/workers/platform...",
-  ),
-});
-
 const GetVersionDetailSchema = z.object({
   id: z.string().optional().describe("Unique identifier for the version."),
   metadata: z.object({
@@ -343,7 +250,7 @@ const GetVersionDetailSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.08.13.1",
+  version: "2026.08.13.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -360,12 +267,6 @@ export const model = {
       schema: ListWorkerScriptSearchWorkersSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "worker_script_upload_worker_module": {
-      description: "Upload Worker Module",
-      schema: UpdateWorkerScriptUploadWorkerModuleSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "assets_upload_session": {
       description: "Create Assets Upload Session",
@@ -466,12 +367,6 @@ export const model = {
     "list_versions": {
       description: "List Versions",
       schema: ListVersionsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "worker_versions_upload_version": {
-      description: "Upload Version",
-      schema: WorkerVersionsUploadVersionSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -595,60 +490,6 @@ export const model = {
         context.logger.info("Found {count} worker_script_search_workers", {
           count: results.length,
         });
-        return { dataHandles: [handle] };
-      },
-    },
-    update_worker_script_upload_worker_module: {
-      description: "Upload Worker Module",
-      arguments: z.object({
-        script_name: z.string(),
-        bindings_inherit: z.enum(["strict"]).optional().describe(
-          'When set to "strict", the upload will fail if any `inherit` type bindings cannot be resolved against the previous version of the Worker. Without this, unresolvable inherit bindings are silently dropped.',
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["script_name", "bindings_inherit"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["bindings_inherit"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/workers/scripts/${args.script_name}${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "worker_script_upload_worker_module",
-          String(args.script_name),
-          result,
-        );
-        context.logger.info("Updated worker_script_upload_worker_module", {});
         return { dataHandles: [handle] };
       },
     },
@@ -1608,53 +1449,6 @@ export const model = {
           result,
         );
         context.logger.info("Fetched list_versions", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    worker_versions_upload_version: {
-      description: "Upload Version",
-      arguments: z.object({
-        script_name: z.string(),
-        bindings_inherit: z.enum(["strict"]).optional().describe(
-          'When set to "strict", the upload will fail if any `inherit` type bindings cannot be resolved against the previous version of the Worker. Without this, unresolvable inherit bindings are silently dropped.',
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["bindings_inherit"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/workers/scripts/${args.script_name}/versions${qs}`,
-        );
-
-        const handle = await context.writeResource(
-          "worker_versions_upload_version",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info("Executed worker_versions_upload_version", {});
         return { dataHandles: [handle] };
       },
     },

@@ -17,37 +17,35 @@ swamp model create @webframp/cloudflare/workers-scripts cf-workers-scripts \
 
 ## Methods
 
-| Method                                      | Description                   |
-| ------------------------------------------- | ----------------------------- |
-| `list_workers`                              | List Workers                  |
-| `list_worker_script_search_workers`         | Search Workers                |
-| `update_worker_script_upload_worker_module` | Upload Worker Module          |
-| `delete_worker`                             | Delete Worker                 |
-| `create_assets_upload_session`              | Create Assets Upload Session  |
-| `list_deployments`                          | List Deployments              |
-| `create_deployment`                         | Create Deployment             |
-| `get_deployment`                            | Get Deployment                |
-| `delete_deployment`                         | Delete Deployment             |
-| `get_cron_triggers`                         | Get Cron Triggers             |
-| `update_cron_triggers`                      | Update Cron Triggers          |
-| `get_settings`                              | Get Script Settings           |
-| `patch_settings`                            | Patch Script Settings         |
-| `list_script_secrets`                       | List script secrets           |
-| `put_script_secret`                         | Add script secret             |
-| `patch_script_secrets_bulk`                 | Patch multiple script secrets |
-| `get_script_secret`                         | Get secret binding            |
-| `delete_script_secret`                      | Delete script secret          |
-| `get_subdomain`                             | Get Worker subdomain          |
-| `create_worker_script_post_subdomain`       | Post Worker subdomain         |
-| `delete_subdomain`                          | Delete Worker subdomain       |
-| `list_tails`                                | List Tails                    |
-| `worker_tail_logs_start_tail`               | Start Tail                    |
-| `delete_tail`                               | Delete Tail                   |
-| `get_worker_script_fetch_usage_model`       | Fetch Usage Model             |
-| `update_usage_model`                        | Update Usage Model            |
-| `list_versions`                             | List Versions                 |
-| `worker_versions_upload_version`            | Upload Version                |
-| `get_version_detail`                        | Get Version Detail            |
+| Method                                | Description                   |
+| ------------------------------------- | ----------------------------- |
+| `list_workers`                        | List Workers                  |
+| `list_worker_script_search_workers`   | Search Workers                |
+| `delete_worker`                       | Delete Worker                 |
+| `create_assets_upload_session`        | Create Assets Upload Session  |
+| `list_deployments`                    | List Deployments              |
+| `create_deployment`                   | Create Deployment             |
+| `get_deployment`                      | Get Deployment                |
+| `delete_deployment`                   | Delete Deployment             |
+| `get_cron_triggers`                   | Get Cron Triggers             |
+| `update_cron_triggers`                | Update Cron Triggers          |
+| `get_settings`                        | Get Script Settings           |
+| `patch_settings`                      | Patch Script Settings         |
+| `list_script_secrets`                 | List script secrets           |
+| `put_script_secret`                   | Add script secret             |
+| `patch_script_secrets_bulk`           | Patch multiple script secrets |
+| `get_script_secret`                   | Get secret binding            |
+| `delete_script_secret`                | Delete script secret          |
+| `get_subdomain`                       | Get Worker subdomain          |
+| `create_worker_script_post_subdomain` | Post Worker subdomain         |
+| `delete_subdomain`                    | Delete Worker subdomain       |
+| `list_tails`                          | List Tails                    |
+| `worker_tail_logs_start_tail`         | Start Tail                    |
+| `delete_tail`                         | Delete Tail                   |
+| `get_worker_script_fetch_usage_model` | Fetch Usage Model             |
+| `update_usage_model`                  | Update Usage Model            |
+| `list_versions`                       | List Versions                 |
+| `get_version_detail`                  | Get Version Detail            |
 
 ## Development
 
