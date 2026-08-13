@@ -1,0 +1,66 @@
+manifestVersion: 1
+name: "@webframp/anydoc-ingest"
+version: "2026.08.12.2"
+description: |
+  Document-to-knowledge ingestion pipeline powered by Firecrawl's anydoc.
+  Converts Word, PowerPoint, Excel, OpenDocument, RTF, EPUB, CSV, and PDF
+  files into structured markdown, then materialises provenance-aware knowledge
+  entries compatible with @stateless/sourced-kb.
+
+  Designed as the intake layer for sourced-kb: point it at a directory of
+  documents, run `ingest`, and each file becomes a versioned KB entry with
+  full provenance (source path, conversion timestamp, format detected,
+  content hash). Run `scan` first to preview what will be processed.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/anydoc-ingest
+
+  swamp model create @webframp/anydoc-ingest doc-ingest \
+    --global-arg 'documentsDir=/path/to/docs'
+
+  # Preview available documents
+  swamp model method run doc-ingest scan
+
+  # Convert and write KB entries
+  swamp model method run doc-ingest ingest
+
+  # Check conversion stats
+  swamp model method run doc-ingest status
+  ```
+
+  ## Methods
+
+  - **scan** — Discover supported documents in the configured directory;
+    reports file count, formats, and total size without converting.
+  - **ingest** — Convert each document to markdown via anydoc and write a
+    provenance-aware `document` resource per file. Idempotent: re-running
+    skips files whose content hash hasn't changed.
+  - **status** — Summarise ingestion state: total documents, last run,
+    formats processed, errors encountered.
+
+  ## Complementing @stateless/sourced-kb
+
+  Each `document` resource carries the same shape that sourced-kb's `apply`
+  method expects as a declared entry: id, kind, facets, claims with asOf/source
+  provenance. Pipe `ingest` output into a sourced-kb instance's declaration
+  file to version and track document-derived knowledge alongside other sources.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - anydoc_ingest.ts
+labels:
+  - document
+  - ingestion
+  - anydoc
+  - knowledge-base
+  - markdown
+  - firecrawl
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
