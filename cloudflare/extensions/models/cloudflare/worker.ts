@@ -57,19 +57,57 @@ const WorkerDeploymentSchema = z.object({
 });
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Map a user-facing binding ({ type, name, value }) to the shape the
+ * Cloudflare Workers script-upload API expects. Each binding type uses a
+ * different field name for the binding's value:
+ *
+ *   plain_text / secret_text         → { type, name, text }
+ *   kv_namespace                     → { type, name, namespace_id }
+ *   r2_bucket                        → { type, name, bucket_name }
+ *   durable_object_namespace         → { type, name, class_name }
+ */
+export function mapBinding(
+  b: { type: string; name: string; value?: string },
+): Record<string, unknown> {
+  switch (b.type) {
+    case "plain_text":
+    case "secret_text":
+      return { type: b.type, name: b.name, text: b.value };
+    case "kv_namespace":
+      return { type: b.type, name: b.name, namespace_id: b.value };
+    case "r2_bucket":
+      return { type: b.type, name: b.name, bucket_name: b.value };
+    case "durable_object_namespace":
+      return { type: b.type, name: b.name, class_name: b.value };
+    default:
+      // Forward unknown binding types unchanged for forward-compatibility
+      return { type: b.type, name: b.name, value: b.value };
+  }
+}
+
+// =============================================================================
 // Model Definition
 // =============================================================================
 
 /** Cloudflare Workers model definition with methods for script lifecycle, route management, and subdomain toggling. */
 export const model = {
   type: "@webframp/cloudflare/worker",
-  version: "2026.07.18.2",
+  version: "2026.08.13.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.13.1",
+      description: "No schema changes — fixed bindings mapping in deploy",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -269,7 +307,7 @@ export const model = {
           main_module: moduleFilename,
         };
         if (args.bindings) {
-          metadata.bindings = args.bindings;
+          metadata.bindings = args.bindings.map((b) => mapBinding(b));
         }
         formData.append(
           "metadata",
