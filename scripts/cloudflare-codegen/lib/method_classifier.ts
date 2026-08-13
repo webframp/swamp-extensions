@@ -536,6 +536,36 @@ function generateArgsSchema(op: GroupedOperation): string {
         `  ${fieldName}: ${fieldZod}${optSuffix}${desc},`,
       );
     }
+  } else if (op.requestBody?.type === "array" && op.requestBody.items) {
+    // Bare-array request body (e.g., PUT /schedules expects an array of cron
+    // objects). Expose as a required `items` argument containing the array.
+    const itemZod = schemaToZod(op.requestBody.items, { indent: 2 }, 2);
+    const desc = op.requestBody.description
+      ? `.describe("${escapeStr(truncateStr(op.requestBody.description))}")`
+      : "";
+    if (!seenFields.has("items")) {
+      seenFields.add("items");
+      fields.push(`  items: z.array(${itemZod})${desc},`);
+    }
+  } else if (op.requestBody?.oneOf) {
+    // Discriminated union request body (e.g., workers_secret with oneOf variants).
+    // Expose the union as a required `body` argument using z.union.
+    const variantZods = op.requestBody.oneOf.map((variant) =>
+      schemaToZod(variant, { indent: 2 }, 2)
+    );
+    const desc = op.requestBody.description
+      ? `.describe("${escapeStr(truncateStr(op.requestBody.description))}")`
+      : "";
+    if (!seenFields.has("body")) {
+      seenFields.add("body");
+      if (variantZods.length === 1) {
+        fields.push(`  body: ${variantZods[0]}${desc},`);
+      } else {
+        fields.push(
+          `  body: z.union([${variantZods.join(", ")}])${desc},`,
+        );
+      }
+    }
   }
 
   if (fields.length === 0) {
@@ -660,13 +690,22 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
     : "";
   const pathSuffix = hasQueryParams ? "${qs}" : "";
 
-  const bodyFilter = excludeNames.length > 0
-    ? `\n${indent}    const body: Record<string, unknown> = {};
+  // Determine how to build the request body based on schema shape.
+  const reqBody = method.operation.requestBody;
+  let bodyFilter: string;
+  if (reqBody?.type === "array") {
+    bodyFilter = `\n${indent}    const body = args.items;`;
+  } else if (reqBody?.oneOf) {
+    bodyFilter = `\n${indent}    const body = args.body;`;
+  } else if (excludeNames.length > 0) {
+    bodyFilter = `\n${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) body[k] = v;
-${indent}    }`
-    : `\n${indent}    const body = args;`;
+${indent}    }`;
+  } else {
+    bodyFilter = `\n${indent}    const body = args;`;
+  }
 
   return `${bodyFilter}${queryBuild}
 ${indent}
@@ -716,13 +755,25 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
     : "";
   const pathSuffix = hasQueryParams ? "${qs}" : "";
 
-  const bodyFilter = excludeNames.length > 0
-    ? `\n${indent}    const body: Record<string, unknown> = {};
+  // Determine how to build the request body based on schema shape.
+  // Bare-array bodies (exposed as `items` arg) must be sent as the raw array.
+  // oneOf union bodies (exposed as `body` arg) must be sent as the raw value.
+  // Standard object bodies are built by filtering path/query params from args.
+  let bodyFilter: string;
+  const reqBody = method.operation.requestBody;
+  if (reqBody?.type === "array") {
+    bodyFilter = `\n${indent}    const body = args.items;`;
+  } else if (reqBody?.oneOf) {
+    bodyFilter = `\n${indent}    const body = args.body;`;
+  } else if (excludeNames.length > 0) {
+    bodyFilter = `\n${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) body[k] = v;
-${indent}    }`
-    : `\n${indent}    const body = args;`;
+${indent}    }`;
+  } else {
+    bodyFilter = `\n${indent}    const body = args;`;
+  }
 
   return `${bodyFilter}${queryBuild}
 ${indent}
@@ -791,7 +842,14 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
 
   let bodySetup = "";
   let bodyArg = "";
-  if (hasBody && excludeNames.length > 0) {
+  const reqBody = method.operation.requestBody;
+  if (hasBody && reqBody?.type === "array") {
+    bodySetup = `\n${indent}    const body = args.items;\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody && reqBody?.oneOf) {
+    bodySetup = `\n${indent}    const body = args.body;\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody && excludeNames.length > 0) {
     bodySetup = `\n${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {

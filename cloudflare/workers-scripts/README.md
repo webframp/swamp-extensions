@@ -24,7 +24,6 @@ swamp model create @webframp/cloudflare/workers-scripts cf-workers-scripts \
 | `update_worker_script_upload_worker_module` | Upload Worker Module          |
 | `delete_worker`                             | Delete Worker                 |
 | `create_assets_upload_session`              | Create Assets Upload Session  |
-| `put_content`                               | Put script content            |
 | `list_deployments`                          | List Deployments              |
 | `create_deployment`                         | Create Deployment             |
 | `get_deployment`                            | Get Deployment                |
@@ -49,7 +48,6 @@ swamp model create @webframp/cloudflare/workers-scripts cf-workers-scripts \
 | `list_versions`                             | List Versions                 |
 | `worker_versions_upload_version`            | Upload Version                |
 | `get_version_detail`                        | Get Version Detail            |
-| `put_script_content`                        | Put script content            |
 
 ## Development
 

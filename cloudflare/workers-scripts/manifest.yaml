@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/workers-scripts"
-version: "2026.07.27.1"
+version: "2026.08.13.1"
 description: "Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

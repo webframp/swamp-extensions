@@ -139,45 +139,6 @@ const CreateAssetsUploadSessionSchema = z.object({
   ),
 });
 
-const PutContentSchema = z.object({
-  cache_options: z.unknown().optional(),
-  compatibility_date: z.unknown().optional(),
-  compatibility_flags: z.unknown().optional(),
-  created_on: z.unknown().optional(),
-  etag: z.unknown().optional(),
-  exports: z.unknown().optional().describe(
-    "Declarative exports for the Worker's most recent version, including Durable Object classes (with ...",
-  ),
-  handlers: z.array(z.string()).optional().describe(
-    "The names of handlers exported as part of the default export.",
-  ),
-  has_assets: z.unknown().optional(),
-  has_modules: z.unknown().optional(),
-  id: z.string().optional().describe("The name used to identify the script."),
-  last_deployed_from: z.string().optional().describe(
-    "The client most recently used to deploy this Worker.",
-  ),
-  logpush: z.unknown().optional(),
-  migration_tag: z.string().optional().describe(
-    "The tag of the Durable Object migration that was most recently applied for this Worker.",
-  ),
-  modified_on: z.unknown().optional(),
-  named_handlers: z.array(z.object({
-    handlers: z.array(z.string()).optional(),
-    name: z.string().optional(),
-  })).optional().describe(
-    "Named exports, such as Durable Object class implementations and named entrypoints.",
-  ),
-  observability: z.unknown().optional(),
-  placement: z.unknown().optional(),
-  placement_mode: z.unknown().optional(),
-  placement_status: z.unknown().optional(),
-  tag: z.string().optional().describe("The immutable ID of the script."),
-  tags: z.unknown().optional(),
-  tail_consumers: z.unknown().optional(),
-  usage_model: z.unknown().optional(),
-});
-
 const ListDeploymentsSchema = z.object({
   deployments: z.array(z.unknown()),
 });
@@ -375,45 +336,6 @@ const GetVersionDetailSchema = z.object({
   }),
 });
 
-const PutScriptContentSchema = z.object({
-  cache_options: z.unknown().optional(),
-  compatibility_date: z.unknown().optional(),
-  compatibility_flags: z.unknown().optional(),
-  created_on: z.unknown().optional(),
-  etag: z.unknown().optional(),
-  exports: z.unknown().optional().describe(
-    "Declarative exports for the Worker's most recent version, including Durable Object classes (with ...",
-  ),
-  handlers: z.array(z.string()).optional().describe(
-    "The names of handlers exported as part of the default export.",
-  ),
-  has_assets: z.unknown().optional(),
-  has_modules: z.unknown().optional(),
-  id: z.string().optional().describe("The name used to identify the script."),
-  last_deployed_from: z.string().optional().describe(
-    "The client most recently used to deploy this Worker.",
-  ),
-  logpush: z.unknown().optional(),
-  migration_tag: z.string().optional().describe(
-    "The tag of the Durable Object migration that was most recently applied for this Worker.",
-  ),
-  modified_on: z.unknown().optional(),
-  named_handlers: z.array(z.object({
-    handlers: z.array(z.string()).optional(),
-    name: z.string().optional(),
-  })).optional().describe(
-    "Named exports, such as Durable Object class implementations and named entrypoints.",
-  ),
-  observability: z.unknown().optional(),
-  placement: z.unknown().optional(),
-  placement_mode: z.unknown().optional(),
-  placement_status: z.unknown().optional(),
-  tag: z.string().optional().describe("The immutable ID of the script."),
-  tags: z.unknown().optional(),
-  tail_consumers: z.unknown().optional(),
-  usage_model: z.unknown().optional(),
-});
-
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -421,7 +343,7 @@ const PutScriptContentSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.07.27.1",
+  version: "2026.08.13.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -448,12 +370,6 @@ export const model = {
     "assets_upload_session": {
       description: "Create Assets Upload Session",
       schema: CreateAssetsUploadSessionSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "put_content": {
-      description: "Put script content",
-      schema: PutContentSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -562,12 +478,6 @@ export const model = {
     "version_detail": {
       description: "Get Version Detail",
       schema: GetVersionDetailSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "put_script_content": {
-      description: "Put script content",
-      schema: PutScriptContentSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -822,49 +732,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    put_content: {
-      description: "Put script content",
-      arguments: z.object({
-        script_name: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["script_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/workers/scripts/${args.script_name}/content`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "put_content",
-          String(args.script_name),
-          result,
-        );
-        context.logger.info("Updated put_content", {});
-        return { dataHandles: [handle] };
-      },
-    },
     list_deployments: {
       description: "List Deployments",
       arguments: z.object({
@@ -1071,6 +938,7 @@ export const model = {
       description: "Update Cron Triggers",
       arguments: z.object({
         script_name: z.string(),
+        items: z.array(z.unknown()),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1088,11 +956,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["script_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.items;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1251,6 +1115,9 @@ export const model = {
       description: "Add script secret",
       arguments: z.object({
         script_name: z.string(),
+        body: z.union([z.unknown(), z.unknown()]).describe(
+          "A secret value accessible through a binding.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1268,11 +1135,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["script_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1828,50 +1691,6 @@ export const model = {
           result,
         );
         context.logger.info("Fetched version_detail", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    put_script_content: {
-      description: "Put script content",
-      arguments: z.object({
-        service_name: z.string(),
-        environment_name: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["service_name", "environment_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/workers/services/${args.service_name}/environments/${args.environment_name}/content`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "put_script_content",
-          String(args.environment_name),
-          result,
-        );
-        context.logger.info("Updated put_script_content", {});
         return { dataHandles: [handle] };
       },
     },

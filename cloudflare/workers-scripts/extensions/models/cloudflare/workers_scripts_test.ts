@@ -33,7 +33,6 @@ Deno.test("workers-scripts model: has expected methods", () => {
   assertExists(model.methods.update_worker_script_upload_worker_module);
   assertExists(model.methods.delete_worker);
   assertExists(model.methods.create_assets_upload_session);
-  assertExists(model.methods.put_content);
   assertExists(model.methods.list_deployments);
   assertExists(model.methods.create_deployment);
   assertExists(model.methods.get_deployment);
@@ -58,7 +57,6 @@ Deno.test("workers-scripts model: has expected methods", () => {
   assertExists(model.methods.list_versions);
   assertExists(model.methods.worker_versions_upload_version);
   assertExists(model.methods.get_version_detail);
-  assertExists(model.methods.put_script_content);
 });
 
 Deno.test("workers-scripts model: has expected resources", () => {
@@ -67,7 +65,6 @@ Deno.test("workers-scripts model: has expected resources", () => {
   assertExists(model.resources["worker_script_search_workers"]);
   assertExists(model.resources["worker_script_upload_worker_module"]);
   assertExists(model.resources["assets_upload_session"]);
-  assertExists(model.resources["put_content"]);
   assertExists(model.resources["list_deployments"]);
   assertExists(model.resources["deployment"]);
   assertExists(model.resources["cron_triggers"]);
@@ -86,7 +83,6 @@ Deno.test("workers-scripts model: has expected resources", () => {
   assertExists(model.resources["list_versions"]);
   assertExists(model.resources["worker_versions_upload_version"]);
   assertExists(model.resources["version_detail"]);
-  assertExists(model.resources["put_script_content"]);
 });
 
 // ---------------------------------------------------------------------------
