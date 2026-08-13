@@ -87,7 +87,10 @@ const StatusSchema = z.object({
     .describe(
       "Documents that produced non-empty markdown (conversion succeeded).",
     ),
-  totalErrors: z.number().int().min(0),
+  totalErrors: z.number().int().min(0)
+    .describe(
+      "Total errors encountered (conversion failures + unreadable files). May exceed totalIngested - totalConverted when files fail before resource write.",
+    ),
   totalSkipped: z.number().int().min(0),
   truncated: z.boolean(),
   byFormat: z.record(z.string(), z.number().int()),
@@ -298,7 +301,17 @@ async function* walkDir(
       }
       yield { path: fullPath, sizeBytes: stat.size };
     } else if (entry.isDirectory && recursive) {
-      yield* walkDir(fullPath, recursive);
+      try {
+        yield* walkDir(fullPath, recursive);
+      } catch (err) {
+        if (
+          err instanceof Deno.errors.NotFound ||
+          err instanceof Deno.errors.PermissionDenied
+        ) {
+          continue;
+        }
+        throw err;
+      }
     }
   }
 }

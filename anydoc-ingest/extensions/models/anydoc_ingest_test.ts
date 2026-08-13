@@ -730,6 +730,55 @@ Deno.test(
 );
 
 Deno.test(
+  "HIGH-2 (walkDir recursive): PermissionDenied on subdirectory does not abort the run",
+  async () => {
+    // Simulates a subdirectory that becomes chmod 000 (or is deleted) between
+    // the parent readDir and the recursive walkDir call. Before the fix, the
+    // Deno.readDir inside the inner walkDir threw PermissionDenied, propagated
+    // through yield*, escaped ingest's per-document try/catch, and dropped
+    // the status resource entirely.
+    await withTestDocuments([
+      { name: "top.docx", content: "top level" },
+    ], async (dir) => {
+      // Create a subdirectory with a file, then make the dir unreadable.
+      const subdir = `${dir}/restricted`;
+      await Deno.mkdir(subdir);
+      await Deno.writeTextFile(`${subdir}/inner.docx`, "inner content");
+      await Deno.chmod(subdir, 0o000);
+
+      try {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {
+            documentsDir: dir,
+            recursive: true,
+            maxFileSizeMb: 50,
+            includePatterns: [],
+            excludePatterns: [],
+          },
+        });
+
+        // Must not throw — the inaccessible subdirectory is silently skipped.
+        await model.methods.ingest.execute(
+          { force: false, _converter: successConverter },
+          context as unknown as IngestContext,
+        );
+
+        const resources = getWrittenResources();
+        const status = resources.find((r) => r.specName === "status");
+        assertExists(status);
+        const statusData = status!.data as Record<string, unknown>;
+        // Only the top-level file was ingested; the restricted subdir was skipped.
+        assertEquals(statusData.totalIngested, 1);
+        assertEquals(statusData.totalErrors, 0);
+      } finally {
+        // Restore permissions so cleanup can remove the directory.
+        await Deno.chmod(subdir, 0o755);
+      }
+    });
+  },
+);
+
+Deno.test(
   "HIGH-2 (cap): outer-catch errors count against the ingestion cap",
   async () => {
     // The cap is 10,000 in production. We can't create 10k files in a test,
