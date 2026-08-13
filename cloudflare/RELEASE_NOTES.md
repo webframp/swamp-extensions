@@ -1,3 +1,13 @@
+## 2026.08.13.1
+
+**Fixed:** The `deploy` method now correctly maps bindings to the field names
+the Cloudflare API expects. Previously, all binding types sent `value` as the
+field name, but the API requires `text` for plain_text/secret_text,
+`namespace_id` for kv_namespace, `bucket_name` for r2_bucket, and `class_name`
+for durable_object_namespace. Deployments with plain_text or secret_text
+bindings failed with "invalid or missing text property"; other binding types
+were silently ignored.
+
 ## 2026.07.18.2
 
 **Added:** An `upgrades` array entry (no-op) to `cache.ts`, `dns.ts`, `waf.ts`,
