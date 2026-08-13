@@ -1,0 +1,94 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/assert@1.0.19": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20",
+    "npm:@firecrawl/anydoc@0.1.8": "0.1.8",
+    "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
+    "npm:zod@4.4.3": "4.4.3",
+    "npm:zod@^4.3.6": "4.4.3"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@systeminit/swamp-testing@0.20260604.20": {
+      "integrity": "643f4bbc7752a46e0188e21fea0b2907c2d333a4edfb61e4bd47ffae6286a29a",
+      "dependencies": [
+        "jsr:@std/assert",
+        "npm:@marcbachmann/cel-js",
+        "npm:zod@^4.3.6"
+      ]
+    }
+  },
+  "npm": {
+    "@firecrawl/anydoc-darwin-arm64@0.1.8": {
+      "integrity": "sha512-B+30kDFGW8RUt1S6nOwdRT3ZTf8pDztid1ws8XL95UuAkz2d49ktg00hfEIW0xCgM1HByUTfQkQtcJsfF2O35g==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@firecrawl/anydoc-darwin-x64@0.1.8": {
+      "integrity": "sha512-PqUQFRv7I86ou2sZ0qE6bQFASi2Ja5yfpsU1vhngnqTsC31q2iSLDE5MWWGGRMoNZrWDh5ICTN7yQBoepkSokw==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@firecrawl/anydoc-linux-arm64-gnu@0.1.8": {
+      "integrity": "sha512-lFuS2GdkKexYCCfBGb47si3vE4jA8Y+w9F377JJPeQc1/HQilqi+RjOhQrEgHiGlNygeOJwL6bKOQr+R+CWL9Q==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@firecrawl/anydoc-linux-arm64-musl@0.1.8": {
+      "integrity": "sha512-MT+24XbTQ5Jh+SDmbQz5F46sbz/gE2SeWf/5RyFriuOJHtiYSb0rym1AOa7HZH12AJvnfPcU6xTqyj1gKxRF0g==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@firecrawl/anydoc-linux-x64-gnu@0.1.8": {
+      "integrity": "sha512-Row1/D9/3Zf5fFKaIyZqlMbz/Bxzl9FULFH7Zxlx/h4HTZT3S4Yl5d5A5Gl6T1Rps3qwrsJerXfL+9nLrj4s3Q==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@firecrawl/anydoc-linux-x64-musl@0.1.8": {
+      "integrity": "sha512-PovgyJR229FbxYsPGFhHFio1B+zBn2WKgNMmon/aPZanSG5a+xGkv+ywdrYJnZtBF1+LHgfbiQPljv5BqdbUMg==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@firecrawl/anydoc-win32-x64-msvc@0.1.8": {
+      "integrity": "sha512-WwCy76FKeNLMFpfQkegaGZh6Oh05XMTQkGCVizh5IDZXTtYfn2j+KqOQbx8XT1y+dewBYQIvq/8OJFpeHuckKA==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@firecrawl/anydoc@0.1.8": {
+      "integrity": "sha512-DJXcCdEL1CcIyRRO/2C6SAcvn/SgM0nnpeGLOyZxJwCZJlx9s0HBUnsNtvQd5UHFUY/vZOURMOUf/h4I3HLjvQ==",
+      "optionalDependencies": [
+        "@firecrawl/anydoc-darwin-arm64",
+        "@firecrawl/anydoc-darwin-x64",
+        "@firecrawl/anydoc-linux-arm64-gnu",
+        "@firecrawl/anydoc-linux-arm64-musl",
+        "@firecrawl/anydoc-linux-x64-gnu",
+        "@firecrawl/anydoc-linux-x64-musl",
+        "@firecrawl/anydoc-win32-x64-msvc"
+      ],
+      "bin": true
+    },
+    "@marcbachmann/cel-js@7.6.1": {
+      "integrity": "sha512-YyY8yiDU07ByKb2rJUoNgMAkYeeDvkdrONBREV2MP9siAW7yNft0KfbIoonWTIMY0fGtv8og0EhzKx3Xsi1Nmg==",
+      "bin": true
+    },
+    "zod@4.4.3": {
+      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@std/assert@1.0.19",
+      "jsr:@systeminit/swamp-testing@0.20260604.20"
+    ]
+  }
+}
