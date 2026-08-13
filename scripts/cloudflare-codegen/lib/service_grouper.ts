@@ -10,9 +10,10 @@ import type {
   OpenAPISpec,
   OperationObject,
   ParameterObject,
+  RequestBodyObject,
   SchemaObject,
 } from "./schema_fetcher.ts";
-import { resolveSchema } from "./schema_fetcher.ts";
+import { resolveRef, resolveSchema } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 
 /** A single API operation grouped into a service */
@@ -204,6 +205,24 @@ function extractOperation(
   // Skip endpoints whose success response is non-JSON (binary, streaming, raw text).
   // These require hand-written implementations that handle raw bytes.
   if (hasNonJsonSuccessResponse(operation)) return null;
+
+  // Resolve $ref on requestBody before content-type checks. The Cloudflare spec
+  // uses $ref to #/components/requestBodies/... for several endpoints (Workers
+  // script uploads, dispatch namespace uploads, zone snippets). Without
+  // resolution, the content-type filter sees no `content` property and lets
+  // multipart-only endpoints through, producing methods with empty bodies.
+  if (operation.requestBody) {
+    const rawRb = operation.requestBody as unknown as Record<string, unknown>;
+    if (typeof rawRb.$ref === "string") {
+      operation = {
+        ...operation,
+        requestBody: resolveRef(
+          spec,
+          rawRb.$ref,
+        ) as unknown as RequestBodyObject,
+      };
+    }
+  }
 
   // Skip endpoints whose request body is exclusively non-JSON (multipart/form-data,
   // octet-stream). These require hand-written implementations with FormData or
