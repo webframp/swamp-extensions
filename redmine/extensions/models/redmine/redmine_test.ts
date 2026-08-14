@@ -633,6 +633,74 @@ Deno.test({
   },
 });
 
+Deno.test({
+  name:
+    "redmine model: update_issue sends empty string to unassign when assignedToId is null",
+  sanitizeResources: false,
+  fn: async () => {
+    let capturedPutBody: Record<string, unknown> | null = null;
+
+    const unassignedIssue = {
+      ...mockIssue1,
+      assigned_to: undefined,
+      journals: [],
+      children: [],
+    };
+
+    const { url, server } = startMockRedmine(async (req) => {
+      const u = new URL(req.url);
+      if (
+        u.pathname === `/issues/${mockIssue1.id}.json` &&
+        req.method === "PUT"
+      ) {
+        capturedPutBody = await req.json();
+        return new Response(null, { status: 204 });
+      }
+      if (
+        u.pathname === `/issues/${mockIssue1.id}.json` &&
+        req.method === "GET"
+      ) {
+        return Response.json({ issue: unassignedIssue });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const result = await model.methods.update_issue.execute(
+        {
+          issueId: mockIssue1.id,
+          assignedToId: null,
+          notes: "Unassigning from this issue",
+        },
+        context as unknown as Parameters<
+          typeof model.methods.update_issue.execute
+        >[1],
+      );
+
+      // Verify PUT body sends "" for assigned_to_id (Redmine API convention)
+      const body = capturedPutBody as unknown as {
+        issue: Record<string, unknown>;
+      };
+      assertEquals(body.issue.assigned_to_id, "");
+      assertEquals(body.issue.notes, "Unassigning from this issue");
+
+      // Verify resource written from re-fetched data shows null assignee
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      const data = resources[0].data as {
+        assignedTo: null | { id: number; name: string };
+      };
+      assertEquals(data.assignedTo, null);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Issue Query Method Tests
 // ---------------------------------------------------------------------------
