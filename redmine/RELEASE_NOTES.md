@@ -1,3 +1,10 @@
+## 2026.08.14.1
+
+**Added:** `update_issue` now accepts `assignedToId: null` to clear the
+assignee. Passes `""` to the Redmine API (their convention for unsetting a
+field). Previously only `number` was accepted, making unassignment impossible
+through the extension.
+
 ## 2026.08.10.1
 
 **Changed:** The `project` global argument is now optional. This enables
