@@ -164,8 +164,15 @@ async function listAiResources(
     `?api-version=2024-10-01&$filter=${filter}`;
 
   const results: AiResource[] = [];
+  const MAX_PAGES = 500;
+  let pageCount = 0;
 
   while (url) {
+    if (++pageCount > MAX_PAGES) {
+      throw new Error(
+        `ARM resource list for ${subscription} exceeded ${MAX_PAGES} pages; aborting`,
+      );
+    }
     const resp = await fetchFn(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
