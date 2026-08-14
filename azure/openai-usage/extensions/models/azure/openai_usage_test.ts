@@ -416,6 +416,104 @@ Deno.test("scan_subscriptions handles metric API failure per resource", async ()
   assertEquals(warns.length >= 1, true);
 });
 
+Deno.test("scan_subscriptions retries transient 429s and still recovers the resource", async () => {
+  let metricAttempts = 0;
+
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("Microsoft.CognitiveServices/accounts?")) {
+      return resourceListResponse([
+        {
+          name: "flaky-res",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "OpenAI",
+        },
+      ]);
+    }
+    if (u.includes("microsoft.insights/metrics")) {
+      if (u.includes("filter")) {
+        return deploymentMetricsResponse([]);
+      }
+      metricAttempts++;
+      if (metricAttempts < 3) {
+        return new Response("Too Many Requests", {
+          status: 429,
+          headers: { "Retry-After": "0" },
+        });
+      }
+      return metricsResponse(1000, 500);
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.scan_subscriptions.execute(
+    { days: 7 },
+    { ...context, fetchFn: mockFetch } as unknown as ScanContext,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    resources: Array<{ resourceName: string; totalTokens: number }>;
+    truncated: boolean;
+  };
+
+  assertEquals(metricAttempts, 3);
+  assertEquals(data.resources.length, 1);
+  assertEquals(data.resources[0].resourceName, "flaky-res");
+  assertEquals(data.resources[0].totalTokens, 1500);
+  assertEquals(data.truncated, false);
+});
+
+Deno.test("scan_subscriptions gives up and marks truncated after exhausting retries on persistent 429s", async () => {
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("Microsoft.CognitiveServices/accounts?")) {
+      return resourceListResponse([
+        {
+          name: "always-throttled",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "OpenAI",
+        },
+      ]);
+    }
+    if (u.includes("microsoft.insights/metrics")) {
+      return new Response("Too Many Requests", {
+        status: 429,
+        headers: { "Retry-After": "0" },
+      });
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.scan_subscriptions.execute(
+    { days: 7 },
+    { ...context, fetchFn: mockFetch } as unknown as ScanContext,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    resources: Array<unknown>;
+    truncated: boolean;
+  };
+
+  assertEquals(data.resources.length, 0);
+  assertEquals(data.truncated, true);
+});
+
 Deno.test("scan_subscriptions handles deployment breakdown failure", async () => {
   const mockFetch = createMockFetchFn((url) => {
     const u = typeof url === "string" ? url : url.toString();
