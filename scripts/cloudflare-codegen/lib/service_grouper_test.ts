@@ -516,3 +516,140 @@ Deno.test("service_grouper: a declared placeholder is not duplicated end to end"
   assertEquals(op.pathParams.length, 1);
   assertEquals(op.pathParams[0].description, "Bucket name");
 });
+
+// ---------------------------------------------------------------------------
+// requestBody $ref resolution
+//
+// The Cloudflare spec uses $ref at the requestBody level for several endpoints
+// (Workers script uploads, dispatch namespace scripts, zone snippets). These
+// point to #/components/requestBodies/... objects whose content is exclusively
+// multipart/form-data. Without resolving the $ref, hasNonJsonRequestBody sees
+// no `content` property and lets the endpoint through — producing methods with
+// empty request bodies that cfApi sends as `{}`.
+// ---------------------------------------------------------------------------
+
+Deno.test("service_grouper: skips endpoint with $ref requestBody pointing to multipart-only content", () => {
+  const spec: OpenAPISpec = {
+    openapi: "3.0.3",
+    info: { title: "Test", version: "1.0" },
+    paths: {
+      "/accounts/{account_id}/r2/upload/{name}": {
+        put: {
+          operationId: "r2-upload-object",
+          summary: "Upload object",
+          tags: ["R2"],
+          parameters: [
+            {
+              name: "name",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+            },
+          ],
+          // $ref at the requestBody level — the key pattern this test exercises
+          requestBody: {
+            $ref: "#/components/requestBodies/r2_upload",
+          } as unknown as import("./schema_fetcher.ts").RequestBodyObject,
+          responses: {
+            "200": {
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { result: { type: "object" } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as OpenAPISpec["paths"],
+    components: {
+      schemas: {},
+      // The requestBodies component that the $ref points to
+      requestBodies: {
+        r2_upload: {
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                properties: {
+                  file: { type: "string", format: "binary" },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as OpenAPISpec["components"],
+  };
+
+  const groups = groupOperations(spec, [testService]);
+  // The multipart-only endpoint should be excluded entirely
+  assertEquals(groups.length, 0);
+});
+
+Deno.test("service_grouper: keeps endpoint with $ref requestBody pointing to JSON content", () => {
+  const spec: OpenAPISpec = {
+    openapi: "3.0.3",
+    info: { title: "Test", version: "1.0" },
+    paths: {
+      "/accounts/{account_id}/r2/settings": {
+        put: {
+          operationId: "r2-update-settings",
+          summary: "Update settings",
+          tags: ["R2"],
+          // $ref pointing to a JSON requestBody — should be kept
+          requestBody: {
+            $ref: "#/components/requestBodies/r2_settings",
+          } as unknown as import("./schema_fetcher.ts").RequestBodyObject,
+          responses: {
+            "200": {
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      result: {
+                        type: "object",
+                        properties: { enabled: { type: "boolean" } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as OpenAPISpec["paths"],
+    components: {
+      schemas: {},
+      requestBodies: {
+        r2_settings: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean" },
+                  cors: { type: "string" },
+                },
+                required: ["enabled"],
+              },
+            },
+          },
+        },
+      },
+    } as unknown as OpenAPISpec["components"],
+  };
+
+  const groups = groupOperations(spec, [testService]);
+  assertEquals(groups.length, 1);
+  const op = groups[0].operations[0];
+  assertEquals(op.operationId, "r2-update-settings");
+  // The resolved requestBody schema should have been extracted
+  assertEquals(op.requestBody?.properties?.enabled?.type, "boolean");
+  assertEquals(op.requestBody?.properties?.cors?.type, "string");
+});

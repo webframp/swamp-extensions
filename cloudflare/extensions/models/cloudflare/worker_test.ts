@@ -269,3 +269,212 @@ Deno.test({
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Bindings Mapping Tests
+// ---------------------------------------------------------------------------
+
+import { mapBinding } from "./worker.ts";
+
+Deno.test("mapBinding: plain_text uses 'text' field", () => {
+  const result = mapBinding({
+    type: "plain_text",
+    name: "TARGET_URL",
+    value: "https://example.com",
+  });
+  assertEquals(result, {
+    type: "plain_text",
+    name: "TARGET_URL",
+    text: "https://example.com",
+  });
+});
+
+Deno.test("mapBinding: secret_text uses 'text' field", () => {
+  const result = mapBinding({
+    type: "secret_text",
+    name: "API_KEY",
+    value: "sk-secret-123",
+  });
+  assertEquals(result, {
+    type: "secret_text",
+    name: "API_KEY",
+    text: "sk-secret-123",
+  });
+});
+
+Deno.test("mapBinding: kv_namespace uses 'namespace_id' field", () => {
+  const result = mapBinding({
+    type: "kv_namespace",
+    name: "MY_KV",
+    value: "abc123def456",
+  });
+  assertEquals(result, {
+    type: "kv_namespace",
+    name: "MY_KV",
+    namespace_id: "abc123def456",
+  });
+});
+
+Deno.test("mapBinding: r2_bucket uses 'bucket_name' field", () => {
+  const result = mapBinding({
+    type: "r2_bucket",
+    name: "ASSETS",
+    value: "my-bucket",
+  });
+  assertEquals(result, {
+    type: "r2_bucket",
+    name: "ASSETS",
+    bucket_name: "my-bucket",
+  });
+});
+
+Deno.test("mapBinding: durable_object_namespace uses 'class_name' field", () => {
+  const result = mapBinding({
+    type: "durable_object_namespace",
+    name: "COUNTER",
+    value: "CounterObject",
+  });
+  assertEquals(result, {
+    type: "durable_object_namespace",
+    name: "COUNTER",
+    class_name: "CounterObject",
+  });
+});
+
+Deno.test("mapBinding: unknown type passes value through unchanged", () => {
+  const result = mapBinding({
+    type: "service",
+    name: "AUTH",
+    value: "auth-worker",
+  });
+  assertEquals(result, {
+    type: "service",
+    name: "AUTH",
+    value: "auth-worker",
+  });
+});
+
+Deno.test("mapBinding: undefined value maps to undefined in target field", () => {
+  const result = mapBinding({ type: "plain_text", name: "EMPTY" });
+  assertEquals(result, { type: "plain_text", name: "EMPTY", text: undefined });
+});
+
+// ---------------------------------------------------------------------------
+// Deploy Integration Test — verifies bindings are correctly mapped in the
+// multipart metadata sent to the Cloudflare API
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name:
+    "worker model: deploy maps bindings to correct API field names in metadata",
+  sanitizeResources: false,
+  fn: async () => {
+    // Capture the metadata JSON from the multipart upload
+    let capturedMetadata: Record<string, unknown> | null = null;
+
+    const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
+      const url = new URL(req.url);
+      if (url.pathname.includes("/workers/scripts/") && req.method === "PUT") {
+        const formData = await req.formData();
+        const metadataBlob = formData.get("metadata") as Blob;
+        if (metadataBlob) {
+          capturedMetadata = JSON.parse(await metadataBlob.text());
+        }
+        return Response.json({
+          success: true,
+          errors: [],
+          messages: [],
+          result: {},
+        });
+      }
+      return Response.json({
+        success: false,
+        errors: [{ code: 404, message: "Not found" }],
+      });
+    });
+
+    const addr = server.addr as Deno.NetAddr;
+    const mockUrl = `http://localhost:${addr.port}`;
+    const uninstall = installFetchMock(mockUrl);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { apiToken: "test-token", accountId: "acct-1" },
+        definition: {
+          id: "test-id",
+          name: "test-worker",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await model.methods.deploy.execute(
+        {
+          scriptName: "my-worker",
+          script: "export default { fetch() { return new Response('OK'); } }",
+          bindings: [
+            {
+              type: "plain_text",
+              name: "BASE_URL",
+              value: "https://api.example.com",
+            },
+            { type: "secret_text", name: "TOKEN", value: "secret-val" },
+            { type: "kv_namespace", name: "CACHE", value: "ns-id-123" },
+            { type: "r2_bucket", name: "STORAGE", value: "my-bucket" },
+            {
+              type: "durable_object_namespace",
+              name: "COUNTER",
+              value: "CounterDO",
+            },
+          ],
+        },
+        context as unknown as Parameters<
+          typeof model.methods.deploy.execute
+        >[1],
+      );
+
+      assertExists(capturedMetadata);
+      const meta = capturedMetadata as Record<string, unknown>;
+      assertEquals(meta.main_module, "index.js");
+
+      const bindings = meta.bindings as Array<
+        Record<string, unknown>
+      >;
+      assertEquals(bindings.length, 5);
+
+      // plain_text → text
+      assertEquals(bindings[0], {
+        type: "plain_text",
+        name: "BASE_URL",
+        text: "https://api.example.com",
+      });
+      // secret_text → text
+      assertEquals(bindings[1], {
+        type: "secret_text",
+        name: "TOKEN",
+        text: "secret-val",
+      });
+      // kv_namespace → namespace_id
+      assertEquals(bindings[2], {
+        type: "kv_namespace",
+        name: "CACHE",
+        namespace_id: "ns-id-123",
+      });
+      // r2_bucket → bucket_name
+      assertEquals(bindings[3], {
+        type: "r2_bucket",
+        name: "STORAGE",
+        bucket_name: "my-bucket",
+      });
+      // durable_object_namespace → class_name
+      assertEquals(bindings[4], {
+        type: "durable_object_namespace",
+        name: "COUNTER",
+        class_name: "CounterDO",
+      });
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
