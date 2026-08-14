@@ -158,36 +158,48 @@ async function listAiResources(
   const filter = encodeURIComponent(
     "kind eq 'OpenAI' or kind eq 'AIServices'",
   );
-  const url = `https://management.azure.com/subscriptions/${subscription}` +
+  let url: string | undefined =
+    `https://management.azure.com/subscriptions/${subscription}` +
     `/providers/Microsoft.CognitiveServices/accounts` +
     `?api-version=2024-10-01&$filter=${filter}`;
 
-  const resp = await fetchFn(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const results: AiResource[] = [];
 
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(
-      `ARM resource list failed for ${subscription} (${resp.status}): ${body}`,
-    );
+  while (url) {
+    const resp = await fetchFn(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(
+        `ARM resource list failed for ${subscription} (${resp.status}): ${body}`,
+      );
+    }
+
+    const data = (await resp.json()) as {
+      value?: Array<{
+        name?: string;
+        location?: string;
+        kind?: string;
+        id?: string;
+      }>;
+      nextLink?: string;
+    };
+
+    for (const r of data.value || []) {
+      results.push({
+        name: r.name || "unknown",
+        resourceGroup: extractResourceGroup(r.id || ""),
+        location: r.location || "unknown",
+        kind: r.kind || "unknown",
+      });
+    }
+
+    url = data.nextLink;
   }
 
-  const data = (await resp.json()) as {
-    value?: Array<{
-      name?: string;
-      location?: string;
-      kind?: string;
-      id?: string;
-    }>;
-  };
-
-  return (data.value || []).map((r) => ({
-    name: r.name || "unknown",
-    resourceGroup: extractResourceGroup(r.id || ""),
-    location: r.location || "unknown",
-    kind: r.kind || "unknown",
-  }));
+  return results;
 }
 
 /** Extract resource group name from an ARM resource ID. */
@@ -372,13 +384,19 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.07.21.1",
+  version: "2026.08.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.21.1",
       description:
         "Remove az CLI dependency; auth via Azure AD client credentials flow",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.14.1",
+      description:
+        "Fix listAiResources to follow ARM nextLink pagination instead of only reading the first page",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
