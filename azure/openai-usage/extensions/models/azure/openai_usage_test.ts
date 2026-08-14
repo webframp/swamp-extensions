@@ -705,6 +705,74 @@ Deno.test("listAiResources follows nextLink to collect all pages", async () => {
   assertEquals(data.resources[1].resourceName, "page2-res");
 });
 
+Deno.test("listAiResources dedups resources repeated on overlapping pages", async () => {
+  const overlapId =
+    `/subscriptions/${FAKE_SUB}/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/overlap-res`;
+
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("next-page")) {
+      return new Response(
+        JSON.stringify({
+          value: [
+            {
+              name: "overlap-res",
+              location: "eastus",
+              kind: "OpenAI",
+              id: overlapId,
+            },
+            {
+              name: "page2-only-res",
+              location: "westus",
+              kind: "AIServices",
+              id:
+                `/subscriptions/${FAKE_SUB}/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/page2-only-res`,
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }
+    if (u.includes("Microsoft.CognitiveServices/accounts")) {
+      return new Response(
+        JSON.stringify({
+          value: [
+            {
+              name: "overlap-res",
+              location: "eastus",
+              kind: "OpenAI",
+              id: overlapId,
+            },
+          ],
+          nextLink: "https://management.azure.com/next-page",
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.list_ai_resources.execute(
+    {} as Record<string, never>,
+    { ...context, fetchFn: mockFetch } as unknown as ListContext,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    resources: Array<{ resourceName: string }>;
+  };
+
+  assertEquals(data.resources.length, 2);
+  const names = data.resources.map((r) => r.resourceName).sort();
+  assertEquals(names, ["overlap-res", "page2-only-res"]);
+});
+
 // =============================================================================
 // Edge Cases
 // =============================================================================

@@ -1,3 +1,14 @@
+## 2026.08.14.3
+
+**Fixed:** `listAiResources` could enumerate the same ARM resource twice
+across paginated `nextLink` requests, causing `scan_subscriptions` to process
+more candidates than the deduplicated resource count reported by
+`list_ai_resources` — surfacing as some resources failing to scan and the
+result being marked `truncated: true` even though nothing was actually
+throttled or missing. Results are now deduped by ARM resource ID across
+pages. Per-page fetch counts and first/last resource IDs are now logged at
+debug level to make a repeat of this easier to diagnose from logs alone.
+
 ## 2026.08.14.1
 
 **Fixed:** `listAiResources` ignored the ARM API's `nextLink` pagination cursor,
