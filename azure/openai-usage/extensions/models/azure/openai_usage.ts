@@ -154,6 +154,11 @@ interface AiResource {
  * Dedups by ARM resource ID across pages: the ARM `nextLink` cursor is not
  * guaranteed to be strictly exclusive, and a retried page request can repeat
  * the previous page's tail, so the same resource can otherwise appear twice.
+ *
+ * Filters results to kind `OpenAI`/`AIServices` client-side: the ARM `$filter`
+ * query param above is not reliably enforced server-side by the Cognitive
+ * Services list endpoint, so non-token-emitting kinds (Face, ComputerVision,
+ * TextAnalytics, etc.) can otherwise leak through and waste metrics attempts.
  */
 async function listAiResources(
   subscription: string,
@@ -225,7 +230,22 @@ async function listAiResources(
     url = data.nextLink;
   }
 
-  return Array.from(resultsById.values());
+  const TOKEN_KINDS = new Set(["openai", "aiservices"]);
+  const all = Array.from(resultsById.values());
+  const filtered = all.filter((r) => TOKEN_KINDS.has(r.kind.toLowerCase()));
+
+  const dropped = all.length - filtered.length;
+  if (dropped > 0) {
+    logger?.debug("Filtered out non-token-emitting resource kinds", {
+      subscription,
+      droppedCount: dropped,
+      droppedKinds: all
+        .filter((r) => !TOKEN_KINDS.has(r.kind.toLowerCase()))
+        .map((r) => ({ name: r.name, kind: r.kind })),
+    });
+  }
+
+  return filtered;
 }
 
 /** Extract resource group name from an ARM resource ID. */
@@ -445,7 +465,7 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.08.14.3",
+  version: "2026.08.14.4",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -470,6 +490,12 @@ export const model = {
       toVersion: "2026.08.14.3",
       description:
         "Dedup listAiResources by ARM resource ID across pages to fix duplicate-enumeration causing spurious scan failures",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.14.4",
+      description:
+        "Client-side filter listAiResources to OpenAI/AIServices kinds (ARM $filter is unreliable server-side); log a pre-attempt line and zero-usage outcome per resource so nothing is silently dropped; log raw error detail (name/message/stack) instead of String(err) on scan failures",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -547,6 +573,12 @@ export const model = {
             );
 
             for (const res of aiResources) {
+              context.logger.debug("Scanning resource", {
+                subscription,
+                resourceGroup: res.resourceGroup,
+                resource: res.name,
+                kind: res.kind,
+              });
               try {
                 const metrics = await getTokenMetrics(
                   subscription,
@@ -562,6 +594,11 @@ export const model = {
                   metrics.promptTokens === 0 &&
                   metrics.generatedTokens === 0
                 ) {
+                  context.logger.info("Scanned resource, no usage in period", {
+                    subscription,
+                    resourceGroup: res.resourceGroup,
+                    resource: res.name,
+                  });
                   continue;
                 }
 
@@ -601,8 +638,13 @@ export const model = {
               } catch (err) {
                 anyFailed = true;
                 context.logger.warn("Failed to get metrics for resource", {
+                  subscription,
+                  resourceGroup: res.resourceGroup,
                   resource: res.name,
-                  error: String(err),
+                  kind: res.kind,
+                  error: err instanceof Error
+                    ? { name: err.name, message: err.message, stack: err.stack }
+                    : String(err),
                 });
               }
             }
@@ -610,7 +652,9 @@ export const model = {
             anyFailed = true;
             context.logger.warn("Failed to scan subscription", {
               subscription,
-              error: String(err),
+              error: err instanceof Error
+                ? { name: err.name, message: err.message, stack: err.stack }
+                : String(err),
             });
           }
         }
@@ -701,7 +745,9 @@ export const model = {
           } catch (err) {
             context.logger.warn("Failed to list resources", {
               subscription,
-              error: String(err),
+              error: err instanceof Error
+                ? { name: err.name, message: err.message, stack: err.stack }
+                : String(err),
             });
           }
         }
