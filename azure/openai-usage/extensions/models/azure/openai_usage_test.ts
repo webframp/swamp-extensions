@@ -774,6 +774,233 @@ Deno.test("listAiResources dedups resources repeated on overlapping pages", asyn
 });
 
 // =============================================================================
+// Client-side kind filtering (server $filter is not reliably enforced)
+// =============================================================================
+
+Deno.test("listAiResources filters out non-OpenAI/AIServices kinds even when the server ignores $filter", async () => {
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("Microsoft.CognitiveServices/accounts?")) {
+      // Simulate Azure ignoring the $filter and returning every kind.
+      return resourceListResponse([
+        {
+          name: "oai-prod",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "OpenAI",
+        },
+        {
+          name: "face-svc",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "Face",
+        },
+        {
+          name: "cv-svc",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "ComputerVision",
+        },
+        {
+          name: "ais-dev",
+          resourceGroup: "rg",
+          location: "westus",
+          kind: "AIServices",
+        },
+      ]);
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.list_ai_resources.execute(
+    {} as Record<string, never>,
+    { ...context, fetchFn: mockFetch } as unknown as ListContext,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    resources: Array<{ resourceName: string; kind: string }>;
+  };
+
+  const names = data.resources.map((r) => r.resourceName).sort();
+  assertEquals(names, ["ais-dev", "oai-prod"]);
+});
+
+Deno.test("scan_subscriptions never attempts metrics for non-OpenAI/AIServices kinds", async () => {
+  let metricsAttempted = false;
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("Microsoft.CognitiveServices/accounts?")) {
+      return resourceListResponse([
+        {
+          name: "face-svc",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "Face",
+        },
+      ]);
+    }
+    if (u.includes("microsoft.insights/metrics")) {
+      metricsAttempted = true;
+      return metricsResponse(0, 0);
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.scan_subscriptions.execute(
+    { days: 7 },
+    { ...context, fetchFn: mockFetch } as unknown as ScanContext,
+  );
+
+  assertEquals(metricsAttempted, false);
+  const resources = getWrittenResources();
+  const data = resources[0].data as { resources: Array<unknown> };
+  assertEquals(data.resources.length, 0);
+});
+
+// =============================================================================
+// Logging: nothing silently dropped, raw error detail preserved
+// =============================================================================
+
+Deno.test("scan_subscriptions logs a pre-attempt line for every discovered resource", async () => {
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("Microsoft.CognitiveServices/accounts?")) {
+      return resourceListResponse([
+        {
+          name: "res-a",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "OpenAI",
+        },
+        {
+          name: "res-b",
+          resourceGroup: "rg",
+          location: "eastus",
+          kind: "AIServices",
+        },
+      ]);
+    }
+    if (u.includes("microsoft.insights/metrics")) {
+      return metricsResponse(0, 0);
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getLogsByLevel } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.scan_subscriptions.execute(
+    { days: 7 },
+    { ...context, fetchFn: mockFetch } as unknown as ScanContext,
+  );
+
+  const debugLogs = getLogsByLevel("debug");
+  const scanned = debugLogs.filter((l) => l.message === "Scanning resource");
+  assertEquals(scanned.length, 2);
+});
+
+Deno.test("scan_subscriptions logs a distinguishable outcome for zero-usage resources instead of dropping silently", async () => {
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("Microsoft.CognitiveServices/accounts?")) {
+      return resourceListResponse([
+        {
+          name: "idle-resource",
+          resourceGroup: "rg",
+          location: "westus",
+          kind: "OpenAI",
+        },
+      ]);
+    }
+    if (u.includes("microsoft.insights/metrics")) {
+      return metricsResponse(0, 0);
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getLogsByLevel } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.scan_subscriptions.execute(
+    { days: 7 },
+    { ...context, fetchFn: mockFetch } as unknown as ScanContext,
+  );
+
+  const infoLogs = getLogsByLevel("info");
+  const noUsage = infoLogs.filter(
+    (l) => l.message === "Scanned resource, no usage in period",
+  );
+  assertEquals(noUsage.length, 1);
+  const meta = noUsage[0].args[0] as { resource: string };
+  assertEquals(meta.resource, "idle-resource");
+});
+
+Deno.test("scan_subscriptions logs raw error detail with resource context on metrics failure", async () => {
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("Microsoft.CognitiveServices/accounts?")) {
+      return resourceListResponse([
+        {
+          name: "bad-res",
+          resourceGroup: "rg-target",
+          location: "eastus",
+          kind: "OpenAI",
+        },
+      ]);
+    }
+    if (u.includes("microsoft.insights/metrics")) {
+      return new Response("Internal Error", { status: 500 });
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getLogsByLevel } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.scan_subscriptions.execute(
+    { days: 7 },
+    { ...context, fetchFn: mockFetch } as unknown as ScanContext,
+  );
+
+  const warns = getLogsByLevel("warning");
+  const failure = warns.find(
+    (l) => l.message === "Failed to get metrics for resource",
+  );
+  assertExists(failure);
+  const meta = failure!.args[0] as {
+    resource: string;
+    resourceGroup: string;
+    error: { name: string; message: string };
+  };
+  assertEquals(meta.resource, "bad-res");
+  assertEquals(meta.resourceGroup, "rg-target");
+  assertEquals(meta.error.name, "Error");
+  assertMatch(meta.error.message, /Azure Monitor metrics failed/);
+});
+
+// =============================================================================
 // Edge Cases
 // =============================================================================
 
