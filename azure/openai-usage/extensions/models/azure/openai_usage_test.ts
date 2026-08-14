@@ -551,6 +551,62 @@ Deno.test("list_ai_resources handles subscription failure gracefully", async () 
   assertEquals(warns.length, 1);
 });
 
+Deno.test("listAiResources follows nextLink to collect all pages", async () => {
+  let page = 0;
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (u.includes("next-page")) {
+      return resourceListResponse([
+        {
+          name: "page2-res",
+          resourceGroup: "rg",
+          location: "westus",
+          kind: "AIServices",
+        },
+      ]);
+    }
+    if (u.includes("Microsoft.CognitiveServices/accounts")) {
+      page += 1;
+      return new Response(
+        JSON.stringify({
+          value: [
+            {
+              name: "page1-res",
+              location: "eastus",
+              kind: "OpenAI",
+              id:
+                `/subscriptions/${FAKE_SUB}/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/page1-res`,
+            },
+          ],
+          nextLink: "https://management.azure.com/next-page",
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: DEFAULT_GLOBAL_ARGS,
+    definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+  });
+
+  await model.methods.list_ai_resources.execute(
+    {} as Record<string, never>,
+    { ...context, fetchFn: mockFetch } as unknown as ListContext,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    resources: Array<{ resourceName: string }>;
+  };
+
+  assertEquals(data.resources.length, 2);
+  assertEquals(data.resources[0].resourceName, "page1-res");
+  assertEquals(data.resources[1].resourceName, "page2-res");
+});
+
 // =============================================================================
 // Edge Cases
 // =============================================================================
