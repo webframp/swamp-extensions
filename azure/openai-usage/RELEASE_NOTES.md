@@ -1,3 +1,19 @@
+## 2026.08.14.4
+
+**Fixed:** three issues surfaced after the #360 dedup fix. First, the ARM
+`$filter=kind eq 'OpenAI' or kind eq 'AIServices'` query param sent to the
+Cognitive Services list endpoint is not reliably enforced server-side, so
+non-token-emitting kinds (Face, ComputerVision, TextAnalytics, etc.) leaked
+into discovery and wasted metrics attempts; `listAiResources` now also
+filters client-side. Second, resources with zero usage in the lookback
+window were silently dropped with no log line at all, indistinguishable from
+a resource that was never attempted; `scan_subscriptions` now logs a debug
+line before each metrics attempt and an info line for zero-usage outcomes.
+Third, per-resource metrics failures logged only `String(err)`, discarding
+detail needed to root-cause failures that don't reproduce via `az rest`;
+failure logs now include the resource's subscription/resourceGroup/kind and
+the raw error's name/message/stack.
+
 ## 2026.08.14.3
 
 **Fixed:** `listAiResources` could enumerate the same ARM resource twice
