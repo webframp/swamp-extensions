@@ -173,9 +173,9 @@ async function listAiResources(
         `ARM resource list for ${subscription} exceeded ${MAX_PAGES} pages; aborting`,
       );
     }
-    const resp = await fetchFn(url, {
+    const resp = await fetchWithRetry(url, {
       headers: { Authorization: `Bearer ${token}` },
-    });
+    }, fetchFn);
 
     if (!resp.ok) {
       const body = await resp.text();
@@ -215,6 +215,41 @@ function extractResourceGroup(resourceId: string): string {
     /\/resourceGroups\/([^/]+)/i,
   );
   return match ? match[1] : "unknown";
+}
+
+/**
+ * Fetch with retry on 429/5xx. Azure Monitor throttles aggressively when
+ * many resources are scanned back-to-back; without this, transient
+ * throttling surfaces as spurious per-resource scan failures.
+ */
+const MAX_RETRY_BACKOFF_MS = 10_000;
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  fetchFn: typeof fetch,
+  maxRetries = 3,
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    const resp = await fetchFn(url, init);
+    if (
+      resp.ok || attempt >= maxRetries ||
+      (resp.status !== 429 && resp.status < 500)
+    ) {
+      return resp;
+    }
+    const retryAfterHeader = resp.headers.get("Retry-After");
+    const retryAfterMs = retryAfterHeader
+      ? Number(retryAfterHeader) * 1000
+      : NaN;
+    await resp.body?.cancel();
+    const backoffMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0
+      ? Math.min(retryAfterMs, MAX_RETRY_BACKOFF_MS)
+      : Math.min(500 * 2 ** attempt, MAX_RETRY_BACKOFF_MS);
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    attempt++;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -260,9 +295,9 @@ async function getTokenMetrics(
     `&interval=P1D` +
     `&aggregation=Total`;
 
-  const resp = await fetchFn(metricsUrl, {
+  const resp = await fetchWithRetry(metricsUrl, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+  }, fetchFn);
 
   if (!resp.ok) {
     const body = await resp.text();
@@ -311,9 +346,9 @@ async function getTokenMetrics(
       `&aggregation=Total` +
       `&$filter=ModelDeploymentName eq '*'`;
 
-    const dimResp = await fetchFn(dimUrl, {
+    const dimResp = await fetchWithRetry(dimUrl, {
       headers: { Authorization: `Bearer ${token}` },
-    });
+    }, fetchFn);
 
     if (!dimResp.ok) {
       return {
@@ -391,7 +426,7 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.08.14.1",
+  version: "2026.08.14.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -404,6 +439,12 @@ export const model = {
       toVersion: "2026.08.14.1",
       description:
         "Fix listAiResources to follow ARM nextLink pagination instead of only reading the first page",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.14.2",
+      description:
+        "Retry Azure Monitor/ARM requests on 429/5xx instead of failing the resource outright",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
