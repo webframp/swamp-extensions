@@ -230,7 +230,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.08.10.1",
+  version: "2026.08.14.1",
 
   upgrades: [
     {
@@ -260,6 +260,12 @@ export const model = {
       toVersion: "2026.08.10.1",
       description:
         "Make project global arg optional for cross-project queries (list_issues, search)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.14.1",
+      description:
+        "Allow null assignedToId in update_issue to unassign — sends empty string to Redmine API",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1010,7 +1016,9 @@ export const model = {
         trackerId: z.number().optional().describe("New tracker ID"),
         statusId: z.number().optional().describe("New status ID"),
         priorityId: z.number().optional().describe("New priority ID"),
-        assignedToId: z.number().optional().describe("New assignee user ID"),
+        assignedToId: z.number().nullable().optional().describe(
+          "New assignee user ID (null to unassign)",
+        ),
         description: z.string().optional().describe("New description"),
         parentIssueId: z.number().optional().describe("New parent issue ID"),
         estimatedHours: z.number().optional().describe("New estimated hours"),
@@ -1031,7 +1039,7 @@ export const model = {
           statusId?: number;
           trackerId?: number;
           priorityId?: number;
-          assignedToId?: number;
+          assignedToId?: number | null;
           description?: string;
           parentIssueId?: number;
           estimatedHours?: number;
@@ -1059,7 +1067,10 @@ export const model = {
           issuePayload.description = args.description;
         }
         if (args.assignedToId !== undefined) {
-          issuePayload.assigned_to_id = args.assignedToId;
+          // Redmine API expects "" to clear the assignee
+          issuePayload.assigned_to_id = args.assignedToId === null
+            ? ""
+            : args.assignedToId;
         }
         if (args.notes !== undefined) {
           issuePayload.notes = args.notes;
