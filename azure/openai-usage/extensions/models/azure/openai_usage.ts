@@ -141,6 +141,7 @@ async function getAccessToken(
 
 /** Discovered AI resource. */
 interface AiResource {
+  id: string;
   name: string;
   resourceGroup: string;
   location: string;
@@ -149,11 +150,18 @@ interface AiResource {
 
 /**
  * List OpenAI/AIServices resources in a subscription via ARM REST API.
+ *
+ * Dedups by ARM resource ID across pages: the ARM `nextLink` cursor is not
+ * guaranteed to be strictly exclusive, and a retried page request can repeat
+ * the previous page's tail, so the same resource can otherwise appear twice.
  */
 async function listAiResources(
   subscription: string,
   token: string,
   fetchFn: typeof fetch,
+  logger?: {
+    debug: (msg: string, props: Record<string, unknown>) => void;
+  },
 ): Promise<AiResource[]> {
   const filter = encodeURIComponent(
     "kind eq 'OpenAI' or kind eq 'AIServices'",
@@ -163,7 +171,7 @@ async function listAiResources(
     `/providers/Microsoft.CognitiveServices/accounts` +
     `?api-version=2024-10-01&$filter=${filter}`;
 
-  const results: AiResource[] = [];
+  const resultsById = new Map<string, AiResource>();
   const MAX_PAGES = 500;
   let pageCount = 0;
 
@@ -194,8 +202,19 @@ async function listAiResources(
       nextLink?: string;
     };
 
-    for (const r of data.value || []) {
-      results.push({
+    const pageItems = data.value || [];
+    logger?.debug("ARM resource list page fetched", {
+      subscription,
+      page: pageCount,
+      count: pageItems.length,
+      firstId: pageItems[0]?.id,
+      lastId: pageItems[pageItems.length - 1]?.id,
+    });
+
+    for (const r of pageItems) {
+      const id = r.id || `unknown/${r.name || "unknown"}`;
+      resultsById.set(id, {
+        id,
         name: r.name || "unknown",
         resourceGroup: extractResourceGroup(r.id || ""),
         location: r.location || "unknown",
@@ -206,7 +225,7 @@ async function listAiResources(
     url = data.nextLink;
   }
 
-  return results;
+  return Array.from(resultsById.values());
 }
 
 /** Extract resource group name from an ARM resource ID. */
@@ -426,7 +445,7 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.08.14.2",
+  version: "2026.08.14.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -445,6 +464,12 @@ export const model = {
       toVersion: "2026.08.14.2",
       description:
         "Retry Azure Monitor/ARM requests on 429/5xx instead of failing the resource outright",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.14.3",
+      description:
+        "Dedup listAiResources by ARM resource ID across pages to fix duplicate-enumeration causing spurious scan failures",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -490,6 +515,7 @@ export const model = {
           logger: {
             info: (msg: string, props: Record<string, unknown>) => void;
             warn: (msg: string, props: Record<string, unknown>) => void;
+            debug: (msg: string, props: Record<string, unknown>) => void;
           };
           fetchFn?: typeof fetch;
         },
@@ -517,6 +543,7 @@ export const model = {
               subscription,
               token,
               fetchFn,
+              context.logger,
             );
 
             for (const res of aiResources) {
@@ -644,6 +671,7 @@ export const model = {
           logger: {
             info: (msg: string, props: Record<string, unknown>) => void;
             warn: (msg: string, props: Record<string, unknown>) => void;
+            debug: (msg: string, props: Record<string, unknown>) => void;
           };
           fetchFn?: typeof fetch;
         },
@@ -665,6 +693,7 @@ export const model = {
               subscription,
               token,
               fetchFn,
+              context.logger,
             );
             for (const r of resources) {
               allResources.push({ ...r, subscription });
