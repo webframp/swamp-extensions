@@ -1,3 +1,7 @@
+## 2026.08.15.1
+
+**Changed:** Bump @opentelemetry/api 1.9.1`) that bypass → 1.9.1
+
 ## 2026.08.06.1
 
 **Fixed:** `plan-bump` no longer assumes that source file version strings match
