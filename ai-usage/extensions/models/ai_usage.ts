@@ -414,7 +414,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.08.05.1",
+  version: "2026.08.15.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
