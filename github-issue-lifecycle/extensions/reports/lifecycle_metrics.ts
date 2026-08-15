@@ -11,21 +11,30 @@
  * @module
  */
 
-/** A stored resource from the model's data. */
-interface StoredResource {
-  specName: string;
-  instance: string;
-  data: Record<string, unknown>;
+/** Metadata for one stored data artifact, as returned by findAllForModel. */
+interface DataEntry {
+  name: string;
   version: number;
-  createdAt: string;
+  tags?: Record<string, string>;
+}
+
+/** Low-level data API shared by all report contexts. */
+interface DataRepository {
+  findAllForModel(type: string, modelId: string): Promise<DataEntry[]>;
+  getContent(
+    type: string,
+    modelId: string,
+    dataName: string,
+    version?: number,
+  ): Promise<Uint8Array | null>;
 }
 
 /** Context provided by the swamp runtime for model-scoped reports. */
 interface ModelReportContext {
-  modelName: string;
   modelType: string;
   modelId: string;
-  storedResources: StoredResource[];
+  definition: { id: string; name: string; version: number };
+  dataRepository: DataRepository;
   logger: {
     info: (msg: string, props?: Record<string, unknown>) => void;
   };
@@ -56,8 +65,36 @@ interface IssueSummary {
   priority: string | null;
   prStatus: string | null;
   prUrl: string | null;
+  retryCount: number;
   cycleTimeHours: number | null;
   staleHours: number;
+}
+
+/**
+ * Fetch and parse every stored resource for the given spec. Each issue has
+ * exactly one instance per spec (e.g. `state-issue-42`), so the returned data
+ * is already at its latest version — no cross-version comparison needed.
+ */
+async function readSpec<T>(
+  dataRepository: DataRepository,
+  modelType: string,
+  modelId: string,
+  entries: DataEntry[],
+  specName: string,
+): Promise<T[]> {
+  const results: T[] = [];
+  for (const entry of entries) {
+    if (entry.tags?.specName !== specName) continue;
+    const bytes = await dataRepository.getContent(
+      modelType,
+      modelId,
+      entry.name,
+      entry.version,
+    );
+    if (!bytes) continue;
+    results.push(JSON.parse(new TextDecoder().decode(bytes)) as T);
+  }
+  return results;
 }
 
 /**
@@ -70,56 +107,48 @@ export const report = {
   scope: "model" as const,
   labels: ["lifecycle", "metrics", "sdlc"],
 
-  execute: (context: ModelReportContext) => {
+  execute: async (context: ModelReportContext) => {
     const now = new Date().toISOString();
-    const resources = context.storedResources;
+    const { modelType, modelId, dataRepository } = context;
+    const entries = await dataRepository.findAllForModel(modelType, modelId);
 
-    // Group state resources by issue number (latest version wins)
-    const stateMap = new Map<number, StoredResource>();
-    for (const r of resources) {
-      if (r.specName !== "state") continue;
-      const issueNum = r.data.issueNumber as number;
-      const existing = stateMap.get(issueNum);
-      if (!existing || r.version > existing.version) {
-        stateMap.set(issueNum, r);
-      }
+    const states = await readSpec<Record<string, unknown>>(
+      dataRepository,
+      modelType,
+      modelId,
+      entries,
+      "state",
+    );
+    const classifications = await readSpec<Record<string, unknown>>(
+      dataRepository,
+      modelType,
+      modelId,
+      entries,
+      "classification",
+    );
+    const pullRequests = await readSpec<Record<string, unknown>>(
+      dataRepository,
+      modelType,
+      modelId,
+      entries,
+      "pullRequest",
+    );
+
+    const classMap = new Map<number, Record<string, unknown>>();
+    for (const c of classifications) {
+      classMap.set(c.issueNumber as number, c);
     }
-
-    // Group classification by issue
-    const classMap = new Map<number, StoredResource>();
-    for (const r of resources) {
-      if (r.specName !== "classification") continue;
-      const issueNum = r.data.issueNumber as number;
-      classMap.set(issueNum, r);
-    }
-
-    // Group pullRequest by issue (latest version)
-    const prMap = new Map<number, StoredResource>();
-    for (const r of resources) {
-      if (r.specName !== "pullRequest") continue;
-      const issueNum = r.data.issueNumber as number;
-      const existing = prMap.get(issueNum);
-      if (!existing || r.version > existing.version) {
-        prMap.set(issueNum, r);
-      }
-    }
-
-    // Count PR retries (pullRequest resources with status=failed per issue)
-    const retryMap = new Map<number, number>();
-    for (const r of resources) {
-      if (r.specName !== "pullRequest") continue;
-      if ((r.data.status as string) === "failed") {
-        const issueNum = r.data.issueNumber as number;
-        retryMap.set(issueNum, (retryMap.get(issueNum) ?? 0) + 1);
-      }
+    const prMap = new Map<number, Record<string, unknown>>();
+    for (const pr of pullRequests) {
+      prMap.set(pr.issueNumber as number, pr);
     }
 
     // Build summaries
     const summaries: IssueSummary[] = [];
-    for (const [issueNum, stateRes] of stateMap) {
-      const state = stateRes.data;
-      const classification = classMap.get(issueNum)?.data;
-      const pr = prMap.get(issueNum)?.data;
+    for (const state of states) {
+      const issueNum = state.issueNumber as number;
+      const classification = classMap.get(issueNum);
+      const pr = prMap.get(issueNum);
 
       const startedAt = state.startedAt as string;
       const transitionedAt = state.transitionedAt as string;
@@ -143,6 +172,7 @@ export const report = {
         priority: (classification?.priority as string) ?? null,
         prStatus: (pr?.status as string) ?? null,
         prUrl: (pr?.prUrl as string) ?? null,
+        retryCount: (pr?.retryCount as number) ?? 0,
         cycleTimeHours,
         staleHours,
       });
@@ -171,13 +201,13 @@ export const report = {
       : null;
 
     // Total retries across all issues
-    const totalRetries = [...retryMap.values()].reduce((a, b) => a + b, 0);
+    const totalRetries = summaries.reduce((a, s) => a + s.retryCount, 0);
 
     // Build markdown
     const lines: string[] = [];
     lines.push("# Issue Lifecycle Metrics");
     lines.push("");
-    lines.push(`**Model:** ${context.modelName}`);
+    lines.push(`**Model:** ${context.definition.name}`);
     lines.push(`**Generated:** ${now}`);
     lines.push("");
 
@@ -210,11 +240,10 @@ export const report = {
       lines.push("| Issue | Phase | Stale | Priority | Retries |");
       lines.push("|-------|-------|-------|----------|---------|");
       for (const s of stuck.sort((a, b) => b.staleHours - a.staleHours)) {
-        const retries = retryMap.get(s.issueNumber) ?? 0;
         lines.push(
           `| #${s.issueNumber} | ${s.phase} | ${
             formatDuration(s.staleHours)
-          } | ${s.priority ?? "-"} | ${retries} |`,
+          } | ${s.priority ?? "-"} | ${s.retryCount} |`,
         );
       }
       lines.push("");
@@ -247,11 +276,10 @@ export const report = {
           (b.cycleTimeHours ?? 0) - (a.cycleTimeHours ?? 0)
         )
       ) {
-        const retries = retryMap.get(s.issueNumber) ?? 0;
         lines.push(
           `| #${s.issueNumber} | ${
             formatDuration(s.cycleTimeHours ?? 0)
-          } | ${s.iteration} | ${retries} |`,
+          } | ${s.iteration} | ${s.retryCount} |`,
         );
       }
       lines.push("");
@@ -259,7 +287,7 @@ export const report = {
 
     const jsonData = {
       generatedAt: now,
-      model: context.modelName,
+      model: context.definition.name,
       totalIssues,
       completed: completed.length,
       inProgress: inProgress.length,

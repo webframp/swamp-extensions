@@ -143,23 +143,24 @@ const PullRequestSchema = z.object({
   linkedAt: z.string(),
   status: z.enum(["open", "merged", "failed"]),
   failureReason: z.string().optional(),
+  retryCount: z.number().default(0)
+    .describe("Number of times this PR has failed CI/review"),
 });
+
+/** Parsed pull request data type. */
+type PullRequestData = z.infer<typeof PullRequestSchema>;
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
-/** A single stored resource from the model's data. */
-interface StoredResource {
-  specName: string;
-  instance: string;
-  data: Record<string, unknown>;
-}
-
 /** Context provided to each method by the swamp runtime. */
 interface MethodContext {
   globalArgs: GlobalArgs;
-  storedResources: StoredResource[];
+  readResource: (
+    instanceName: string,
+    version?: number,
+  ) => Promise<Record<string, unknown> | null>;
   writeResource: (
     spec: string,
     instance: string,
@@ -169,6 +170,16 @@ interface MethodContext {
     info: (msg: string, props?: Record<string, unknown>) => void;
     warn: (msg: string, props?: Record<string, unknown>) => void;
   };
+}
+
+/**
+ * Build a storage instance name unique across all resource specs on this
+ * model. Instance names map directly to storage paths and must not collide
+ * across specs — prefixing with the spec name keeps `state-issue-42` and
+ * `pullRequest-issue-42` distinct even though they track the same issue.
+ */
+function instanceName(spec: string, issueNumber: number, suffix = ""): string {
+  return `${spec}-issue-${issueNumber}${suffix}`;
 }
 
 /** Execute a gh CLI command and return stdout. */
@@ -203,30 +214,25 @@ function assertTransition(current: Phase, target: Phase): void {
   }
 }
 
-/** Read current state for an issue from stored resources. */
-function readCurrentState(
-  storedResources: StoredResource[],
+/** Read current state for an issue via the model's stored resources. */
+async function readCurrentState(
+  ctx: MethodContext,
   issueNumber: number,
-): StateData | null {
-  const stateResources = storedResources.filter(
-    (r) =>
-      r.specName === "state" &&
-      (r.data as Record<string, unknown>).issueNumber === issueNumber,
-  );
-  if (stateResources.length === 0) return null;
-  return stateResources[stateResources.length - 1].data as StateData;
+): Promise<StateData | null> {
+  const data = await ctx.readResource(instanceName("state", issueNumber));
+  return data as StateData | null;
 }
 
 /**
  * Require current state and validate transition. Returns the current state
  * for propagating startedAt, iteration, etc.
  */
-function requireStateAndTransition(
+async function requireStateAndTransition(
   ctx: MethodContext,
   issueNumber: number,
   targetPhase: Phase,
-): StateData {
-  const current = readCurrentState(ctx.storedResources, issueNumber);
+): Promise<StateData> {
+  const current = await readCurrentState(ctx, issueNumber);
   if (!current) {
     throw new Error(
       `No lifecycle state found for issue #${issueNumber}. Run 'start' first.`,
@@ -297,7 +303,7 @@ async function start(
 
   // start is special: it creates the initial state. If state already exists,
   // we allow re-start only if not in terminal state.
-  const existing = readCurrentState(ctx.storedResources, args.issue_number);
+  const existing = await readCurrentState(ctx, args.issue_number);
   if (existing && (existing.phase === "done" || existing.phase === "closed")) {
     throw new Error(
       `Issue #${args.issue_number} is already in terminal state: ${existing.phase}`,
@@ -318,7 +324,7 @@ async function start(
 
   const contextHandle = await ctx.writeResource(
     "context",
-    `issue-${args.issue_number}`,
+    instanceName("context", args.issue_number),
     {
       issueNumber: args.issue_number,
       title: issueData.title ?? "",
@@ -341,7 +347,7 @@ async function start(
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "triaging",
@@ -384,7 +390,7 @@ async function triage(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(
+  const current = await requireStateAndTransition(
     ctx,
     args.issue_number,
     "classified",
@@ -393,7 +399,7 @@ async function triage(
 
   const classHandle = await ctx.writeResource(
     "classification",
-    `issue-${args.issue_number}`,
+    instanceName("classification", args.issue_number),
     {
       issueNumber: args.issue_number,
       kind: args.kind,
@@ -406,7 +412,7 @@ async function triage(
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "classified",
@@ -464,13 +470,17 @@ async function plan(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(ctx, args.issue_number, "planned");
+  const current = await requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "planned",
+  );
   const now = new Date().toISOString();
   const iteration = current.iteration + 1;
 
   const planHandle = await ctx.writeResource(
     "plan",
-    `issue-${args.issue_number}-v${iteration}`,
+    instanceName("plan", args.issue_number, `-v${iteration}`),
     {
       issueNumber: args.issue_number,
       iteration,
@@ -484,7 +494,7 @@ async function plan(
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "planned",
@@ -530,13 +540,17 @@ async function iterate(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments } = ctx.globalArgs;
-  const current = requireStateAndTransition(ctx, args.issue_number, "planned");
+  const current = await requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "planned",
+  );
   const now = new Date().toISOString();
   const iteration = current.iteration + 1;
 
   const planHandle = await ctx.writeResource(
     "plan",
-    `issue-${args.issue_number}-v${iteration}`,
+    instanceName("plan", args.issue_number, `-v${iteration}`),
     {
       issueNumber: args.issue_number,
       iteration,
@@ -550,7 +564,7 @@ async function iterate(
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "planned",
@@ -581,12 +595,16 @@ async function approve(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(ctx, args.issue_number, "approved");
+  const current = await requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "approved",
+  );
   const now = new Date().toISOString();
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "approved",
@@ -623,7 +641,7 @@ async function implement(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(
+  const current = await requireStateAndTransition(
     ctx,
     args.issue_number,
     "implementing",
@@ -632,7 +650,7 @@ async function implement(
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "implementing",
@@ -670,7 +688,7 @@ async function linkPr(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(
+  const current = await requireStateAndTransition(
     ctx,
     args.issue_number,
     "pr_open",
@@ -680,9 +698,14 @@ async function linkPr(
   const prMatch = args.pr_url.match(/\/pull\/(\d+)/);
   const prNumber = prMatch ? parseInt(prMatch[1], 10) : null;
 
+  // Preserve the retry count across a link_pr retry from pr_failed.
+  const existingPr = await ctx.readResource(
+    instanceName("pullRequest", args.issue_number),
+  ) as PullRequestData | null;
+
   const prHandle = await ctx.writeResource(
     "pullRequest",
-    `issue-${args.issue_number}`,
+    instanceName("pullRequest", args.issue_number),
     {
       issueNumber: args.issue_number,
       prNumber,
@@ -690,12 +713,13 @@ async function linkPr(
       branch: args.branch,
       linkedAt: now,
       status: "open",
+      retryCount: existingPr?.retryCount ?? 0,
     },
   );
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "pr_open",
@@ -730,31 +754,34 @@ async function prMerged(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(ctx, args.issue_number, "done");
+  const current = await requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "done",
+  );
   const now = new Date().toISOString();
 
   // Update the pullRequest resource with merged status, carrying forward URL/number
-  const existingPr = ctx.storedResources.findLast(
-    (r) =>
-      r.specName === "pullRequest" &&
-      (r.data as Record<string, unknown>).issueNumber === args.issue_number,
-  );
+  const existingPr = await ctx.readResource(
+    instanceName("pullRequest", args.issue_number),
+  ) as PullRequestData | null;
   const prHandle = await ctx.writeResource(
     "pullRequest",
-    `issue-${args.issue_number}`,
+    instanceName("pullRequest", args.issue_number),
     {
       issueNumber: args.issue_number,
-      prNumber: (existingPr?.data?.prNumber as number | null) ?? null,
-      prUrl: (existingPr?.data?.prUrl as string) ?? "",
-      branch: existingPr?.data?.branch as string | undefined,
-      linkedAt: (existingPr?.data?.linkedAt as string) ?? now,
+      prNumber: existingPr?.prNumber ?? null,
+      prUrl: existingPr?.prUrl ?? "",
+      branch: existingPr?.branch,
+      linkedAt: existingPr?.linkedAt ?? now,
       status: "merged",
+      retryCount: existingPr?.retryCount ?? 0,
     },
   );
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "done",
@@ -795,7 +822,7 @@ async function prFailed(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(
+  const current = await requireStateAndTransition(
     ctx,
     args.issue_number,
     "pr_failed",
@@ -803,28 +830,27 @@ async function prFailed(
   const now = new Date().toISOString();
 
   // Update pullRequest resource with failed status, carrying forward URL/number
-  const existingPr = ctx.storedResources.findLast(
-    (r) =>
-      r.specName === "pullRequest" &&
-      (r.data as Record<string, unknown>).issueNumber === args.issue_number,
-  );
+  const existingPr = await ctx.readResource(
+    instanceName("pullRequest", args.issue_number),
+  ) as PullRequestData | null;
   const prHandle = await ctx.writeResource(
     "pullRequest",
-    `issue-${args.issue_number}`,
+    instanceName("pullRequest", args.issue_number),
     {
       issueNumber: args.issue_number,
-      prNumber: (existingPr?.data?.prNumber as number | null) ?? null,
-      prUrl: (existingPr?.data?.prUrl as string) ?? "",
-      branch: existingPr?.data?.branch as string | undefined,
-      linkedAt: (existingPr?.data?.linkedAt as string) ?? now,
+      prNumber: existingPr?.prNumber ?? null,
+      prUrl: existingPr?.prUrl ?? "",
+      branch: existingPr?.branch,
+      linkedAt: existingPr?.linkedAt ?? now,
       status: "failed",
       failureReason: args.reason,
+      retryCount: (existingPr?.retryCount ?? 0) + 1,
     },
   );
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "pr_failed",
@@ -860,12 +886,16 @@ async function complete(
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
   const { repo, postComments, syncLabels } = ctx.globalArgs;
-  const current = requireStateAndTransition(ctx, args.issue_number, "done");
+  const current = await requireStateAndTransition(
+    ctx,
+    args.issue_number,
+    "done",
+  );
   const now = new Date().toISOString();
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "done",
@@ -907,7 +937,7 @@ async function close(
 
   // close is special: allowed from any non-terminal state, but requires
   // that a lifecycle has been started.
-  const current = readCurrentState(ctx.storedResources, args.issue_number);
+  const current = await readCurrentState(ctx, args.issue_number);
   if (!current) {
     throw new Error(
       `No lifecycle state found for issue #${args.issue_number}. Run 'start' first.`,
@@ -921,7 +951,7 @@ async function close(
 
   const stateHandle = await ctx.writeResource(
     "state",
-    `issue-${args.issue_number}`,
+    instanceName("state", args.issue_number),
     {
       issueNumber: args.issue_number,
       phase: "closed",
@@ -982,7 +1012,7 @@ async function status(
 
   const handle = await ctx.writeResource(
     "context",
-    `issue-${args.issue_number}`,
+    instanceName("context", args.issue_number),
     {
       issueNumber: args.issue_number,
       title: issueData.title ?? "",
@@ -1015,7 +1045,7 @@ async function status(
 
 export const model = {
   type: "@webframp/github-issue-lifecycle" as const,
-  version: "2026.07.27.1",
+  version: "2026.08.15.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {
@@ -1166,9 +1196,9 @@ export { assertTransition };
 export { readCurrentState };
 /** Valid transition map. */
 export { TRANSITIONS };
+/** Build a per-spec, collision-free storage instance name. */
+export { instanceName };
 /** Method context interface for consumers. */
 export type { MethodContext };
 /** Lifecycle phase type. */
 export type { Phase };
-/** Stored resource shape. */
-export type { StoredResource };

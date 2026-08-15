@@ -1,13 +1,26 @@
-## 2026.07.27.1
+## 2026.08.15.1
 
-**Fixed:** The `fmt` task ran `deno fmt --check`, so `deno task fmt` verified
-formatting instead of applying it and there was no way to format the extension
-through its own task. `fmt` now formats and a new `fmt:check` verifies, matching
-every other extension in the repository.
+**Fixed:** Every method that reads lifecycle state (`start`, `triage`, `plan`,
+`iterate`, `approve`, `implement`, `link_pr`, `pr_merged`, `pr_failed`,
+`complete`, `close`) threw before reaching GitHub because it relied on
+`ctx.storedResources`, a field current swamp no longer passes to model methods.
+All state reads now go through `ctx.readResource()`, the supported API.
 
-**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
-are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
-so `deno task fmt:check` could fail locally on a file CI does not have.
+**Fixed:** Resource instance names collided across specs — `context`, `state`,
+`classification`, and `pullRequest` all wrote to the same `issue-<n>` storage
+path for a given issue, since instance names must be unique across all specs on
+a model, not just within one. Each spec now writes to a spec-prefixed path
+(`state-issue-42`, `pullRequest-issue-42`, etc.), so per-issue data no longer
+overwrites itself across specs.
 
-**Upgrade note:** Tooling and formatting only. No model, method, schema, or
-behavior change — nothing to do on upgrade.
+**Changed:** `pullRequest` gained a `retryCount` field, incremented on every
+`pr_failed` call and carried forward through `link_pr` retries and `pr_merged`.
+The `lifecycle-metrics` report now reads this field directly instead of relying
+on raw stored-resource access (also removed) to derive retry counts from
+historical writes.
+
+**Upgrade note:** Existing `pullRequest` data written before this version lacks
+`retryCount` and will read as `0` going forward — no migration needed. Issues
+already tracked under the old `issue-<n>` instance naming will not be found by
+the new spec-prefixed lookups; re-run `start` to re-establish state under the
+new naming for any in-flight issues.
