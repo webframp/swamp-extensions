@@ -1,9 +1,9 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import {
   assertTransition,
+  instanceName,
   type MethodContext,
   model,
-  type StoredResource,
   TRANSITIONS,
 } from "./lifecycle.ts";
 
@@ -13,7 +13,7 @@ import {
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/github-issue-lifecycle");
-  assertEquals(model.version, "2026.07.27.1");
+  assertEquals(model.version, "2026.08.15.1");
 });
 
 Deno.test("model has all expected methods", () => {
@@ -223,10 +223,20 @@ function withMockedCommand<T>(
   });
 }
 
+/** A single stored resource, keyed the same way the model writes it. */
+interface StoredResource {
+  specName: string;
+  instance: string;
+  data: Record<string, unknown>;
+}
+
 function makeContext(
-  storedResources: StoredResource[] = [],
+  seed: Record<string, Record<string, unknown>> = {},
 ): { context: MethodContext; getWritten: () => StoredResource[] } {
   const written: StoredResource[] = [];
+  const store = new Map<string, Record<string, unknown>>(
+    Object.entries(seed),
+  );
   return {
     context: {
       globalArgs: {
@@ -234,13 +244,14 @@ function makeContext(
         postComments: false,
         syncLabels: false,
       },
-      storedResources,
+      readResource: (name: string) => Promise.resolve(store.get(name) ?? null),
       writeResource: (spec: string, instance: string, data: unknown) => {
         written.push({
           specName: spec,
           instance,
           data: data as Record<string, unknown>,
         });
+        store.set(instance, data as Record<string, unknown>);
         return Promise.resolve({ name: instance });
       },
       logger: { info: () => {}, warn: () => {} },
@@ -249,17 +260,15 @@ function makeContext(
   };
 }
 
-/** Helper to create a state resource for seeding storedResources. */
-function stateResource(
+/** Helper to seed a state resource under its expected instance name. */
+function stateSeed(
   issueNumber: number,
   phase: string,
   startedAt = "2026-07-01T00:00:00Z",
   iteration = 0,
-): StoredResource {
+): Record<string, Record<string, unknown>> {
   return {
-    specName: "state",
-    instance: `issue-${issueNumber}`,
-    data: {
+    [instanceName("state", issueNumber)]: {
       issueNumber,
       phase,
       previousPhase: null,
@@ -306,9 +315,7 @@ Deno.test("triage: enforces transition from triaging", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext([
-        stateResource(10, "triaging"),
-      ]);
+      const { context, getWritten } = makeContext(stateSeed(10, "triaging"));
       await model.methods.triage.execute(
         { issue_number: 10, kind: "feature", priority: "high" },
         context,
@@ -324,7 +331,7 @@ Deno.test("triage: rejects invalid transition from approved", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context } = makeContext([stateResource(10, "approved")]);
+      const { context } = makeContext(stateSeed(10, "approved"));
       await assertRejects(
         () =>
           model.methods.triage.execute(
@@ -342,9 +349,9 @@ Deno.test("plan: increments iteration from current state", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext([
-        stateResource(5, "classified", "2026-07-01T00:00:00Z", 0),
-      ]);
+      const { context, getWritten } = makeContext(
+        stateSeed(5, "classified", "2026-07-01T00:00:00Z", 0),
+      );
       await model.methods.plan.execute(
         { issue_number: 5, summary: "Add rate limiting", steps: ["step 1"] },
         context,
@@ -361,9 +368,9 @@ Deno.test("iterate: bumps iteration again", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext([
-        stateResource(5, "planned", "2026-07-01T00:00:00Z", 1),
-      ]);
+      const { context, getWritten } = makeContext(
+        stateSeed(5, "planned", "2026-07-01T00:00:00Z", 1),
+      );
       await model.methods.iterate.execute(
         {
           issue_number: 5,
@@ -384,9 +391,9 @@ Deno.test("approve: preserves iteration from planned state", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext([
-        stateResource(5, "planned", "2026-07-01T00:00:00Z", 3),
-      ]);
+      const { context, getWritten } = makeContext(
+        stateSeed(5, "planned", "2026-07-01T00:00:00Z", 3),
+      );
       await model.methods.approve.execute({ issue_number: 5 }, context);
       const written = getWritten();
       assertEquals(written[0].data.iteration, 3);
@@ -399,9 +406,9 @@ Deno.test("link_pr: extracts PR number and transitions from implementing", async
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext([
-        stateResource(7, "implementing"),
-      ]);
+      const { context, getWritten } = makeContext(
+        stateSeed(7, "implementing"),
+      );
       await model.methods.link_pr.execute(
         {
           issue_number: 7,
@@ -423,9 +430,7 @@ Deno.test("link_pr: works from pr_failed (retry)", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext([
-        stateResource(7, "pr_failed"),
-      ]);
+      const { context, getWritten } = makeContext(stateSeed(7, "pr_failed"));
       await model.methods.link_pr.execute(
         {
           issue_number: 7,
@@ -446,22 +451,19 @@ Deno.test("pr_merged: writes pullRequest with status merged, preserves URL", asy
       return { stdout: "", success: true };
     },
     async () => {
-      const prResource: StoredResource = {
-        specName: "pullRequest",
-        instance: "issue-7",
-        data: {
+      const seed = {
+        ...stateSeed(7, "pr_open"),
+        [instanceName("pullRequest", 7)]: {
           issueNumber: 7,
           prNumber: 261,
           prUrl: "https://github.com/webframp/swamp-extensions/pull/261",
           branch: "fix/thing",
           linkedAt: "2026-07-20T00:00:00Z",
           status: "open",
+          retryCount: 0,
         },
       };
-      const { context, getWritten } = makeContext([
-        stateResource(7, "pr_open"),
-        prResource,
-      ]);
+      const { context, getWritten } = makeContext(seed);
       await model.methods.pr_merged.execute({ issue_number: 7 }, context);
       const written = getWritten();
       assertEquals(written[0].specName, "pullRequest");
@@ -477,13 +479,11 @@ Deno.test("pr_merged: writes pullRequest with status merged, preserves URL", asy
   );
 });
 
-Deno.test("pr_failed: writes pullRequest with status failed and reason", async () => {
+Deno.test("pr_failed: writes pullRequest with status failed, reason, and bumps retryCount", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context, getWritten } = makeContext([
-        stateResource(7, "pr_open"),
-      ]);
+      const { context, getWritten } = makeContext(stateSeed(7, "pr_open"));
       await model.methods.pr_failed.execute(
         { issue_number: 7, reason: "CI timeout" },
         context,
@@ -492,6 +492,7 @@ Deno.test("pr_failed: writes pullRequest with status failed and reason", async (
       assertEquals(written[0].specName, "pullRequest");
       assertEquals(written[0].data.status, "failed");
       assertEquals(written[0].data.failureReason, "CI timeout");
+      assertEquals(written[0].data.retryCount, 1);
       assertEquals(written[1].data.phase, "pr_failed");
     },
   );
@@ -501,7 +502,7 @@ Deno.test("close: rejects from terminal state", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context } = makeContext([stateResource(7, "done")]);
+      const { context } = makeContext(stateSeed(7, "done"));
       await assertRejects(
         () => model.methods.close.execute({ issue_number: 7 }, context),
         Error,
@@ -515,7 +516,7 @@ Deno.test("close: rejects when no lifecycle started", async () => {
   await withMockedCommand(
     () => ({ stdout: "", success: true }),
     async () => {
-      const { context } = makeContext([]);
+      const { context } = makeContext();
       await assertRejects(
         () => model.methods.close.execute({ issue_number: 99 }, context),
         Error,
@@ -530,9 +531,9 @@ Deno.test("startedAt is preserved across transitions", async () => {
     () => ({ stdout: "", success: true }),
     async () => {
       const originalStart = "2026-06-15T08:00:00Z";
-      const { context, getWritten } = makeContext([
-        stateResource(1, "implementing", originalStart, 2),
-      ]);
+      const { context, getWritten } = makeContext(
+        stateSeed(1, "implementing", originalStart, 2),
+      );
       await model.methods.link_pr.execute(
         {
           issue_number: 1,
@@ -543,4 +544,10 @@ Deno.test("startedAt is preserved across transitions", async () => {
       assertEquals(getWritten()[1].data.startedAt, originalStart);
     },
   );
+});
+
+Deno.test("instanceName produces distinct storage paths per spec", () => {
+  assertEquals(instanceName("state", 42), "state-issue-42");
+  assertEquals(instanceName("context", 42), "context-issue-42");
+  assertEquals(instanceName("plan", 42, "-v2"), "plan-issue-42-v2");
 });
