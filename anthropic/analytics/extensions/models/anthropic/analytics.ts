@@ -760,6 +760,11 @@ export const model = {
         let totalInput = 0;
         let totalOutput = 0;
         let totalAll = 0;
+        // totalAll sums the API's own total_tokens, which the Analytics API
+        // docs define as excluding cache_creation tokens. totalInput below
+        // (uncached + cache_read) uses the same exclusion, so the two stay
+        // consistent by construction — this isn't the main Messages API,
+        // where cache-write tokens can roll into a combined total.
         for (const u of users) {
           totalAll += u.totalTokens;
           for (const p of u.byProduct) {
