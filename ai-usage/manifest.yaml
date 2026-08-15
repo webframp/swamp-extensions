@@ -1,10 +1,10 @@
 manifestVersion: 1
 name: "@webframp/ai-usage"
-version: "2026.08.11.1"
+version: "2026.08.14.1"
 description: |
   Unified cross-provider AI token usage monitoring — workflow, model, and
-  report that aggregates Bedrock, Vertex AI, and Azure OpenAI token data
-  into a single view.
+  report that aggregates Bedrock, Vertex AI, Azure OpenAI, and Anthropic
+  (Claude Enterprise Analytics) token data into a single view.
 
   Gracefully handles partial provider configurations. Unconfigured providers
   are shown with setup hints in the report output.
@@ -24,6 +24,9 @@ description: |
 
   swamp model create @webframp/azure/openai-usage azure-ai-usage \
     --global-arg 'subscriptions=["sub-id"]'
+
+  swamp model create @webframp/anthropic/analytics claude-analytics \
+    --global-arg 'analyticsKey=<vault-reference>'
 
   # Create the unified model
   swamp model create @webframp/ai-usage ai-usage
@@ -76,4 +79,5 @@ additionalFiles:
 dependencies:
   - "@webframp/aws/bedrock-usage@2026.08.02.1"
   - "@webframp/gcp/vertex-usage@2026.07.31.1"
-  - "@webframp/azure/openai-usage@2026.07.31.1"
+  - "@webframp/azure/openai-usage@2026.08.14.4"
+  - "@webframp/anthropic/analytics@2026.08.14.1"

@@ -23,6 +23,12 @@ const GlobalArgsSchema = z.object({
   analyticsKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Analytics API key (scope read:analytics) from claude.ai (use vault reference)",
   ),
+  discountRate: z.number().min(0).max(1).default(0).describe(
+    "Enterprise volume discount off list usage/token pricing, as a fraction " +
+      '(e.g. 0.15 for "15% off"). Applied to cost/user-usage totals derived ' +
+      "from the Analytics API's list-price `amount` fields; list-price " +
+      "reference fields (listCostUsd) are left unadjusted.",
+  ),
 });
 
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
@@ -67,6 +73,8 @@ const CostSchema = z.object({
   total_usd: z.number(),
   currency: z.string(),
   by_cost_type: z.record(z.string(), z.number()),
+  // Discount rate applied to total_cents/total_usd/by_cost_type (fraction).
+  discountRate: z.number(),
   startingAt: z.string(),
   endingAt: z.string().nullable(),
   dataRefreshedAt: z.string().nullable(),
@@ -98,11 +106,29 @@ const UserUsageRecordSchema = z.object({
   byProduct: z.array(UserProductUsageSchema),
 });
 
+/**
+ * Grand totals across all returned users, in the shape @webframp/ai-usage's
+ * generic provider registry expects (inputTokens/outputTokens/totalTokens
+ * plus per-minute rates) so this resource can be dropped into that registry
+ * without a bespoke adapter.
+ */
+const UserUsageTotalsSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  totalTokens: z.number(),
+  inputTokensPerMinute: z.number(),
+  outputTokensPerMinute: z.number(),
+});
+
 const UserUsageSchema = z.object({
   startingAt: z.string(),
   endingAt: z.string(),
   filteredEmail: z.string().nullable(),
   users: z.array(UserUsageRecordSchema),
+  totals: UserUsageTotalsSchema,
+  // Discount rate applied to costUsd/totalCostUsd (fraction); listCostUsd is
+  // always list price and is never adjusted.
+  discountRate: z.number(),
   count: z.number(),
   dataRefreshedAt: z.string().nullable(),
   // false when the report fetch failed (not an Enterprise plan, or the key
@@ -200,6 +226,15 @@ function daysAgoYmd(n: number): string {
   return toYmd(d);
 }
 
+/** Throw if `endingAt` isn't strictly after `startingAt` (both ISO timestamps). */
+function assertRange(startingAt: string, endingAt: string): void {
+  if (new Date(endingAt).getTime() <= new Date(startingAt).getTime()) {
+    throw new Error(
+      `endDate (${endingAt}) must be after startDate (${startingAt})`,
+    );
+  }
+}
+
 // =============================================================================
 // Context Type
 // =============================================================================
@@ -248,12 +283,19 @@ function usedAcrossProducts(user: any, field: string): boolean {
 /** Claude Enterprise Analytics — seat counts, adoption, DAU/WAU/MAU, and cost via the Analytics API. */
 export const model = {
   type: "@webframp/anthropic/analytics",
-  version: "2026.07.18.1",
+  version: "2026.08.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.14.1",
+      description:
+        "Add discountRate global arg; cost and userUsage resources gain " +
+        "a discountRate field, userUsage gains a totals field",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -316,6 +358,9 @@ export const model = {
         const nowIso = new Date().toISOString();
         const startDate = args.startDate ?? daysAgoYmd(7);
         const endDate = args.endDate;
+        if (endDate) {
+          assertRange(`${startDate}T00:00:00Z`, `${endDate}T00:00:00Z`);
+        }
         const handles: { name: string }[] = [];
 
         // --- 1) Activity summaries (core; failure here fails the method) ------
@@ -437,12 +482,19 @@ export const model = {
               byCostType[ct] = (byCostType[ct] ?? 0) + amt;
             }
           }
+          const discountRate = ctx.globalArgs.discountRate ?? 0;
+          const factor = 1 - discountRate;
+          const discountedByCostType: Record<string, number> = {};
+          for (const [ct, amt] of Object.entries(byCostType)) {
+            discountedByCostType[ct] = amt * factor;
+          }
           handles.push(
             await ctx.writeResource("cost", "window", {
-              total_cents: totalCents,
-              total_usd: totalCents / 100,
+              total_cents: totalCents * factor,
+              total_usd: (totalCents * factor) / 100,
               currency: "USD",
-              by_cost_type: byCostType,
+              by_cost_type: discountedByCostType,
+              discountRate,
               startingAt,
               endingAt,
               dataRefreshedAt: dataRefreshedAt ?? null,
@@ -461,6 +513,7 @@ export const model = {
               total_usd: 0,
               currency: "USD",
               by_cost_type: {},
+              discountRate: ctx.globalArgs.discountRate ?? 0,
               startingAt,
               endingAt,
               dataRefreshedAt: null,
@@ -482,8 +535,15 @@ export const model = {
       description:
         "Per-user token usage and cost from the Enterprise Analytics user_usage_report + user_cost_report endpoints, grouped by product (Claude Code broken out). Optionally filter to one user by email. Degrades (collected:false) rather than throwing when the reports are unavailable (e.g. seat-based plan or missing read:analytics scope).",
       arguments: z.object({
+        days: z.number().min(1).max(31).optional().describe(
+          "Lookback window in days, ending now (mutually redundant with " +
+            "startDate — startDate wins if both are given). Capped at 31, " +
+            "the API's max window. Defaults to 30 when neither is given.",
+        ),
         startDate: z.string().optional().describe(
-          "Start (YYYY-MM-DD, UTC, no earlier than 2026-01-01). Defaults to 30 days ago. Window spans at most 31 days.",
+          "Start (YYYY-MM-DD, UTC, no earlier than 2026-01-01). Defaults to " +
+            "`days` (or 30 days ago if `days` is also omitted). Window spans " +
+            "at most 31 days.",
         ),
         endDate: z.string().optional().describe(
           "End (YYYY-MM-DD, UTC). Defaults to now.",
@@ -497,6 +557,7 @@ export const model = {
       }),
       execute: async (
         args: {
+          days?: number;
           startDate?: string;
           endDate?: string;
           email?: string;
@@ -506,9 +567,10 @@ export const model = {
       ) => {
         const key = ctx.globalArgs.analyticsKey;
         const nowIso = new Date().toISOString();
-        const start = args.startDate ?? daysAgoYmd(30);
+        const start = args.startDate ?? daysAgoYmd(args.days ?? 30);
         const startingAt = `${start}T00:00:00Z`;
         const endingAt = args.endDate ? `${args.endDate}T00:00:00Z` : nowIso;
+        assertRange(startingAt, endingAt);
         const emailFilter = args.email?.trim().toLowerCase() || null;
         const products = args.products;
         const instance = emailFilter ? sanitize(emailFilter) : "all";
@@ -647,11 +709,16 @@ export const model = {
         const collected = usageOk || costOk;
         // Round per-row cent-division noise off the aggregated dollar totals.
         const r2 = (n: number) => Math.round(n * 100) / 100;
+        const discountRate = ctx.globalArgs.discountRate ?? 0;
+        const factor = 1 - discountRate;
 
         let users = [...byUser.values()].map((r) => {
           const byProduct = [...r.byProduct.values()].map((p) => ({
             ...p,
-            costUsd: p.costUsd === null ? null : r2(p.costUsd),
+            // costUsd reflects the API's list-price `amount`; apply the
+            // enterprise discount here. listCostUsd is already the explicit
+            // list-price reference and stays unadjusted.
+            costUsd: p.costUsd === null ? null : r2(p.costUsd * factor),
             listCostUsd: p.listCostUsd === null ? null : r2(p.listCostUsd),
           }));
           return {
@@ -683,11 +750,38 @@ export const model = {
           ? `user-${sanitize(users[0].userId)}`
           : instance;
 
+        // Grand totals across the returned users, in the shape
+        // @webframp/ai-usage's generic provider registry expects.
+        const periodMinutes = Math.max(
+          1,
+          (new Date(endingAt).getTime() - new Date(startingAt).getTime()) /
+            60000,
+        );
+        let totalInput = 0;
+        let totalOutput = 0;
+        let totalAll = 0;
+        for (const u of users) {
+          totalAll += u.totalTokens;
+          for (const p of u.byProduct) {
+            totalInput += (p.uncachedInputTokens ?? 0) +
+              (p.cacheReadInputTokens ?? 0);
+            totalOutput += p.outputTokens ?? 0;
+          }
+        }
+
         const handle = await ctx.writeResource("userUsage", outInstance, {
           startingAt,
           endingAt,
           filteredEmail: emailFilter,
           users,
+          totals: {
+            inputTokens: totalInput,
+            outputTokens: totalOutput,
+            totalTokens: totalAll,
+            inputTokensPerMinute: totalInput / periodMinutes,
+            outputTokensPerMinute: totalOutput / periodMinutes,
+          },
+          discountRate,
           count: users.length,
           dataRefreshedAt,
           collected,

@@ -1,3 +1,26 @@
+## 2026.08.14.1
+
+**Added:** Anthropic (Claude Enterprise Analytics) as a fourth provider in
+the registry, sourced from `@webframp/anthropic/analytics`'s `userUsage`
+resource (`collect_user_usage` method). Groups by user (keyed by email) with
+a per-product (`claude_code`, `chat`, etc.) breakdown, using the `totals`
+field that extension's `2026.08.14.1` release added specifically to match
+this registry's expected shape — no bespoke adapter code needed here.
+
+**Changed:** Bumped the `@webframp/azure/openai-usage` dependency to
+`2026.08.14.4` (pagination + 429/5xx retry + dedup fixes) and added the
+`@webframp/anthropic/analytics@2026.08.14.1` dependency (needed for its new
+`days` argument on `collect_user_usage` and the `totals` field on
+`userUsage`). Wired an `anthropic-usage` step into the `@webframp/ai-usage-scan`
+workflow using the same `days` input as the other providers, so the unified
+report's per-minute rates share one consistent window.
+
+**Fixed:** `lastScanned` in `status` and `generate` fell back straight to
+the data-write timestamp when a provider's attributes had no `scannedAt`
+field. Anthropic's `userUsage` resource uses `fetchedAt` instead of
+`scannedAt` — both methods now check `fetchedAt` before falling back to the
+write timestamp, matching how the field is actually named across providers.
+
 ## 2026.08.11.1
 
 **Fixed:** `status` and `generate` always reported every provider as
