@@ -261,9 +261,9 @@ function installFetchMock(mockUrl: string): () => void {
   };
 }
 
-function testContext() {
+function testContext(globalArgs: Record<string, unknown> = {}) {
   return createModelTestContext({
-    globalArgs: { analyticsKey: "ak-test-key" },
+    globalArgs: { analyticsKey: "ak-test-key", ...globalArgs },
     definition: { id: "test-id", name: "test-analytics", version: 1, tags: {} },
   });
 }
@@ -429,6 +429,41 @@ Deno.test({
       assertEquals(data.currency, "USD");
       assertEquals(data.by_cost_type.tokens, 41280);
       assertEquals(data.by_cost_type.web_search, 1000);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "analytics: cost applies discountRate to totals and by_cost_type",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext({
+        discountRate: 0.15,
+      });
+      await model.methods.collect_analytics.execute(
+        {},
+        context as unknown as ExecCtx,
+      );
+      const cost = getWrittenResources().find((r) => r.specName === "cost");
+      assertExists(cost);
+      const data = cost.data as {
+        total_cents: number;
+        total_usd: number;
+        by_cost_type: Record<string, number>;
+        discountRate: number;
+      };
+      assertEquals(data.discountRate, 0.15);
+      // 42280 * 0.85 = 35938
+      assertEquals(data.total_cents, 35938);
+      assertEquals(data.total_usd, 359.38);
+      assertEquals(data.by_cost_type.tokens, 41280 * 0.85);
+      assertEquals(data.by_cost_type.web_search, 1000 * 0.85);
     } finally {
       uninstall();
       await server.shutdown();
@@ -692,6 +727,30 @@ Deno.test({
   },
 });
 
+Deno.test({
+  name: "analytics: collect_analytics rejects an inverted date range",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context } = testContext();
+      await assertRejects(
+        () =>
+          model.methods.collect_analytics.execute(
+            { startDate: "2026-07-15", endDate: "2026-07-01" },
+            context as unknown as ExecCtx,
+          ),
+        Error,
+        "must be after",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 // ---------------------------------------------------------------------------
 // collect_user_usage
 // ---------------------------------------------------------------------------
@@ -739,6 +798,64 @@ Deno.test({
       assertEquals(cc.costUsd, 412.8); // 41280 cents -> USD
       assertEquals(cc.requests, 120);
       assertEquals(d.users[0].totalCostUsd, 422.8); // 412.80 + 10.00 (chat)
+      assertExists(d.totals);
+      assertEquals(d.discountRate, 0);
+      // Sum across both users' byProduct rows in MOCK_USER_USAGE:
+      // outputTokens: 800000 (cc/user_1) + 40000 (chat/user_1) + 100000 (cc/user_2)
+      assertEquals(d.totals.outputTokens, 940000);
+      // uncached+cache_read input: (1200000+3000000) + (100000+60000) + (400000+500000)
+      assertEquals(d.totals.inputTokens, 5260000);
+      // totalTokens: 5000000 (user_1 cc) + 200000 (user_1 chat) + 1000000 (user_2 cc)
+      assertEquals(d.totals.totalTokens, 6200000);
+      assertEquals(
+        d.totals.totalTokens,
+        d.users[0].totalTokens + d.users[1].totalTokens,
+      );
+      // Rates are self-consistent with the reported window, not a magic constant.
+      const periodMinutes =
+        (new Date(d.endingAt).getTime() - new Date(d.startingAt).getTime()) /
+        60000;
+      assertEquals(
+        d.totals.inputTokensPerMinute,
+        d.totals.inputTokens / periodMinutes,
+      );
+      assertEquals(
+        d.totals.outputTokensPerMinute,
+        d.totals.outputTokens / periodMinutes,
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "analytics: collect_user_usage applies discountRate to costUsd but not listCostUsd",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext({
+        discountRate: 0.15,
+      });
+      await model.methods.collect_user_usage.execute(
+        {},
+        context as unknown as ExecCtx,
+      );
+      const uu = getWrittenResources().find((r) => r.specName === "userUsage");
+      assertExists(uu);
+      const d = uu.data as UserUsageData;
+      assertEquals(d.discountRate, 0.15);
+      const cc = d.users[0].byProduct.find((p: UserUsageData) =>
+        p.product === "claude_code"
+      );
+      // 412.80 amount -> 350.88 at 15% off; listCostUsd stays at list price (516.00).
+      assertEquals(cc.costUsd, 350.88);
+      assertEquals(cc.listCostUsd, 516);
+      assertEquals(d.users[0].totalCostUsd, 359.38); // (412.80+10.00) * 0.85
     } finally {
       uninstall();
       await server.shutdown();
@@ -866,6 +983,58 @@ Deno.test({
       assertEquals(d.count, 0);
       assertEquals(d.users.length, 0);
       assertEquals(d.filteredEmail, "nobody@example.com");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "analytics: collect_user_usage rejects an inverted date range",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context } = testContext();
+      await assertRejects(
+        () =>
+          model.methods.collect_user_usage.execute(
+            { startDate: "2026-07-15", endDate: "2026-07-01" },
+            context as unknown as ExecCtx,
+          ),
+        Error,
+        "must be after",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "analytics: collect_user_usage days argument sets the lookback window",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_user_usage.execute(
+        { days: 7 },
+        context as unknown as ExecCtx,
+      );
+      const uu = getWrittenResources().find((r) => r.specName === "userUsage");
+      assertExists(uu);
+      const d = uu.data as UserUsageData;
+      const spanDays = (new Date(d.endingAt).getTime() -
+        new Date(d.startingAt).getTime()) / (24 * 60 * 60 * 1000);
+      // startingAt is midnight UTC 7 days ago; endingAt is "now" with a
+      // time-of-day component, so the span is 7..8 days depending on when
+      // the test runs.
+      assertEquals(spanDays >= 7 && spanDays <= 8, true);
     } finally {
       uninstall();
       await server.shutdown();

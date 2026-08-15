@@ -1,12 +1,17 @@
 manifestVersion: 1
 name: "@webframp/anthropic/analytics"
-version: "2026.07.18.1"
+version: "2026.08.14.1"
 description: |
   Observe Claude Enterprise analytics via the Enterprise Analytics API
   (`/v1/organizations/analytics/*`): seat counts, DAU/WAU/MAU, pending
   invites, feature adoption (projects, skills, connectors), and token
   cost/usage. Extracts structured seat, adoption, and cost data into
   separate versioned resources for CEL queries.
+
+  Supports an optional `discountRate` global arg (fraction, e.g. `0.15` for
+  "15% off") applied to cost and per-user-usage totals derived from the
+  Analytics API's list-price `amount` fields, to reflect enterprise volume
+  discounts. `listCostUsd` on per-user rows always stays at list price.
 
   ## Authentication
 
@@ -18,7 +23,8 @@ description: |
   ```bash
   swamp extension pull @webframp/anthropic/analytics
   swamp model create @webframp/anthropic/analytics claude-analytics \
-    --global-arg 'analyticsKey=${{ vault.get("anthropic", "ANALYTICS_KEY") }}'
+    --global-arg 'analyticsKey=${{ vault.get("anthropic", "ANALYTICS_KEY") }}' \
+    --global-arg 'discountRate=0.15'  # optional; defaults to 0
 
   # Collect analytics
   swamp model method run claude-analytics collect_analytics

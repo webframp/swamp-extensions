@@ -184,6 +184,38 @@ export const PROVIDERS: ProviderDefinition[] = [
       modelTotalField: "totalTokens",
     },
   },
+  {
+    name: "Anthropic (Claude Enterprise)",
+    modelName: "claude-analytics",
+    extensionType: "@webframp/anthropic/analytics",
+    scanMethod: "collect_user_usage",
+    scanSpec: "userUsage",
+    setup: {
+      command:
+        `swamp model create @webframp/anthropic/analytics claude-analytics \\
+  --global-arg 'analyticsKey=<vault-reference>'`,
+      permissions: [
+        "read:analytics",
+      ],
+      authNotes:
+        "Uses an Enterprise Analytics API key (scope read:analytics) created " +
+        "by the primary owner in claude.ai — Org settings → API access. " +
+        "No cloud IAM role required.",
+    },
+    fields: {
+      inputTokens: "inputTokens",
+      outputTokens: "outputTokens",
+      totalTokens: "totalTokens",
+      inputRate: "inputTokensPerMinute",
+      outputRate: "outputTokensPerMinute",
+      groupKey: "users",
+      groupNameField: "email",
+      groupTotalField: "totalTokens",
+      modelKey: "byProduct",
+      modelNameField: "product",
+      modelTotalField: "totalTokens",
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -435,6 +467,7 @@ export const model = {
             if (latest) {
               configured = true;
               lastScanned = (latest.attributes.scannedAt as string) ??
+                (latest.attributes.fetchedAt as string) ??
                 latest.updatedAt ??
                 null;
               const totals = latest.attributes.totals as
@@ -576,7 +609,9 @@ export const model = {
               modelName: p.modelName,
               extensionType: p.extensionType,
               setup: buildSetup(p, true),
-              lastScanned: (attrs.scannedAt as string) ?? null,
+              lastScanned: (attrs.scannedAt as string) ??
+                (attrs.fetchedAt as string) ??
+                null,
               totalTokens,
             });
 

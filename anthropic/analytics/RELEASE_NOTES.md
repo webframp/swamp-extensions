@@ -1,3 +1,30 @@
+## 2026.08.14.1
+
+**Added:** `discountRate` global arg (fraction, default `0`) applying an
+enterprise volume discount to cost figures derived from the Analytics API's
+list-price `amount` fields. Applies to `cost.total_cents`/`total_usd`/
+`by_cost_type` and per-user `costUsd`/`totalCostUsd`; `listCostUsd` always
+stays at list price so the discount and list reference remain comparable.
+Both `cost` and `userUsage` resources gain a `discountRate` field echoing
+the rate applied.
+
+**Added:** `totals` field on the `userUsage` resource — grand
+`inputTokens`/`outputTokens`/`totalTokens` and per-minute rates across all
+returned users, in the shape `@webframp/ai-usage`'s generic provider registry
+expects, so this resource can be registered there without a bespoke adapter.
+
+**Added:** `days` argument on `collect_user_usage` (capped at 31, the
+Analytics API's max window) as an alternative to `startDate`, so callers
+(including a future `@webframp/ai-usage-scan` step) can drive the lookback
+the same way as the other provider scan methods.
+
+**Added:** Both `collect_analytics` and `collect_user_usage` now reject an
+inverted date range (`endDate` at or before `startDate`) via a shared
+`assertRange` check, instead of silently sending a backwards window to the
+Analytics API — `collect_user_usage` additionally used this to guard
+against a near-zero `periodMinutes` producing wildly inflated per-minute
+rates in `totals`.
+
 ## 2026.07.18.1
 
 **Added:** An `upgrades` array entry (no-op) to `analytics.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.

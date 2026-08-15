@@ -363,7 +363,7 @@ Deno.test({
       totalProviders: number;
     };
     assertEquals(data.configuredCount, 0);
-    assertEquals(data.totalProviders, 3);
+    assertEquals(data.totalProviders, 4);
   },
 });
 
@@ -533,6 +533,68 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "generate handles Anthropic field mapping (users/byProduct, email-keyed groups)",
+  fn: async () => {
+    const { context, getWrittenResources } = createAiUsageContext({
+      "claude-analytics": {
+        "userUsage": [
+          {
+            attributes: {
+              scannedAt: "2026-08-14T00:00:00Z",
+              totals: {
+                inputTokens: 40000,
+                outputTokens: 10000,
+                totalTokens: 50000,
+                inputTokensPerMinute: 0.9,
+                outputTokensPerMinute: 0.2,
+              },
+              users: [
+                {
+                  email: "sescriva@jw.org",
+                  totalTokens: 50000,
+                  byProduct: [
+                    { product: "claude_code", totalTokens: 50000 },
+                  ],
+                },
+              ],
+            },
+            updatedAt: "2026-08-14T00:00:00Z",
+          },
+        ],
+      },
+    });
+
+    const result = await model.methods.generate.execute(
+      { days: 30 },
+      context as unknown as GenerateContext,
+    );
+
+    assertExists(result.dataHandles);
+    const resources = getWrittenResources();
+    const data = resources[0].data as {
+      providers: Array<{
+        name: string;
+        inputTokens: number;
+        outputTokens: number;
+        totalTokens: number;
+        topAccounts: Array<{ name: string }>;
+        topModels: Array<{ modelId: string }>;
+      }>;
+      grandTotals: { inputTokens: number; outputTokens: number };
+    };
+
+    assertEquals(data.providers.length, 1);
+    assertEquals(data.providers[0].name, "Anthropic (Claude Enterprise)");
+    assertEquals(data.providers[0].inputTokens, 40000);
+    assertEquals(data.providers[0].outputTokens, 10000);
+    assertEquals(data.providers[0].totalTokens, 50000);
+    assertEquals(data.providers[0].topAccounts[0].name, "sescriva@jw.org");
+    assertEquals(data.providers[0].topModels[0].modelId, "claude_code");
+  },
+});
+
+Deno.test({
   name: "generate handles all providers unconfigured gracefully",
   fn: async () => {
     const { context, getWrittenResources } = createAiUsageContext({});
@@ -554,7 +616,7 @@ Deno.test({
 
     assertEquals(data.providers.length, 0);
     assertEquals(data.grandTotals.totalTokens, 0);
-    assertEquals(data.coverage.length, 3);
+    assertEquals(data.coverage.length, 4);
     assertEquals(data.coverage.every((c) => !c.configured), true);
     assertEquals(data.days, 7);
     assertEquals(data.periodMinutes, 7 * 24 * 60);
