@@ -13,26 +13,26 @@ import {
   ListEventBusesCommand,
   ListRulesCommand,
   ListTargetsByRuleCommand,
-} from "npm:@aws-sdk/client-eventbridge@3.1104.0";
+} from "npm:@aws-sdk/client-eventbridge@3.1111.0";
 import {
   ListSubscriptionsByTopicCommand,
   ListTopicsCommand,
   SNSClient,
-} from "npm:@aws-sdk/client-sns@3.1104.0";
+} from "npm:@aws-sdk/client-sns@3.1111.0";
 import {
   GetQueueAttributesCommand,
   ListQueuesCommand,
   SQSClient,
-} from "npm:@aws-sdk/client-sqs@3.1104.0";
+} from "npm:@aws-sdk/client-sqs@3.1111.0";
 import {
   LambdaClient,
   ListEventSourceMappingsCommand,
-} from "npm:@aws-sdk/client-lambda@3.1104.0";
+} from "npm:@aws-sdk/client-lambda@3.1111.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1104.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1104.0";
+} from "npm:@aws-sdk/client-sts@3.1111.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1111.0";
 
 // Defensive pagination cap. The per-topic subscription and Lambda event-source
 // mapping listings have no caller-supplied bound (unlike rules/topics/queues),
@@ -242,7 +242,7 @@ function isSnsEndpointInternal(protocol: string, endpoint: string): boolean {
 /** Event topology model — observes the directed graph of AWS event relationships. */
 export const model = {
   type: "@webframp/aws/event-topology",
-  version: "2026.08.05.1",
+  version: "2026.08.15.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -253,6 +253,11 @@ export const model = {
     {
       toVersion: "2026.08.05.1",
       description: "Version bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.15.1",
+      description: "Dependency bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

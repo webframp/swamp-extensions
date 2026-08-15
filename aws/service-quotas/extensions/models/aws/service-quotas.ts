@@ -17,21 +17,21 @@ import {
   ListServicesCommand,
   RequestServiceQuotaIncreaseCommand,
   ServiceQuotasClient,
-} from "npm:@aws-sdk/client-service-quotas@3.1104.0";
+} from "npm:@aws-sdk/client-service-quotas@3.1111.0";
 import {
   CloudWatchClient,
   GetMetricDataCommand,
-} from "npm:@aws-sdk/client-cloudwatch@3.1104.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1111.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1104.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1104.0";
+} from "npm:@aws-sdk/client-sts@3.1111.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1111.0";
 import {
   DescribeCasesCommand,
   DescribeCommunicationsCommand,
   SupportClient,
-} from "npm:@aws-sdk/client-support@3.1104.0";
+} from "npm:@aws-sdk/client-support@3.1111.0";
 
 // =============================================================================
 // Schemas
@@ -357,7 +357,7 @@ interface ModelContext {
 /** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.08.05.1",
+  version: "2026.08.15.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -369,6 +369,11 @@ export const model = {
     {
       toVersion: "2026.08.05.1",
       description: "Version bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.15.1",
+      description: "Dependency bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

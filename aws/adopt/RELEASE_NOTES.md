@@ -1,3 +1,13 @@
+## 2026.08.15.1
+
+**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (5 packages)
+
+**Changed:** Bump @swamp/aws/ec2 2026.08.05.1 → 2026.08.14.1
+
+**Changed:** Bump @swamp/aws/rds 2026.08.05.1 → 2026.08.15.1
+
+**Changed:** Bump @swamp/aws/secretsmanager 2026.08.05.1 → 2026.08.14.1
+
 ## 2026.08.05.1
 
 **Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (5 packages)
