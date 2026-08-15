@@ -13,8 +13,8 @@ import { z } from "npm:zod@4.4.3";
 import {
   CostExplorerClient,
   GetCostAndUsageCommand,
-} from "npm:@aws-sdk/client-cost-explorer@3.1104.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1104.0";
+} from "npm:@aws-sdk/client-cost-explorer@3.1111.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1111.0";
 
 // =============================================================================
 // Schemas
@@ -183,7 +183,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.08.13.1",
+  version: "2026.08.15.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -302,6 +302,11 @@ export const model = {
         }
         return old;
       },
+    },
+    {
+      toVersion: "2026.08.15.1",
+      description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
 

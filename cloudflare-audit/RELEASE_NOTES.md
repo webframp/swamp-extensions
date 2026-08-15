@@ -1,3 +1,7 @@
+## 2026.08.15.1
+
+**Changed:** Bump @webframp/cloudflare 2026.07.18.2 → 2026.08.13.1
+
 ## 2026.07.24.1
 
 **Changed:** Bump dependency pin:

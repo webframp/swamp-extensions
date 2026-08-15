@@ -428,6 +428,11 @@ export const model = {
         "Breaking: hint field replaced with setup object containing command, permissions, authNotes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.15.1",
+      description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {

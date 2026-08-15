@@ -1,3 +1,9 @@
+## 2026.08.15.1
+
+**Fixed:** Restore comment line in `maintainer.ts` truncated by apply-bump's
+over-broad version regex (matched `@opentelemetry/api@1.9.1` inside a code
+comment and stripped trailing text).
+
 ## 2026.08.06.1
 
 **Fixed:** `plan-bump` no longer assumes that source file version strings match

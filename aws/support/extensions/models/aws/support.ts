@@ -19,12 +19,12 @@ import {
   DescribeCommunicationsCommand,
   ResolveCaseCommand,
   SupportClient,
-} from "npm:@aws-sdk/client-support@3.1104.0";
+} from "npm:@aws-sdk/client-support@3.1111.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1104.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1104.0";
+} from "npm:@aws-sdk/client-sts@3.1111.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1111.0";
 
 // =============================================================================
 // Schemas
@@ -234,13 +234,18 @@ interface ModelContext {
 /** AWS Support case management model. */
 export const model = {
   type: "@webframp/aws/support",
-  version: "2026.08.05.1",
+  version: "2026.08.15.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.08.05.1",
       description: "Initial release",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.15.1",
+      description: "Dependency bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

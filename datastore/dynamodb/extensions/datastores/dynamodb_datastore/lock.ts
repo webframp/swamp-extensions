@@ -7,7 +7,7 @@ import {
   GetCommand,
   PutCommand,
   UpdateCommand,
-} from "npm:@aws-sdk/lib-dynamodb@3.1104.0";
+} from "npm:@aws-sdk/lib-dynamodb@3.1111.0";
 import { lockKey } from "./keys.ts";
 import {
   Attr,

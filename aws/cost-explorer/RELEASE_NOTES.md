@@ -1,3 +1,7 @@
+## 2026.08.15.1
+
+**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (2 packages)
+
 ## 2026.08.10.1
 
 **Added:** `totalCost` field in `get_cost_trend` output. The field contains the

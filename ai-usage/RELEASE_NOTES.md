@@ -1,3 +1,7 @@
+## 2026.08.15.1
+
+**Changed:** Bump @webframp/aws/bedrock-usage 2026.08.02.1 → 2026.08.05.1
+
 ## 2026.08.14.1
 
 **Added:** Anthropic (Claude Enterprise Analytics) as a fourth provider in
