@@ -268,6 +268,11 @@ export const model = {
         "Allow null assignedToId in update_issue to unassign — sends empty string to Redmine API",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.20.1",
+      description: "Pin zod to 4.4.3 — no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: z.object({
