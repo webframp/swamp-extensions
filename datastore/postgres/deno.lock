@@ -98,7 +98,7 @@
       "jsr:@std/assert@1.0.19",
       "jsr:@systeminit/swamp-testing@0.20260604.20",
       "npm:postgres@3.4.7",
-      "npm:zod@4"
+      "npm:zod@4.4.3"
     ]
   }
 }
