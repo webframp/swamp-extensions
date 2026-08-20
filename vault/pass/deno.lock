@@ -9,7 +9,6 @@
     "npm:@opentelemetry/api@1.9.1": "1.9.1",
     "npm:@opentelemetry/context-async-hooks@2.10.0": "2.10.0_@opentelemetry+api@1.9.1",
     "npm:@opentelemetry/sdk-trace-base@2.10.0": "2.10.0_@opentelemetry+api@1.9.1",
-    "npm:zod@4.3.6": "4.3.6",
     "npm:zod@4.4.3": "4.4.3",
     "npm:zod@^4.3.6": "4.4.3"
   },
@@ -86,9 +85,6 @@
     "@opentelemetry/semantic-conventions@1.43.0": {
       "integrity": "sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg=="
     },
-    "zod@4.3.6": {
-      "integrity": "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="
-    },
     "zod@4.4.3": {
       "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
     }
@@ -96,7 +92,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@systeminit/swamp-testing@0.20260604.20",
-      "npm:zod@4.3.6"
+      "npm:zod@4.4.3"
     ]
   }
 }

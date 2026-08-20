@@ -1,7 +1,3 @@
-## 2026.07.18.1
+## 2026.08.20.1
 
-**Added:** An `upgrades` array entry (no-op) to `terraform.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
-
-## 2026.07.16.1
-
-**Changed:** README and LICENSE reformatted (deno fmt) in PR #134; this is the first version bump to publish that formatting to the registry. No functional or behavioral change.
+**Upgrade note:** Bumped zod from 4.3.6 to 4.4.3. No behavioral changes — dependency version alignment only.

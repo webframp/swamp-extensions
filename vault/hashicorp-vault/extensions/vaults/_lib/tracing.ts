@@ -32,7 +32,7 @@ import {
 /** Extension name, used as the instrumentation scope. */
 const INSTRUMENTATION_NAME = "@webframp/hashicorp-vault";
 /** Kept in step with `version` in manifest.yaml. */
-const INSTRUMENTATION_VERSION = "2026.07.30.1";
+const INSTRUMENTATION_VERSION = "2026.08.20.1";
 
 /** Returns the tracer for this extension. No-op unless the host configured a provider. */
 export function getTracer(): Tracer {

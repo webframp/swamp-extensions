@@ -189,12 +189,17 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.07.18.1",
+  version: "2026.08.20.1",
 
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.20.1",
+      description: "Pin zod to 4.4.3 — no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
