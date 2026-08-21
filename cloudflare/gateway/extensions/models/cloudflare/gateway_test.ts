@@ -55,7 +55,6 @@ Deno.test("gateway model: has expected methods", () => {
   assertExists(model.methods.list_dns_destination_ips);
   assertExists(model.methods.get_egress_cidr_pairs);
   assertExists(model.methods.list_zero_trust_lists);
-  assertExists(model.methods.list_from_csv);
   assertExists(model.methods.list_details);
   assertExists(model.methods.list_items);
   assertExists(model.methods.list_zero_trust_gateway_locations);
@@ -128,7 +127,6 @@ Deno.test("gateway model: has expected resources", () => {
   assertExists(model.resources["dns_destination_ips"]);
   assertExists(model.resources["get_egress_cidr_pairs"]);
   assertExists(model.resources["zero_trust_lists"]);
-  assertExists(model.resources["list_from_csv"]);
   assertExists(model.resources["list_details"]);
   assertExists(model.resources["items"]);
   assertExists(model.resources["zero_trust_gateway_locations"]);

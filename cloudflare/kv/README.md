@@ -17,20 +17,19 @@ swamp model create @webframp/cloudflare/kv cf-kv \
 
 ## Methods
 
-| Method                                                           | Description                                 |
-| ---------------------------------------------------------------- | ------------------------------------------- |
-| `list_namespaces`                                                | List Namespaces                             |
-| `create_a_namespace`                                             | Create a Namespace                          |
-| `get_a_namespace`                                                | Get a Namespace                             |
-| `update_workers_kv_namespace_rename_a_namespace`                 | Rename a Namespace                          |
-| `delete_workers_kv_namespace_remove_a_namespace`                 | Remove a Namespace                          |
-| `update_workers_kv_namespace_write_multiple_key_value_pairs`     | Write multiple key-value pairs              |
-| `delete_multiple_key_value_pairs`                                | Delete multiple key-value pairs             |
-| `get_multiple_key_value_pairs`                                   | Get multiple key-value pairs                |
-| `list_a_namespace_s_keys`                                        | List a Namespace's Keys                     |
-| `get_workers_kv_namespace_read_the_metadata_for_a_key`           | Read the metadata for a key                 |
-| `update_workers_kv_namespace_write_key_value_pair_with_metadata` | Write key-value pair with optional metadata |
-| `delete_key_value_pair`                                          | Delete key-value pair                       |
+| Method                                                       | Description                     |
+| ------------------------------------------------------------ | ------------------------------- |
+| `list_namespaces`                                            | List Namespaces                 |
+| `create_a_namespace`                                         | Create a Namespace              |
+| `get_a_namespace`                                            | Get a Namespace                 |
+| `update_workers_kv_namespace_rename_a_namespace`             | Rename a Namespace              |
+| `delete_workers_kv_namespace_remove_a_namespace`             | Remove a Namespace              |
+| `update_workers_kv_namespace_write_multiple_key_value_pairs` | Write multiple key-value pairs  |
+| `delete_multiple_key_value_pairs`                            | Delete multiple key-value pairs |
+| `get_multiple_key_value_pairs`                               | Get multiple key-value pairs    |
+| `list_a_namespace_s_keys`                                    | List a Namespace's Keys         |
+| `get_workers_kv_namespace_read_the_metadata_for_a_key`       | Read the metadata for a key     |
+| `delete_key_value_pair`                                      | Delete key-value pair           |
 
 ## Development
 

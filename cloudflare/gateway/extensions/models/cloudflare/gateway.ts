@@ -295,24 +295,6 @@ const ListZeroTrustListsSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const ListFromCsvSchema = z.object({
-  created_at: z.unknown().optional(),
-  data: z.unknown().optional(),
-  id: z.unknown().optional(),
-  operation_type: z.enum(["create_list"]).optional().describe(
-    "The type of operation.",
-  ),
-  processing_error: z.string().nullable().optional().describe(
-    "A human-readable error message if the operation failed. Only present when the operation status is...",
-  ),
-  result: z.string().nullable().optional().describe(
-    "The result of the operation. Only present when the operation has completed successfully.",
-  ),
-  status: z.enum(["pending", "active", "failed", "complete"]).optional()
-    .describe("The status of the operation."),
-  updated_at: z.unknown().optional(),
-});
-
 const ListDetailsSchema = z.object({
   count: z.unknown().optional(),
   created_at: z.unknown().optional(),
@@ -689,7 +671,7 @@ const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
 /** Cloudflare Gateway — DNS/HTTP policies, locations, proxy endpoints */
 export const model = {
   type: "@webframp/cloudflare/gateway",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -802,12 +784,6 @@ export const model = {
       schema: ListZeroTrustListsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "list_from_csv": {
-      description: "Create Zero Trust list from CSV",
-      schema: ListFromCsvSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "list_details": {
       description: "Get Zero Trust list details",
@@ -1834,40 +1810,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    list_from_csv: {
-      description: "Create Zero Trust list from CSV",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/gateway/lists/upload`,
-        );
-
-        const handle = await context.writeResource(
-          "list_from_csv",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info("Executed list_from_csv", {});
-        return { dataHandles: [handle] };
-      },
-    },
     list_details: {
       description: "Get Zero Trust list details",
       arguments: z.object({
@@ -2533,7 +2475,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body = args.body;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2775,7 +2717,15 @@ export const model = {
     },
     patch_multiple_zero_trust_gateway_rules: {
       description: "Patch multiple Zero Trust Gateway rules",
-      arguments: z.object({}),
+      arguments: z.object({
+        items: z.array(z.object({
+          description: z.unknown().optional(),
+          enabled: z.unknown().optional(),
+          id: z.unknown(),
+          name: z.unknown().optional(),
+          precedence: z.unknown().optional(),
+        })),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -2792,7 +2742,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body = args.items;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,

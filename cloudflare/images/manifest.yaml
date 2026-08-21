@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/images"
-version: "2026.07.27.1"
+version: "2026.08.21.1"
 description: "Cloudflare Images — upload, transform, deliver, and manage image pipelines"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

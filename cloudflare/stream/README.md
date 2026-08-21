@@ -57,7 +57,6 @@ swamp model create @webframp/cloudflare/stream cf-stream \
 | `delete_audio_tracks`                                                 | Delete additional audio tracks on a video                     |
 | `list_captions_or_subtitles`                                          | List captions or subtitles                                    |
 | `get_caption_or_subtitle_for_language`                                | List captions or subtitles for a provided language            |
-| `update_stream_subtitles_captions_upload_captions_or_subtitles`       | Upload captions or subtitles                                  |
 | `delete_captions_or_subtitles`                                        | Delete captions or subtitles                                  |
 | `stream_subtitles_captions_generate_caption_or_subtitle_for_language` | Generate captions or subtitles for a provided language via AI |
 | `list_downloads`                                                      | List downloads                                                |

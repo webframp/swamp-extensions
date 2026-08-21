@@ -17,39 +17,37 @@ swamp model create @webframp/cloudflare/images cf-images \
 
 ## Methods
 
-| Method                                                              | Description                               |
-| ------------------------------------------------------------------- | ----------------------------------------- |
-| `cloudflare_images_upload_an_image_via_url`                         | Upload an image                           |
-| `list_signing_keys`                                                 | List Signing Keys                         |
-| `update_cloudflare_images_keys_add_signing_key`                     | Create a new Signing Key                  |
-| `delete_signing_key`                                                | Delete Signing Key                        |
-| `get_cloudflare_images_images_usage_statistics`                     | Images usage statistics                   |
-| `list_variants`                                                     | List variants                             |
-| `create_a_variant`                                                  | Create a variant                          |
-| `get_cloudflare_images_variants_variant_details`                    | Variant details                           |
-| `update_a_variant`                                                  | Update a variant                          |
-| `delete_a_variant`                                                  | Delete a variant                          |
-| `get_cloudflare_images_variants_variant_details_flat`               | Variant details (flat)                    |
-| `get_cloudflare_images_image_details`                               | Image details                             |
-| `update_image`                                                      | Update image                              |
-| `delete_image`                                                      | Delete image                              |
-| `list_images_v2`                                                    | List images V2                            |
-| `create_authenticated_direct_upload_url_v_2`                        | Create authenticated direct upload URL V2 |
-| `list_migrations`                                                   | List sourcing kit migrations              |
-| `create_migration`                                                  | Create a sourcing kit migration           |
-| `get_migration`                                                     | Get sourcing kit migration                |
-| `delete_migration`                                                  | Delete a sourcing kit migration           |
-| `get_migration_progress`                                            | Get migration progress                    |
-| `update_cloudflare_images_sourcingkit_abort_migration`              | Abort a migration                         |
-| `update_cloudflare_images_sourcingkit_start_migration`              | Start a migration                         |
-| `list_migration_logs`                                               | List migration logs                       |
-| `list_sources`                                                      | List sourcing kit sources                 |
-| `create_source`                                                     | Create a sourcing kit source              |
-| `create_cloudflare_images_sourcingkit_precheck_source_connectivity` | Precheck source connectivity              |
-| `get_source`                                                        | Get sourcing kit source                   |
-| `update_source`                                                     | Update a sourcing kit source              |
-| `delete_source`                                                     | Delete a sourcing kit source              |
-| `get_source_connectivity`                                           | Get source connectivity status            |
+| Method                                                              | Description                     |
+| ------------------------------------------------------------------- | ------------------------------- |
+| `list_signing_keys`                                                 | List Signing Keys               |
+| `update_cloudflare_images_keys_add_signing_key`                     | Create a new Signing Key        |
+| `delete_signing_key`                                                | Delete Signing Key              |
+| `get_cloudflare_images_images_usage_statistics`                     | Images usage statistics         |
+| `list_variants`                                                     | List variants                   |
+| `create_a_variant`                                                  | Create a variant                |
+| `get_cloudflare_images_variants_variant_details`                    | Variant details                 |
+| `update_a_variant`                                                  | Update a variant                |
+| `delete_a_variant`                                                  | Delete a variant                |
+| `get_cloudflare_images_variants_variant_details_flat`               | Variant details (flat)          |
+| `get_cloudflare_images_image_details`                               | Image details                   |
+| `update_image`                                                      | Update image                    |
+| `delete_image`                                                      | Delete image                    |
+| `list_images_v2`                                                    | List images V2                  |
+| `list_migrations`                                                   | List sourcing kit migrations    |
+| `create_migration`                                                  | Create a sourcing kit migration |
+| `get_migration`                                                     | Get sourcing kit migration      |
+| `delete_migration`                                                  | Delete a sourcing kit migration |
+| `get_migration_progress`                                            | Get migration progress          |
+| `update_cloudflare_images_sourcingkit_abort_migration`              | Abort a migration               |
+| `update_cloudflare_images_sourcingkit_start_migration`              | Start a migration               |
+| `list_migration_logs`                                               | List migration logs             |
+| `list_sources`                                                      | List sourcing kit sources       |
+| `create_source`                                                     | Create a sourcing kit source    |
+| `create_cloudflare_images_sourcingkit_precheck_source_connectivity` | Precheck source connectivity    |
+| `get_source`                                                        | Get sourcing kit source         |
+| `update_source`                                                     | Update a sourcing kit source    |
+| `delete_source`                                                     | Delete a sourcing kit source    |
+| `get_source_connectivity`                                           | Get source connectivity status  |
 
 ## Development
 

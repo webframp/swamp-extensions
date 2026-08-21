@@ -117,7 +117,6 @@ Deno.test("workers-ai model: has expected methods", () => {
     model.methods.create_ai_search_namespace_instance_chat_completion,
   );
   assertExists(model.methods.list_items);
-  assertExists(model.methods.ai_search_namespace_instance_upload_item);
   assertExists(model.methods.create_or_update_item);
   assertExists(model.methods.get_item);
   assertExists(model.methods.update_ai_search_namespace_instance_sync_item);
@@ -139,7 +138,6 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.list_finetunes);
   assertExists(model.methods.create_finetune);
   assertExists(model.methods.list_public_finetunes);
-  assertExists(model.methods.workers_ai_upload_finetune_asset);
   assertExists(model.methods.get_model_schema);
   assertExists(model.methods.get_workers_ai_search_model);
   assertExists(model.methods.create_workers_ai_post_run_generic);
@@ -243,9 +241,6 @@ Deno.test("workers-ai model: has expected methods", () => {
     model.methods.create_workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn,
   );
   assertExists(
-    model.methods.workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50,
-  );
-  assertExists(
     model.methods.workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16,
   );
   assertExists(
@@ -315,11 +310,7 @@ Deno.test("workers-ai model: has expected methods", () => {
     model.methods.create_workers_ai_post_run_cf_meta_llama_guard_3_8b,
   );
   assertExists(model.methods.workers_ai_post_run_cf_meta_m2m100_1_2b);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_microsoft_nonomni_resnet_50,
-  );
   assertExists(model.methods.workers_ai_post_run_cf_microsoft_phi_2);
-  assertExists(model.methods.workers_ai_post_run_cf_microsoft_resnet_50);
   assertExists(
     model.methods.workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1,
   );
@@ -347,11 +338,9 @@ Deno.test("workers-ai model: has expected methods", () => {
   );
   assertExists(model.methods.workers_ai_post_run_cf_openai_gpt_oss_120b);
   assertExists(model.methods.workers_ai_post_run_cf_openai_gpt_oss_20b);
-  assertExists(model.methods.workers_ai_post_run_cf_openai_whisper);
   assertExists(
     model.methods.create_workers_ai_post_run_cf_openai_whisper_large_v3_turbo,
   );
-  assertExists(model.methods.workers_ai_post_run_cf_openai_whisper_tiny_en);
   assertExists(model.methods.workers_ai_post_run_cf_openchat_openchat_3_5_0106);
   assertExists(
     model.methods.create_workers_ai_post_run_cf_pfnet_plamo_embedding_1b,
@@ -435,7 +424,6 @@ Deno.test("workers-ai model: has expected methods", () => {
   );
   assertExists(model.methods.workers_ai_post_run_model);
   assertExists(model.methods.list_workers_ai_search_task);
-  assertExists(model.methods.workers_ai_post_to_markdown);
   assertExists(model.methods.get_to_markdown_supported);
 });
 
@@ -501,7 +489,6 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["ai_search_move_instance"]);
   assertExists(model.resources["ai_search_namespace_instance_chat_completion"]);
   assertExists(model.resources["items"]);
-  assertExists(model.resources["ai_search_namespace_instance_upload_item"]);
   assertExists(model.resources["or_update_item"]);
   assertExists(model.resources["item"]);
   assertExists(model.resources["ai_search_namespace_instance_sync_item"]);
@@ -519,7 +506,6 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["list_finetunes"]);
   assertExists(model.resources["finetune"]);
   assertExists(model.resources["public_finetunes"]);
-  assertExists(model.resources["workers_ai_upload_finetune_asset"]);
   assertExists(model.resources["model_schema"]);
   assertExists(model.resources["workers_ai_search_model"]);
   assertExists(model.resources["workers_ai_post_run_generic"]);
@@ -635,9 +621,6 @@ Deno.test("workers-ai model: has expected resources", () => {
     model.resources["workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn"],
   );
   assertExists(
-    model.resources["workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50"],
-  );
-  assertExists(
     model.resources["workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16"],
   );
   assertExists(
@@ -724,11 +707,7 @@ Deno.test("workers-ai model: has expected resources", () => {
   );
   assertExists(model.resources["workers_ai_post_run_cf_meta_llama_guard_3_8b"]);
   assertExists(model.resources["workers_ai_post_run_cf_meta_m2m100_1_2b"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_microsoft_nonomni_resnet_50"],
-  );
   assertExists(model.resources["workers_ai_post_run_cf_microsoft_phi_2"]);
-  assertExists(model.resources["workers_ai_post_run_cf_microsoft_resnet_50"]);
   assertExists(
     model.resources["workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1"],
   );
@@ -767,12 +746,8 @@ Deno.test("workers-ai model: has expected resources", () => {
   );
   assertExists(model.resources["workers_ai_post_run_cf_openai_gpt_oss_120b"]);
   assertExists(model.resources["workers_ai_post_run_cf_openai_gpt_oss_20b"]);
-  assertExists(model.resources["workers_ai_post_run_cf_openai_whisper"]);
   assertExists(
     model.resources["workers_ai_post_run_cf_openai_whisper_large_v3_turbo"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_openai_whisper_tiny_en"],
   );
   assertExists(
     model.resources["workers_ai_post_run_cf_openchat_openchat_3_5_0106"],
@@ -892,7 +867,6 @@ Deno.test("workers-ai model: has expected resources", () => {
   );
   assertExists(model.resources["workers_ai_post_run_model"]);
   assertExists(model.resources["workers_ai_search_task"]);
-  assertExists(model.resources["workers_ai_post_to_markdown"]);
   assertExists(model.resources["get_to_markdown_supported"]);
 });
 
@@ -1228,27 +1202,12 @@ Deno.test({
 
 Deno.test({
   name:
-    "workers-ai model: ai_search_namespace_instance_upload_item executes and writes resource",
+    "workers-ai model: workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = {
-      "checksum": "test-value",
-      "chunks_count": 1,
-      "created_at": "2024-01-01T00:00:00Z",
-      "error": "test-value",
-      "file_size": 1,
-      "id": "test-value",
-      "key": "test-value",
-      "last_seen_at": "2024-01-01T00:00:00Z",
-      "namespace": "test-value",
-      "next_action": "INDEX",
-      "source_id": "test-value",
-      "status": "queued",
-    };
+    const mockData = {};
     const { url, server } = startMockCfServer({
-      "/ai-search/namespaces/test-id-123/instances/test-id-123/items": {
-        result: mockData,
-      },
+      "/ai/run/@cf/aisingapore/gemma-sea-lion-v4-27b-it": { result: mockData },
     });
     const uninstall = installFetchMock(url);
 
@@ -1271,21 +1230,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).ai_search_namespace_instance_upload_item.execute({
-        "checksum": "test-value",
-        "chunks_count": 1,
-        "created_at": "2024-01-01T00:00:00Z",
-        "error": "test-value",
-        "file_size": 1,
-        "id": "test-id-123",
-        "key": "test-value",
-        "last_seen_at": "2024-01-01T00:00:00Z",
-        "namespace": "test-value",
-        "next_action": "INDEX",
-        "source_id": "test-value",
-        "status": "queued",
-        "name": "test-id-123",
-      }, context);
+      >).workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it.execute(
+        {},
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

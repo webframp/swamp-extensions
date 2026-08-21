@@ -28,7 +28,6 @@ Deno.test("images model: has globalArguments with apiToken", () => {
 
 Deno.test("images model: has expected methods", () => {
   assertExists(model.methods);
-  assertExists(model.methods.cloudflare_images_upload_an_image_via_url);
   assertExists(model.methods.list_signing_keys);
   assertExists(model.methods.update_cloudflare_images_keys_add_signing_key);
   assertExists(model.methods.delete_signing_key);
@@ -45,7 +44,6 @@ Deno.test("images model: has expected methods", () => {
   assertExists(model.methods.update_image);
   assertExists(model.methods.delete_image);
   assertExists(model.methods.list_images_v2);
-  assertExists(model.methods.create_authenticated_direct_upload_url_v_2);
   assertExists(model.methods.list_migrations);
   assertExists(model.methods.create_migration);
   assertExists(model.methods.get_migration);
@@ -72,7 +70,6 @@ Deno.test("images model: has expected methods", () => {
 
 Deno.test("images model: has expected resources", () => {
   assertExists(model.resources);
-  assertExists(model.resources["cloudflare_images_upload_an_image_via_url"]);
   assertExists(model.resources["list_signing_keys"]);
   assertExists(model.resources["cloudflare_images_keys_add_signing_key"]);
   assertExists(model.resources["cloudflare_images_images_usage_statistics"]);
@@ -85,7 +82,6 @@ Deno.test("images model: has expected resources", () => {
   assertExists(model.resources["cloudflare_images_image_details"]);
   assertExists(model.resources["image"]);
   assertExists(model.resources["list_images_v2"]);
-  assertExists(model.resources["authenticated_direct_upload_url_v_2"]);
   assertExists(model.resources["list_migrations"]);
   assertExists(model.resources["migration"]);
   assertExists(model.resources["migration_progress"]);
@@ -163,64 +159,6 @@ function installFetchMock(mockUrl: string): () => void {
     globalThis.fetch = originalFetch;
   };
 }
-
-Deno.test({
-  name:
-    "images model: cloudflare_images_upload_an_image_via_url executes and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = {
-      "creator": null,
-      "filename": null,
-      "id": null,
-      "meta": null,
-      "requireSignedURLs": null,
-      "uploaded": null,
-      "variants": null,
-    };
-    const { url, server } = startMockCfServer({
-      "/images/v1": { result: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
-        definition: {
-          id: "test-id",
-          name: "test-images",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).cloudflare_images_upload_an_image_via_url.execute({
-        "creator": null,
-        "filename": null,
-        "id": null,
-        "meta": null,
-        "requireSignedURLs": null,
-        "uploaded": null,
-        "variants": null,
-      }, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
 
 Deno.test({
   name: "images model: list_signing_keys fetches and writes resource",
