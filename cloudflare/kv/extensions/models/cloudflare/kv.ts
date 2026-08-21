@@ -69,7 +69,29 @@ const DeleteMultipleKeyValuePairsSchema = z.object({
   ),
 });
 
-const GetMultipleKeyValuePairsSchema = z.union([z.unknown(), z.unknown()]);
+const GetMultipleKeyValuePairsSchema = z.union([
+  z.object({
+    values: z.record(
+      z.string(),
+      z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.string(), z.unknown()),
+      ]),
+    ).optional(),
+  }),
+  z.object({
+    values: z.record(
+      z.string(),
+      z.object({
+        expiration: z.unknown().optional(),
+        metadata: z.unknown(),
+        value: z.unknown(),
+      }).nullable(),
+    ).optional(),
+  }),
+]);
 
 const ANamespaceSKeysItemSchema = z.object({
   expiration: z.number().optional().describe(
@@ -345,6 +367,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -617,6 +640,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

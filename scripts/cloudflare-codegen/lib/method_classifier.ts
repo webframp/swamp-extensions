@@ -518,25 +518,18 @@ function generateArgsSchema(op: GroupedOperation): string {
     );
   }
 
-  // Request body fields (for create/update)
-  if (op.requestBody?.properties) {
-    const required = new Set(op.requestBody.required ?? []);
-    for (const [name, prop] of Object.entries(op.requestBody.properties)) {
-      // Skip id fields in request bodies
-      if (name === "id") continue;
-      const fieldName = sanitizeFieldName(name);
-      if (seenFields.has(fieldName)) continue;
-      seenFields.add(fieldName);
-      const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
-      const optSuffix = required.has(name) ? "" : ".optional()";
-      const desc = prop.description
-        ? `.describe("${escapeStr(truncateStr(prop.description))}")`
-        : "";
-      fields.push(
-        `  ${fieldName}: ${fieldZod}${optSuffix}${desc},`,
-      );
-    }
-  } else if (op.requestBody?.type === "array" && op.requestBody.items) {
+  // Request body fields (for create/update).
+  //
+  // Order matters: a discriminated-union body (oneOf) sometimes carries a
+  // sibling top-level `properties` entry that is just the discriminator field
+  // (e.g. `kind`), already duplicated inside every oneOf variant. Checking
+  // `properties` first would surface only that discriminator and silently
+  // drop the variant-specific fields the body generators (which check oneOf
+  // before properties) actually need — the args schema and the body builder
+  // must agree on which shape they're using. So array and oneOf are checked
+  // ahead of a bare `properties` object here, matching generateCreateBody /
+  // generateUpdateBody / generateActionBody.
+  if (op.requestBody?.type === "array" && op.requestBody.items) {
     // Bare-array request body (e.g., PUT /schedules expects an array of cron
     // objects). Expose as a required `items` argument containing the array.
     const itemZod = schemaToZod(op.requestBody.items, { indent: 2 }, 2);
@@ -565,6 +558,23 @@ function generateArgsSchema(op: GroupedOperation): string {
           `  body: z.union([${variantZods.join(", ")}])${desc},`,
         );
       }
+    }
+  } else if (op.requestBody?.properties) {
+    const required = new Set(op.requestBody.required ?? []);
+    for (const [name, prop] of Object.entries(op.requestBody.properties)) {
+      // Skip id fields in request bodies
+      if (name === "id") continue;
+      const fieldName = sanitizeFieldName(name);
+      if (seenFields.has(fieldName)) continue;
+      seenFields.add(fieldName);
+      const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
+      const optSuffix = required.has(name) ? "" : ".optional()";
+      const desc = prop.description
+        ? `.describe("${escapeStr(truncateStr(prop.description))}")`
+        : "";
+      fields.push(
+        `  ${fieldName}: ${fieldZod}${optSuffix}${desc},`,
+      );
     }
   }
 
@@ -802,10 +812,54 @@ function generateDeleteBody(
     ? `args.${sanitizeFieldName(idParam.name)}`
     : '"unknown"';
 
-  return `${indent}    await cfApi(
+  const hasBody = method.operation.requestBody !== undefined;
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+
+  const hasQueryParams = queryParamNames.length > 0;
+  const queryBuild = hasQueryParams
+    ? `\n${indent}    const queryParts: string[] = [];
+${indent}    const queryKeys = new Set(${JSON.stringify(queryParamNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && queryKeys.has(k)) queryParts.push(\`\${k}=\${encodeURIComponent(String(v))}\`);
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";`
+    : "";
+  const pathSuffix = hasQueryParams ? "${qs}" : "";
+
+  // Determine how to build the request body, matching the same array/oneOf/
+  // properties priority as generateArgsSchema so the declared arguments and
+  // the value actually sent agree.
+  let bodySetup = "";
+  let bodyArg = "";
+  const reqBody = method.operation.requestBody;
+  if (hasBody && reqBody?.type === "array") {
+    bodySetup = `\n${indent}    const body = args.items;\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody && reqBody?.oneOf) {
+    bodySetup = `\n${indent}    const body = args.body;\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody && excludeNames.length > 0) {
+    bodySetup = `\n${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
+${indent}    }\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody) {
+    bodyArg = `\n${indent}      args,`;
+  }
+
+  return `${bodySetup}${queryBuild}
+${indent}    await cfApi(
 ${indent}      apiToken,
 ${indent}      "DELETE",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
 ${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });

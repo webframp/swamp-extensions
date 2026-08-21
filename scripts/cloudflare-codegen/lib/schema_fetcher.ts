@@ -203,5 +203,19 @@ export function resolveSchema(
     return merged;
   }
 
+  if (schema.oneOf) {
+    return {
+      ...schema,
+      oneOf: schema.oneOf.map((v) => resolveSchema(spec, v, new Set(visited))),
+    };
+  }
+
+  if (schema.anyOf) {
+    return {
+      ...schema,
+      anyOf: schema.anyOf.map((v) => resolveSchema(spec, v, new Set(visited))),
+    };
+  }
+
   return schema;
 }

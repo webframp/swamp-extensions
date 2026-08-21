@@ -34,8 +34,18 @@ const CreateZeroTrustAccountSchema = z.object({
 });
 
 const ApplicationAndApplicationTypeMappingsItemSchema = z.union([
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    application_type_id: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    name: z.unknown().optional(),
+  }),
+  z.object({
+    created_at: z.unknown().optional(),
+    description: z.string().optional(),
+    id: z.unknown().optional(),
+    name: z.unknown().optional(),
+  }),
 ]);
 
 const ListApplicationAndApplicationTypeMappingsSchema = z.object({
@@ -467,7 +477,25 @@ const GetZeroTrustGatewayPacfilesDetailsSchema = z.object({
   url: z.unknown().optional(),
 });
 
-const ProxyEndpointsItemSchema = z.union([z.unknown(), z.unknown()]);
+const ProxyEndpointsItemSchema = z.union([
+  z.object({
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    ips: z.unknown(),
+    kind: z.enum(["ip"]).optional(),
+    name: z.unknown(),
+    subdomain: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+  z.object({
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    kind: z.enum(["identity"]),
+    name: z.unknown(),
+    subdomain: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+]);
 
 const ListProxyEndpointsSchema = z.object({
   items: z.array(ProxyEndpointsItemSchema),
@@ -475,11 +503,44 @@ const ListProxyEndpointsSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const CreateProxyEndpointSchema = z.union([z.unknown(), z.unknown()]);
+const CreateProxyEndpointSchema = z.union([
+  z.object({
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    ips: z.unknown(),
+    kind: z.enum(["ip"]).optional(),
+    name: z.unknown(),
+    subdomain: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+  z.object({
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    kind: z.enum(["identity"]),
+    name: z.unknown(),
+    subdomain: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+]);
 
 const GetZeroTrustGatewayProxyEndpointsProxyEndpointDetailsSchema = z.union([
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    ips: z.unknown(),
+    kind: z.enum(["ip"]).optional(),
+    name: z.unknown(),
+    subdomain: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
+  z.object({
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    kind: z.enum(["identity"]),
+    name: z.unknown(),
+    subdomain: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+  }),
 ]);
 
 const ZeroTrustGatewayRulesItemSchema = z.object({
@@ -1411,6 +1472,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2105,6 +2167,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2391,6 +2454,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2455,9 +2519,16 @@ export const model = {
     create_proxy_endpoint: {
       description: "Create a proxy endpoint",
       arguments: z.object({
-        kind: z.enum(["ip", "identity"]).optional().describe(
-          "The proxy endpoint kind.",
-        ),
+        body: z.union([
+          z.object({
+            kind: z.enum(["ip"]).optional(),
+            name: z.unknown(),
+          }),
+          z.object({
+            kind: z.enum(["identity"]),
+            name: z.unknown(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2597,6 +2668,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2979,6 +3051,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
