@@ -1,8 +1,8 @@
 ## 2026.08.21.1
 
-**Changed:** Tightened `query`, `find_errors`, and `get_recent_events` schemas to
-require non-empty values for `logGroupNames`, `queryString`, and `logGroupName` —
-these are required identifiers the CloudWatch Logs API already rejects when empty.
+**Changed:** Tightened `find_errors`'s `logGroupNames` and `get_recent_events`'s
+`logGroupName` to require non-empty values — these are required identifiers the
+CloudWatch Logs API already rejects when empty.
 
 ## 2026.08.20.1
 
