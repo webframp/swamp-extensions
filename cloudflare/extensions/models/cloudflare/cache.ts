@@ -18,10 +18,10 @@ import { cfApi } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiToken: z.string().meta({ sensitive: true }).describe(
+  apiToken: z.string().min(1).meta({ sensitive: true }).describe(
     "Cloudflare API token with Cache Purge permissions",
   ),
-  zoneId: z.string().describe("Zone ID to manage cache for"),
+  zoneId: z.string().min(1).describe("Zone ID to manage cache for"),
 });
 
 const PurgeResultSchema = z.object({

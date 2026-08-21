@@ -189,6 +189,11 @@ function objectToZod(
       fieldType += ".optional()";
     }
 
+    // Add .default() if the schema declares a default value
+    if (prop.default !== undefined) {
+      fieldType += `.default(${JSON.stringify(prop.default)})`;
+    }
+
     // Add .describe() if there's a description (only for top-level fields)
     if (prop.description && depth < 2) {
       fieldType += `.describe(${

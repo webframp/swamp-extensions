@@ -17,101 +17,133 @@ import { z } from "npm:zod@4.4.3";
 const GlobalArgsSchema = z.object({});
 
 const RepoSchema = z.object({
-  name: z.string(),
-  description: z.string().nullable(),
-  isPrivate: z.boolean(),
-  isFork: z.boolean(),
-  stargazerCount: z.number(),
-  updatedAt: z.string(),
-  primaryLanguage: z.object({ name: z.string() }).nullable(),
+  name: z.string().describe("Repository name"),
+  description: z.string().nullable().describe("Repository description"),
+  isPrivate: z.boolean().describe("Whether the repository is private"),
+  isFork: z.boolean().describe("Whether the repository is a fork"),
+  stargazerCount: z.number().describe("Number of stargazers"),
+  updatedAt: z.string().describe("Timestamp the repository was last updated"),
+  primaryLanguage: z.object({ name: z.string() }).nullable().describe(
+    "Primary programming language, or null if undetected",
+  ),
 });
 
 const RepoListSchema = z.object({
-  repos: z.array(RepoSchema),
-  count: z.number(),
-  fetchedAt: z.string(),
+  repos: z.array(RepoSchema).describe(
+    "Repositories for the authenticated user",
+  ),
+  count: z.number().describe("Number of repositories returned"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const RepoInfoSchema = z.object({
-  name: z.string(),
-  description: z.string().nullable(),
-  defaultBranchRef: z.object({ name: z.string() }).nullable(),
-  stargazerCount: z.number(),
-  forkCount: z.number(),
-  issues: z.object({ totalCount: z.number() }),
-  pullRequests: z.object({ totalCount: z.number() }),
-  watchers: z.object({ totalCount: z.number() }),
-  licenseInfo: z.object({ name: z.string() }).nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  fetchedAt: z.string(),
+  name: z.string().describe("Repository name"),
+  description: z.string().nullable().describe("Repository description"),
+  defaultBranchRef: z.object({ name: z.string() }).nullable().describe(
+    "Default branch, or null if the repository has none",
+  ),
+  stargazerCount: z.number().describe("Number of stargazers"),
+  forkCount: z.number().describe("Number of forks"),
+  issues: z.object({ totalCount: z.number() }).describe(
+    "Total issue count",
+  ),
+  pullRequests: z.object({ totalCount: z.number() }).describe(
+    "Total pull request count",
+  ),
+  watchers: z.object({ totalCount: z.number() }).describe(
+    "Total watcher count",
+  ),
+  licenseInfo: z.object({ name: z.string() }).nullable().describe(
+    "License name, or null if unlicensed",
+  ),
+  createdAt: z.string().describe("Timestamp the repository was created"),
+  updatedAt: z.string().describe("Timestamp the repository was last updated"),
+  fetchedAt: z.string().describe("Timestamp this info was fetched"),
 });
 
 const PullRequestSchema = z.object({
-  number: z.number(),
-  title: z.string(),
-  state: z.string(),
-  author: z.object({ login: z.string() }).nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  labels: z.array(z.object({ name: z.string() })),
+  number: z.number().describe("Pull request number"),
+  title: z.string().describe("Pull request title"),
+  state: z.string().describe("Pull request state"),
+  author: z.object({ login: z.string() }).nullable().describe(
+    "Pull request author, or null if unavailable",
+  ),
+  createdAt: z.string().describe("Timestamp the pull request was created"),
+  updatedAt: z.string().describe(
+    "Timestamp the pull request was last updated",
+  ),
+  labels: z.array(z.object({ name: z.string() })).describe(
+    "Labels applied to the pull request",
+  ),
 });
 
 const PullRequestListSchema = z.object({
-  repo: z.string(),
-  pullRequests: z.array(PullRequestSchema),
-  count: z.number(),
-  state: z.string(),
-  fetchedAt: z.string(),
+  repo: z.string().describe("Repository the pull requests belong to"),
+  pullRequests: z.array(PullRequestSchema).describe(
+    "Pull requests matching the queried state",
+  ),
+  count: z.number().describe("Number of pull requests returned"),
+  state: z.string().describe("State filter used for the query"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const IssueSchema = z.object({
-  number: z.number(),
-  title: z.string(),
-  state: z.string(),
-  author: z.object({ login: z.string() }).nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  labels: z.array(z.object({ name: z.string() })),
+  number: z.number().describe("Issue number"),
+  title: z.string().describe("Issue title"),
+  state: z.string().describe("Issue state"),
+  author: z.object({ login: z.string() }).nullable().describe(
+    "Issue author, or null if unavailable",
+  ),
+  createdAt: z.string().describe("Timestamp the issue was created"),
+  updatedAt: z.string().describe("Timestamp the issue was last updated"),
+  labels: z.array(z.object({ name: z.string() })).describe(
+    "Labels applied to the issue",
+  ),
 });
 
 const IssueListSchema = z.object({
-  repo: z.string(),
-  issues: z.array(IssueSchema),
-  count: z.number(),
-  state: z.string(),
-  fetchedAt: z.string(),
+  repo: z.string().describe("Repository the issues belong to"),
+  issues: z.array(IssueSchema).describe(
+    "Issues matching the queried state",
+  ),
+  count: z.number().describe("Number of issues returned"),
+  state: z.string().describe("State filter used for the query"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const ReleaseSchema = z.object({
-  tagName: z.string(),
-  name: z.string(),
-  publishedAt: z.string(),
-  isPrerelease: z.boolean(),
-  isDraft: z.boolean(),
+  tagName: z.string().describe("Git tag associated with the release"),
+  name: z.string().describe("Release title"),
+  publishedAt: z.string().describe("Timestamp the release was published"),
+  isPrerelease: z.boolean().describe("Whether the release is a prerelease"),
+  isDraft: z.boolean().describe("Whether the release is a draft"),
 });
 
 const ReleaseListSchema = z.object({
-  repo: z.string(),
-  releases: z.array(ReleaseSchema),
-  count: z.number(),
-  fetchedAt: z.string(),
+  repo: z.string().describe("Repository the releases belong to"),
+  releases: z.array(ReleaseSchema).describe("Releases for the repository"),
+  count: z.number().describe("Number of releases returned"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const WorkflowRunSchema = z.object({
-  name: z.string(),
-  status: z.string(),
-  conclusion: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  headBranch: z.string(),
+  name: z.string().describe("Workflow name"),
+  status: z.string().describe("Current run status"),
+  conclusion: z.string().nullable().describe(
+    "Run conclusion, or null while the run is in progress",
+  ),
+  createdAt: z.string().describe("Timestamp the run was created"),
+  updatedAt: z.string().describe("Timestamp the run was last updated"),
+  headBranch: z.string().describe("Branch the run was triggered from"),
 });
 
 const WorkflowRunListSchema = z.object({
-  repo: z.string(),
-  workflowRuns: z.array(WorkflowRunSchema),
-  count: z.number(),
-  fetchedAt: z.string(),
+  repo: z.string().describe("Repository the workflow runs belong to"),
+  workflowRuns: z.array(WorkflowRunSchema).describe(
+    "Recent workflow runs for the repository",
+  ),
+  count: z.number().describe("Number of workflow runs returned"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 // =============================================================================
@@ -158,13 +190,18 @@ type ModelContext = {
 /** GitHub model definition exposing repository query methods. */
 export const model = {
   type: "@webframp/github",
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "No schema changes (added field descriptions only)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Tightened `namespace`, `metricName`, `instanceId`, and `functionName`
+arguments across `get_data`, `analyze`, `get_ec2_cpu`, and `get_lambda_metrics` to
+require non-empty strings — these are required identifiers the CloudWatch API
+already rejects when empty.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (2 packages)

@@ -21,13 +21,13 @@ import { graphRequest, graphRequestPaginated } from "./_lib/graph.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  tenantId: z.string().describe(
+  tenantId: z.string().min(1).describe(
     "Entra tenant GUID (e.g. e9b2b7ba-b238-42a9-b271-2adfc82da650)",
   ),
-  clientId: z.string().describe(
+  clientId: z.string().min(1).describe(
     "Azure public client app registration ID",
   ),
-  refreshToken: z.string().meta({ sensitive: true }).describe(
+  refreshToken: z.string().min(1).meta({ sensitive: true }).describe(
     "OAuth2 refresh token obtained via bootstrap. Re-run bootstrap if expired.",
   ),
 });
@@ -35,146 +35,200 @@ const GlobalArgsSchema = z.object({
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 const TeamSchema = z.object({
-  id: z.string(),
-  displayName: z.string(),
-  description: z.string().nullable().optional(),
+  id: z.string().describe("Team ID"),
+  displayName: z.string().describe("Team display name"),
+  description: z.string().nullable().optional().describe("Team description"),
 });
 
 const TeamsListSchema = z.object({
-  teams: z.array(TeamSchema),
-  fetchedAt: z.string(),
+  teams: z.array(TeamSchema).describe(
+    "Teams the signed-in user is a member of",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const ChannelSchema = z.object({
-  id: z.string(),
-  displayName: z.string(),
-  description: z.string().nullable().optional(),
-  membershipType: z.string().optional(),
+  id: z.string().describe("Channel ID"),
+  displayName: z.string().describe("Channel display name"),
+  description: z.string().nullable().optional().describe(
+    "Channel description",
+  ),
+  membershipType: z.string().optional().describe(
+    "Channel membership type (e.g. standard, private, shared)",
+  ),
 });
 
 const ChannelsListSchema = z.object({
-  teamId: z.string(),
-  teamName: z.string(),
-  channels: z.array(ChannelSchema),
-  fetchedAt: z.string(),
+  teamId: z.string().describe("Team the channels belong to"),
+  teamName: z.string().describe("Display name of the team"),
+  channels: z.array(ChannelSchema).describe("Channels in the team"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const MessageFromSchema = z.object({
   user: z.object({
-    id: z.string().optional(),
-    displayName: z.string().nullable().optional(),
-  }).nullable().optional(),
+    id: z.string().optional().describe("Sender's user ID"),
+    displayName: z.string().nullable().optional().describe(
+      "Sender's display name",
+    ),
+  }).nullable().optional().describe("Sending user, null for system messages"),
 }).nullable().optional();
 
 const MentionSchema = z.object({
-  id: z.number(),
-  mentionText: z.string().optional(),
+  id: z.number().describe("Mention index within the message"),
+  mentionText: z.string().optional().describe("Rendered mention text"),
   mentioned: z.object({
     user: z.object({
-      id: z.string(),
-      displayName: z.string().nullable().optional(),
+      id: z.string().describe("Mentioned user's ID"),
+      displayName: z.string().nullable().optional().describe(
+        "Mentioned user's display name",
+      ),
     }).optional(),
-  }).optional(),
+  }).optional().describe("The user mentioned"),
 });
 
 const ReplySchema = z.object({
-  id: z.string(),
-  createdDateTime: z.string(),
-  lastModifiedDateTime: z.string().nullable().optional(),
-  subject: z.string().nullable().optional(),
+  id: z.string().describe("Reply message ID"),
+  createdDateTime: z.string().describe("Timestamp the reply was created"),
+  lastModifiedDateTime: z.string().nullable().optional().describe(
+    "Timestamp the reply was last modified",
+  ),
+  subject: z.string().nullable().optional().describe("Reply subject line"),
   body: z.object({
-    contentType: z.string(),
-    content: z.string(),
-  }),
+    contentType: z.string().describe("Content type (text or html)"),
+    content: z.string().describe("Message body content"),
+  }).describe("Reply body"),
   from: MessageFromSchema,
-  importance: z.string().optional(),
-  webUrl: z.string().nullable().optional(),
-  mentions: z.array(MentionSchema).optional(),
+  importance: z.string().optional().describe("Message importance level"),
+  webUrl: z.string().nullable().optional().describe("Web URL for the reply"),
+  mentions: z.array(MentionSchema).optional().describe(
+    "@mentions in the reply",
+  ),
 });
 
 const MessageSchema = z.object({
-  id: z.string(),
-  createdDateTime: z.string(),
-  lastModifiedDateTime: z.string().nullable().optional(),
-  subject: z.string().nullable().optional(),
+  id: z.string().describe("Message ID"),
+  createdDateTime: z.string().describe("Timestamp the message was created"),
+  lastModifiedDateTime: z.string().nullable().optional().describe(
+    "Timestamp the message was last modified",
+  ),
+  subject: z.string().nullable().optional().describe("Message subject line"),
   body: z.object({
-    contentType: z.string(),
-    content: z.string(),
-  }),
+    contentType: z.string().describe("Content type (text or html)"),
+    content: z.string().describe("Message body content"),
+  }).describe("Message body"),
   from: MessageFromSchema,
-  importance: z.string().optional(),
-  webUrl: z.string().nullable().optional(),
-  mentions: z.array(MentionSchema).optional(),
-  replies: z.array(ReplySchema).optional(),
+  importance: z.string().optional().describe("Message importance level"),
+  webUrl: z.string().nullable().optional().describe("Web URL for the message"),
+  mentions: z.array(MentionSchema).optional().describe(
+    "@mentions in the message",
+  ),
+  replies: z.array(ReplySchema).optional().describe(
+    "Replies nested under this root message",
+  ),
 });
 
 const ChannelMessagesSchema = z.object({
-  teamId: z.string(),
-  channelId: z.string(),
-  channelName: z.string(),
-  messages: z.array(MessageSchema),
-  totalRoots: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  teamId: z.string().describe("Team the channel belongs to"),
+  channelId: z.string().describe("Channel the messages belong to"),
+  channelName: z.string().describe("Display name of the channel"),
+  messages: z.array(MessageSchema).describe(
+    "Root messages, with replies nested when requested",
+  ),
+  totalRoots: z.number().describe("Number of root messages returned"),
+  truncated: z.boolean().describe(
+    "Whether the fetch hit the limit or page cap before exhausting the channel",
+  ),
+  fetchedAt: z.string().describe("Timestamp the messages were fetched"),
 });
 
 const ChatMemberSchema = z.object({
-  displayName: z.string().nullable().optional(),
-  email: z.string().nullable().optional(),
-  userId: z.string().optional(),
+  displayName: z.string().nullable().optional().describe(
+    "Member's display name",
+  ),
+  email: z.string().nullable().optional().describe("Member's email address"),
+  userId: z.string().optional().describe("Member's user ID"),
 });
 
 const ChatViewpointSchema = z.object({
-  isHidden: z.boolean().optional(),
-  lastMessageReadDateTime: z.string().nullable().optional(),
+  isHidden: z.boolean().optional().describe(
+    "Whether the chat is hidden for the signed-in user",
+  ),
+  lastMessageReadDateTime: z.string().nullable().optional().describe(
+    "Timestamp of the last message the signed-in user read",
+  ),
 });
 
 const ChatSchema = z.object({
-  id: z.string(),
-  chatType: z.string().optional(),
-  topic: z.string().nullable().optional(),
-  createdDateTime: z.string().optional(),
-  lastUpdatedDateTime: z.string().nullable().optional(),
-  webUrl: z.string().optional(),
-  members: z.array(ChatMemberSchema).optional(),
-  viewpoint: ChatViewpointSchema.nullable().optional(),
+  id: z.string().describe("Chat ID"),
+  chatType: z.string().optional().describe(
+    "Chat type (oneOnOne, group, meeting)",
+  ),
+  topic: z.string().nullable().optional().describe("Chat topic/title"),
+  createdDateTime: z.string().optional().describe(
+    "Timestamp the chat was created",
+  ),
+  lastUpdatedDateTime: z.string().nullable().optional().describe(
+    "Timestamp of the chat's last activity",
+  ),
+  webUrl: z.string().optional().describe("Web URL for the chat"),
+  members: z.array(ChatMemberSchema).optional().describe("Chat members"),
+  viewpoint: ChatViewpointSchema.nullable().optional().describe(
+    "Signed-in user's read state for this chat",
+  ),
 });
 
 const ChatsListSchema = z.object({
-  chats: z.array(ChatSchema),
-  totalFetched: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  chats: z.array(ChatSchema).describe(
+    "Chats the signed-in user participates in",
+  ),
+  totalFetched: z.number().describe("Number of chats returned"),
+  truncated: z.boolean().describe(
+    "Whether the fetch hit the limit or page cap before exhausting the list",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const ChatMessagesSchema = z.object({
-  chatId: z.string(),
-  messages: z.array(MessageSchema),
-  totalFetched: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  chatId: z.string().describe("Chat the messages belong to"),
+  messages: z.array(MessageSchema).describe("Messages returned, newest first"),
+  totalFetched: z.number().describe("Number of messages returned"),
+  truncated: z.boolean().describe(
+    "Whether the fetch hit the limit before exhausting the chat",
+  ),
+  fetchedAt: z.string().describe("Timestamp the messages were fetched"),
 });
 
 const AttentionItemSchema = z.object({
-  reason: z.enum(["mention", "unread_chat"]),
-  when: z.string(),
-  chatLabel: z.string(),
-  chat: ChatSchema,
-  message: MessageSchema.optional(),
+  reason: z.enum(["mention", "unread_chat"]).describe(
+    "Why this item needs attention",
+  ),
+  when: z.string().describe("Timestamp of the triggering event"),
+  chatLabel: z.string().describe("Human-readable label for the chat"),
+  chat: ChatSchema.describe("The chat this item belongs to"),
+  message: MessageSchema.optional().describe(
+    "The mentioning message, present only when reason is mention",
+  ),
 });
 
 const AttentionSchema = z.object({
-  items: z.array(AttentionItemSchema),
-  totalItems: z.number(),
-  truncated: z.boolean(),
-  since: z.string(),
-  fetchedAt: z.string(),
+  items: z.array(AttentionItemSchema).describe(
+    "Attention items, sorted newest first",
+  ),
+  totalItems: z.number().describe("Number of attention items returned"),
+  truncated: z.boolean().describe(
+    "Whether the chat scan hit chatLimit before exhausting the list",
+  ),
+  since: z.string().describe("Timestamp the lookback window started"),
+  fetchedAt: z.string().describe("Timestamp the aggregation ran"),
 });
 
 const BootstrapResultSchema = z.object({
-  status: z.string(),
-  message: z.string(),
-  refreshToken: z.string().meta({ sensitive: true }).optional(),
+  status: z.string().describe("Authentication result status"),
+  message: z.string().describe("Human-readable guidance for the caller"),
+  refreshToken: z.string().meta({ sensitive: true }).optional().describe(
+    "OAuth2 refresh token to store in the vault",
+  ),
 });
 
 // =============================================================================
@@ -269,7 +323,7 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -280,6 +334,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Pin zod to 4.4.3 — no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "No schema changes (added field descriptions and required-string min-length checks)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

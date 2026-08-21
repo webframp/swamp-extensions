@@ -44,80 +44,126 @@ const RelationshipTypeSchema = z.enum([
 ]);
 
 const ContextRelationshipSchema = z.object({
-  upstream: z.string(),
-  downstream: z.string(),
-  type: RelationshipTypeSchema,
-  description: z.string(),
+  upstream: z.string().describe("Name of the upstream bounded context"),
+  downstream: z.string().describe("Name of the downstream bounded context"),
+  type: RelationshipTypeSchema.describe(
+    "DDD context-mapping relationship pattern between the two contexts",
+  ),
+  description: z.string().describe(
+    "Free-form description of how the two contexts interact",
+  ),
 });
 
 const BoundedContextSchema = z.object({
-  name: z.string(),
-  purpose: z.string(),
-  ownerTeam: z.string().optional(),
-  ubiquitousLanguageTerms: z.array(z.string()),
-  coreSubdomain: z.boolean(),
+  name: z.string().describe("Bounded context name"),
+  purpose: z.string().describe(
+    "One-sentence statement of this context's purpose",
+  ),
+  ownerTeam: z.string().optional().describe(
+    "Team or person that owns this context",
+  ),
+  ubiquitousLanguageTerms: z.array(z.string()).describe(
+    "Core domain terms specific to this context",
+  ),
+  coreSubdomain: z.boolean().describe(
+    "True if this context represents the core (competitive-advantage) subdomain",
+  ),
 });
 
 const ContextMapSchema = z.object({
-  contexts: z.array(BoundedContextSchema),
-  relationships: z.array(ContextRelationshipSchema),
+  contexts: z.array(BoundedContextSchema).describe(
+    "Discovered bounded contexts",
+  ),
+  relationships: z.array(ContextRelationshipSchema).describe(
+    "Relationships between bounded contexts",
+  ),
   overloadedTerms: z.array(z.object({
-    term: z.string(),
+    term: z.string().describe("The overloaded term"),
     meanings: z.array(z.object({
-      context: z.string(),
-      definition: z.string(),
+      context: z.string().describe("Bounded context this meaning applies to"),
+      definition: z.string().describe("Definition of the term in this context"),
     })),
-  })),
-  discoveredAt: z.string(),
+  })).describe("Terms that mean different things in different contexts"),
+  discoveredAt: z.string().describe(
+    "ISO 8601 timestamp when this context map was last written",
+  ),
 });
 
 // --- Domain Glossary resource schema ---
 
 const GlossaryEntrySchema = z.object({
-  term: z.string(),
-  context: z.string(),
-  definition: z.string(),
-  examples: z.array(z.string()),
-  relatedTerms: z.array(z.string()),
-  antiPatterns: z.array(z.string()).optional(),
+  term: z.string().describe("The domain term"),
+  context: z.string().describe("Bounded context this term belongs to"),
+  definition: z.string().describe(
+    "Precise definition within this bounded context",
+  ),
+  examples: z.array(z.string()).describe("Concrete usage examples"),
+  relatedTerms: z.array(z.string()).describe(
+    "Terms that reference or depend on this term",
+  ),
+  antiPatterns: z.array(z.string()).optional().describe(
+    "Names to avoid and why (too generic, implementation-leaked, passive)",
+  ),
 });
 
 const DomainGlossarySchema = z.object({
-  entries: z.array(GlossaryEntrySchema),
-  updatedAt: z.string(),
+  entries: z.array(GlossaryEntrySchema).describe("Captured glossary entries"),
+  updatedAt: z.string().describe(
+    "ISO 8601 timestamp when the glossary was last written",
+  ),
 });
 
 // --- Boundaries resource schema ---
 
 const InvariantSchema = z.object({
-  description: z.string(),
-  transactional: z.boolean(),
-  rationale: z.string(),
+  description: z.string().describe("The business rule that must always hold"),
+  transactional: z.boolean().describe(
+    "True if this invariant must be enforced within a single transaction",
+  ),
+  rationale: z.string().describe("Why this invariant exists"),
 });
 
 const AggregateDesignSchema = z.object({
-  name: z.string(),
-  context: z.string(),
-  rootEntity: z.string(),
-  entities: z.array(z.string()),
-  valueObjects: z.array(z.string()),
-  invariants: z.array(InvariantSchema),
+  name: z.string().describe("Aggregate name"),
+  context: z.string().describe("Bounded context this aggregate belongs to"),
+  rootEntity: z.string().describe("The aggregate root entity"),
+  entities: z.array(z.string()).describe("Entities within this aggregate"),
+  valueObjects: z.array(z.string()).describe(
+    "Value objects within this aggregate",
+  ),
+  invariants: z.array(InvariantSchema).describe(
+    "Business rules that must hold within this aggregate boundary",
+  ),
   identityReferences: z.array(z.object({
-    target: z.string(),
-    reason: z.string(),
-  })),
-  eventsTrigger: z.array(z.string()),
+    target: z.string().describe("Target aggregate referenced by ID"),
+    reason: z.string().describe("Why this reference exists"),
+  })).describe("References to other aggregates by identity only"),
+  eventsTrigger: z.array(z.string()).describe(
+    "Domain events this aggregate emits (past tense: OrderPlaced, etc.)",
+  ),
 });
 
 const BoundariesSchema = z.object({
-  aggregates: z.array(AggregateDesignSchema),
+  aggregates: z.array(AggregateDesignSchema).describe(
+    "Aggregate designs for this bounded context",
+  ),
   eventualConsistencyRules: z.array(z.object({
-    trigger: z.string(),
-    affectedAggregates: z.array(z.string()),
-    tolerableDelay: z.string(),
-    rationale: z.string(),
-  })),
-  discoveredAt: z.string(),
+    trigger: z.string().describe("The domain event that triggers this rule"),
+    affectedAggregates: z.array(z.string()).describe(
+      "Aggregates that react to this event",
+    ),
+    tolerableDelay: z.string().describe(
+      "How much delay is acceptable (seconds, minutes, hours)",
+    ),
+    rationale: z.string().describe(
+      "Why eventual consistency is acceptable here",
+    ),
+  })).describe(
+    "Cross-aggregate consistency rules that tolerate eventual consistency",
+  ),
+  discoveredAt: z.string().describe(
+    "ISO 8601 timestamp when these boundaries were last written",
+  ),
 });
 
 // =============================================================================

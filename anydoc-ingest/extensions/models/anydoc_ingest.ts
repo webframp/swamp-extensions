@@ -40,45 +40,67 @@ type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 /** Schema for the scan result resource. */
 const ScanResultSchema = z.object({
-  scannedAt: z.string(),
-  documentsDir: z.string(),
-  recursive: z.boolean(),
-  totalFiles: z.number().int().min(0),
-  totalSizeBytes: z.number().int().min(0),
-  byFormat: z.record(z.string(), z.number().int()),
+  scannedAt: z.string().describe("ISO 8601 timestamp when the scan ran"),
+  documentsDir: z.string().describe("Directory that was scanned"),
+  recursive: z.boolean().describe("Whether subdirectories were scanned"),
+  totalFiles: z.number().int().min(0).describe(
+    "Number of supported documents found",
+  ),
+  totalSizeBytes: z.number().int().min(0).describe(
+    "Combined size in bytes of all discovered documents",
+  ),
+  byFormat: z.record(z.string(), z.number().int()).describe(
+    "Document count broken down by format",
+  ),
   files: z.array(z.object({
-    relativePath: z.string(),
-    format: z.string(),
-    sizeBytes: z.number().int(),
-  })),
-  truncated: z.boolean(),
+    relativePath: z.string().describe(
+      "Path relative to documentsDir",
+    ),
+    format: z.string().describe("Detected document format"),
+    sizeBytes: z.number().int().describe("File size in bytes"),
+  })).describe("Discovered documents, up to the scan cap"),
+  truncated: z.boolean().describe(
+    "Whether the scan cap was reached before all documents were listed",
+  ),
 });
 
 /** Schema for a single ingested document resource. */
 const DocumentSchema = z.object({
-  id: z.string(),
-  kind: z.string(),
-  sourcePath: z.string(),
-  relativePath: z.string(),
-  format: z.string(),
-  sizeBytes: z.number().int(),
-  contentHash: z.string(),
-  markdown: z.string(),
-  markdownLength: z.number().int(),
-  convertedAt: z.string(),
+  id: z.string().describe("Stable content-derived document identifier"),
+  kind: z.string().describe("Resource kind discriminator"),
+  sourcePath: z.string().describe("Absolute path to the source file"),
+  relativePath: z.string().describe("Path relative to documentsDir"),
+  format: z.string().describe("Detected document format"),
+  sizeBytes: z.number().int().describe("Source file size in bytes"),
+  contentHash: z.string().describe(
+    "SHA-256 hex hash of the source file content, used for idempotency",
+  ),
+  markdown: z.string().describe(
+    "Converted markdown content (empty if conversion failed)",
+  ),
+  markdownLength: z.number().int().describe(
+    "Length of the converted markdown in characters",
+  ),
+  convertedAt: z.string().describe(
+    "ISO 8601 timestamp when this document was converted",
+  ),
   provenance: z.object({
-    asOf: z.string(),
-    source: z.string(),
-    tool: z.string(),
-    toolVersion: z.string(),
+    asOf: z.string().describe("ISO 8601 timestamp the provenance was recorded"),
+    source: z.string().describe("Absolute path to the source file"),
+    tool: z.string().describe("Conversion tool identifier"),
+    toolVersion: z.string().describe("Conversion tool version"),
   }),
-  error: z.string().nullable(),
+  error: z.string().nullable().describe(
+    "Conversion error message, or null if conversion succeeded",
+  ),
 });
 
 /** Schema for the ingestion status resource. */
 const StatusSchema = z.object({
-  lastRunAt: z.string().nullable(),
-  documentsDir: z.string(),
+  lastRunAt: z.string().nullable().describe(
+    "ISO 8601 timestamp of the last ingest run, or null if none has run",
+  ),
+  documentsDir: z.string().describe("Directory that was ingested"),
   totalIngested: z.number().int().min(0)
     .describe(
       "Documents for which a `document` resource was written this run — includes both successful conversions and conversion failures (empty markdown + error field). Use `totalConverted` for the successful-only count.",
@@ -91,13 +113,19 @@ const StatusSchema = z.object({
     .describe(
       "Total errors encountered (conversion failures + unreadable files). May exceed totalIngested - totalConverted when files fail before resource write.",
     ),
-  totalSkipped: z.number().int().min(0),
-  truncated: z.boolean(),
-  byFormat: z.record(z.string(), z.number().int()),
+  totalSkipped: z.number().int().min(0).describe(
+    "Documents skipped because content hash was unchanged since the last run",
+  ),
+  truncated: z.boolean().describe(
+    "Whether the ingest cap was reached before all documents were processed",
+  ),
+  byFormat: z.record(z.string(), z.number().int()).describe(
+    "Ingested document count broken down by format",
+  ),
   errors: z.array(z.object({
-    path: z.string(),
-    error: z.string(),
-  })),
+    path: z.string().describe("Relative path of the file that errored"),
+    error: z.string().describe("Error message"),
+  })).describe("Per-file errors encountered during the run"),
 });
 
 // ---------------------------------------------------------------------------

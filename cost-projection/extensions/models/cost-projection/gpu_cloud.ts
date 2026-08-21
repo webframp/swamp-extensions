@@ -34,58 +34,110 @@ const CapacityModelEnum = z.enum([
 const ProviderEnum = z.enum(["aws", "azure", "gcp", "other"]);
 
 const ScenarioSchema = z.object({
-  name: z.string().min(1),
-  provider: ProviderEnum,
-  region: z.string().min(1),
+  name: z.string().min(1).describe("Human-readable name for this scenario"),
+  provider: ProviderEnum.describe("Cloud provider hosting the GPU instance"),
+  region: z.string().min(1).describe(
+    "Cloud region for the instance (e.g. us-east-1)",
+  ),
 
-  instanceType: z.string().min(1),
-  gpuCount: z.number().int().positive(),
-  gpuModel: z.string().min(1),
+  instanceType: z.string().min(1).describe(
+    "Cloud provider instance type or SKU",
+  ),
+  gpuCount: z.number().int().positive().describe("Number of GPUs per instance"),
+  gpuModel: z.string().min(1).describe("GPU model (e.g. H100, A100)"),
 
-  capacityModel: CapacityModelEnum,
-  commitmentTermMonths: z.number().nonnegative().optional(),
+  capacityModel: CapacityModelEnum.describe(
+    "Pricing/commitment model under which the instance is purchased",
+  ),
+  commitmentTermMonths: z.number().nonnegative().optional().describe(
+    "Length of the commitment term in months, if the capacity model requires one",
+  ),
 
-  instanceRatePerHour: z.number().positive(),
-  currency: z.string().default("USD"),
+  instanceRatePerHour: z.number().positive().describe(
+    "Quoted hourly rate per instance, in currency units",
+  ),
+  currency: z.string().default("USD").describe(
+    "Currency of all rate fields in this scenario",
+  ),
 
-  hoursPerDay: z.number().min(1).max(24).default(24),
-  daysPerMonth: z.number().min(1).max(31).default(30),
-  replicas: z.number().int().positive().default(1),
+  hoursPerDay: z.number().min(1).max(24).default(24).describe(
+    "Expected hours of instance utilization per day",
+  ),
+  daysPerMonth: z.number().min(1).max(31).default(30).describe(
+    "Expected days of instance utilization per month",
+  ),
+  replicas: z.number().int().positive().default(1).describe(
+    "Number of identical instances running concurrently",
+  ),
 
-  storageGb: z.number().nonnegative().default(0),
-  storageRatePerGbMonth: z.number().nonnegative().default(0),
-  dataTransferGbMonth: z.number().nonnegative().default(0),
-  dataTransferRatePerGb: z.number().nonnegative().default(0),
-  managementFeePerMonth: z.number().nonnegative().default(0),
+  storageGb: z.number().nonnegative().default(0).describe(
+    "Attached storage size per instance, in GB",
+  ),
+  storageRatePerGbMonth: z.number().nonnegative().default(0).describe(
+    "Storage cost per GB per month",
+  ),
+  dataTransferGbMonth: z.number().nonnegative().default(0).describe(
+    "Expected monthly data transfer volume, in GB",
+  ),
+  dataTransferRatePerGb: z.number().nonnegative().default(0).describe(
+    "Data transfer cost per GB",
+  ),
+  managementFeePerMonth: z.number().nonnegative().default(0).describe(
+    "Flat monthly management/platform fee, independent of replicas",
+  ),
 
-  apiComparisonRatePerMToken: z.number().nonnegative().optional(),
-  estimatedTokensPerGpuHour: z.number().nonnegative().optional(),
+  apiComparisonRatePerMToken: z.number().nonnegative().optional().describe(
+    "Comparable managed-API rate per million tokens, used to compute break-even",
+  ),
+  estimatedTokensPerGpuHour: z.number().nonnegative().optional().describe(
+    "Estimated throughput in tokens per GPU-hour, from benchmarks or model card figures",
+  ),
 
-  notes: z.string().optional(),
-  sourceUrl: z.string().optional(),
-  quotedAt: z.string().optional(),
+  notes: z.string().optional().describe("Free-form notes about this scenario"),
+  sourceUrl: z.string().optional().describe(
+    "URL of the quote or pricing page this scenario is based on",
+  ),
+  quotedAt: z.string().optional().describe(
+    "Date the rate was quoted (YYYY-MM-DD)",
+  ),
 });
 
 const ProjectionSchema = z.object({
-  scenarioName: z.string(),
-  computedAt: z.string(),
+  scenarioName: z.string().describe(
+    "Name of the scenario this projection was computed from",
+  ),
+  computedAt: z.string().describe(
+    "ISO 8601 timestamp when the projection was computed",
+  ),
 
-  costPerGpuHour: z.number(),
-  costPerInstanceHour: z.number(),
+  costPerGpuHour: z.number().describe(
+    "Normalized total cost per GPU-hour across all replicas",
+  ),
+  costPerInstanceHour: z.number().describe(
+    "Normalized total cost per instance-hour across all replicas",
+  ),
 
-  monthlyComputeCost: z.number(),
-  monthlyStorageCost: z.number(),
-  monthlyTransferCost: z.number(),
-  monthlyManagementCost: z.number(),
-  monthlyTotalCost: z.number(),
+  monthlyComputeCost: z.number().describe(
+    "Monthly compute cost across all replicas",
+  ),
+  monthlyStorageCost: z.number().describe(
+    "Monthly storage cost across all replicas",
+  ),
+  monthlyTransferCost: z.number().describe("Monthly data transfer cost"),
+  monthlyManagementCost: z.number().describe("Monthly flat management fee"),
+  monthlyTotalCost: z.number().describe("Sum of all monthly cost components"),
 
-  annualTotalCost: z.number(),
+  annualTotalCost: z.number().describe("monthlyTotalCost annualized (x12)"),
 
-  breakEvenTokensPerMonth: z.number().optional(),
-  breakEvenRequestsPerMonth: z.number().optional(),
+  breakEvenTokensPerMonth: z.number().optional().describe(
+    "Monthly token volume at which self-hosting cost equals the comparable API cost",
+  ),
+  breakEvenRequestsPerMonth: z.number().optional().describe(
+    "breakEvenTokensPerMonth expressed as an approximate request count (4000 tokens/request)",
+  ),
 
-  effectiveHoursPerMonth: z.number(),
-  totalGpuCount: z.number(),
+  effectiveHoursPerMonth: z.number().describe("hoursPerDay * daysPerMonth"),
+  totalGpuCount: z.number().describe("gpuCount * replicas"),
 });
 
 // =============================================================================
@@ -279,8 +331,12 @@ export const model = {
         "Update the instance hourly rate and quotedAt timestamp without " +
         "re-entering all other fields. Automatically re-runs projection.",
       arguments: z.object({
-        instanceRatePerHour: z.number().positive(),
-        quotedAt: z.string().optional(),
+        instanceRatePerHour: z.number().positive().describe(
+          "New quoted hourly rate per instance, in the scenario's currency",
+        ),
+        quotedAt: z.string().optional().describe(
+          "Date the new rate was quoted (YYYY-MM-DD); defaults to today",
+        ),
       }),
       execute: async (
         args: { instanceRatePerHour: number; quotedAt?: string },

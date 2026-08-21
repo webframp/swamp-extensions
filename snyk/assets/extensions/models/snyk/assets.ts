@@ -246,21 +246,45 @@ const AssetProjectsItemSchema = z.object({
   id: z.string(),
   type: z.enum(["project"]).optional(),
   issues_counts: z.object({
-    critical: z.number().optional(),
-    high: z.number().optional(),
-    low: z.number().optional(),
-    medium: z.number().optional(),
-  }).optional(),
-  last_scan: z.string().optional(),
-  name: z.string().optional(),
-  organization_id: z.string().optional(),
-  organization_name: z.string().optional(),
-  project_type: z.string().optional(),
-  target_file: z.string().optional(),
-  target_id: z.string().optional(),
-  target_reference: z.string().optional(),
-  test_surface: z.string().optional(),
-  url: z.string().optional(),
+    critical: z.number().optional().describe(
+      "Count of critical-severity issues on this project",
+    ),
+    high: z.number().optional().describe(
+      "Count of high-severity issues on this project",
+    ),
+    low: z.number().optional().describe(
+      "Count of low-severity issues on this project",
+    ),
+    medium: z.number().optional().describe(
+      "Count of medium-severity issues on this project",
+    ),
+  }).optional().describe("Issue counts by severity for this project"),
+  last_scan: z.string().optional().describe(
+    "Timestamp of the most recent scan of this project",
+  ),
+  name: z.string().optional().describe("Name of the project"),
+  organization_id: z.string().optional().describe(
+    "ID of the organization that owns the project",
+  ),
+  organization_name: z.string().optional().describe(
+    "Name of the organization that owns the project",
+  ),
+  project_type: z.string().optional().describe(
+    "Type of the project (e.g. package manager or ecosystem)",
+  ),
+  target_file: z.string().optional().describe(
+    "Manifest or target file scanned for this project",
+  ),
+  target_id: z.string().optional().describe(
+    "ID of the target the project was scanned from",
+  ),
+  target_reference: z.string().optional().describe(
+    "Branch, tag, or other reference of the scanned target",
+  ),
+  test_surface: z.string().optional().describe(
+    "Testing surface used to scan the project",
+  ),
+  url: z.string().optional().describe("URL to view the project in Snyk"),
 });
 
 const ListAssetProjectsSchema = z.object({

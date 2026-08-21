@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,25 +29,53 @@ const EventsItemSchema = z.object({
   id: z.string().describe("the unique ID of the event."),
   type: z.enum(["event"]).optional().describe("Type of the event."),
   attributes: z.object({
-    aggregation_key: z.string().optional(),
-    date_happened: z.number().int().optional(),
-    device_name: z.string().optional(),
-    duration: z.number().int().optional(),
+    aggregation_key: z.string().optional().describe(
+      "A string used for aggregation when correlating events.",
+    ),
+    date_happened: z.number().int().optional().describe(
+      "POSIX timestamp of the event.",
+    ),
+    device_name: z.string().optional().describe(
+      "A device name associated with the event.",
+    ),
+    duration: z.number().int().optional().describe(
+      "Duration between the triggering and resolution of the event, in nanoseconds.",
+    ),
     event_object: z.string().optional(),
     evt: z.unknown().optional(),
-    hostname: z.string().optional(),
+    hostname: z.string().optional().describe(
+      "Host name to associate with the event.",
+    ),
     monitor: z.unknown().optional(),
-    monitor_groups: z.array(z.string()).nullable().optional(),
-    monitor_id: z.number().int().nullable().optional(),
-    priority: z.unknown().optional(),
-    related_event_id: z.number().int().optional(),
-    service: z.string().optional(),
-    source_type_name: z.string().optional(),
-    sourcecategory: z.string().optional(),
+    monitor_groups: z.array(z.string()).nullable().optional().describe(
+      "Groups related to the monitor that triggered the event.",
+    ),
+    monitor_id: z.number().int().nullable().optional().describe(
+      "ID of the monitor that triggered the event, if applicable.",
+    ),
+    priority: z.unknown().optional().describe(
+      "The priority of the event ('normal' or 'low').",
+    ),
+    related_event_id: z.number().int().optional().describe(
+      "ID of the previous event related to this one, if any.",
+    ),
+    service: z.string().optional().describe(
+      "Service that triggered the event.",
+    ),
+    source_type_name: z.string().optional().describe(
+      "The type of event being posted, e.g. `nagios`, `hudson`, `jenkins`.",
+    ),
+    sourcecategory: z.string().optional().describe(
+      "The source category of the event.",
+    ),
     status: z.unknown().optional(),
-    tags: z.array(z.string()).optional(),
-    timestamp: z.number().int().optional(),
-    title: z.string().optional(),
+    tags: z.array(z.string()).optional().describe(
+      "A list of tags associated with the event.",
+    ),
+    timestamp: z.number().int().optional().describe(
+      "POSIX timestamp of the event.",
+    ),
+    title: z.string().optional().describe("The event title."),
   }).optional().describe("Object description of attributes from your event."),
   message: z.string().optional().describe("The message of the event."),
   tags: z.array(z.string()).optional().describe(
@@ -63,7 +91,9 @@ const ListEventsSchema = z.object({
 });
 
 const CreateEventSchema = z.object({
-  attributes: z.unknown().optional(),
+  attributes: z.unknown().optional().describe(
+    "Object description of attributes from the created event.",
+  ),
   type: z.string().optional().describe("Entity type."),
 });
 
@@ -71,25 +101,53 @@ const SearchEventsItemSchema = z.object({
   id: z.string().describe("the unique ID of the event."),
   type: z.enum(["event"]).optional().describe("Type of the event."),
   attributes: z.object({
-    aggregation_key: z.string().optional(),
-    date_happened: z.number().int().optional(),
-    device_name: z.string().optional(),
-    duration: z.number().int().optional(),
+    aggregation_key: z.string().optional().describe(
+      "A string used for aggregation when correlating events.",
+    ),
+    date_happened: z.number().int().optional().describe(
+      "POSIX timestamp of the event.",
+    ),
+    device_name: z.string().optional().describe(
+      "A device name associated with the event.",
+    ),
+    duration: z.number().int().optional().describe(
+      "Duration between the triggering and resolution of the event, in nanoseconds.",
+    ),
     event_object: z.string().optional(),
     evt: z.unknown().optional(),
-    hostname: z.string().optional(),
+    hostname: z.string().optional().describe(
+      "Host name to associate with the event.",
+    ),
     monitor: z.unknown().optional(),
-    monitor_groups: z.array(z.string()).nullable().optional(),
-    monitor_id: z.number().int().nullable().optional(),
-    priority: z.unknown().optional(),
-    related_event_id: z.number().int().optional(),
-    service: z.string().optional(),
-    source_type_name: z.string().optional(),
-    sourcecategory: z.string().optional(),
+    monitor_groups: z.array(z.string()).nullable().optional().describe(
+      "Groups related to the monitor that triggered the event.",
+    ),
+    monitor_id: z.number().int().nullable().optional().describe(
+      "ID of the monitor that triggered the event, if applicable.",
+    ),
+    priority: z.unknown().optional().describe(
+      "The priority of the event ('normal' or 'low').",
+    ),
+    related_event_id: z.number().int().optional().describe(
+      "ID of the previous event related to this one, if any.",
+    ),
+    service: z.string().optional().describe(
+      "Service that triggered the event.",
+    ),
+    source_type_name: z.string().optional().describe(
+      "The type of event being posted, e.g. `nagios`, `hudson`, `jenkins`.",
+    ),
+    sourcecategory: z.string().optional().describe(
+      "The source category of the event.",
+    ),
     status: z.unknown().optional(),
-    tags: z.array(z.string()).optional(),
-    timestamp: z.number().int().optional(),
-    title: z.string().optional(),
+    tags: z.array(z.string()).optional().describe(
+      "A list of tags associated with the event.",
+    ),
+    timestamp: z.number().int().optional().describe(
+      "POSIX timestamp of the event.",
+    ),
+    title: z.string().optional().describe("The event title."),
   }).optional().describe("Object description of attributes from your event."),
   message: z.string().optional().describe("The message of the event."),
   tags: z.array(z.string()).optional().describe(
@@ -219,12 +277,18 @@ export const model = {
         aggregation_key: z.string().min(1).max(100).optional().describe(
           "A string used for aggregation when [correlating](https://docs.datadoghq.com/s...",
         ),
-        attributes: z.unknown(),
-        category: z.unknown(),
+        attributes: z.unknown().describe(
+          "JSON object of attributes from the event.",
+        ),
+        category: z.unknown().describe(
+          "The category of the event, e.g. `change`, `error`, `alert`.",
+        ),
         host: z.string().min(1).max(255).optional().describe(
           "Host name to associate with the event. Any tags associated with the host are ...",
         ),
-        integration_id: z.unknown().optional(),
+        integration_id: z.unknown().optional().describe(
+          "The integration ID (source type) that generated the event.",
+        ),
         message: z.string().min(1).max(4000).optional().describe(
           "Free formed text associated with the event. It's suggested to use `data.attri...",
         ),
@@ -278,10 +342,18 @@ export const model = {
     search_events: {
       description: "Search events",
       arguments: z.object({
-        filter: z.unknown().optional(),
-        options: z.unknown().optional(),
-        page: z.unknown().optional(),
-        sort: z.unknown().optional(),
+        filter: z.unknown().optional().describe(
+          "Search filters for the events query (query, from, to, indexes).",
+        ),
+        options: z.unknown().optional().describe(
+          "Global query options that are used during the query (e.g. timezone).",
+        ),
+        page: z.unknown().optional().describe(
+          "Paging attributes for listing events.",
+        ),
+        sort: z.unknown().optional().describe(
+          "The sort order of the events matching the query.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -335,7 +407,7 @@ export const model = {
     get_event: {
       description: "Get an event",
       arguments: z.object({
-        event_id: z.string().describe("The UID of the event."),
+        event_id: z.string().min(1).describe("The UID of the event."),
       }),
       execute: async (
         args: Record<string, unknown>,

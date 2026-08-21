@@ -1,3 +1,9 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` and `.min(1)` to the `queue_id` and
+`consumer_id` identifier arguments used across most methods. No behavioral
+changes.
+
 ## 2026.07.27.1
 
 **Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator

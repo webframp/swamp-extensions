@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` documentation to every previously undocumented field across
+all resource schemas (projects, merge requests, issues, notes, discussions, releases,
+pipelines, labels, members, branches, dashboard, todos, merge status, pipeline jobs, job logs,
+retry results, and rebase results). No schema or behavioral changes — a no-op `upgrades` entry
+was added to keep the model's `typeVersion` tracking in sync with the version bump.
+
 ## 2026.08.12.1
 
 **Added:** `list_my_merge_requests` now includes `pipelineStatus` on each MR in

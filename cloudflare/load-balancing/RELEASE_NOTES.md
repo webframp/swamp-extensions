@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` and `.min(1)` to the identifier arguments
+used across most methods — `zone_id`, `load_balancer_id`, `pool_id`,
+`monitor_id`, and `monitor_group_id` now document their purpose and reject
+empty strings, which the Cloudflare API never accepts for these path
+parameters. No behavioral changes.
+
 ## 2026.07.27.1
 
 **Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator

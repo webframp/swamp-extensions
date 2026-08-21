@@ -83,20 +83,20 @@ type MethodContext = {
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  channel: z.string().describe("Twitch channel login name"),
-  moderatorId: z.string().describe(
+  channel: z.string().min(1).describe("Twitch channel login name"),
+  moderatorId: z.string().min(1).describe(
     "Your Twitch user ID (the moderator performing actions)",
   ),
-  clientId: z.string().meta({ sensitive: true }).describe(
+  clientId: z.string().min(1).meta({ sensitive: true }).describe(
     "Twitch application client ID",
   ),
-  clientSecret: z.string().meta({ sensitive: true }).describe(
+  clientSecret: z.string().min(1).meta({ sensitive: true }).describe(
     "Twitch application client secret",
   ),
-  accessToken: z.string().meta({ sensitive: true }).describe(
+  accessToken: z.string().min(1).meta({ sensitive: true }).describe(
     "OAuth2 access token",
   ),
-  refreshToken: z.string().meta({ sensitive: true }).describe(
+  refreshToken: z.string().min(1).meta({ sensitive: true }).describe(
     "OAuth2 refresh token",
   ),
   hasBroadcasterAuth: z.boolean().default(false).describe(
@@ -194,13 +194,19 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.07.30.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.30.1",
       description: "Added hasBroadcasterAuth global arg (default false)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Require non-empty channel, moderatorId, and OAuth2/client credential fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

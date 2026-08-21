@@ -24,82 +24,160 @@ import { z } from "npm:zod@4.4.3";
 const DepreciationMethodEnum = z.enum(["straight-line"]);
 
 const ScenarioSchema = z.object({
-  name: z.string().min(1),
-  site: z.string().optional(),
+  name: z.string().min(1).describe("Human-readable name for this scenario"),
+  site: z.string().optional().describe("Physical site or datacenter location"),
 
-  gpuModel: z.string().min(1),
-  gpuCount: z.number().int().positive(),
-  gpuCostPerUnit: z.number().positive(),
-  serverCost: z.number().nonnegative(),
-  networkingCost: z.number().nonnegative(),
-  totalHardwareCost: z.number().positive(),
+  gpuModel: z.string().min(1).describe("GPU model (e.g. H100, A100)"),
+  gpuCount: z.number().int().positive().describe("Number of GPUs purchased"),
+  gpuCostPerUnit: z.number().positive().describe("Purchase price per GPU"),
+  serverCost: z.number().nonnegative().describe(
+    "Server/chassis hardware cost, excluding GPUs",
+  ),
+  networkingCost: z.number().nonnegative().describe(
+    "Networking hardware cost (switches, NICs, cabling)",
+  ),
+  totalHardwareCost: z.number().positive().describe(
+    "Total upfront hardware cost; should equal gpuCostPerUnit * gpuCount + serverCost + networkingCost",
+  ),
 
-  usefulLifeMonths: z.number().int().positive(),
-  residualValuePct: z.number().min(0).max(100).default(0),
-  depreciationMethod: DepreciationMethodEnum.default("straight-line"),
+  usefulLifeMonths: z.number().int().positive().describe(
+    "Amortization period for the hardware, in months",
+  ),
+  residualValuePct: z.number().min(0).max(100).default(0).describe(
+    "Expected resale/residual value at end of useful life, as a percentage of totalHardwareCost",
+  ),
+  depreciationMethod: DepreciationMethodEnum.default("straight-line").describe(
+    "Depreciation method used to amortize the hardware cost",
+  ),
 
-  coloCostPerKwMonth: z.number().nonnegative(),
-  powerDrawKw: z.number().positive(),
-  pue: z.number().min(1).default(1.4),
-  networkBandwidthCostPerMonth: z.number().nonnegative().default(0),
+  coloCostPerKwMonth: z.number().nonnegative().describe(
+    "Colocation/power cost per kW per month",
+  ),
+  powerDrawKw: z.number().positive().describe(
+    "IT power draw of the hardware, in kW",
+  ),
+  pue: z.number().min(1).default(1.4).describe(
+    "Power usage effectiveness multiplier applied to powerDrawKw to account for cooling/overhead",
+  ),
+  networkBandwidthCostPerMonth: z.number().nonnegative().default(0).describe(
+    "Flat monthly network bandwidth cost",
+  ),
 
-  staffFteAllocation: z.number().min(0).max(10).default(0),
-  staffCostPerFteMonth: z.number().nonnegative().default(0),
+  staffFteAllocation: z.number().min(0).max(10).default(0).describe(
+    "Fraction of staff FTE allocated to operating this hardware",
+  ),
+  staffCostPerFteMonth: z.number().nonnegative().default(0).describe(
+    "Fully-loaded staff cost per FTE per month",
+  ),
 
-  failureRatePctPerYear: z.number().min(0).max(100).default(3),
-  spareBudgetPerMonth: z.number().nonnegative().default(0),
-  warrantyMonths: z.number().int().nonnegative().default(36),
+  failureRatePctPerYear: z.number().min(0).max(100).default(3).describe(
+    "Expected annual hardware failure rate, as a percentage of totalHardwareCost, used to estimate replacement spend",
+  ),
+  spareBudgetPerMonth: z.number().nonnegative().default(0).describe(
+    "Flat monthly budget reserved for spare parts",
+  ),
+  warrantyMonths: z.number().int().nonnegative().default(36).describe(
+    "Manufacturer warranty coverage, in months",
+  ),
 
-  targetUtilizationPct: z.number().min(1).max(100).default(90),
-  hoursPerDay: z.number().min(1).max(24).default(24),
-  daysPerMonth: z.number().min(1).max(31).default(30),
+  targetUtilizationPct: z.number().min(1).max(100).default(90).describe(
+    "Target GPU utilization used to compute the effective cost per GPU-hour",
+  ),
+  hoursPerDay: z.number().min(1).max(24).default(24).describe(
+    "Expected hours of hardware availability per day",
+  ),
+  daysPerMonth: z.number().min(1).max(31).default(30).describe(
+    "Expected days of hardware availability per month",
+  ),
 
-  apiComparisonRatePerMToken: z.number().nonnegative().optional(),
-  estimatedTokensPerGpuHour: z.number().nonnegative().optional(),
+  apiComparisonRatePerMToken: z.number().nonnegative().optional().describe(
+    "Comparable managed-API rate per million tokens, used to compute break-even",
+  ),
+  estimatedTokensPerGpuHour: z.number().nonnegative().optional().describe(
+    "Estimated throughput in tokens per GPU-hour, from benchmarks or model card figures",
+  ),
 
-  currency: z.string().default("USD"),
-  notes: z.string().optional(),
-  quotedAt: z.string().optional(),
+  currency: z.string().default("USD").describe(
+    "Currency of all cost fields in this scenario",
+  ),
+  notes: z.string().optional().describe("Free-form notes about this scenario"),
+  quotedAt: z.string().optional().describe(
+    "Date the hardware cost was quoted (YYYY-MM-DD)",
+  ),
 });
 
 const ProjectionSchema = z.object({
-  scenarioName: z.string(),
-  computedAt: z.string(),
+  scenarioName: z.string().describe(
+    "Name of the scenario this projection was computed from",
+  ),
+  computedAt: z.string().describe(
+    "ISO 8601 timestamp when the projection was computed",
+  ),
 
-  costPerGpuHour: z.number(),
-  costPerGpuHourAtTargetUtil: z.number(),
+  costPerGpuHour: z.number().describe(
+    "Normalized total cost per GPU-hour assuming full-time availability",
+  ),
+  costPerGpuHourAtTargetUtil: z.number().describe(
+    "Normalized total cost per GPU-hour at targetUtilizationPct",
+  ),
 
-  monthlyDepreciation: z.number(),
-  monthlyFacilityCost: z.number(),
-  monthlyNetworkCost: z.number(),
-  monthlyStaffCost: z.number(),
-  monthlyMaintenanceCost: z.number(),
-  monthlyTotalCost: z.number(),
+  monthlyDepreciation: z.number().describe("Monthly amortized hardware cost"),
+  monthlyFacilityCost: z.number().describe("Monthly power/colocation cost"),
+  monthlyNetworkCost: z.number().describe("Monthly network bandwidth cost"),
+  monthlyStaffCost: z.number().describe("Monthly staffing cost"),
+  monthlyMaintenanceCost: z.number().describe(
+    "Monthly maintenance/spares cost",
+  ),
+  monthlyTotalCost: z.number().describe("Sum of all monthly cost components"),
 
-  annualTotalCost: z.number(),
-  totalCostOfOwnership: z.number(),
+  annualTotalCost: z.number().describe("monthlyTotalCost annualized (x12)"),
+  totalCostOfOwnership: z.number().describe(
+    "monthlyTotalCost multiplied by usefulLifeMonths",
+  ),
 
-  breakEvenTokensPerMonth: z.number().optional(),
-  breakEvenRequestsPerMonth: z.number().optional(),
+  breakEvenTokensPerMonth: z.number().optional().describe(
+    "Monthly token volume at which this scenario's cost equals the comparable API cost",
+  ),
+  breakEvenRequestsPerMonth: z.number().optional().describe(
+    "breakEvenTokensPerMonth expressed as an approximate request count (4000 tokens/request)",
+  ),
 
-  effectiveHoursPerMonth: z.number(),
-  effectiveGpuHoursPerMonth: z.number(),
-  usefulLifeMonths: z.number(),
-  residualValue: z.number(),
-  totalGpuCount: z.number(),
+  effectiveHoursPerMonth: z.number().describe("hoursPerDay * daysPerMonth"),
+  effectiveGpuHoursPerMonth: z.number().describe(
+    "effectiveHoursPerMonth * totalGpuCount * targetUtilizationPct",
+  ),
+  usefulLifeMonths: z.number().describe("Amortization period used, in months"),
+  residualValue: z.number().describe(
+    "Expected residual value of the hardware at end of useful life",
+  ),
+  totalGpuCount: z.number().describe("Total number of GPUs in this scenario"),
 });
 
 const SensitivityRowSchema = z.object({
-  usefulLifeMonths: z.number(),
-  utilizationPct: z.number(),
-  costPerGpuHour: z.number(),
-  monthlyTotalCost: z.number(),
+  usefulLifeMonths: z.number().describe(
+    "Useful-life assumption for this matrix cell, in months",
+  ),
+  utilizationPct: z.number().describe(
+    "Utilization assumption for this matrix cell, as a percentage",
+  ),
+  costPerGpuHour: z.number().describe(
+    "Cost per GPU-hour under this cell's assumptions",
+  ),
+  monthlyTotalCost: z.number().describe(
+    "Monthly total cost under this cell's assumptions",
+  ),
 });
 
 const SensitivitySchema = z.object({
-  scenarioName: z.string(),
-  computedAt: z.string(),
-  matrix: z.array(SensitivityRowSchema),
+  scenarioName: z.string().describe(
+    "Name of the scenario this sensitivity analysis was computed from",
+  ),
+  computedAt: z.string().describe(
+    "ISO 8601 timestamp when the analysis was computed",
+  ),
+  matrix: z.array(SensitivityRowSchema).describe(
+    "Cost per GPU-hour and monthly total cost across the useful-life × utilization grid",
+  ),
 });
 
 // =============================================================================
@@ -372,9 +450,15 @@ export const model = {
         "without re-entering all other assumptions. Automatically re-runs " +
         "projection.",
       arguments: z.object({
-        totalHardwareCost: z.number().positive(),
-        gpuCostPerUnit: z.number().positive().optional(),
-        quotedAt: z.string().optional(),
+        totalHardwareCost: z.number().positive().describe(
+          "New total upfront hardware cost",
+        ),
+        gpuCostPerUnit: z.number().positive().optional().describe(
+          "New purchase price per GPU; leave unset to keep the stored value",
+        ),
+        quotedAt: z.string().optional().describe(
+          "Date the new cost was quoted (YYYY-MM-DD); defaults to today",
+        ),
       }),
       execute: async (
         args: {
@@ -441,10 +525,12 @@ export const model = {
       arguments: z.object({
         usefulLifeMonthsRange: z
           .array(z.number().int().positive())
-          .default([24, 36, 48, 60]),
+          .default([24, 36, 48, 60])
+          .describe("Useful-life assumptions (months) to sweep across"),
         utilizationPctRange: z
           .array(z.number().min(1).max(100))
-          .default([60, 75, 85, 95]),
+          .default([60, 75, 85, 95])
+          .describe("Utilization assumptions (percent) to sweep across"),
       }),
       execute: async (
         args: {

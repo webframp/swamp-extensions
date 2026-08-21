@@ -24,13 +24,19 @@ const EnvironmentsItemSchema = z.object({
   id: z.string().describe("Environment ID"),
   type: z.string().optional(),
   created_at: z.string().describe("When the environment was created"),
-  deleted_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional().describe(
+    "When the environment was deleted, if applicable",
+  ),
   kind: z.enum(["aws", "google", "azure", "scm", "tfc", "cli"]).describe(
     "Environment kind: aws",
   ),
   name: z.string().describe("Environment name"),
-  options: z.object({}).optional(),
-  properties: z.object({}).optional(),
+  options: z.object({}).optional().describe(
+    "Provider-specific configuration options for the environment",
+  ),
+  properties: z.object({}).optional().describe(
+    "Provider-specific properties recorded for the environment",
+  ),
   revision: z.number().int().optional().describe(
     "Increment for each change to an environment",
   ),
@@ -49,13 +55,19 @@ const CreateEnvironmentSchema = z.object({
   id: z.string().describe("Environment ID"),
   type: z.string().optional(),
   created_at: z.string().describe("When the environment was created"),
-  deleted_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional().describe(
+    "When the environment was deleted, if applicable",
+  ),
   kind: z.enum(["aws", "google", "azure", "scm", "tfc", "cli"]).describe(
     "Environment kind: aws",
   ),
   name: z.string().describe("Environment name"),
-  options: z.object({}).optional(),
-  properties: z.object({}).optional(),
+  options: z.object({}).optional().describe(
+    "Provider-specific configuration options for the environment",
+  ),
+  properties: z.object({}).optional().describe(
+    "Provider-specific properties recorded for the environment",
+  ),
   revision: z.number().int().optional().describe(
     "Increment for each change to an environment",
   ),
@@ -66,15 +78,19 @@ const CreateEnvironmentSchema = z.object({
 
 const GetPermissionsSchema = z.object({
   id: z.string(),
-  type: z.enum(["cf", "tf", "bash"]),
-  data: z.string(),
+  type: z.enum(["cf", "tf", "bash"]).describe(
+    "Output format for the generated permissions document",
+  ),
+  data: z.string().describe("Generated cloud provider permissions document"),
 });
 
 const ResourcesItemSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   created_at: z.string().describe("When the resource was first recorded"),
-  deleted_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional().describe(
+    "When the resource was deleted, if applicable",
+  ),
   hash: z.string().describe(
     "Computed hash value for the resource based on its attributes",
   ),
@@ -117,7 +133,9 @@ const ScanItemSchema = z.object({
   id: z.string().describe("Scan ID"),
   type: z.string().optional(),
   created_at: z.string().describe("When the scan was created"),
-  deleted_at: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional().describe(
+    "When the scan was deleted, if applicable",
+  ),
   environment_id: z.string().optional().describe("Environment ID"),
   error: z.string().nullable().describe("Error message if the scan failed"),
   finished_at: z.string().nullable().optional().describe(

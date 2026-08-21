@@ -520,6 +520,7 @@ export const model = {
       arguments: z.object({
         logGroupNames: z
           .array(z.string())
+          .min(1)
           .describe("Log group names to search"),
         startTime: z
           .string()
@@ -697,7 +698,7 @@ export const model = {
     get_recent_events: {
       description: "Get recent log events from a log group using filter",
       arguments: z.object({
-        logGroupName: z.string().describe("Log group name"),
+        logGroupName: z.string().min(1).describe("Log group name"),
         filterPattern: z
           .string()
           .optional()

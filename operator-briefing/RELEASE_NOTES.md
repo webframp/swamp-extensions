@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` to every field on the metrics model's `Row`
+and `Series` resource schemas, mirroring the descriptions that already
+existed on the corresponding `append_metrics` method arguments. No
+behavioral change.
+
 ## 2026.08.10.1
 
 **Added:** Three new briefing sources and four new metrics fields.

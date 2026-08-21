@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Added descriptions to the previously undocumented `provision`
+resource fields (`region`, `bucketName`, `bucketCreated`, `ecrRepositoryUri`,
+`ecrRepositoryArn`, `roleArn`, `runtimeArn`, `imageTag`, `provisionedAt`,
+`durationMs`) in the provisioner's result schema. No behavioral change.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @webframp/agentcore 2026.08.05.1 → 2026.08.20.1

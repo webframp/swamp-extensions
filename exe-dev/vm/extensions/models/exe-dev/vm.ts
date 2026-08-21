@@ -43,86 +43,140 @@ const GlobalArgsSchema = z.object({
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 const SharingSchema = z.object({
-  group: z.string(),
-  publicProxy: z.boolean(),
-  teamShared: z.boolean(),
-  teamAccess: z.boolean(),
-  namedUserCount: z.number(),
-  shareLinkCount: z.number(),
+  group: z.string().describe("Sharing group identifier for the VM"),
+  publicProxy: z.boolean().describe(
+    "Whether the VM's HTTPS proxy is publicly accessible",
+  ),
+  teamShared: z.boolean().describe("Whether the VM is shared with the team"),
+  teamAccess: z.boolean().describe(
+    "Whether team members currently have access to the VM",
+  ),
+  namedUserCount: z.number().describe(
+    "Number of individually named users granted access",
+  ),
+  shareLinkCount: z.number().describe("Number of active share links"),
 });
 
 const VmSchema = z.object({
-  vmName: z.string(),
-  httpsUrl: z.string(),
-  sshDest: z.string(),
-  sshHost: z.string(),
-  sshUser: z.string().optional(),
-  region: z.string(),
-  regionDisplay: z.string(),
-  status: z.string(),
-  image: z.string().optional(),
-  allocatedCpus: z.number().optional(),
-  memoryGb: z.number().optional(),
-  diskGb: z.number().optional(),
-  proxyPort: z.number().optional(),
-  proxyShare: z.string().optional(),
-  sharing: SharingSchema.optional(),
-  tags: z.array(z.string()).optional(),
-  domains: z.array(z.string()).optional(),
-  comment: z.string().optional(),
-  emoji: z.string().optional(),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional(),
-  lastActiveAt: z.string().optional(),
-  emailReceiveEnabled: z.boolean().optional(),
-  shelleyUrl: z.string().optional(),
-  terminalUrl: z.string().optional(),
+  vmName: z.string().describe("Unique exe.dev VM name"),
+  httpsUrl: z.string().describe("HTTPS URL for the VM's web proxy"),
+  sshDest: z.string().describe("SSH destination string for the VM"),
+  sshHost: z.string().describe("SSH hostname for the VM"),
+  sshUser: z.string().optional().describe("SSH user configured for the VM"),
+  region: z.string().describe("Region code where the VM is running"),
+  regionDisplay: z.string().describe("Human-readable region name"),
+  status: z.string().describe("Current lifecycle status of the VM"),
+  image: z.string().optional().describe(
+    "Container image the VM was created from",
+  ),
+  allocatedCpus: z.number().optional().describe(
+    "Number of CPUs allocated to the VM",
+  ),
+  memoryGb: z.number().optional().describe(
+    "Memory allocated to the VM, in GiB",
+  ),
+  diskGb: z.number().optional().describe("Disk allocated to the VM, in GiB"),
+  proxyPort: z.number().optional().describe(
+    "Port the VM's proxy listens on",
+  ),
+  proxyShare: z.string().optional().describe(
+    "Current sharing state of the VM's proxy",
+  ),
+  sharing: SharingSchema.optional().describe(
+    "Detailed sharing configuration for the VM",
+  ),
+  tags: z.array(z.string()).optional().describe("Tags applied to the VM"),
+  domains: z.array(z.string()).optional().describe(
+    "Custom domains attached to the VM",
+  ),
+  comment: z.string().optional().describe("Short comment set on the VM"),
+  emoji: z.string().optional().describe("Emoji icon associated with the VM"),
+  createdAt: z.string().optional().describe("Timestamp the VM was created"),
+  updatedAt: z.string().optional().describe(
+    "Timestamp the VM was last updated",
+  ),
+  lastActiveAt: z.string().optional().describe(
+    "Timestamp of the VM's last observed activity",
+  ),
+  emailReceiveEnabled: z.boolean().optional().describe(
+    "Whether the VM can receive inbound email",
+  ),
+  shelleyUrl: z.string().optional().describe(
+    "URL for the VM's Shelley (Claude Code) web session",
+  ),
+  terminalUrl: z.string().optional().describe(
+    "URL for the VM's web terminal",
+  ),
 });
 
 const FleetSchema = z.object({
-  fetchedAt: z.string(),
-  vms: z.array(VmSchema),
-  count: z.number(),
+  fetchedAt: z.string().describe(
+    "Timestamp the fleet snapshot was fetched",
+  ),
+  vms: z.array(VmSchema).describe("VMs observed in the fleet"),
+  count: z.number().describe("Number of VMs in the fleet"),
 });
 
 const VmDetailSchema = VmSchema;
 
 const StatSchema = z.object({
-  vmName: z.string(),
-  fetchedAt: z.string(),
-  range: z.string(),
-  metrics: z.unknown(),
+  vmName: z.string().describe("VM the metrics were fetched for"),
+  fetchedAt: z.string().describe("Timestamp the metrics were fetched"),
+  range: z.string().describe("Time range covered by the metrics"),
+  metrics: z.unknown().describe(
+    "Raw metrics payload returned by the exe.dev stat API",
+  ),
 });
 
 const ExecResultSchema = z.object({
-  vmName: z.string(),
-  command: z.string(),
-  executedAt: z.string(),
-  output: z.string(),
-  exitCode: z.number(),
-  truncated: z.boolean(),
+  vmName: z.string().describe("VM the command was executed on"),
+  command: z.string().describe("Shell command that was executed"),
+  executedAt: z.string().describe("Timestamp the command was executed"),
+  output: z.string().describe(
+    "Combined stdout/stderr output of the command",
+  ),
+  exitCode: z.number().describe("Exit code of the executed command"),
+  truncated: z.boolean().describe(
+    "Whether output was truncated by the 10MB per-stream cap",
+  ),
 });
 
 const ShelleyVersionSchema = z.object({
-  vmName: z.string(),
-  version: z.string().nullable(),
-  error: z.string().optional(),
+  vmName: z.string().describe("VM the version was checked on"),
+  version: z.string().nullable().describe(
+    "Installed Shelley/Claude Code version, or null if not installed or unreachable",
+  ),
+  error: z.string().optional().describe(
+    "Error encountered while checking the version",
+  ),
 });
 
 const ShelleyVersionsSchema = z.object({
-  fetchedAt: z.string(),
-  vms: z.array(ShelleyVersionSchema),
-  count: z.number(),
-  outdatedCount: z.number(),
-  latestObserved: z.string().nullable(),
+  fetchedAt: z.string().describe(
+    "Timestamp the version check was performed",
+  ),
+  vms: z.array(ShelleyVersionSchema).describe(
+    "Per-VM Shelley version results",
+  ),
+  count: z.number().describe("Number of VMs checked"),
+  outdatedCount: z.number().describe(
+    "Number of VMs running a version older than the latest observed",
+  ),
+  latestObserved: z.string().nullable().describe(
+    "Newest Shelley version observed across the checked VMs",
+  ),
 });
 
 const ShelleyUpgradeResultSchema = z.object({
-  vmName: z.string(),
-  previousVersion: z.string().nullable(),
-  upgraded: z.boolean(),
-  output: z.string(),
-  error: z.string().optional(),
+  vmName: z.string().describe("VM the upgrade was attempted on"),
+  previousVersion: z.string().nullable().describe(
+    "Shelley version installed before the upgrade attempt",
+  ),
+  upgraded: z.boolean().describe("Whether the upgrade succeeded"),
+  output: z.string().describe("Raw output from the upgrade command"),
+  error: z.string().optional().describe(
+    "Error encountered during the upgrade attempt",
+  ),
 });
 
 // =============================================================================
@@ -621,10 +675,18 @@ export const model = {
     shelleyUpgrade: {
       description: "Result of a Shelley upgrade operation per VM.",
       schema: z.object({
-        executedAt: z.string(),
-        results: z.array(ShelleyUpgradeResultSchema),
-        upgradedCount: z.number(),
-        failedCount: z.number(),
+        executedAt: z.string().describe(
+          "Timestamp the upgrade batch was executed",
+        ),
+        results: z.array(ShelleyUpgradeResultSchema).describe(
+          "Per-VM upgrade results",
+        ),
+        upgradedCount: z.number().describe(
+          "Number of VMs successfully upgraded",
+        ),
+        failedCount: z.number().describe(
+          "Number of VMs where the upgrade failed",
+        ),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 10,

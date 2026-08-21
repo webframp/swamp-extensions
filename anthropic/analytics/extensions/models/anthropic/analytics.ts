@@ -37,20 +37,32 @@ type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 /** Raw per-day summary rows exactly as returned by /analytics/summaries. */
 const AnalyticsSnapshotSchema = z.object({
-  summaries: z.array(z.record(z.string(), z.unknown())),
-  count: z.number(),
-  dataRefreshedAt: z.string().nullable(),
-  fetchedAt: z.string(),
+  summaries: z.array(z.record(z.string(), z.unknown())).describe(
+    "Raw per-day summary rows as returned by /analytics/summaries",
+  ),
+  count: z.number().describe("Number of summary rows returned"),
+  dataRefreshedAt: z.string().nullable().describe(
+    "ISO 8601 timestamp the API last refreshed its underlying data, or null",
+  ),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when this snapshot was fetched",
+  ),
 });
 
 const SeatCountSchema = z.object({
-  total: z.number().nullable(),
-  active: z.number().nullable(),
-  pending_invites: z.number().nullable(),
-  dau: z.number().nullable(),
-  wau: z.number().nullable(),
-  mau: z.number().nullable(),
-  fetchedAt: z.string(),
+  total: z.number().nullable().describe("Total assigned seat count"),
+  active: z.number().nullable().describe(
+    "Active seats for the latest summarized day (mirrors dau)",
+  ),
+  pending_invites: z.number().nullable().describe(
+    "Number of pending seat invitations",
+  ),
+  dau: z.number().nullable().describe("Daily active user count"),
+  wau: z.number().nullable().describe("Weekly active user count"),
+  mau: z.number().nullable().describe("Monthly active user count"),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when this seat count was fetched",
+  ),
 });
 
 /**
@@ -59,51 +71,95 @@ const SeatCountSchema = z.object({
  * are aggregated from the per-user /analytics/users records.
  */
 const AdoptionMetricsSchema = z.object({
-  projects: z.number().nullable(),
-  skills: z.number().nullable(),
-  connectors: z.number().nullable(),
+  projects: z.number().nullable().describe(
+    "Number of users who used at least one project on the queried day",
+  ),
+  skills: z.number().nullable().describe(
+    "Number of users who used at least one skill on the queried day",
+  ),
+  connectors: z.number().nullable().describe(
+    "Number of users who used at least one connector on the queried day",
+  ),
   // false when the /users collection failed — distinguishes "error" from a
   // legitimately empty org (all-null with collected=true).
-  collected: z.boolean(),
-  fetchedAt: z.string(),
+  collected: z.boolean().describe(
+    "Whether the /users collection succeeded (false distinguishes an error from a legitimately empty org)",
+  ),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when adoption metrics were fetched",
+  ),
 });
 
 const CostSchema = z.object({
-  total_cents: z.number(),
-  total_usd: z.number(),
-  currency: z.string(),
-  by_cost_type: z.record(z.string(), z.number()),
+  total_cents: z.number().describe(
+    "Total token usage cost in USD cents, after discountRate",
+  ),
+  total_usd: z.number().describe(
+    "Total token usage cost in USD, after discountRate",
+  ),
+  currency: z.string().describe("Currency code for the cost totals"),
+  by_cost_type: z.record(z.string(), z.number()).describe(
+    "Cost in USD cents broken down by cost_type, after discountRate",
+  ),
   // Discount rate applied to total_cents/total_usd/by_cost_type (fraction).
-  discountRate: z.number(),
-  startingAt: z.string(),
-  endingAt: z.string().nullable(),
-  dataRefreshedAt: z.string().nullable(),
+  discountRate: z.number().describe(
+    "Discount rate applied to total_cents/total_usd/by_cost_type (fraction)",
+  ),
+  startingAt: z.string().describe("Window start (ISO 8601 timestamp)"),
+  endingAt: z.string().nullable().describe(
+    "Window end (ISO 8601 timestamp), or null if open-ended",
+  ),
+  dataRefreshedAt: z.string().nullable().describe(
+    "ISO 8601 timestamp the API last refreshed its underlying cost data, or null",
+  ),
   // false when the /cost_report collection failed — distinguishes "error"
   // from a seat-based org with genuinely zero usage cost.
-  collected: z.boolean(),
-  fetchedAt: z.string(),
+  collected: z.boolean().describe(
+    "Whether the /cost_report collection succeeded (false distinguishes an error from a seat-based org with genuinely zero usage cost)",
+  ),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when cost data was fetched",
+  ),
 });
 
 /** One product's usage + cost for a single user over the window. */
 const UserProductUsageSchema = z.object({
-  product: z.string(),
-  totalTokens: z.number().nullable(),
-  outputTokens: z.number().nullable(),
-  uncachedInputTokens: z.number().nullable(),
-  cacheReadInputTokens: z.number().nullable(),
-  requests: z.number().nullable(),
-  costUsd: z.number().nullable(),
-  listCostUsd: z.number().nullable(),
+  product: z.string().describe("Product identifier (e.g. claude_code, chat)"),
+  totalTokens: z.number().nullable().describe(
+    "Total tokens for this product (excludes cache_creation tokens per the Analytics API)",
+  ),
+  outputTokens: z.number().nullable().describe(
+    "Output tokens for this product",
+  ),
+  uncachedInputTokens: z.number().nullable().describe(
+    "Uncached input tokens for this product",
+  ),
+  cacheReadInputTokens: z.number().nullable().describe(
+    "Cache-read input tokens for this product",
+  ),
+  requests: z.number().nullable().describe("Request count for this product"),
+  costUsd: z.number().nullable().describe(
+    "Cost in USD for this product, after discountRate",
+  ),
+  listCostUsd: z.number().nullable().describe(
+    "List-price cost in USD for this product, never discounted",
+  ),
 });
 
 /** Per-user usage + cost across products (Claude Code broken out by `product`). */
 const UserUsageRecordSchema = z.object({
-  userId: z.string(),
-  email: z.string().nullable(),
-  name: z.string().nullable(),
-  totalTokens: z.number(),
-  totalCostUsd: z.number(),
-  byProduct: z.array(UserProductUsageSchema),
+  userId: z.string().describe("Unique user identifier"),
+  email: z.string().nullable().describe("User's email address, if known"),
+  name: z.string().nullable().describe("User's display name, if known"),
+  totalTokens: z.number().describe(
+    "Total tokens across all products for this user",
+  ),
+  totalCostUsd: z.number().describe(
+    "Total cost in USD across all products for this user, after discountRate",
+  ),
+  byProduct: z.array(UserProductUsageSchema).describe(
+    "Per-product usage and cost breakdown for this user",
+  ),
 });
 
 /**
@@ -113,29 +169,53 @@ const UserUsageRecordSchema = z.object({
  * without a bespoke adapter.
  */
 const UserUsageTotalsSchema = z.object({
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  totalTokens: z.number(),
-  inputTokensPerMinute: z.number(),
-  outputTokensPerMinute: z.number(),
+  inputTokens: z.number().describe(
+    "Sum of uncached + cache-read input tokens across returned users",
+  ),
+  outputTokens: z.number().describe(
+    "Sum of output tokens across returned users",
+  ),
+  totalTokens: z.number().describe("Sum of total tokens across returned users"),
+  inputTokensPerMinute: z.number().describe(
+    "Input tokens per minute over the window",
+  ),
+  outputTokensPerMinute: z.number().describe(
+    "Output tokens per minute over the window",
+  ),
 });
 
 const UserUsageSchema = z.object({
-  startingAt: z.string(),
-  endingAt: z.string(),
-  filteredEmail: z.string().nullable(),
-  users: z.array(UserUsageRecordSchema),
-  totals: UserUsageTotalsSchema,
+  startingAt: z.string().describe("Window start (ISO 8601 timestamp)"),
+  endingAt: z.string().describe("Window end (ISO 8601 timestamp)"),
+  filteredEmail: z.string().nullable().describe(
+    "Email the results were filtered to, or null if unfiltered",
+  ),
+  users: z.array(UserUsageRecordSchema).describe(
+    "Per-user usage and cost records, sorted by cost then tokens descending",
+  ),
+  totals: UserUsageTotalsSchema.describe(
+    "Grand totals across returned users, in the shape @webframp/ai-usage's provider registry expects",
+  ),
   // Discount rate applied to costUsd/totalCostUsd (fraction); listCostUsd is
   // always list price and is never adjusted.
-  discountRate: z.number(),
-  count: z.number(),
-  dataRefreshedAt: z.string().nullable(),
+  discountRate: z.number().describe(
+    "Discount rate applied to costUsd/totalCostUsd (fraction); listCostUsd is never adjusted",
+  ),
+  count: z.number().describe("Number of users returned"),
+  dataRefreshedAt: z.string().nullable().describe(
+    "ISO 8601 timestamp the API last refreshed its underlying data, or null",
+  ),
   // false when the report fetch failed (not an Enterprise plan, or the key
   // lacks read:analytics) — distinguishes error from a genuinely empty window.
-  collected: z.boolean(),
-  error: z.string().nullable(),
-  fetchedAt: z.string(),
+  collected: z.boolean().describe(
+    "Whether either report fetch succeeded (false distinguishes an error from a genuinely empty window)",
+  ),
+  error: z.string().nullable().describe(
+    "Error message if either report failed, or null",
+  ),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when this usage data was fetched",
+  ),
 });
 
 // =============================================================================

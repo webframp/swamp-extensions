@@ -1860,13 +1860,13 @@ class GitLabSyncService implements TwoPhaseSyncService {
 
 /** Zod schema that validates and supplies defaults for GitLab datastore configuration. */
 const ConfigSchema = z.object({
-  projectId: z.string().describe(
+  projectId: z.string().min(1).describe(
     "GitLab project ID (numeric) or URL-encoded path (e.g., 'mygroup/myproject')",
   ),
   baseUrl: z.string().url().default("https://gitlab.com").describe(
     "GitLab instance URL",
   ),
-  token: z.string().describe(
+  token: z.string().min(1).describe(
     "GitLab personal access token or CI job token with api scope",
   ),
   username: z.string().optional().describe(

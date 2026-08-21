@@ -27,13 +27,15 @@ const GetOrgPoliciesItemSchema = z.object({
   type: z.enum(["policy"]).optional(),
   action: z.object({
     data: z.unknown(),
-  }),
-  action_type: z.enum(["ignore"]),
+  }).describe("The action to apply when this policy's conditions match"),
+  action_type: z.enum(["ignore"]).describe(
+    "The kind of action this policy performs",
+  ),
   conditions_group: z.object({
     conditions: z.array(z.unknown()),
     logical_operator: z.enum(["and"]),
-  }),
-  created_at: z.string(),
+  }).describe("The set of conditions that must match for this policy to apply"),
+  created_at: z.string().describe("When the policy was created"),
   created_by: z.object({
     actor_source: z.enum(["snyk_user", "external_user"]).optional(),
     email: z.string().optional(),
@@ -51,12 +53,12 @@ const GetOrgPoliciesItemSchema = z.object({
       "github_server_app",
       "azure_repos",
     ]).optional(),
-  }).optional(),
-  name: z.string(),
+  }).optional().describe("The user who created the policy"),
+  name: z.string().describe("Name of the policy"),
   review: z.enum(["pending", "approved", "rejected", "not-required"]).describe(
     "Review status.",
   ),
-  updated_at: z.string(),
+  updated_at: z.string().describe("When the policy was last updated"),
 });
 
 const GetOrgPoliciesSchema = z.object({
@@ -72,13 +74,15 @@ const CreateOrgPolicySchema = z.object({
   type: z.enum(["policy"]).optional(),
   action: z.object({
     data: z.unknown(),
-  }),
-  action_type: z.enum(["ignore"]),
+  }).describe("The action to apply when this policy's conditions match"),
+  action_type: z.enum(["ignore"]).describe(
+    "The kind of action this policy performs",
+  ),
   conditions_group: z.object({
     conditions: z.array(z.unknown()),
     logical_operator: z.enum(["and"]),
-  }),
-  created_at: z.string(),
+  }).describe("The set of conditions that must match for this policy to apply"),
+  created_at: z.string().describe("When the policy was created"),
   created_by: z.object({
     actor_source: z.enum(["snyk_user", "external_user"]).optional(),
     email: z.string().optional(),
@@ -96,17 +100,18 @@ const CreateOrgPolicySchema = z.object({
       "github_server_app",
       "azure_repos",
     ]).optional(),
-  }).optional(),
-  name: z.string(),
+  }).optional().describe("The user who created the policy"),
+  name: z.string().describe("Name of the policy"),
   review: z.enum(["pending", "approved", "rejected", "not-required"]).describe(
     "Review status.",
   ),
-  updated_at: z.string(),
+  updated_at: z.string().describe("When the policy was last updated"),
 });
 
 const GetOrgPolicyEventsItemSchema = z.object({
   id: z.string().describe("A unique identifier for this event."),
-  type: z.enum(["approve", "reject", "cancel", "reopen", "edit", "create"]),
+  type: z.enum(["approve", "reject", "cancel", "reopen", "edit", "create"])
+    .describe("The kind of event that occurred on the policy"),
   changes: z.object({
     new_action: z.unknown().optional(),
     new_conditions_group: z.unknown().optional(),
@@ -116,9 +121,11 @@ const GetOrgPolicyEventsItemSchema = z.object({
     old_conditions_group: z.unknown().optional(),
     old_name: z.string().optional(),
     old_review: z.unknown().optional(),
-  }),
-  comment: z.string().optional(),
-  created_at: z.string(),
+  }).describe("Before/after values for the fields this event modified"),
+  comment: z.string().optional().describe(
+    "Optional comment left by the actor for this event",
+  ),
+  created_at: z.string().describe("When this event was recorded"),
   created_by: z.object({
     actor_source: z.enum(["snyk_user", "external_user"]).optional(),
     email: z.string().optional(),
@@ -136,7 +143,7 @@ const GetOrgPolicyEventsItemSchema = z.object({
       "github_server_app",
       "azure_repos",
     ]).optional(),
-  }),
+  }).describe("The user who triggered this event"),
 });
 
 const GetOrgPolicyEventsSchema = z.object({

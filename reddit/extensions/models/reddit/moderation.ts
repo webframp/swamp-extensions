@@ -19,15 +19,15 @@ const GlobalArgsSchema = z.object({
   subreddit: z.string().regex(/^[A-Za-z0-9_]{2,21}$/).describe(
     "Subreddit name (without r/ prefix)",
   ),
-  clientId: z.string().describe("Reddit OAuth2 application client ID"),
-  clientSecret: z.string().meta({ sensitive: true }).describe(
+  clientId: z.string().min(1).describe("Reddit OAuth2 application client ID"),
+  clientSecret: z.string().min(1).meta({ sensitive: true }).describe(
     "Reddit OAuth2 application client secret",
   ),
-  username: z.string().describe("Reddit account username"),
-  password: z.string().meta({ sensitive: true }).describe(
+  username: z.string().min(1).describe("Reddit account username"),
+  password: z.string().min(1).meta({ sensitive: true }).describe(
     "Reddit account password",
   ),
-  userAgent: z.string().describe(
+  userAgent: z.string().min(1).describe(
     "User-Agent string for Reddit API requests (e.g. 'swamp:modbot:v1.0 by /u/yourname')",
   ),
 });
@@ -165,13 +165,18 @@ interface MethodContext {
 /** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "Require non-empty OAuth2 credential and user-agent fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

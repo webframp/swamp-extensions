@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/anthropic/compliance"
-version: "2026.07.30.1"
+version: "2026.08.21.1"
 description: |
   Observe a Claude Enterprise account via the Compliance API. Covers the
   6-year activity audit feed, organization directory (users, roles, groups

@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` to the eight cosmetic spawn/despawn region
+bounds on the customer base config schema (`startsXMin`/`startsXMax`/
+`startsYMin`/`startsYMax`/`stopsXMin`/`stopsXMax`/`stopsYMin`/`stopsYMax`),
+clarifying that they are informational only and not used by the simulation.
+No behavioral change.
+
 ## 2026.07.23.1
 
 **Added:** Initial release of `@webframp/org-simulation`, an agent-guided

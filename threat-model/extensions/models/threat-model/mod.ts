@@ -42,14 +42,16 @@ const GlobalArgsSchema = z.object({
 });
 
 const AssetSchema = z.object({
-  name: z.string(),
-  value: z.string(),
+  name: z.string().describe("Asset name"),
+  value: z.string().describe(
+    "What makes this asset valuable or sensitive (credential type, data classification, etc.)",
+  ),
 });
 
 const ThreatScenarioSchema = z.object({
   id: z.string().describe("Short identifier like T1, T2"),
-  title: z.string(),
-  description: z.string(),
+  title: z.string().describe("One-line threat scenario title"),
+  description: z.string().describe("What could happen"),
   likelihood: LikelihoodEnum,
   impact: ImpactEnum,
   inherentRisk: RiskLevelEnum,
@@ -60,71 +62,89 @@ const ThreatScenarioSchema = z.object({
 
 const ControlSchema = z.object({
   id: z.string().describe("Short identifier like C1, C2"),
-  description: z.string(),
+  description: z.string().describe("What this control does"),
   mitigates: z.array(z.string()).describe("Threat IDs this control addresses"),
-  effectiveness: z.enum(["full", "partial", "minimal"]),
-  implemented: z.boolean().default(false),
+  effectiveness: z.enum(["full", "partial", "minimal"]).describe(
+    "How much this control reduces the mitigated threats' risk",
+  ),
+  implemented: z.boolean().default(false).describe(
+    "Whether this control is already in place (vs. proposed)",
+  ),
 });
 
 const AcceptanceSchema = z.object({
-  threatId: z.string(),
-  rationale: z.string(),
+  threatId: z.string().describe("ID of the threat being accepted"),
+  rationale: z.string().describe("Why this risk is being accepted"),
   conditions: z.string().optional().describe(
     "Conditions under which acceptance is valid",
   ),
-  acceptedBy: z.string(),
-  acceptedAt: z.string(),
+  acceptedBy: z.string().describe("Who accepted this risk"),
+  acceptedAt: z.string().describe("ISO timestamp of when this was accepted"),
 });
 
 const AssessmentSchema = z.object({
-  scope: z.string(),
+  scope: z.string().describe(
+    "Boundary statement: what is/is not included in this assessment",
+  ),
   subject: z.string().describe("What is being assessed"),
-  currentPosture: z.string(),
-  assessedAt: z.string(),
+  currentPosture: z.string().describe(
+    "Current security posture before this change",
+  ),
+  assessedAt: z.string().describe("ISO timestamp of when scoping occurred"),
   assets: z.array(AssetSchema).default([]),
   threats: z.array(ThreatScenarioSchema).default([]),
   controls: z.array(ControlSchema).default([]),
   acceptances: z.array(AcceptanceSchema).default([]),
   recommendation: z.string().default(""),
   openQuestions: z.array(z.string()).default([]),
-  updatedAt: z.string(),
+  updatedAt: z.string().describe(
+    "ISO timestamp of the most recent update to this assessment",
+  ),
 });
 
 const PostureSchema = z.object({
-  subject: z.string(),
-  assessedAt: z.string(),
-  totalThreats: z.number(),
+  subject: z.string().describe("What is being assessed"),
+  assessedAt: z.string().describe(
+    "ISO timestamp of when the underlying assessment was scoped",
+  ),
+  totalThreats: z.number().describe("Total number of identified threats"),
   byStatus: z.object({
     mitigated: z.number(),
     accepted: z.number(),
     deferred: z.number(),
     unaddressed: z.number(),
-  }),
+  }).describe("Count of threats grouped by their current status"),
   byRiskLevel: z.object({
     critical: z.number(),
     high: z.number(),
     medium: z.number(),
     low: z.number(),
     negligible: z.number(),
-  }),
+  }).describe("Count of threats grouped by inherent risk level"),
   controlsCoverage: z.object({
     total: z.number(),
     implemented: z.number(),
-  }),
+  }).describe("Total controls recorded vs. how many are actually in place"),
   unmitigatedAboveThreshold: z.array(z.object({
     id: z.string(),
     title: z.string(),
     inherentRisk: RiskLevelEnum,
     status: ThreatStatusEnum,
-  })),
-  openQuestions: z.number(),
+  })).describe(
+    "Unaddressed threats at medium risk or above, requiring attention",
+  ),
+  openQuestions: z.number().describe("Count of unresolved open questions"),
   overallPosture: z.enum([
     "acceptable",
     "conditionally-acceptable",
     "unacceptable",
-  ]),
-  recommendation: z.string(),
-  snapshotAt: z.string(),
+  ]).describe("Overall risk posture derived from threat statuses"),
+  recommendation: z.string().describe(
+    "Recommendation carried over from the assessment",
+  ),
+  snapshotAt: z.string().describe(
+    "ISO timestamp of when this posture snapshot was computed",
+  ),
 });
 
 // =============================================================================
@@ -217,13 +237,19 @@ interface ModelContext {
 /** Agile threat modeling concept model. */
 export const model = {
   type: "@webframp/threat-model",
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Added .describe() to previously undocumented resource schema fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

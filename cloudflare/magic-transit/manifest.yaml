@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/magic-transit"
-version: "2026.07.27.1"
+version: "2026.08.21.1"
 description: "Cloudflare Magic Transit — GRE tunnels, static routes, health checks, IPsec"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

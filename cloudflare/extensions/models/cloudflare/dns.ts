@@ -17,10 +17,10 @@ import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiToken: z.string().meta({ sensitive: true }).describe(
+  apiToken: z.string().min(1).meta({ sensitive: true }).describe(
     "Cloudflare API token with DNS read/write permissions",
   ),
-  zoneId: z.string().describe("Zone ID to manage DNS records for"),
+  zoneId: z.string().min(1).describe("Zone ID to manage DNS records for"),
 });
 
 const DnsRecordSchema = z.object({
@@ -184,7 +184,7 @@ export const model = {
     get: {
       description: "Get a specific DNS record",
       arguments: z.object({
-        recordId: z.string().describe("DNS record ID"),
+        recordId: z.string().min(1).describe("DNS record ID"),
       }),
       execute: async (
         args: { recordId: string },
@@ -295,7 +295,7 @@ export const model = {
     update: {
       description: "Update an existing DNS record",
       arguments: z.object({
-        recordId: z.string().describe("DNS record ID to update"),
+        recordId: z.string().min(1).describe("DNS record ID to update"),
         type: z.enum([
           "A",
           "AAAA",
@@ -361,7 +361,7 @@ export const model = {
     delete: {
       description: "Delete a DNS record",
       arguments: z.object({
-        recordId: z.string().describe("DNS record ID to delete"),
+        recordId: z.string().min(1).describe("DNS record ID to delete"),
       }),
       execute: async (
         args: { recordId: string },

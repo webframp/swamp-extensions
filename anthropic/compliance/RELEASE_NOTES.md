@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Added descriptions to every previously undocumented field across
+the `activities`, `organizations`, `users`, `roles`, `groups`,
+`groupMembers`, and `effectiveSettings` resource schemas. No behavioral
+change.
+
 ## 2026.07.30.1
 
 **Fixed:** `sync_groups` and `sync_directory` returned HTTP 404 from the

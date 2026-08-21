@@ -4422,7 +4422,9 @@ export const model = {
     get_filter_profile: {
       description: "Get BGP Filter Profile",
       arguments: z.object({
-        profile_id: z.string(),
+        profile_id: z.string().min(1).describe(
+          "CNI (connector network interconnect) profile identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4457,7 +4459,9 @@ export const model = {
     update_filter_profile: {
       description: "Update BGP Filter Profile",
       arguments: z.object({
-        profile_id: z.string(),
+        profile_id: z.string().min(1).describe(
+          "CNI (connector network interconnect) profile identifier.",
+        ),
         description: z.string().max(1024).optional().describe(
           "Description of the filter profile",
         ),
@@ -4510,7 +4514,9 @@ export const model = {
     delete_filter_profile: {
       description: "Delete BGP Filter Profile",
       arguments: z.object({
-        profile_id: z.string(),
+        profile_id: z.string().min(1).describe(
+          "CNI (connector network interconnect) profile identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5224,7 +5230,7 @@ export const model = {
     get_catalog_syncs_read: {
       description: "Read Catalog Sync",
       arguments: z.object({
-        sync_id: z.string(),
+        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5259,7 +5265,7 @@ export const model = {
     update: {
       description: "Update Catalog Sync",
       arguments: z.object({
-        sync_id: z.string(),
+        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
         description: z.string().optional(),
         name: z.string().optional(),
         policy: z.string().optional(),
@@ -5306,7 +5312,7 @@ export const model = {
     patch: {
       description: "Patch Catalog Sync",
       arguments: z.object({
-        sync_id: z.string(),
+        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
         description: z.string().optional(),
         name: z.string().optional(),
         policy: z.string().optional(),
@@ -5353,7 +5359,7 @@ export const model = {
     delete: {
       description: "Delete Catalog Sync",
       arguments: z.object({
-        sync_id: z.string(),
+        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
         delete_destination: z.boolean().optional(),
       }),
       execute: async (
@@ -5384,7 +5390,7 @@ export const model = {
     catalog_syncs_refresh: {
       description: "Run Catalog Sync",
       arguments: z.object({
-        sync_id: z.string(),
+        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5453,7 +5459,7 @@ export const model = {
     get_onramps_read: {
       description: "Read On-ramp",
       arguments: z.object({
-        onramp_id: z.string(),
+        onramp_id: z.string().min(1).describe("Onramp identifier."),
         status: z.boolean().optional(),
         vpcs: z.boolean().optional(),
         post_apply_resources: z.boolean().optional(),
@@ -5492,7 +5498,7 @@ export const model = {
     onramps_apply: {
       description: "Apply On-ramp",
       arguments: z.object({
-        onramp_id: z.string(),
+        onramp_id: z.string().min(1).describe("Onramp identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5528,7 +5534,7 @@ export const model = {
     onramps_plan: {
       description: "Plan On-ramp",
       arguments: z.object({
-        onramp_id: z.string(),
+        onramp_id: z.string().min(1).describe("Onramp identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5598,7 +5604,9 @@ export const model = {
     get_providers_read: {
       description: "Read Cloud Integration",
       arguments: z.object({
-        provider_id: z.string(),
+        provider_id: z.string().min(1).describe(
+          "Network interconnect provider identifier.",
+        ),
         status: z.boolean().optional(),
       }),
       execute: async (
@@ -5634,7 +5642,9 @@ export const model = {
     providers_discover: {
       description: "Run Discovery",
       arguments: z.object({
-        provider_id: z.string(),
+        provider_id: z.string().min(1).describe(
+          "Network interconnect provider identifier.",
+        ),
         v2: z.boolean().optional(),
       }),
       execute: async (
@@ -5679,7 +5689,9 @@ export const model = {
     get_providers_initial_setup: {
       description: "Get Cloud Integration Setup Config",
       arguments: z.object({
-        provider_id: z.string(),
+        provider_id: z.string().min(1).describe(
+          "Network interconnect provider identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6001,7 +6013,7 @@ export const model = {
     list_gre_tunnel_details: {
       description: "List GRE Tunnel Details",
       arguments: z.object({
-        gre_tunnel_id: z.string(),
+        gre_tunnel_id: z.string().min(1).describe("GRE tunnel identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6036,7 +6048,7 @@ export const model = {
     update_gre_tunnel: {
       description: "Update GRE Tunnel",
       arguments: z.object({
-        gre_tunnel_id: z.string(),
+        gre_tunnel_id: z.string().min(1).describe("GRE tunnel identifier."),
         automatic_return_routing: z.unknown().optional(),
         cloudflare_gre_endpoint: z.unknown(),
         customer_gre_endpoint: z.unknown(),
@@ -6089,7 +6101,7 @@ export const model = {
     delete_gre_tunnel: {
       description: "Delete GRE Tunnel",
       arguments: z.object({
-        gre_tunnel_id: z.string(),
+        gre_tunnel_id: z.string().min(1).describe("GRE tunnel identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6296,7 +6308,7 @@ export const model = {
     list_ipsec_tunnel_details: {
       description: "List IPsec tunnel details",
       arguments: z.object({
-        ipsec_tunnel_id: z.string(),
+        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6331,7 +6343,7 @@ export const model = {
     update_ipsec_tunnel: {
       description: "Update IPsec Tunnel",
       arguments: z.object({
-        ipsec_tunnel_id: z.string(),
+        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
         automatic_return_routing: z.unknown().optional(),
         bgp: z.unknown().optional(),
         cloudflare_endpoint: z.unknown(),
@@ -6386,7 +6398,7 @@ export const model = {
     delete_ipsec_tunnel: {
       description: "Delete IPsec Tunnel",
       arguments: z.object({
-        ipsec_tunnel_id: z.string(),
+        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6418,7 +6430,7 @@ export const model = {
     magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels: {
       description: "Generate Pre-Shared Key (PSK) for IPsec tunnels",
       arguments: z.object({
-        ipsec_tunnel_id: z.string(),
+        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6538,7 +6550,9 @@ export const model = {
     get_redundancy_group: {
       description: "Get Redundancy Group Details",
       arguments: z.object({
-        redundancy_group_id: z.string(),
+        redundancy_group_id: z.string().min(1).describe(
+          "Connector redundancy group identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6573,7 +6587,9 @@ export const model = {
     update_redundancy_group: {
       description: "Update a Redundancy Group",
       arguments: z.object({
-        redundancy_group_id: z.string(),
+        redundancy_group_id: z.string().min(1).describe(
+          "Connector redundancy group identifier.",
+        ),
         description: z.string().max(1024).optional().describe(
           "Optional description",
         ),
@@ -6625,7 +6641,9 @@ export const model = {
     delete_redundancy_group: {
       description: "Delete a Redundancy Group",
       arguments: z.object({
-        redundancy_group_id: z.string(),
+        redundancy_group_id: z.string().min(1).describe(
+          "Connector redundancy group identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6800,7 +6818,7 @@ export const model = {
     get_magic_static_routes_route_details: {
       description: "Route Details",
       arguments: z.object({
-        route_id: z.string(),
+        route_id: z.string().min(1).describe("Static route identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6835,7 +6853,7 @@ export const model = {
     update_route: {
       description: "Update Route",
       arguments: z.object({
-        route_id: z.string(),
+        route_id: z.string().min(1).describe("Static route identifier."),
         description: z.unknown().optional(),
         nexthop: z.unknown(),
         prefix: z.unknown(),
@@ -6884,7 +6902,7 @@ export const model = {
     delete_route: {
       description: "Delete Route",
       arguments: z.object({
-        route_id: z.string(),
+        route_id: z.string().min(1).describe("Static route identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7008,7 +7026,7 @@ export const model = {
     get_magic_sites_site_details: {
       description: "Site Details",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7043,7 +7061,7 @@ export const model = {
     update_site: {
       description: "Update Site",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         connector_id: z.unknown().optional(),
         description: z.string().optional(),
         location: z.unknown().optional(),
@@ -7091,7 +7109,7 @@ export const model = {
     patch_site: {
       description: "Patch Site",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         connector_id: z.unknown().optional(),
         description: z.string().optional(),
         location: z.unknown().optional(),
@@ -7139,7 +7157,7 @@ export const model = {
     delete_site: {
       description: "Delete Site",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7169,7 +7187,7 @@ export const model = {
     list_acls: {
       description: "List Site ACLs",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7220,7 +7238,7 @@ export const model = {
     create_acl: {
       description: "Create a new Site ACL",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         description: z.string().optional().describe("Description for the ACL."),
         forward_locally: z.unknown().optional(),
         lan_1: z.unknown(),
@@ -7267,8 +7285,8 @@ export const model = {
     get_magic_site_acls_acl_details: {
       description: "Site ACL Details",
       arguments: z.object({
-        site_id: z.string(),
-        acl_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        acl_id: z.string().min(1).describe("ACL identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7303,8 +7321,8 @@ export const model = {
     update_acl: {
       description: "Update Site ACL",
       arguments: z.object({
-        site_id: z.string(),
-        acl_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        acl_id: z.string().min(1).describe("ACL identifier."),
         description: z.string().optional().describe("Description for the ACL."),
         forward_locally: z.unknown().optional(),
         lan_1: z.unknown().optional(),
@@ -7354,8 +7372,8 @@ export const model = {
     patch_acl: {
       description: "Patch Site ACL",
       arguments: z.object({
-        site_id: z.string(),
-        acl_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        acl_id: z.string().min(1).describe("ACL identifier."),
         description: z.string().optional().describe("Description for the ACL."),
         forward_locally: z.unknown().optional(),
         lan_1: z.unknown().optional(),
@@ -7405,8 +7423,8 @@ export const model = {
     delete_acl: {
       description: "Delete Site ACL",
       arguments: z.object({
-        site_id: z.string(),
-        acl_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        acl_id: z.string().min(1).describe("ACL identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7436,7 +7454,7 @@ export const model = {
     list_app_configs: {
       description: "List App Configs",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7489,7 +7507,7 @@ export const model = {
     create_magic_site_app_configs_add_app_config: {
       description: "Create a new App Config",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         breakout: z.unknown().optional(),
         preferred_wans: z.unknown().optional(),
         priority: z.unknown().optional(),
@@ -7539,7 +7557,7 @@ export const model = {
     update_app_config: {
       description: "Update an App Config",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         app_config_id: z.string(),
         account_app_id: z.unknown().optional(),
         breakout: z.unknown().optional(),
@@ -7588,7 +7606,7 @@ export const model = {
     patch_app_config: {
       description: "Update an App Config",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         app_config_id: z.string(),
         account_app_id: z.unknown().optional(),
         breakout: z.unknown().optional(),
@@ -7637,7 +7655,7 @@ export const model = {
     delete_app_config: {
       description: "Delete App Config",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         app_config_id: z.string(),
       }),
       execute: async (
@@ -7670,7 +7688,7 @@ export const model = {
     list_lans: {
       description: "List Site LANs",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7721,7 +7739,7 @@ export const model = {
     create_lan: {
       description: "Create a new Site LAN",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         bond_id: z.unknown().optional(),
         ha_link: z.boolean().optional().describe(
           "mark true to use this LAN for HA probing. only works for site with HA turned ...",
@@ -7777,8 +7795,8 @@ export const model = {
     get_magic_site_lans_lan_details: {
       description: "Site LAN Details",
       arguments: z.object({
-        site_id: z.string(),
-        lan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        lan_id: z.string().min(1).describe("LAN identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7813,8 +7831,8 @@ export const model = {
     update_lan: {
       description: "Update Site LAN",
       arguments: z.object({
-        site_id: z.string(),
-        lan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        lan_id: z.string().min(1).describe("LAN identifier."),
         bond_id: z.unknown().optional(),
         is_breakout: z.boolean().optional().describe(
           "mark true to use this LAN for source-based breakout traffic",
@@ -7870,8 +7888,8 @@ export const model = {
     patch_lan: {
       description: "Patch Site LAN",
       arguments: z.object({
-        site_id: z.string(),
-        lan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        lan_id: z.string().min(1).describe("LAN identifier."),
         bond_id: z.unknown().optional(),
         is_breakout: z.boolean().optional().describe(
           "mark true to use this LAN for source-based breakout traffic",
@@ -7927,8 +7945,8 @@ export const model = {
     delete_lan: {
       description: "Delete Site LAN",
       arguments: z.object({
-        site_id: z.string(),
-        lan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        lan_id: z.string().min(1).describe("LAN identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7958,7 +7976,7 @@ export const model = {
     get_magic_site_netflow_config_details: {
       description: "NetFlow Configuration Details",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7993,7 +8011,7 @@ export const model = {
     create_netflow_config: {
       description: "Create NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         active_timeout: z.number().int().min(1).max(5400).optional().describe(
           "Timeout in seconds for active flows.",
         ),
@@ -8052,7 +8070,7 @@ export const model = {
     update_netflow_config: {
       description: "Update NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         active_timeout: z.number().int().min(1).max(5400).optional().describe(
           "Timeout in seconds for active flows.",
         ),
@@ -8110,7 +8128,7 @@ export const model = {
     patch_netflow_config: {
       description: "Update NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         active_timeout: z.number().int().min(1).max(5400).optional().describe(
           "Timeout in seconds for active flows.",
         ),
@@ -8168,7 +8186,7 @@ export const model = {
     delete_netflow_config: {
       description: "Delete NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8198,7 +8216,7 @@ export const model = {
     list_wans: {
       description: "List Site WANs",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8249,7 +8267,7 @@ export const model = {
     create_wan: {
       description: "Create a new Site WAN",
       arguments: z.object({
-        site_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
         name: z.string().optional(),
         physport: z.unknown(),
         priority: z.number().int().optional(),
@@ -8294,8 +8312,8 @@ export const model = {
     get_magic_site_wans_wan_details: {
       description: "Site WAN Details",
       arguments: z.object({
-        site_id: z.string(),
-        wan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        wan_id: z.string().min(1).describe("WAN identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8330,8 +8348,8 @@ export const model = {
     update_wan: {
       description: "Update Site WAN",
       arguments: z.object({
-        site_id: z.string(),
-        wan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        wan_id: z.string().min(1).describe("WAN identifier."),
         name: z.string().optional(),
         physport: z.unknown().optional(),
         priority: z.number().int().optional(),
@@ -8379,8 +8397,8 @@ export const model = {
     patch_wan: {
       description: "Patch Site WAN",
       arguments: z.object({
-        site_id: z.string(),
-        wan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        wan_id: z.string().min(1).describe("WAN identifier."),
         name: z.string().optional(),
         physport: z.unknown().optional(),
         priority: z.number().int().optional(),
@@ -8428,8 +8446,8 @@ export const model = {
     delete_wan: {
       description: "Delete Site WAN",
       arguments: z.object({
-        site_id: z.string(),
-        wan_id: z.string(),
+        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        wan_id: z.string().min(1).describe("WAN identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,

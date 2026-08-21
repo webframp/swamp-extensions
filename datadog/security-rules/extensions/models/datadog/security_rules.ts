@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -68,7 +68,7 @@ const TestExistingSecurityMonitoringRuleSchema = z.object({
 /** Datadog Security Rules — detection rule CRUD and management */
 export const model = {
   type: "@webframp/datadog/security-rules",
-  version: "2026.07.20.11",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -209,21 +209,27 @@ export const model = {
         isEnabled: z.boolean().describe("Whether the rule is enabled."),
         message: z.string().describe("Message for generated signals."),
         name: z.string().describe("The name of the rule."),
-        options: z.unknown(),
+        options: z.unknown().describe(
+          "Options on the detection rule, such as detection method, evaluation window, and keep-alive duration.",
+        ),
         queries: z.array(z.unknown()).describe(
           "Queries for selecting logs which are part of the rule.",
         ),
         referenceTables: z.array(z.unknown()).optional().describe(
           "Reference tables for the rule.",
         ),
-        schedulingOptions: z.unknown().optional(),
+        schedulingOptions: z.unknown().optional().describe(
+          "Options for scheduled rules controlling how often the rule query runs.",
+        ),
         tags: z.array(z.string()).optional().describe(
           "Tags for generated signals.",
         ),
         thirdPartyCases: z.array(z.unknown()).optional().describe(
           "Cases for generating signals from third-party rules. Only available for third...",
         ),
-        type: z.unknown().optional(),
+        type: z.unknown().optional().describe(
+          "The rule type, e.g. `log_detection`, `workload_security`, or `application_security`.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -322,21 +328,27 @@ export const model = {
         isEnabled: z.boolean().describe("Whether the rule is enabled."),
         message: z.string().describe("Message for generated signals."),
         name: z.string().describe("The name of the rule."),
-        options: z.unknown(),
+        options: z.unknown().describe(
+          "Options on the detection rule, such as detection method, evaluation window, and keep-alive duration.",
+        ),
         queries: z.array(z.unknown()).describe(
           "Queries for selecting logs which are part of the rule.",
         ),
         referenceTables: z.array(z.unknown()).optional().describe(
           "Reference tables for the rule.",
         ),
-        schedulingOptions: z.unknown().optional(),
+        schedulingOptions: z.unknown().optional().describe(
+          "Options for scheduled rules controlling how often the rule query runs.",
+        ),
         tags: z.array(z.string()).optional().describe(
           "Tags for generated signals.",
         ),
         thirdPartyCases: z.array(z.unknown()).optional().describe(
           "Cases for generating signals from third-party rules. Only available for third...",
         ),
-        type: z.unknown().optional(),
+        type: z.unknown().optional().describe(
+          "The rule type, e.g. `log_detection`, `workload_security`, or `application_security`.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -384,7 +396,9 @@ export const model = {
     test_security_monitoring_rule: {
       description: "Test a rule",
       arguments: z.object({
-        rule: z.unknown().optional(),
+        rule: z.unknown().optional().describe(
+          "The rule payload to test against the given query payloads.",
+        ),
         ruleQueryPayloads: z.array(z.unknown()).optional().describe(
           "Data payloads used to test rules query with the expected result.",
         ),
@@ -456,21 +470,27 @@ export const model = {
         isEnabled: z.boolean().describe("Whether the rule is enabled."),
         message: z.string().describe("Message for generated signals."),
         name: z.string().describe("The name of the rule."),
-        options: z.unknown(),
+        options: z.unknown().describe(
+          "Options on the detection rule, such as detection method, evaluation window, and keep-alive duration.",
+        ),
         queries: z.array(z.unknown()).describe(
           "Queries for selecting logs which are part of the rule.",
         ),
         referenceTables: z.array(z.unknown()).optional().describe(
           "Reference tables for the rule.",
         ),
-        schedulingOptions: z.unknown().optional(),
+        schedulingOptions: z.unknown().optional().describe(
+          "Options for scheduled rules controlling how often the rule query runs.",
+        ),
         tags: z.array(z.string()).optional().describe(
           "Tags for generated signals.",
         ),
         thirdPartyCases: z.array(z.unknown()).optional().describe(
           "Cases for generating signals from third-party rules. Only available for third...",
         ),
-        type: z.unknown().optional(),
+        type: z.unknown().optional().describe(
+          "The rule type, e.g. `log_detection`, `workload_security`, or `application_security`.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -563,7 +583,9 @@ export const model = {
         cases: z.array(z.unknown()).optional().describe(
           "Cases for generating signals.",
         ),
-        complianceSignalOptions: z.unknown().optional(),
+        complianceSignalOptions: z.unknown().optional().describe(
+          "Options for generating compliance signals from this rule.",
+        ),
         customMessage: z.string().optional().describe(
           "Custom/Overridden Message for generated signals (used in case of Default rule...",
         ),
@@ -586,14 +608,18 @@ export const model = {
           "Message for generated signals.",
         ),
         name: z.string().optional().describe("Name of the rule."),
-        options: z.unknown().optional(),
+        options: z.unknown().optional().describe(
+          "Options on the detection rule, such as detection method, evaluation window, and keep-alive duration.",
+        ),
         queries: z.array(z.unknown()).optional().describe(
           "Queries for selecting logs which are part of the rule.",
         ),
         referenceTables: z.array(z.unknown()).optional().describe(
           "Reference tables for the rule.",
         ),
-        schedulingOptions: z.unknown().optional(),
+        schedulingOptions: z.unknown().optional().describe(
+          "Options for scheduled rules controlling how often the rule query runs.",
+        ),
         tags: z.array(z.string()).optional().describe(
           "Tags for generated signals.",
         ),
@@ -725,7 +751,9 @@ export const model = {
       description: "Test an existing rule",
       arguments: z.object({
         rule_id: z.string().describe("The ID of the rule."),
-        rule: z.unknown().optional(),
+        rule: z.unknown().optional().describe(
+          "The rule payload to test against the given query payloads.",
+        ),
         ruleQueryPayloads: z.array(z.unknown()).optional().describe(
           "Data payloads used to test rules query with the expected result.",
         ),

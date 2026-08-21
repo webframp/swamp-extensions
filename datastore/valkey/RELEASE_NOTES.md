@@ -1,3 +1,7 @@
+## 2026.08.21.1
+
+**Changed:** Added a description to the previously-undocumented `tls.rejectUnauthorized` field in the config schema, explaining what it verifies and when to disable it.
+
 ## 2026.08.02.1
 
 **Changed:** Bump ioredis 5.11.1 → 6.0.0

@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` and `.min(1)` to the identifier arguments
+used across most methods — `site_id`, `sync_id`, `wan_id`, `lan_id`,
+`ipsec_tunnel_id`, `acl_id`, `route_id`, `redundancy_group_id`,
+`provider_id`, `profile_id`, `onramp_id`, and `gre_tunnel_id`. No
+behavioral changes.
+
 ## 2026.07.27.1
 
 **Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator

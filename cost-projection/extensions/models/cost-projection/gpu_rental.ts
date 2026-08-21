@@ -27,53 +27,103 @@ const CommitmentTermEnum = z.enum([
 ]);
 
 const ScenarioSchema = z.object({
-  name: z.string().min(1),
-  provider: z.string().min(1),
-  region: z.string().optional(),
+  name: z.string().min(1).describe("Human-readable name for this scenario"),
+  provider: z.string().min(1).describe(
+    "GPU rental provider name (e.g. CoreWeave, Lambda Labs)",
+  ),
+  region: z.string().optional().describe(
+    "Provider region or datacenter location",
+  ),
 
-  gpuModel: z.string().min(1),
-  gpuCount: z.number().int().positive(),
-  gpuMemoryGb: z.number().positive().optional(),
+  gpuModel: z.string().min(1).describe("GPU model (e.g. H100, A100)"),
+  gpuCount: z.number().int().positive().describe(
+    "Number of GPUs in this scenario",
+  ),
+  gpuMemoryGb: z.number().positive().optional().describe(
+    "Memory per GPU, in GB",
+  ),
 
-  ratePerGpuHour: z.number().positive(),
-  currency: z.string().default("USD"),
-  commitmentTerm: CommitmentTermEnum.default("none"),
-  commitmentDiscountPct: z.number().min(0).max(100).default(0),
+  ratePerGpuHour: z.number().positive().describe(
+    "Quoted list price per GPU per hour",
+  ),
+  currency: z.string().default("USD").describe(
+    "Currency of all rate fields in this scenario",
+  ),
+  commitmentTerm: CommitmentTermEnum.default("none").describe(
+    "Commitment term the discounted rate is tied to",
+  ),
+  commitmentDiscountPct: z.number().min(0).max(100).default(0).describe(
+    "Discount off ratePerGpuHour granted for the commitment term, as a percentage",
+  ),
 
-  hoursPerDay: z.number().min(1).max(24).default(24),
-  daysPerMonth: z.number().min(1).max(31).default(30),
+  hoursPerDay: z.number().min(1).max(24).default(24).describe(
+    "Expected hours of GPU utilization per day",
+  ),
+  daysPerMonth: z.number().min(1).max(31).default(30).describe(
+    "Expected days of GPU utilization per month",
+  ),
 
-  storageGb: z.number().nonnegative().default(0),
-  storageRatePerGbMonth: z.number().nonnegative().default(0),
-  networkEgressGbMonth: z.number().nonnegative().default(0),
-  networkEgressRatePerGb: z.number().nonnegative().default(0),
+  storageGb: z.number().nonnegative().default(0).describe(
+    "Attached storage size, in GB",
+  ),
+  storageRatePerGbMonth: z.number().nonnegative().default(0).describe(
+    "Storage cost per GB per month",
+  ),
+  networkEgressGbMonth: z.number().nonnegative().default(0).describe(
+    "Expected monthly network egress volume, in GB",
+  ),
+  networkEgressRatePerGb: z.number().nonnegative().default(0).describe(
+    "Network egress cost per GB",
+  ),
 
-  apiComparisonRatePerMToken: z.number().nonnegative().optional(),
-  estimatedTokensPerGpuHour: z.number().nonnegative().optional(),
+  apiComparisonRatePerMToken: z.number().nonnegative().optional().describe(
+    "Comparable managed-API rate per million tokens, used to compute break-even",
+  ),
+  estimatedTokensPerGpuHour: z.number().nonnegative().optional().describe(
+    "Estimated throughput in tokens per GPU-hour, from benchmarks or model card figures",
+  ),
 
-  notes: z.string().optional(),
-  sourceUrl: z.string().optional(),
-  quotedAt: z.string().optional(),
+  notes: z.string().optional().describe("Free-form notes about this scenario"),
+  sourceUrl: z.string().optional().describe(
+    "URL of the quote or pricing page this scenario is based on",
+  ),
+  quotedAt: z.string().optional().describe(
+    "Date the rate was quoted (YYYY-MM-DD)",
+  ),
 });
 
 const ProjectionSchema = z.object({
-  scenarioName: z.string(),
-  computedAt: z.string(),
+  scenarioName: z.string().describe(
+    "Name of the scenario this projection was computed from",
+  ),
+  computedAt: z.string().describe(
+    "ISO 8601 timestamp when the projection was computed",
+  ),
 
-  costPerGpuHour: z.number(),
-  costPerGpuHourListRate: z.number(),
+  costPerGpuHour: z.number().describe(
+    "Normalized total cost per GPU-hour after the commitment discount",
+  ),
+  costPerGpuHourListRate: z.number().describe(
+    "Normalized total cost per GPU-hour at the undiscounted list rate",
+  ),
 
-  monthlyGpuCost: z.number(),
-  monthlyStorageCost: z.number(),
-  monthlyNetworkCost: z.number(),
-  monthlyTotalCost: z.number(),
-  annualTotalCost: z.number(),
+  monthlyGpuCost: z.number().describe(
+    "Monthly GPU rental cost after the commitment discount",
+  ),
+  monthlyStorageCost: z.number().describe("Monthly storage cost"),
+  monthlyNetworkCost: z.number().describe("Monthly network egress cost"),
+  monthlyTotalCost: z.number().describe("Sum of all monthly cost components"),
+  annualTotalCost: z.number().describe("monthlyTotalCost annualized (x12)"),
 
-  breakEvenTokensPerMonth: z.number().optional(),
-  breakEvenRequestsPerMonth: z.number().optional(),
+  breakEvenTokensPerMonth: z.number().optional().describe(
+    "Monthly token volume at which this scenario's cost equals the comparable API cost",
+  ),
+  breakEvenRequestsPerMonth: z.number().optional().describe(
+    "breakEvenTokensPerMonth expressed as an approximate request count (4000 tokens/request)",
+  ),
 
-  effectiveHoursPerMonth: z.number(),
-  totalGpuCount: z.number(),
+  effectiveHoursPerMonth: z.number().describe("hoursPerDay * daysPerMonth"),
+  totalGpuCount: z.number().describe("Total number of GPUs in this scenario"),
 });
 
 // =============================================================================
@@ -264,8 +314,12 @@ export const model = {
         "Update the per-GPU hourly rate and quotedAt without re-entering " +
         "all other fields. Automatically re-runs projection.",
       arguments: z.object({
-        ratePerGpuHour: z.number().positive(),
-        quotedAt: z.string().optional(),
+        ratePerGpuHour: z.number().positive().describe(
+          "New quoted list price per GPU per hour",
+        ),
+        quotedAt: z.string().optional().describe(
+          "Date the new rate was quoted (YYYY-MM-DD); defaults to today",
+        ),
       }),
       execute: async (
         args: { ratePerGpuHour: number; quotedAt?: string },

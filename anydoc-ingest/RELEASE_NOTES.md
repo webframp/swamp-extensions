@@ -1,3 +1,9 @@
+## 2026.08.21.1
+
+**Changed:** Added descriptions to the previously undocumented fields in the
+`scan`, `document`, and `status` resource schemas (e.g. `contentHash`,
+`markdownLength`, `provenance`, `byFormat`, `errors`). No behavioral change.
+
 ## 2026.08.12.2
 
 **Fixed:** `ingest` no longer aborts the whole run when a file is deleted or

@@ -1,3 +1,9 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` to the `create` method's `domain_name`
+argument, and added `.describe()`/`.min(1)` to the `domain_name` arguments
+on `get_status` and `get_update_status`. No behavioral changes.
+
 ## 2026.07.27.1
 
 **Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator

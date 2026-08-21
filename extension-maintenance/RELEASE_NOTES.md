@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` documentation to previously undocumented schema
+fields: the `extensions` array in `AuditSummarySchema`, the `changes[].category`
+enum and `entries` array in the bump-plan schemas, and the error/result fields
+in `ApplyResultSchema` and `QualityResultSchema`. No behavioral change.
+
 ## 2026.08.15.1
 
 **Fixed:** Restore comment line in `maintainer.ts` truncated by apply-bump's

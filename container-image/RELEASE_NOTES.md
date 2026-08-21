@@ -1,3 +1,9 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe(...)` documentation to previously undocumented
+fields in `BuildResultSchema`, `PushResultSchema`, and `InspectResultSchema`. No
+behavioral changes.
+
 ## 2026.08.01.1
 
 **Fixed:** Broken model-upgrade chain. The prior version bump (to

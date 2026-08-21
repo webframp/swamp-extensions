@@ -17,10 +17,10 @@ import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiToken: z.string().meta({ sensitive: true }).describe(
+  apiToken: z.string().min(1).meta({ sensitive: true }).describe(
     "Cloudflare API token with Firewall read/write permissions",
   ),
-  zoneId: z.string().describe("Zone ID to manage firewall rules for"),
+  zoneId: z.string().min(1).describe("Zone ID to manage firewall rules for"),
 });
 
 const FirewallRuleSchema = z.object({
@@ -263,7 +263,7 @@ export const model = {
     delete_rule: {
       description: "Delete a firewall rule",
       arguments: z.object({
-        ruleId: z.string().describe("Firewall rule ID to delete"),
+        ruleId: z.string().min(1).describe("Firewall rule ID to delete"),
       }),
       execute: async (
         args: { ruleId: string },
@@ -292,7 +292,7 @@ export const model = {
     toggle_rule: {
       description: "Pause or unpause a firewall rule",
       arguments: z.object({
-        ruleId: z.string().describe("Firewall rule ID"),
+        ruleId: z.string().min(1).describe("Firewall rule ID"),
         paused: z.boolean().describe("Set to true to pause, false to enable"),
       }),
       execute: async (

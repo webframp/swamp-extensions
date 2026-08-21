@@ -14,58 +14,68 @@ import { z } from "npm:zod@4.4.3";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  host: z.string().describe("GitLab hostname (e.g. gitlab.example.com)"),
-  token: z.string().meta({ sensitive: true }).describe(
+  host: z.string().min(1).describe(
+    "GitLab hostname (e.g. gitlab.example.com)",
+  ),
+  token: z.string().min(1).meta({ sensitive: true }).describe(
     "GitLab personal access token",
   ),
 });
 
 const DiffFileSchema = z.object({
-  oldPath: z.string(),
-  newPath: z.string(),
-  diff: z.string(),
-  newFile: z.boolean(),
-  renamedFile: z.boolean(),
-  deletedFile: z.boolean(),
+  oldPath: z.string().describe("File path on the old side of the diff"),
+  newPath: z.string().describe("File path on the new side of the diff"),
+  diff: z.string().describe("Raw unified diff content for this file"),
+  newFile: z.boolean().describe("Whether the file was newly added"),
+  renamedFile: z.boolean().describe("Whether the file was renamed"),
+  deletedFile: z.boolean().describe("Whether the file was deleted"),
 });
 
 const MrDiffSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  title: z.string(),
-  state: z.string(),
-  description: z.string().nullable(),
-  sourceBranch: z.string(),
-  targetBranch: z.string(),
-  author: z.string(),
-  diffs: z.array(DiffFileSchema),
-  fetchedAt: z.string(),
-  truncated: z.boolean(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request IID"),
+  title: z.string().describe("Merge request title"),
+  state: z.string().describe("Merge request state (opened/closed/merged)"),
+  description: z.string().nullable().describe("Merge request description"),
+  sourceBranch: z.string().describe("Source branch"),
+  targetBranch: z.string().describe("Target branch"),
+  author: z.string().describe("Merge request author's username"),
+  diffs: z.array(DiffFileSchema).describe("Per-file diff content"),
+  fetchedAt: z.string().describe("Timestamp the diff was fetched"),
+  truncated: z.boolean().describe(
+    "Whether GitLab's diff overflow limit was hit, dropping some file diffs",
+  ),
 });
 
 const ReviewDraftSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  body: z.string(),
-  createdAt: z.string(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request IID"),
+  body: z.string().describe("Draft review comment body (markdown)"),
+  createdAt: z.string().describe(
+    "Timestamp the draft was created or last edited",
+  ),
 });
 
 const ReviewPostedSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  noteId: z.number(),
-  postedAt: z.string(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request IID"),
+  noteId: z.number().describe("ID of the posted GitLab note"),
+  postedAt: z.string().describe("Timestamp the review comment was posted"),
 });
 
 const LineCommentSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  discussionId: z.string(),
-  noteId: z.number(),
-  newPath: z.string(),
-  newLine: z.number().int().positive().nullable(),
-  oldLine: z.number().int().positive().nullable(),
-  postedAt: z.string(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request IID"),
+  discussionId: z.string().describe("GitLab discussion ID the comment opened"),
+  noteId: z.number().describe("ID of the posted note"),
+  newPath: z.string().describe("File path on the new side of the diff"),
+  newLine: z.number().int().positive().nullable().describe(
+    "Line number on the new side (added/changed lines), null if unset",
+  ),
+  oldLine: z.number().int().positive().nullable().describe(
+    "Line number on the old side (deleted lines), null if unset",
+  ),
+  postedAt: z.string().describe("Timestamp the comment was posted"),
 });
 
 // =============================================================================
@@ -269,7 +279,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.08.07.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -281,6 +291,12 @@ export const model = {
       toVersion: "2026.08.07.1",
       description:
         "Additive: new lineComment resource, no changes to existing resources",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "No schema changes (added field descriptions and required-string min-length checks)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

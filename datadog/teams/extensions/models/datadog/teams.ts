@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -438,7 +438,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.07.20.11",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -770,8 +770,12 @@ export const model = {
     add_team_hierarchy_link: {
       description: "Create a team hierarchy link",
       arguments: z.object({
-        relationships: z.unknown(),
-        type: z.unknown(),
+        relationships: z.unknown().describe(
+          "JSON:API relationships object linking this hierarchy record to its parent and child teams.",
+        ),
+        type: z.unknown().describe(
+          "JSON:API resource type for this record.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1117,11 +1121,21 @@ export const model = {
     sync_teams: {
       description: "Link Teams with GitHub Teams",
       arguments: z.object({
-        frequency: z.unknown().optional(),
-        selection_state: z.unknown().optional(),
-        source: z.unknown(),
-        sync_membership: z.unknown().optional(),
-        type: z.unknown(),
+        frequency: z.unknown().optional().describe(
+          "How often the sync with the external source should run.",
+        ),
+        selection_state: z.unknown().optional().describe(
+          "The selection state controlling which external teams are included in the sync.",
+        ),
+        source: z.unknown().describe(
+          "The external source system to sync teams from, e.g. `github`.",
+        ),
+        sync_membership: z.unknown().optional().describe(
+          "Whether team memberships should also be synced, in addition to team definitions.",
+        ),
+        type: z.unknown().describe(
+          "The resource type for the sync request.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1163,7 +1177,7 @@ export const model = {
     get_team: {
       description: "Get a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1200,7 +1214,7 @@ export const model = {
     update_team: {
       description: "Update a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
         avatar: z.string().nullable().optional().describe(
           "Unicode representation of the avatar for the team, limited to a single grapheme",
         ),
@@ -1262,7 +1276,7 @@ export const model = {
     delete_team: {
       description: "Remove a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1294,7 +1308,7 @@ export const model = {
     get_team_links: {
       description: "Get links for a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1351,7 +1365,7 @@ export const model = {
     create_team_link: {
       description: "Create a team link",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
         label: z.string().max(256).describe("The link's label"),
         position: z.number().int().max(2147483647).optional().describe(
           "The link's position, used to sort links for the team",
@@ -1398,8 +1412,8 @@ export const model = {
     get_team_link: {
       description: "Get a team link",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        link_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        link_id: z.string().min(1).describe("The ID of the team link."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1438,8 +1452,8 @@ export const model = {
     update_team_link: {
       description: "Update a team link",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        link_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        link_id: z.string().min(1).describe("The ID of the team link."),
         label: z.string().max(256).describe("The link's label"),
         position: z.number().int().max(2147483647).optional().describe(
           "The link's position, used to sort links for the team",
@@ -1491,8 +1505,8 @@ export const model = {
     delete_team_link: {
       description: "Remove a team link",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        link_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        link_id: z.string().min(1).describe("The ID of the team link."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1526,7 +1540,7 @@ export const model = {
     get_team_memberships: {
       description: "Get team memberships",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
         sort: z.string().optional().describe(
           "Specifies the order of returned team memberships",
         ),
@@ -1599,14 +1613,16 @@ export const model = {
     create_team_membership: {
       description: "Add a user to a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
         provisioned_by: z.string().nullable().optional().describe(
           "The mechanism responsible for provisioning the team relationship. Possible va...",
         ),
         provisioned_by_id: z.string().nullable().optional().describe(
           "UUID of the User or Service Account who provisioned this team membership, or ...",
         ),
-        role: z.unknown().optional(),
+        role: z.unknown().optional().describe(
+          "The user's role on the team (e.g. `admin` or `member`).",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1654,15 +1670,17 @@ export const model = {
     update_team_membership: {
       description: "Update a user's membership attributes on a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        user_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        user_id: z.string().min(1).describe("The ID of the user."),
         provisioned_by: z.string().nullable().optional().describe(
           "The mechanism responsible for provisioning the team relationship. Possible va...",
         ),
         provisioned_by_id: z.string().nullable().optional().describe(
           "UUID of the User or Service Account who provisioned this team membership, or ...",
         ),
-        role: z.unknown().optional(),
+        role: z.unknown().optional().describe(
+          "The user's role on the team (e.g. `admin` or `member`).",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1709,8 +1727,8 @@ export const model = {
     delete_team_membership: {
       description: "Remove a user from a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        user_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        user_id: z.string().min(1).describe("The ID of the user."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1744,7 +1762,7 @@ export const model = {
     get_team_notification_rules: {
       description: "Get team notification rules",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1807,11 +1825,19 @@ export const model = {
     create_team_notification_rule: {
       description: "Create team notification rule",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        email: z.unknown().optional(),
-        ms_teams: z.unknown().optional(),
-        pagerduty: z.unknown().optional(),
-        slack: z.unknown().optional(),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        email: z.unknown().optional().describe(
+          "Email notification targets for this team notification rule.",
+        ),
+        ms_teams: z.unknown().optional().describe(
+          "Microsoft Teams notification targets for this team notification rule.",
+        ),
+        pagerduty: z.unknown().optional().describe(
+          "PagerDuty notification targets for this team notification rule.",
+        ),
+        slack: z.unknown().optional().describe(
+          "Slack notification targets for this team notification rule.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1861,8 +1887,8 @@ export const model = {
     get_team_notification_rule: {
       description: "Get team notification rule",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        rule_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        rule_id: z.string().min(1).describe("The ID of the notification rule."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1901,12 +1927,20 @@ export const model = {
     update_team_notification_rule: {
       description: "Update team notification rule",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        rule_id: z.string().describe("None"),
-        email: z.unknown().optional(),
-        ms_teams: z.unknown().optional(),
-        pagerduty: z.unknown().optional(),
-        slack: z.unknown().optional(),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        rule_id: z.string().min(1).describe("The ID of the notification rule."),
+        email: z.unknown().optional().describe(
+          "Email notification targets for this team notification rule.",
+        ),
+        ms_teams: z.unknown().optional().describe(
+          "Microsoft Teams notification targets for this team notification rule.",
+        ),
+        pagerduty: z.unknown().optional().describe(
+          "PagerDuty notification targets for this team notification rule.",
+        ),
+        slack: z.unknown().optional().describe(
+          "Slack notification targets for this team notification rule.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1955,8 +1989,8 @@ export const model = {
     delete_team_notification_rule: {
       description: "Delete team notification rule",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        rule_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        rule_id: z.string().min(1).describe("The ID of the notification rule."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1990,7 +2024,7 @@ export const model = {
     get_team_permission_settings: {
       description: "Get permission settings for a team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
+        team_id: z.string().min(1).describe("The ID of the team."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2053,9 +2087,11 @@ export const model = {
     update_team_permission_setting: {
       description: "Update permission setting for team",
       arguments: z.object({
-        team_id: z.string().describe("None"),
-        action: z.string().describe("None"),
-        value: z.unknown().optional(),
+        team_id: z.string().min(1).describe("The ID of the team."),
+        action: z.string().min(1).describe("The permission action to update."),
+        value: z.unknown().optional().describe(
+          "The new value for the permission setting.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2104,7 +2140,7 @@ export const model = {
     get_user_memberships: {
       description: "Get user memberships",
       arguments: z.object({
-        user_uuid: z.string().describe("None"),
+        user_uuid: z.string().min(1).describe("The UUID of the user."),
       }),
       execute: async (
         args: Record<string, unknown>,
