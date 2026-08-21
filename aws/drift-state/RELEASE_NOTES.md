@@ -1,3 +1,9 @@
+## 2026.08.20.1
+
+**Changed:** Bump @webframp/aws/adopt 2026.08.05.1 → 2026.08.20.1
+
+**Changed:** Bump @webframp/aws/inventory 2026.08.05.1 → 2026.08.20.1
+
 ## 2026.08.15.1
 
 **Changed:** Bump @webframp/aws/adopt 2026.08.02.1 → 2026.08.05.1

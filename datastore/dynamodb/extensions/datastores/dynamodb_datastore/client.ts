@@ -1,8 +1,8 @@
 // ABOUTME: DynamoDBDocumentClient factory — wires region/endpoint config onto
 // ABOUTME: the AWS SDK's default credential provider chain.
 
-import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1111.0";
-import { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1111.0";
+import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1114.0";
+import { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1114.0";
 
 export interface ClientConfig {
   region: string;

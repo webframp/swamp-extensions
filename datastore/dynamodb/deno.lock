@@ -6,8 +6,10 @@
     "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20",
     "npm:@aws-sdk/client-dynamodb@3.1091.0": "3.1091.0",
     "npm:@aws-sdk/client-dynamodb@3.1111.0": "3.1111.0",
-    "npm:@aws-sdk/lib-dynamodb@3.1091.0": "3.1091.0_@aws-sdk+client-dynamodb@3.1111.0",
-    "npm:@aws-sdk/lib-dynamodb@3.1111.0": "3.1111.0_@aws-sdk+client-dynamodb@3.1111.0",
+    "npm:@aws-sdk/client-dynamodb@3.1114.0": "3.1114.0",
+    "npm:@aws-sdk/lib-dynamodb@3.1091.0": "3.1091.0_@aws-sdk+client-dynamodb@3.1114.0",
+    "npm:@aws-sdk/lib-dynamodb@3.1111.0": "3.1111.0_@aws-sdk+client-dynamodb@3.1114.0",
+    "npm:@aws-sdk/lib-dynamodb@3.1114.0": "3.1114.0_@aws-sdk+client-dynamodb@3.1114.0",
     "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
     "npm:@opentelemetry/api@1.9.1": "1.9.1",
     "npm:@opentelemetry/context-async-hooks@2.10.0": "2.10.0_@opentelemetry+api@1.9.1",
@@ -52,6 +54,21 @@
     },
     "@aws-sdk/client-dynamodb@3.1111.0": {
       "integrity": "sha512-rji6S5ZJfBp3ahC7pcEilaBKDrnLNZGerIzXCEOhur9gkgMhTiJjpoQSLKgR1Lnehetew1isiciL9xVoNvt9uw==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/dynamodb-codec",
+        "@aws-sdk/middleware-endpoint-discovery",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-dynamodb@3.1114.0": {
+      "integrity": "sha512-0oHSQWBZvjwcTuWOiyIemuGsXMwMvl2hqPiIoCvxiOOpgzIOqN/lcatygW3VGe9iDfHgcyqJfXC8B+XbKHpftA==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",
@@ -194,10 +211,10 @@
         "tslib"
       ]
     },
-    "@aws-sdk/lib-dynamodb@3.1091.0_@aws-sdk+client-dynamodb@3.1111.0": {
+    "@aws-sdk/lib-dynamodb@3.1091.0_@aws-sdk+client-dynamodb@3.1114.0": {
       "integrity": "sha512-PV9SKp5Kwi/IaqejwPcJXBaY3A13g7XX4IYTNzVuq44wB2ffHw7VrarugLCaQSPFGbIlEmfkZNbcLrU3sv9MKA==",
       "dependencies": [
-        "@aws-sdk/client-dynamodb@3.1111.0",
+        "@aws-sdk/client-dynamodb@3.1114.0",
         "@aws-sdk/core",
         "@aws-sdk/util-dynamodb",
         "@smithy/core",
@@ -205,10 +222,21 @@
         "tslib"
       ]
     },
-    "@aws-sdk/lib-dynamodb@3.1111.0_@aws-sdk+client-dynamodb@3.1111.0": {
+    "@aws-sdk/lib-dynamodb@3.1111.0_@aws-sdk+client-dynamodb@3.1114.0": {
       "integrity": "sha512-7akWVgxSimF3parFgE6RYrDdxunRIKB/DPCCxMr0NW3OT34xKJ67YmbBiZgFaURjCK9i53zY4BAqNGizxFl2RQ==",
       "dependencies": [
-        "@aws-sdk/client-dynamodb@3.1111.0",
+        "@aws-sdk/client-dynamodb@3.1114.0",
+        "@aws-sdk/core",
+        "@aws-sdk/util-dynamodb",
+        "@smithy/core",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/lib-dynamodb@3.1114.0_@aws-sdk+client-dynamodb@3.1114.0": {
+      "integrity": "sha512-W+47hC6EJ58POUUjYq/Y0Y8oHpXZ1c8OMZwObvkamMzK3xmBserFfOONwtJ6PhkmyedhPMk3ZESWQYTcZ/uSnQ==",
+      "dependencies": [
+        "@aws-sdk/client-dynamodb@3.1114.0",
         "@aws-sdk/core",
         "@aws-sdk/util-dynamodb",
         "@smithy/core",
@@ -266,10 +294,10 @@
         "tslib"
       ]
     },
-    "@aws-sdk/util-dynamodb@3.996.9_@aws-sdk+client-dynamodb@3.1111.0": {
+    "@aws-sdk/util-dynamodb@3.996.9_@aws-sdk+client-dynamodb@3.1114.0": {
       "integrity": "sha512-16x2tRvl7OYpZ0W/DdFJieFriD13+RvuRBDbe5sj/tCEfK86HSGd7I2s5j0ivz8p6KWGkS+5wKRO9OliJkjUOQ==",
       "dependencies": [
-        "@aws-sdk/client-dynamodb@3.1111.0",
+        "@aws-sdk/client-dynamodb@3.1114.0",
         "tslib"
       ]
     },
