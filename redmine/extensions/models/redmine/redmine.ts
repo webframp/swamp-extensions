@@ -230,7 +230,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
 
   upgrades: [
     {
@@ -271,6 +271,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Pin zod to 4.4.3 — no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Documentation-only: retroactive compatibility note for list_issues instance-name change in 2026.08.10.1",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
