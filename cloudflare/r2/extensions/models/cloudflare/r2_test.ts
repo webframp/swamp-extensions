@@ -113,10 +113,24 @@ Deno.test("r2 model: has expected resources", () => {
 
 function startMockCfServer(
   responses: Record<string, { result: unknown; isCollection?: boolean }>,
-): { url: string; server: Deno.HttpServer } {
-  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+): {
+  url: string;
+  server: Deno.HttpServer;
+  getLastRequestBody: () => unknown;
+} {
+  let lastRequestBody: unknown = undefined;
+
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    if (req.method !== "GET" && req.body) {
+      try {
+        lastRequestBody = await req.json();
+      } catch {
+        lastRequestBody = undefined;
+      }
+    }
 
     for (
       const [pattern, { result, isCollection }] of Object.entries(responses)
@@ -148,7 +162,11 @@ function startMockCfServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return {
+    url: `http://localhost:${addr.port}`,
+    server,
+    getLastRequestBody: () => lastRequestBody,
+  };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -399,6 +417,90 @@ Deno.test({
         }
       >).list_objects.execute({ "bucket_name": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "r2 model: delete_objects sends items as request body",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, getLastRequestBody } = startMockCfServer({
+      "/r2/buckets/test-id-123/objects": { result: {} },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
+      });
+
+      const items = ["a.txt", "b.txt"];
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_objects.execute(
+        { "bucket_name": "test-id-123", "items": items },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 0);
+      assertEquals(getLastRequestBody(), items);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "r2 model: put_bucket_sippy_config sends body as request body",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, getLastRequestBody } = startMockCfServer({
+      "/r2/buckets/test-id-123/sippy": { result: {} },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
+      });
+
+      const sippyBody = {
+        destination: { provider: "r2" as const },
+        source: {
+          provider: "aws" as const,
+          bucket: "my-aws-bucket",
+          region: "us-east-1",
+        },
+      };
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).put_bucket_sippy_config.execute(
+        { "bucket_name": "test-id-123", "body": sippyBody },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+      assertEquals(getLastRequestBody(), sippyBody);
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
