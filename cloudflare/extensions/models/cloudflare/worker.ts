@@ -16,10 +16,10 @@ import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiToken: z.string().meta({ sensitive: true }).describe(
+  apiToken: z.string().min(1).meta({ sensitive: true }).describe(
     "Cloudflare API token with Workers read/write permissions",
   ),
-  accountId: z.string().describe("Cloudflare account ID"),
+  accountId: z.string().min(1).describe("Cloudflare account ID"),
 });
 
 const WorkerScriptSchema = z.object({
@@ -199,7 +199,7 @@ export const model = {
     get_script: {
       description: "Get Worker script metadata and source code",
       arguments: z.object({
-        scriptName: z.string().describe("Worker script name"),
+        scriptName: z.string().min(1).describe("Worker script name"),
       }),
       execute: async (
         args: { scriptName: string },
@@ -256,7 +256,7 @@ export const model = {
     deploy: {
       description: "Deploy a Worker script",
       arguments: z.object({
-        scriptName: z.string().describe("Worker script name"),
+        scriptName: z.string().min(1).describe("Worker script name"),
         script: z.string().describe("JavaScript/TypeScript source code"),
         bindings: z.array(z.object({
           type: z.enum([
@@ -354,7 +354,7 @@ export const model = {
     delete_script: {
       description: "Delete a Worker script",
       arguments: z.object({
-        scriptName: z.string().describe("Worker script name to delete"),
+        scriptName: z.string().min(1).describe("Worker script name to delete"),
       }),
       execute: async (
         args: { scriptName: string },
@@ -383,7 +383,7 @@ export const model = {
     list_routes: {
       description: "List Worker routes for a zone",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
+        zoneId: z.string().min(1).describe("Zone ID"),
       }),
       execute: async (
         args: { zoneId: string },
@@ -432,9 +432,9 @@ export const model = {
     create_route: {
       description: "Create a Worker route",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
+        zoneId: z.string().min(1).describe("Zone ID"),
         pattern: z.string().describe("Route pattern (e.g., 'example.com/*')"),
-        scriptName: z.string().describe("Worker script name to execute"),
+        scriptName: z.string().min(1).describe("Worker script name to execute"),
       }),
       execute: async (
         args: { zoneId: string; pattern: string; scriptName: string },
@@ -485,8 +485,8 @@ export const model = {
     delete_route: {
       description: "Delete a Worker route",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
-        routeId: z.string().describe("Route ID to delete"),
+        zoneId: z.string().min(1).describe("Zone ID"),
+        routeId: z.string().min(1).describe("Route ID to delete"),
       }),
       execute: async (
         args: { zoneId: string; routeId: string },
@@ -516,7 +516,7 @@ export const model = {
       description:
         "Enable or disable workers.dev subdomain for a Worker script",
       arguments: z.object({
-        scriptName: z.string().describe("Worker script name"),
+        scriptName: z.string().min(1).describe("Worker script name"),
         enabled: z.boolean().describe(
           "Enable or disable workers.dev subdomain",
         ),

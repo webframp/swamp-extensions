@@ -19,93 +19,123 @@ const GlobalArgsSchema = z.object({
   url: z.string().url().describe(
     "Artifactory base URL including context path (e.g., https://packages.example.com/artifactory)",
   ),
-  token: z.string().meta({ sensitive: true })
+  token: z.string().min(1).meta({ sensitive: true })
     .describe("vault:// reference to JFrog Identity Token or Access Token"),
 });
 
 const HealthSchema = z.object({
-  url: z.string(),
-  fetchedAt: z.string(),
-  ping: z.enum(["ok", "error"]),
-  pingLatencyMs: z.number(),
+  url: z.string().describe("Artifactory base URL that was checked"),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when health was checked"),
+  ping: z.enum(["ok", "error"]).describe("Result of the ping check"),
+  pingLatencyMs: z.number().describe("Ping round-trip latency in milliseconds"),
   health: z.object({
-    available: z.boolean(),
+    available: z.boolean().describe("Whether Artifactory is reachable"),
     components: z.array(z.object({
-      name: z.string(),
-      status: z.string(),
-    })).optional(),
-    note: z.string().optional(),
+      name: z.string().describe("Component/service name"),
+      status: z.string().describe("Component status"),
+    })).optional().describe(
+      "Per-component health, when the health endpoint is accessible",
+    ),
+    note: z.string().optional().describe(
+      "Explanatory note when health details are unavailable (e.g. 403)",
+    ),
   }),
 });
 
 const RepoSchema = z.object({
-  key: z.string(),
-  type: z.string(),
-  packageType: z.string(),
-  url: z.string(),
-  description: z.string(),
+  key: z.string().describe("Repository key/identifier"),
+  type: z.string().describe("Repository type (local, remote, virtual)"),
+  packageType: z.string().describe("Package format (e.g. maven, npm, docker)"),
+  url: z.string().describe("Repository URL"),
+  description: z.string().describe("Repository description"),
 });
 
 const RepoListSchema = z.object({
-  url: z.string(),
-  fetchedAt: z.string(),
-  repos: z.array(RepoSchema),
-  totalCount: z.number(),
-  truncated: z.boolean(),
+  url: z.string().describe("Artifactory base URL that was queried"),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when repos were fetched"),
+  repos: z.array(RepoSchema).describe("All repositories on the server"),
+  totalCount: z.number().describe("Number of repositories returned"),
+  truncated: z.boolean().describe(
+    "Whether the listing is incomplete (always false — the API is non-paginated)",
+  ),
 });
 
 const RepoHealthSchema = z.object({
-  repoKey: z.string(),
-  fetchedAt: z.string(),
-  artifactCount: z.number(),
-  usedSpaceBytes: z.number(),
-  usedSpace: z.string(),
-  status: z.enum(["ok", "error"]),
-  error: z.string().optional(),
+  repoKey: z.string().describe("Repository key/identifier"),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when repo health was fetched",
+  ),
+  artifactCount: z.number().describe("Number of artifacts/files in the repo"),
+  usedSpaceBytes: z.number().describe("Storage used by the repo, in bytes"),
+  usedSpace: z.string().describe("Storage used by the repo, human-readable"),
+  status: z.enum(["ok", "error"]).describe("Whether health data was retrieved"),
+  error: z.string().optional().describe("Error message when status is error"),
 });
 
 const PackageResultSchema = z.object({
-  queryHash: z.string(),
-  query: z.string(),
-  fetchedAt: z.string(),
+  queryHash: z.string().describe(
+    "Collision-resistant hash of the AQL query, used as the resource instance key",
+  ),
+  query: z.string().describe("The AQL query that was executed"),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when the query ran"),
   results: z.array(z.object({
-    repo: z.string(),
-    path: z.string(),
-    name: z.string(),
-    size: z.number(),
-    modified: z.string(),
-    sha256: z.string().optional(),
-  })),
-  totalCount: z.number(),
-  truncated: z.boolean(),
+    repo: z.string().describe("Repository containing the artifact"),
+    path: z.string().describe("Artifact path within the repository"),
+    name: z.string().describe("Artifact file name"),
+    size: z.number().describe("Artifact size in bytes"),
+    modified: z.string().describe("Last-modified timestamp"),
+    sha256: z.string().optional().describe(
+      "Artifact SHA-256 checksum, if known",
+    ),
+  })).describe("Matching artifacts, up to the query limit"),
+  totalCount: z.number().describe(
+    "Total matching artifacts reported by Artifactory",
+  ),
+  truncated: z.boolean().describe(
+    "Whether totalCount exceeds the number of results returned",
+  ),
 });
 
 const PackageDiffSchema = z.object({
-  queryHash: z.string(),
-  fetchedAt: z.string(),
-  previousFetchedAt: z.string().optional(),
+  queryHash: z.string().describe(
+    "Collision-resistant hash of the AQL query being diffed",
+  ),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when this diff ran"),
+  previousFetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp of the prior scan used as the diff baseline, if any",
+  ),
   newPackages: z.array(
     z.object({ repo: z.string(), path: z.string(), name: z.string() }),
-  ),
+  ).describe("Packages present now but not in the previous baseline"),
   removedPackages: z.array(
     z.object({ repo: z.string(), path: z.string(), name: z.string() }),
-  ),
+  ).describe("Packages present in the previous baseline but not now"),
   summary: z.object({
-    newCount: z.number(),
-    removedCount: z.number(),
+    newCount: z.number().describe("Number of new packages"),
+    removedCount: z.number().describe("Number of removed packages"),
   }),
-  noBaseline: z.boolean(),
-  truncated: z.boolean(),
+  noBaseline: z.boolean().describe(
+    "Whether no prior scan existed to diff against",
+  ),
+  truncated: z.boolean().describe(
+    "Whether the current or baseline scan was truncated, suppressing the diff",
+  ),
 });
 
 const StorageSchema = z.object({
-  fetchedAt: z.string(),
-  usedSpace: z.string(),
-  freeSpace: z.string(),
-  totalSpace: z.string(),
-  repoCount: z.number(),
-  status: z.enum(["ok", "error", "forbidden"]),
-  error: z.string().optional(),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when storage info was fetched",
+  ),
+  usedSpace: z.string().describe("Total used storage, human-readable"),
+  freeSpace: z.string().describe("Total free storage, human-readable"),
+  totalSpace: z.string().describe("Total storage capacity, human-readable"),
+  repoCount: z.number().describe(
+    "Number of repositories included in the summary",
+  ),
+  status: z.enum(["ok", "error", "forbidden"]).describe(
+    "Whether storage info was retrieved successfully",
+  ),
+  error: z.string().optional().describe("Error message when status is not ok"),
 });
 
 // =============================================================================
@@ -512,7 +542,8 @@ export const model = {
         query: z.string().describe(
           "AQL query string (same as used in query_packages)",
         ),
-        limit: z.number().int().min(1).max(10000).default(1000),
+        limit: z.number().int().min(1).max(10000).default(1000)
+          .describe("Maximum results to return"),
       }),
       execute: async (
         args: { query: string; limit: number },

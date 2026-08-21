@@ -217,9 +217,12 @@ export const model = {
     get_attribute_values: {
       description: "Get possible values for a service attribute",
       arguments: z.object({
-        serviceCode: z.string().describe("AWS service code (e.g., AmazonEC2)"),
+        serviceCode: z.string().min(1).describe(
+          "AWS service code (e.g., AmazonEC2)",
+        ),
         attributeName: z
           .string()
+          .min(1)
           .describe("Attribute name (e.g., instanceType)"),
       }),
       execute: async (
@@ -292,7 +295,9 @@ export const model = {
     get_price: {
       description: "Get pricing for a service with optional filters",
       arguments: z.object({
-        serviceCode: z.string().describe("AWS service code (e.g., AmazonEC2)"),
+        serviceCode: z.string().min(1).describe(
+          "AWS service code (e.g., AmazonEC2)",
+        ),
         filters: z
           .array(
             z.object({
@@ -400,7 +405,7 @@ export const model = {
     get_ec2_price: {
       description: "Get EC2 instance pricing (convenience method)",
       arguments: z.object({
-        instanceType: z.string().describe(
+        instanceType: z.string().min(1).describe(
           "EC2 instance type (e.g., t3.medium)",
         ),
         region: z

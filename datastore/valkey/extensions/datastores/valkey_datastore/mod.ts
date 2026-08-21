@@ -1421,7 +1421,9 @@ const TlsConfigSchema = z.union([
   z.literal(true),
   z.object({
     ca: z.string().optional().describe("Path to CA certificate file"),
-    rejectUnauthorized: z.boolean().default(true),
+    rejectUnauthorized: z.boolean().default(true).describe(
+      "Verify the server's TLS certificate against the CA. Disable only for self-signed/dev setups.",
+    ),
   }),
 ]);
 

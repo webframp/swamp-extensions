@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -77,24 +77,30 @@ const GetTeamOnCallUsersSchema = z.object({
   id: z.string().optional().describe(
     "Unique identifier of the on-call responder configuration.",
   ),
-  relationships: z.unknown().optional(),
-  type: z.unknown(),
+  relationships: z.unknown().optional().describe(
+    "JSON:API relationships object linking this resource to related entities.",
+  ),
+  type: z.unknown().describe("JSON:API resource type for this record."),
 });
 
 const GetOnCallTeamRoutingRulesSchema = z.object({
   id: z.string().optional().describe(
     "Specifies the unique identifier of this team routing rules record.",
   ),
-  relationships: z.unknown().optional(),
-  type: z.unknown(),
+  relationships: z.unknown().optional().describe(
+    "JSON:API relationships object linking this resource to related entities.",
+  ),
+  type: z.unknown().describe("JSON:API resource type for this record."),
 });
 
 const SetOnCallTeamRoutingRulesSchema = z.object({
   id: z.string().optional().describe(
     "Specifies the unique identifier of this team routing rules record.",
   ),
-  relationships: z.unknown().optional(),
-  type: z.unknown(),
+  relationships: z.unknown().optional().describe(
+    "JSON:API relationships object linking this resource to related entities.",
+  ),
+  type: z.unknown().describe("JSON:API resource type for this record."),
 });
 
 const UserNotificationChannelsItemSchema = z.object({
@@ -176,7 +182,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.07.20.11",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1169,7 +1175,9 @@ export const model = {
       description: "Create an On-Call notification rule for a user",
       arguments: z.object({
         user_id: z.string().describe("The user ID"),
-        category: z.unknown().optional(),
+        category: z.unknown().optional().describe(
+          "Specifies the category a notification rule will apply to (high_urgency or low_urgency).",
+        ),
         channel_settings: z.unknown().nullable().optional().describe(
           "Configuration for the associated channel, if necessary",
         ),
@@ -1287,7 +1295,9 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
-        category: z.unknown().optional(),
+        category: z.unknown().optional().describe(
+          "Specifies the category a notification rule will apply to (high_urgency or low_urgency).",
+        ),
         channel_settings: z.unknown().nullable().optional().describe(
           "Configuration for the associated channel, if necessary",
         ),

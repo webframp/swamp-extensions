@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -62,9 +62,11 @@ const ListTagsByMetricNameSchema = z.object({
 });
 
 const ListMetricAssetsSchema = z.object({
-  id: z.unknown(),
-  relationships: z.unknown().optional(),
-  type: z.unknown(),
+  id: z.unknown().describe("The metric name for this resource."),
+  relationships: z.unknown().optional().describe(
+    "Related assets (dashboards, monitors, notebooks, SLOs) for this metric.",
+  ),
+  type: z.unknown().describe("The metric assets resource type."),
 });
 
 const EstimateMetricsOutputSeriesSchema = z.object({
@@ -169,13 +171,17 @@ const ListVolumesByMetricNameSchema = z.object({
 });
 
 const QueryScalarDataSchema = z.object({
-  attributes: z.unknown().optional(),
-  type: z.unknown().optional(),
+  attributes: z.unknown().optional().describe(
+    "The object containing the scalar response.",
+  ),
+  type: z.unknown().optional().describe("The scalar response type."),
 });
 
 const QueryTimeseriesDataSchema = z.object({
-  attributes: z.unknown().optional(),
-  type: z.unknown().optional(),
+  attributes: z.unknown().optional().describe(
+    "The object containing the timeseries response.",
+  ),
+  type: z.unknown().optional().describe("The timeseries response type."),
 });
 
 const SubmitMetricsSchema = z.object({
@@ -387,7 +393,7 @@ export const model = {
     list_active_metric_configurations: {
       description: "List active tags and aggregations",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
         window_seconds: z.number().optional().describe(
           "The number of seconds of look back (from now). Default value is 604,800 (1 we...",
         ),
@@ -444,7 +450,7 @@ export const model = {
     list_tags_by_metric_name: {
       description: "List tags by metric name",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
         window_seconds: z.number().optional().describe(
           "The number of seconds of look back (from now) to query for tag data. Default ...",
         ),
@@ -534,7 +540,7 @@ export const model = {
     list_metric_assets: {
       description: "Related Assets to a Metric",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -573,7 +579,7 @@ export const model = {
     estimate_metrics_output_series: {
       description: "Tag Configuration Cardinality Estimator",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
         filter_groups: z.string().optional().describe(
           "Comma-separated list of tag keys that the metric is configured to query with....",
         ),
@@ -646,7 +652,7 @@ export const model = {
     get_metric_tag_cardinality_details: {
       description: "Get tag key cardinality details",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -709,7 +715,7 @@ export const model = {
     list_tag_configuration_by_name: {
       description: "List tag configuration by name",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -748,15 +754,17 @@ export const model = {
     create_tag_configuration: {
       description: "Create a tag configuration",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
-        aggregations: z.unknown().optional(),
+        metric_name: z.string().min(1).describe("The name of the metric."),
+        aggregations: z.unknown().optional().describe(
+          "Deprecated. Time and space aggregations to configure for the metric.",
+        ),
         exclude_tags_mode: z.boolean().optional().describe(
           "When set to true, the configuration will exclude the configured tags and incl...",
         ),
         include_percentiles: z.boolean().optional().describe(
           "Toggle to include/exclude percentiles for a distribution metric. Defaults to ...",
         ),
-        metric_type: z.unknown(),
+        metric_type: z.unknown().describe("The metric's type."),
         tags: z.array(z.string()).describe(
           "A list of tag keys that will be queryable for your metric.",
         ),
@@ -807,8 +815,10 @@ export const model = {
     update_tag_configuration: {
       description: "Update a tag configuration",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
-        aggregations: z.unknown().optional(),
+        metric_name: z.string().min(1).describe("The name of the metric."),
+        aggregations: z.unknown().optional().describe(
+          "Deprecated. Time and space aggregations to configure for the metric.",
+        ),
         exclude_tags_mode: z.boolean().optional().describe(
           "When set to true, the configuration will exclude the configured tags and incl...",
         ),
@@ -864,7 +874,7 @@ export const model = {
     delete_tag_configuration: {
       description: "Delete a tag configuration",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -898,7 +908,7 @@ export const model = {
     list_volumes_by_metric_name: {
       description: "List distinct metric volumes by metric name",
       arguments: z.object({
-        metric_name: z.string().describe("The name of the metric."),
+        metric_name: z.string().min(1).describe("The name of the metric."),
         window_seconds: z.number().optional().describe(
           "The number of seconds of look back (from now). Default value is 3,600 (1 hour...",
         ),
@@ -961,7 +971,9 @@ export const model = {
         from: z.number().int().describe(
           "Start date (inclusive) of the query in milliseconds since the Unix epoch.",
         ),
-        queries: z.unknown(),
+        queries: z.unknown().describe(
+          "List of queries to be run and used with the formulas.",
+        ),
         to: z.number().int().describe(
           "End date (exclusive) of the query in milliseconds since the Unix epoch.",
         ),
@@ -1019,7 +1031,9 @@ export const model = {
         interval: z.number().int().optional().describe(
           "A time interval in milliseconds. May be overridden by a larger interval if th...",
         ),
-        queries: z.unknown(),
+        queries: z.unknown().describe(
+          "List of queries to be run and used with the formulas.",
+        ),
         to: z.number().int().describe(
           "End date (exclusive) of the query in milliseconds since the Unix epoch.",
         ),

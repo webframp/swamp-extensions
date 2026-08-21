@@ -11,7 +11,7 @@ import { z } from "npm:zod@4.4.3";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  host: z.string().describe(
+  host: z.string().min(1).describe(
     "Discourse instance hostname (e.g. discourse.example.com)",
   ),
   apiKey: z.string().optional().describe(
@@ -23,60 +23,80 @@ const GlobalArgsSchema = z.object({
 });
 
 const CategorySchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  slug: z.string(),
-  topicCount: z.number(),
-  description: z.string().nullable(),
+  id: z.number().describe("Category ID"),
+  name: z.string().describe("Category display name"),
+  slug: z.string().describe("Category URL slug"),
+  topicCount: z.number().describe("Number of topics in this category"),
+  description: z.string().nullable().describe("Category description text"),
 });
 
 const TopicSchema = z.object({
-  id: z.number(),
-  title: z.string(),
-  categoryId: z.number(),
-  createdAt: z.string(),
-  postsCount: z.number(),
-  views: z.number(),
-  replyCount: z.number(),
-  lastPostedAt: z.string().nullable(),
-  pinned: z.boolean(),
+  id: z.number().describe("Topic ID"),
+  title: z.string().describe("Topic title"),
+  categoryId: z.number().describe("ID of the category this topic belongs to"),
+  createdAt: z.string().describe(
+    "ISO 8601 timestamp when the topic was created",
+  ),
+  postsCount: z.number().describe("Total number of posts in this topic"),
+  views: z.number().describe("Total view count"),
+  replyCount: z.number().describe(
+    "Number of replies (excludes the original post)",
+  ),
+  lastPostedAt: z.string().nullable().describe(
+    "ISO 8601 timestamp of the most recent post, if any",
+  ),
+  pinned: z.boolean().describe("True if the topic is pinned in its category"),
 });
 
 const TopicDetailSchema = z.object({
-  id: z.number(),
-  title: z.string(),
-  categoryId: z.number(),
-  createdAt: z.string(),
-  postsCount: z.number(),
-  views: z.number(),
+  id: z.number().describe("Topic ID"),
+  title: z.string().describe("Topic title"),
+  categoryId: z.number().describe("ID of the category this topic belongs to"),
+  createdAt: z.string().describe(
+    "ISO 8601 timestamp when the topic was created",
+  ),
+  postsCount: z.number().describe("Total number of posts in this topic"),
+  views: z.number().describe("Total view count"),
   posts: z.array(z.object({
-    id: z.number(),
-    username: z.string(),
-    createdAt: z.string(),
-    cooked: z.string(),
-  })),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+    id: z.number().describe("Post ID"),
+    username: z.string().describe("Author's Discourse username"),
+    createdAt: z.string().describe(
+      "ISO 8601 timestamp when the post was created",
+    ),
+    cooked: z.string().describe("Rendered HTML content of the post"),
+  })).describe("Posts fetched for this topic, in order"),
+  truncated: z.boolean().describe(
+    "True if fewer posts were fetched than postsCount reports",
+  ),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when this topic was fetched",
+  ),
 });
 
 const CategoriesResultSchema = z.object({
-  categories: z.array(CategorySchema),
-  fetchedAt: z.string(),
+  categories: z.array(CategorySchema).describe("All forum categories"),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when this listing was fetched",
+  ),
 });
 
 const TopicsResultSchema = z.object({
-  topics: z.array(TopicSchema),
-  resultCount: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  topics: z.array(TopicSchema).describe("Topics returned for this page"),
+  resultCount: z.number().describe("Number of topics in this result"),
+  truncated: z.boolean().describe("True if more pages of topics are available"),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when this listing was fetched",
+  ),
 });
 
 const SearchResultSchema = z.object({
-  query: z.string(),
-  topics: z.array(TopicSchema),
-  resultCount: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  query: z.string().describe("The search query that produced these results"),
+  topics: z.array(TopicSchema).describe("Matching topics for this page"),
+  resultCount: z.number().describe("Number of topics in this result"),
+  truncated: z.boolean().describe(
+    "True if more search result pages are available",
+  ),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when the search ran"),
 });
 
 // =============================================================================

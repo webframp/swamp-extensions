@@ -16,7 +16,7 @@ import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiToken: z.string().meta({ sensitive: true }).describe(
+  apiToken: z.string().min(1).meta({ sensitive: true }).describe(
     "Cloudflare API token with Zone read/write permissions",
   ),
 });
@@ -154,7 +154,7 @@ export const model = {
     get: {
       description: "Get details for a specific zone",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
+        zoneId: z.string().min(1).describe("Zone ID"),
       }),
       execute: async (
         args: { zoneId: string },
@@ -186,7 +186,7 @@ export const model = {
     get_settings: {
       description: "Get all settings for a zone",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
+        zoneId: z.string().min(1).describe("Zone ID"),
       }),
       execute: async (
         args: { zoneId: string },
@@ -244,7 +244,7 @@ export const model = {
     update_setting: {
       description: "Update a specific zone setting",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
+        zoneId: z.string().min(1).describe("Zone ID"),
         setting: z.string().describe(
           "Setting name (e.g., 'ssl', 'cache_level', 'minify')",
         ),
@@ -311,7 +311,7 @@ export const model = {
     pause: {
       description: "Pause a zone (disable Cloudflare proxy)",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
+        zoneId: z.string().min(1).describe("Zone ID"),
       }),
       execute: async (
         args: { zoneId: string },
@@ -345,7 +345,7 @@ export const model = {
     unpause: {
       description: "Unpause a zone (enable Cloudflare proxy)",
       arguments: z.object({
-        zoneId: z.string().describe("Zone ID"),
+        zoneId: z.string().min(1).describe("Zone ID"),
       }),
       execute: async (
         args: { zoneId: string },

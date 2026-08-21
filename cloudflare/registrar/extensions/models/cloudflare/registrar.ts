@@ -425,7 +425,7 @@ export const model = {
           "Enable or disable automatic renewal. Defaults to `false` if omitted. Setting ...",
         ),
         contacts: z.unknown().optional(),
-        domain_name: z.unknown(),
+        domain_name: z.unknown().describe("Domain name to register."),
         privacy_mode: z.union([z.literal(false), z.literal("redaction")])
           .optional().describe(
             "WHOIS privacy mode for the registration. Defaults to `redaction`. - `off`: Do...",
@@ -549,7 +549,9 @@ export const model = {
     get_status: {
       description: "Get Registration Status",
       arguments: z.object({
-        domain_name: z.string(),
+        domain_name: z.string().min(1).describe(
+          "Domain name to check the registration status for.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -584,7 +586,9 @@ export const model = {
     get_update_status: {
       description: "Get Update Status",
       arguments: z.object({
-        domain_name: z.string(),
+        domain_name: z.string().min(1).describe(
+          "Domain name to check the update status for.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

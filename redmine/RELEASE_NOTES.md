@@ -1,3 +1,11 @@
+## 2026.08.21.2
+
+**Changed:** Tightened `host` and `apiKey` on the global-args schema, and
+`subject` on `create_issue`'s argument schema, to require non-empty strings.
+All three are required identifiers/tokens that the Redmine API never accepts
+empty — this catches misconfiguration at model-create/method-call time
+instead of a confusing API failure.
+
 ## 2026.08.21.1
 
 ### Added

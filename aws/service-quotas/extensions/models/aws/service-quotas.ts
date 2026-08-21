@@ -432,8 +432,10 @@ export const model = {
         "applied value (account-level override or default), usage if available " +
         "from CloudWatch, and whether it's adjustable.",
       arguments: z.object({
-        serviceCode: z.string().describe("AWS service code (e.g. 'iam')"),
-        quotaCode: z.string().describe("Quota code (e.g. 'L-FE177D64')"),
+        serviceCode: z.string().min(1).describe(
+          "AWS service code (e.g. 'iam')",
+        ),
+        quotaCode: z.string().min(1).describe("Quota code (e.g. 'L-FE177D64')"),
         profile: z
           .string()
           .optional()
@@ -539,7 +541,9 @@ export const model = {
         "List all quotas for a service in a given account. Optionally filter " +
         "to only quotas with applied (non-default) values.",
       arguments: z.object({
-        serviceCode: z.string().describe("AWS service code (e.g. 'iam')"),
+        serviceCode: z.string().min(1).describe(
+          "AWS service code (e.g. 'iam')",
+        ),
         profile: z
           .string()
           .optional()
@@ -879,8 +883,10 @@ export const model = {
         "submits a request to AWS Service Quotas. Requires " +
         "servicequotas:RequestServiceQuotaIncrease permission.",
       arguments: z.object({
-        serviceCode: z.string().describe("AWS service code (e.g. 'iam')"),
-        quotaCode: z.string().describe("Quota code (e.g. 'L-FE177D64')"),
+        serviceCode: z.string().min(1).describe(
+          "AWS service code (e.g. 'iam')",
+        ),
+        quotaCode: z.string().min(1).describe("Quota code (e.g. 'L-FE177D64')"),
         desiredValue: z.number().describe("Requested new quota value"),
         profile: z
           .string()
@@ -975,6 +981,7 @@ export const model = {
       arguments: z.object({
         requestId: z
           .string()
+          .min(1)
           .describe("Request ID from a prior quota increase request"),
         profile: z
           .string()
@@ -1177,6 +1184,7 @@ export const model = {
       arguments: z.object({
         displayId: z
           .string()
+          .min(1)
           .describe(
             "Support case display ID (numeric, from the quota increase request)",
           ),

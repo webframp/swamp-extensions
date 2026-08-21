@@ -41,8 +41,12 @@ const GetAppInstallsForGroupSchema = z.object({
 const CreateGroupAppInstallSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
-  client_id: z.string(),
-  client_secret: z.string(),
+  client_id: z.string().min(1).describe(
+    "The OAuth2 client id for the app installation.",
+  ),
+  client_secret: z.string().min(1).describe(
+    "The OAuth2 client secret for the app installation.",
+  ),
   app_id: z.string().optional().describe("Related app ID"),
 });
 
@@ -255,8 +259,12 @@ const GetAppInstallsForOrgSchema = z.object({
 const CreateOrgAppInstallSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
-  client_id: z.string(),
-  client_secret: z.string(),
+  client_id: z.string().min(1).describe(
+    "The OAuth2 client id for the app installation.",
+  ),
+  client_secret: z.string().min(1).describe(
+    "The OAuth2 client secret for the app installation.",
+  ),
   app_id: z.string().optional().describe("Related app ID"),
 });
 

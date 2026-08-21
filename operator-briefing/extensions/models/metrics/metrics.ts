@@ -35,29 +35,44 @@ const GlobalArgsSchema = z.object({});
 
 /** One dated point in the series. `date` is required; every metric is optional. */
 const Row = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
-  spendUsd: z.number().optional(),
-  dau: z.number().optional(),
-  wau: z.number().optional(),
-  mau: z.number().optional(),
-  activeSeats: z.number().optional(),
-  totalSeats: z.number().optional(),
-  projects: z.number().optional(),
-  skills: z.number().optional(),
-  connectors: z.number().optional(),
-  quotaOverCount: z.number().optional(),
-  pendingCount: z.number().optional(),
-  redmineIssueCount: z.number().optional(),
-  criticalFindingCount: z.number().optional(),
-  highFindingCount: z.number().optional(),
-  awsCostTotal7d: z.number().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD")
+    .describe("The row date in zero-padded YYYY-MM-DD form (required)."),
+  spendUsd: z.number().optional().describe("Spend in USD for the day."),
+  dau: z.number().optional().describe("Daily active users."),
+  wau: z.number().optional().describe("Weekly active users."),
+  mau: z.number().optional().describe("Monthly active users."),
+  activeSeats: z.number().optional().describe("Active seats."),
+  totalSeats: z.number().optional().describe("Total provisioned seats."),
+  projects: z.number().optional().describe("Project count."),
+  skills: z.number().optional().describe("Skill count."),
+  connectors: z.number().optional().describe("Connector count."),
+  quotaOverCount: z.number().optional().describe(
+    "Count of AWS quotas over threshold.",
+  ),
+  pendingCount: z.number().optional().describe(
+    "Count of pending quota-increase requests.",
+  ),
+  redmineIssueCount: z.number().optional().describe(
+    "Count of open Redmine issues assigned to the operator.",
+  ),
+  criticalFindingCount: z.number().optional().describe(
+    "Count of CRITICAL Security Hub findings (24h window).",
+  ),
+  highFindingCount: z.number().optional().describe(
+    "Count of HIGH Security Hub findings (24h window).",
+  ),
+  awsCostTotal7d: z.number().optional().describe(
+    "Total AWS cost (USD) for the trailing 7-day window.",
+  ),
 });
 
 /** The whole append-only series: the latest version holds all rows. */
 const Series = z.object({
-  rows: z.array(Row),
-  count: z.number(),
-  updatedAt: z.string(),
+  rows: z.array(Row).describe("Dated metric rows, sorted ascending by date."),
+  count: z.number().describe("Number of rows in the series."),
+  updatedAt: z.string().describe(
+    "ISO timestamp of when the series was last written.",
+  ),
 });
 
 type RowT = z.infer<typeof Row>;
@@ -180,7 +195,7 @@ type AppendArgs = {
 /** Durable append-only time-series accumulator for operator-briefing trends. */
 export const model = {
   type: "@webframp/operator-briefing/metrics",
-  version: "2026.08.10.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -193,6 +208,12 @@ export const model = {
       toVersion: "2026.08.10.1",
       description:
         "Add redmineIssueCount, criticalFindingCount, highFindingCount, awsCostTotal7d to series rows",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Added .describe() to Row/Series resource schema fields, matching the existing append_metrics argument descriptions",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

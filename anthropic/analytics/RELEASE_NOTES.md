@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Added descriptions to the previously undocumented fields across
+the `snapshot`, `seats`, `adoption`, `cost`, and `userUsage` resource schemas
+(e.g. `total_cents`, `by_cost_type`, `collected`, `byProduct`, `totals`). No
+behavioral change.
+
 ## 2026.08.14.1
 
 **Added:** `discountRate` global arg (fraction, default `0`) applying an

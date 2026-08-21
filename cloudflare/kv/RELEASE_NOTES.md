@@ -1,3 +1,12 @@
+## 2026.08.21.2
+
+**Changed:** Added `.describe()` annotations to previously undocumented
+fields across the namespace and key-value schemas (namespace `id`/`title`,
+key `name`, `list_namespaces` paging/order arguments, and the various
+`namespace_id`/`key_name`/`items` method arguments). Added `.min(1)` to
+`namespace_id` and `key_name` fields, which are required identifiers that
+the Cloudflare API never accepts empty. No behavioral changes.
+
 ## 2026.08.21.1
 
 **Fixed:** Regenerated with three cloudflare-codegen fixes: (1)

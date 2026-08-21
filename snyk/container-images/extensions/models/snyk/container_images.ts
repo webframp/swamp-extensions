@@ -23,8 +23,12 @@ const GlobalArgsSchema = z.object({
 const ContainerImageItemSchema = z.object({
   id: z.string(),
   type: z.enum(["container_image"]).optional(),
-  layers: z.array(z.unknown()),
-  names: z.array(z.unknown()).optional(),
+  layers: z.array(z.unknown()).describe(
+    "OCI layers making up this container image",
+  ),
+  names: z.array(z.unknown()).optional().describe(
+    "Registry names/tags this image is known by",
+  ),
   platform: z.enum([
     "aix/ppc64",
     "android/386",
@@ -100,7 +104,7 @@ const ContainerImageItemSchema = z.object({
     "windows/arm/v7",
     "windows/arm64",
     "windows/arm64/v8",
-  ]),
+  ]).describe("The image Operating System and processor architecture"),
   image_target_refs_id: z.string().optional().describe(
     "Related image_target_refs ID",
   ),
@@ -190,9 +194,15 @@ const ImageTargetRefsItemSchema = z.object({
     "windows/arm/v7",
     "windows/arm64",
     "windows/arm64/v8",
-  ]).optional(),
-  target_id: z.string().optional(),
-  target_reference: z.string().optional(),
+  ]).optional().describe(
+    "The image Operating System and processor architecture",
+  ),
+  target_id: z.string().optional().describe(
+    "ID of the target (e.g. registry repository) this image reference belongs to",
+  ),
+  target_reference: z.string().optional().describe(
+    "Tag or reference identifying the image within its target",
+  ),
 });
 
 const ListImageTargetRefsSchema = z.object({

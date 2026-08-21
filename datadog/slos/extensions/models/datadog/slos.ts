@@ -15,10 +15,10 @@ import { ddApi } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -71,7 +71,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.07.20.11",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -104,7 +104,9 @@ export const model = {
         from_ts: z.number().int().describe(
           "The `from` timestamp for the report in epoch seconds.",
         ),
-        interval: z.unknown().optional(),
+        interval: z.unknown().optional().describe(
+          "The reporting interval used to bucket the SLO report data (e.g. day, week, or month).",
+        ),
         query: z.string().describe(
           "The query string used to filter SLO results. Some examples of queries include...",
         ),

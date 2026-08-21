@@ -232,7 +232,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 
@@ -250,6 +250,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Added descriptions to previously undocumented estimate_from_spec fields, no schema migration needed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

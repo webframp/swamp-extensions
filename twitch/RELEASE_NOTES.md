@@ -1,3 +1,12 @@
+## 2026.08.21.1
+
+**Changed:** Tightened `channel`, `moderatorId`, `clientId`, `clientSecret`,
+`accessToken`, and `refreshToken` on the global-args schema to require
+non-empty strings. All six are required identifiers/tokens that the Twitch
+API never accepts empty — this catches misconfigured vault references or
+blank `--global-arg` values at model-create time instead of a confusing
+Helix API failure on first method call.
+
 ## 2026.07.30.1
 
 **Added:** `hasBroadcasterAuth` global arg (boolean, default `false`). When

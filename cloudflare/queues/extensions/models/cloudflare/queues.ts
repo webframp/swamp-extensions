@@ -359,7 +359,7 @@ export const model = {
     get: {
       description: "Get Queue",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -394,7 +394,7 @@ export const model = {
     update: {
       description: "Update Queue",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         consumers: z.array(z.unknown()).optional(),
         consumers_total_count: z.number().optional(),
         created_on: z.string().optional(),
@@ -445,7 +445,7 @@ export const model = {
     update_partial: {
       description: "Update Queue",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         consumers: z.array(z.unknown()).optional(),
         consumers_total_count: z.number().optional(),
         created_on: z.string().optional(),
@@ -496,7 +496,7 @@ export const model = {
     delete: {
       description: "Delete Queue",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -526,7 +526,7 @@ export const model = {
     list_consumers: {
       description: "List Queue Consumers",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -579,7 +579,7 @@ export const model = {
     create_consumer: {
       description: "Create a Queue Consumer",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -622,8 +622,10 @@ export const model = {
     get_consumer: {
       description: "Get Queue Consumer",
       arguments: z.object({
-        consumer_id: z.string(),
-        queue_id: z.string(),
+        consumer_id: z.string().min(1).describe(
+          "Identifier of the queue consumer.",
+        ),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -658,8 +660,10 @@ export const model = {
     update_consumer: {
       description: "Update Queue Consumer",
       arguments: z.object({
-        consumer_id: z.string(),
-        queue_id: z.string(),
+        consumer_id: z.string().min(1).describe(
+          "Identifier of the queue consumer.",
+        ),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -702,8 +706,10 @@ export const model = {
     delete_consumer: {
       description: "Delete Queue Consumer",
       arguments: z.object({
-        consumer_id: z.string(),
-        queue_id: z.string(),
+        consumer_id: z.string().min(1).describe(
+          "Identifier of the queue consumer.",
+        ),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -733,7 +739,7 @@ export const model = {
     create_queues_push_message: {
       description: "Push Message",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         delay_seconds: z.number().optional().describe(
           "The number of seconds to wait for attempting to deliver this message to consu...",
         ),
@@ -780,7 +786,7 @@ export const model = {
     create_queues_ack_messages: {
       description: "Acknowledge + Retry Queue Messages",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         acks: z.array(z.object({
           lease_id: z.unknown().optional(),
         })).optional(),
@@ -831,7 +837,7 @@ export const model = {
     create_queues_push_messages: {
       description: "Push Message Batch",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         delay_seconds: z.number().optional().describe(
           "The number of seconds to wait for attempting to deliver this batch to consumers",
         ),
@@ -879,7 +885,7 @@ export const model = {
     create_queues_preview_messages: {
       description: "Preview Queue Messages",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         batch_size: z.unknown().optional(),
       }),
       execute: async (
@@ -924,7 +930,7 @@ export const model = {
     create_queues_ack_preview_messages: {
       description: "Delete Previewed Queue Messages",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         acks: z.array(z.object({
           lease_id: z.unknown().optional(),
         })).optional(),
@@ -975,7 +981,7 @@ export const model = {
     create_queues_pull_messages: {
       description: "Pull Queue Messages",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         batch_size: z.unknown().optional(),
         visibility_timeout_ms: z.unknown().optional(),
       }),
@@ -1021,7 +1027,7 @@ export const model = {
     get_metrics: {
       description: "Get Queue Metrics",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1056,7 +1062,7 @@ export const model = {
     create_queues_purge: {
       description: "Purge Queue",
       arguments: z.object({
-        queue_id: z.string(),
+        queue_id: z.string().min(1).describe("Identifier of the queue."),
         delete_messages_permanently: z.boolean().optional().describe(
           "Confimation that all messages will be deleted permanently.",
         ),

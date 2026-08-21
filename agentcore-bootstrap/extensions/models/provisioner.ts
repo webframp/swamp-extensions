@@ -38,16 +38,26 @@ const GlobalArgsSchema = z.object({
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 const ProvisionResultSchema = z.object({
-  region: z.string(),
-  bucketName: z.string(),
-  bucketCreated: z.boolean(),
-  ecrRepositoryUri: z.string(),
-  ecrRepositoryArn: z.string(),
-  roleArn: z.string(),
-  runtimeArn: z.string(),
-  imageTag: z.string(),
-  provisionedAt: z.string(),
-  durationMs: z.number(),
+  region: z.string().describe("AWS region the resources were provisioned in"),
+  bucketName: z.string().describe("Name of the S3 coordination bucket"),
+  bucketCreated: z.boolean().describe(
+    "Whether the S3 bucket was created by this run (false if it already existed)",
+  ),
+  ecrRepositoryUri: z.string().describe("URI of the ECR repository"),
+  ecrRepositoryArn: z.string().describe("ARN of the ECR repository"),
+  roleArn: z.string().describe(
+    "ARN of the IAM role used by the AgentCore worker",
+  ),
+  runtimeArn: z.string().describe("ARN of the deployed AgentCore runtime"),
+  imageTag: z.string().describe(
+    "Full ECR image tag (URI plus tag) of the worker image that was pushed",
+  ),
+  provisionedAt: z.string().describe(
+    "ISO 8601 timestamp when provisioning completed",
+  ),
+  durationMs: z.number().describe(
+    "Total provisioning duration in milliseconds",
+  ),
 });
 
 /** Run an AWS CLI command and return parsed JSON output. */

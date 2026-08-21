@@ -64,32 +64,50 @@ const LoginArgsSchema = z.object({
 });
 
 const BuildResultSchema = z.object({
-  tag: z.string(),
-  imageId: z.string(),
-  platform: z.string().nullable(),
-  contextPath: z.string(),
-  dockerfile: z.string(),
-  buildDurationMs: z.number(),
-  builtAt: z.string(),
+  tag: z.string().describe("Image tag that was built"),
+  imageId: z.string().describe("Local image ID produced by the build"),
+  platform: z.string().nullable().describe(
+    "Target platform used for the build, if specified",
+  ),
+  contextPath: z.string().describe("Build context directory that was used"),
+  dockerfile: z.string().describe(
+    "Dockerfile path used, relative to the context",
+  ),
+  buildDurationMs: z.number().describe(
+    "Wall-clock build duration, in milliseconds",
+  ),
+  builtAt: z.string().describe("ISO 8601 timestamp when the build completed"),
 });
 
 const PushResultSchema = z.object({
-  tag: z.string(),
-  digest: z.string(),
-  size: z.number().nullable(),
-  pushedAt: z.string(),
-  pushDurationMs: z.number(),
+  tag: z.string().describe("Image tag that was pushed"),
+  digest: z.string().describe("Registry digest of the pushed image"),
+  size: z.number().nullable().describe(
+    "Image size in bytes, if reported by the CLI",
+  ),
+  pushedAt: z.string().describe("ISO 8601 timestamp when the push completed"),
+  pushDurationMs: z.number().describe(
+    "Wall-clock push duration, in milliseconds",
+  ),
 });
 
 const InspectResultSchema = z.object({
-  tag: z.string(),
-  id: z.string(),
-  digest: z.string().nullable(),
-  architecture: z.string(),
-  os: z.string(),
-  size: z.number(),
-  created: z.string(),
-  inspectedAt: z.string(),
+  tag: z.string().describe("Image tag that was inspected"),
+  id: z.string().describe("Local or from-image ID reported by the CLI"),
+  digest: z.string().nullable().describe(
+    "Registry digest, if the image has one",
+  ),
+  architecture: z.string().describe(
+    "Image target architecture (e.g. amd64, arm64)",
+  ),
+  os: z.string().describe("Image target operating system (e.g. linux)"),
+  size: z.number().describe("Image size in bytes"),
+  created: z.string().describe(
+    "Image creation timestamp as reported by the CLI",
+  ),
+  inspectedAt: z.string().describe(
+    "ISO 8601 timestamp when the inspection ran",
+  ),
 });
 
 async function runCommand(

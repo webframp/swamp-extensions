@@ -1,3 +1,9 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` and `.min(1)` to the `zone_id`, `job_id`,
+and `dataset_id` identifier arguments used across most methods, and added a
+`.describe()` to the `destination_conf` argument. No behavioral changes.
+
 ## 2026.07.27.1
 
 **Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator

@@ -35,37 +35,71 @@ const GlobalArgsSchema = z.object({
 
 /** Schema for a single model's token usage. */
 const ModelUsageSchema = z.object({
-  modelId: z.string(),
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  totalTokens: z.number(),
+  modelId: z.string().describe(
+    "Vertex AI publisher model ID (e.g. gemini-1.5-pro)",
+  ),
+  inputTokens: z.number().describe(
+    "Total input-direction tokens for this model over the scanned period",
+  ),
+  outputTokens: z.number().describe(
+    "Total output-direction tokens for this model over the scanned period",
+  ),
+  totalTokens: z.number().describe(
+    "Sum of inputTokens and outputTokens for this model",
+  ),
 });
 
 /** Schema for per-project usage results. */
 const ProjectUsageSchema = z.object({
-  project: z.string(),
-  inputTokens: z.number(),
-  outputTokens: z.number(),
-  totalTokens: z.number(),
-  models: z.array(ModelUsageSchema),
-  periodMinutes: z.number(),
-  inputTokensPerMinute: z.number(),
-  outputTokensPerMinute: z.number(),
+  project: z.string().describe("GCP project ID"),
+  inputTokens: z.number().describe(
+    "Total input-direction tokens across all models over the scanned period",
+  ),
+  outputTokens: z.number().describe(
+    "Total output-direction tokens across all models over the scanned period",
+  ),
+  totalTokens: z.number().describe(
+    "Sum of inputTokens and outputTokens for this project",
+  ),
+  models: z.array(ModelUsageSchema).describe(
+    "Per-model token usage breakdown",
+  ),
+  periodMinutes: z.number().describe(
+    "Length of the scanned lookback period, in minutes",
+  ),
+  inputTokensPerMinute: z.number().describe(
+    "inputTokens divided by periodMinutes",
+  ),
+  outputTokensPerMinute: z.number().describe(
+    "outputTokens divided by periodMinutes",
+  ),
 });
 
 /** Schema for the full scan results. */
 const ScanResultsSchema = z.object({
-  scannedAt: z.string(),
-  days: z.number(),
-  periodMinutes: z.number(),
-  truncated: z.boolean(),
-  projects: z.array(ProjectUsageSchema),
+  scannedAt: z.string().describe("ISO 8601 timestamp when the scan completed"),
+  days: z.number().describe("Lookback period in days used for this scan"),
+  periodMinutes: z.number().describe(
+    "Length of the scanned lookback period, in minutes",
+  ),
+  truncated: z.boolean().describe(
+    "True if any project's metrics query was paginated beyond the fetch cap or failed, meaning results may be incomplete",
+  ),
+  projects: z.array(ProjectUsageSchema).describe(
+    "Per-project usage results, sorted by totalTokens descending",
+  ),
   totals: z.object({
-    inputTokens: z.number(),
-    outputTokens: z.number(),
-    totalTokens: z.number(),
-    inputTokensPerMinute: z.number(),
-    outputTokensPerMinute: z.number(),
+    inputTokens: z.number().describe("Sum of inputTokens across all projects"),
+    outputTokens: z.number().describe(
+      "Sum of outputTokens across all projects",
+    ),
+    totalTokens: z.number().describe("Sum of totalTokens across all projects"),
+    inputTokensPerMinute: z.number().describe(
+      "Total inputTokens divided by periodMinutes",
+    ),
+    outputTokensPerMinute: z.number().describe(
+      "Total outputTokens divided by periodMinutes",
+    ),
   }),
 });
 
@@ -479,7 +513,7 @@ export const model = {
       description:
         "Get token usage for a single GCP project with model breakdown.",
       arguments: z.object({
-        project: z.string().describe("GCP project ID"),
+        project: z.string().min(1).describe("GCP project ID"),
         days: z.number().min(1).max(90).default(30).describe(
           "Lookback period in days",
         ),

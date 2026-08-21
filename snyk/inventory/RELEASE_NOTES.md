@@ -1,10 +1,10 @@
-## 2026.07.20.1
+## 2026.08.21.1
 
-**Fixed:** Group-scoped methods (paths under `/groups/{group_id}/...`) dropped
-their `group_id` path parameter. The generated code referenced `args.group_id`,
-but the argument was never declared or forwarded, so requests went to
-`/groups/undefined/...` and returned HTTP 404. These methods now declare and
-forward `group_id` correctly.
+**Changed:** Schema tightening sweep — no behavioral changes.
 
-**Upgrade note:** Group-scoped methods now take a required `group_id` argument.
-Calls that previously failed with a 404 succeed once `group_id` is supplied.
+- Added `.min(1)` to `apiToken` and `orgId` in the global arguments schema.
+- Added `.describe(...)` to previously undocumented fields on the asset
+  projects schemas (group and org scope): the `base_image_remediation`
+  sub-fields (`base_image`, `base_image_name`, `base_image_outdated`,
+  `code`, `distro_alert`, `proposed_base_images`) and the `issues`
+  severity-count breakdown.

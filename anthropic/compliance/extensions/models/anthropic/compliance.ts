@@ -31,117 +31,159 @@ type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 // --- Activity Feed ---
 
 const ActivityActorSchema = z.object({
-  type: z.string(),
-  id: z.string().nullable().optional(),
-  email: z.string().nullable().optional(),
-  name: z.string().nullable().optional(),
+  type: z.string().describe("Actor type (e.g. user, api_key, system)"),
+  id: z.string().nullable().optional().describe("Actor's unique identifier"),
+  email: z.string().nullable().optional().describe(
+    "Actor's email address, if known",
+  ),
+  name: z.string().nullable().optional().describe(
+    "Actor's display name, if known",
+  ),
 });
 
 const ActivitySchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  created_at: z.string(),
-  actor: ActivityActorSchema,
-  organization_id: z.string().nullable(),
-  details: z.record(z.string(), z.unknown()).nullable().optional(),
+  id: z.string().describe("Unique activity identifier"),
+  type: z.string().describe(
+    "Activity type (e.g. user.login, conversation.create)",
+  ),
+  created_at: z.string().describe("ISO 8601 timestamp the activity occurred"),
+  actor: ActivityActorSchema.describe("Who or what performed the activity"),
+  organization_id: z.string().nullable().describe(
+    "Organization the activity belongs to",
+  ),
+  details: z.record(z.string(), z.unknown()).nullable().optional().describe(
+    "Activity-type-specific detail payload",
+  ),
 });
 
 const ActivityFeedSchema = z.object({
-  activities: z.array(ActivitySchema),
-  count: z.number(),
-  has_more: z.boolean(),
-  oldest_id: z.string().nullable(),
-  newest_id: z.string().nullable(),
-  fetchedAt: z.string(),
+  activities: z.array(ActivitySchema).describe(
+    "Activities returned for this page",
+  ),
+  count: z.number().describe("Number of activities in this page"),
+  has_more: z.boolean().describe(
+    "Whether more activities exist beyond this page",
+  ),
+  oldest_id: z.string().nullable().describe(
+    "ID of the oldest activity in this page, or null if empty",
+  ),
+  newest_id: z.string().nullable().describe(
+    "ID of the newest activity in this page, or null if empty",
+  ),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when the feed was fetched",
+  ),
 });
 
 // --- Directory ---
 
 const OrgSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  type: z.string().nullable(),
+  id: z.string().describe("Organization unique identifier"),
+  name: z.string().describe("Organization display name"),
+  type: z.string().nullable().describe(
+    "Organization type, if provided by the API",
+  ),
 });
 
 const OrgListSchema = z.object({
-  organizations: z.array(OrgSchema),
-  count: z.number(),
-  fetchedAt: z.string(),
+  organizations: z.array(OrgSchema).describe(
+    "Organizations visible to the compliance key",
+  ),
+  count: z.number().describe("Number of organizations returned"),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when organizations were fetched",
+  ),
 });
 
 const DirectoryUserSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  name: z.string().nullable(),
-  role: z.string(),
-  created_at: z.string().nullable(),
+  id: z.string().describe("User's unique identifier"),
+  email: z.string().describe("User's email address"),
+  name: z.string().nullable().describe("User's display name, if known"),
+  role: z.string().describe("User's organization role"),
+  created_at: z.string().nullable().describe(
+    "ISO 8601 timestamp the user was created, if known",
+  ),
 });
 
 const DirectoryUserListSchema = z.object({
-  orgId: z.string(),
-  users: z.array(DirectoryUserSchema),
-  count: z.number(),
-  has_more: z.boolean(),
-  fetchedAt: z.string(),
+  orgId: z.string().describe("Organization these users belong to"),
+  users: z.array(DirectoryUserSchema).describe(
+    "Directory users for the organization",
+  ),
+  count: z.number().describe("Number of users returned"),
+  has_more: z.boolean().describe("Whether more users exist beyond this page"),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when users were fetched"),
 });
 
 const RoleSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullable(),
+  id: z.string().describe("Role's unique identifier"),
+  name: z.string().describe("Role display name"),
+  description: z.string().nullable().describe("Role description, if provided"),
 });
 
 const RoleListSchema = z.object({
-  orgId: z.string(),
-  roles: z.array(RoleSchema),
-  count: z.number(),
-  has_more: z.boolean(),
-  fetchedAt: z.string(),
+  orgId: z.string().describe("Organization these roles belong to"),
+  roles: z.array(RoleSchema).describe("Roles defined for the organization"),
+  count: z.number().describe("Number of roles returned"),
+  has_more: z.boolean().describe("Whether more roles exist beyond this page"),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when roles were fetched"),
 });
 
 const GroupMemberSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  name: z.string().nullable(),
-  source_type: z.string(),
+  id: z.string().describe("Member's unique identifier"),
+  email: z.string().describe("Member's email address"),
+  name: z.string().nullable().describe("Member's display name, if known"),
+  source_type: z.string().describe(
+    "How the member was added (e.g. direct, scim)",
+  ),
 });
 
 const GroupSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullable(),
-  member_count: z.number().nullable(),
+  id: z.string().describe("Group's unique identifier"),
+  name: z.string().describe("Group display name"),
+  description: z.string().nullable().describe("Group description, if provided"),
+  member_count: z.number().nullable().describe(
+    "Number of members in the group, if known",
+  ),
 });
 
 const GroupListSchema = z.object({
-  orgId: z.string(),
-  groups: z.array(GroupSchema),
-  count: z.number(),
-  has_more: z.boolean(),
-  fetchedAt: z.string(),
+  orgId: z.string().describe("Organization these groups belong to"),
+  groups: z.array(GroupSchema).describe("Groups defined for the organization"),
+  count: z.number().describe("Number of groups returned"),
+  has_more: z.boolean().describe("Whether more groups exist beyond this page"),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when groups were fetched"),
 });
 
 const GroupDetailSchema = z.object({
-  orgId: z.string(),
-  groupId: z.string(),
-  groupName: z.string(),
-  members: z.array(GroupMemberSchema),
-  count: z.number(),
-  fetchedAt: z.string(),
+  orgId: z.string().describe("Organization the group belongs to"),
+  groupId: z.string().describe("Group's unique identifier"),
+  groupName: z.string().describe("Group display name"),
+  members: z.array(GroupMemberSchema).describe(
+    "Group members with SCIM source attribution",
+  ),
+  count: z.number().describe("Number of members returned"),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when membership was fetched",
+  ),
 });
 
 // --- Effective Settings ---
 
 const EffectiveSettingSchema = z.object({
-  name: z.string(),
-  value: z.unknown(),
+  name: z.string().describe("Setting name/key"),
+  value: z.unknown().describe("Setting's effective value"),
 });
 
 const EffectiveSettingsSchema = z.object({
-  orgId: z.string(),
-  settings: z.array(EffectiveSettingSchema),
-  count: z.number(),
-  fetchedAt: z.string(),
+  orgId: z.string().describe("Organization these settings belong to"),
+  settings: z.array(EffectiveSettingSchema).describe(
+    "Effective runtime settings (retention, redaction, IP allowlist, SSO mode, etc.)",
+  ),
+  count: z.number().describe("Number of settings returned"),
+  fetchedAt: z.string().describe(
+    "ISO 8601 timestamp when settings were fetched",
+  ),
 });
 
 // =============================================================================

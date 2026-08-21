@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -49,19 +49,25 @@ const ListSecurityMonitoringSignalsSchema = z.object({
 });
 
 const BulkEditSecurityMonitoringSignalsAssigneeSchema = z.object({
-  result: z.unknown(),
+  result: z.unknown().describe(
+    "The result of the bulk operation, mapping signal IDs to per-signal outcomes.",
+  ),
   status: z.string().describe("The status of the bulk operation."),
   type: z.string().describe("The type of the response."),
 });
 
 const BulkEditSecurityMonitoringSignalsStateSchema = z.object({
-  result: z.unknown(),
+  result: z.unknown().describe(
+    "The result of the bulk operation, mapping signal IDs to per-signal outcomes.",
+  ),
   status: z.string().describe("The status of the bulk operation."),
   type: z.string().describe("The type of the response."),
 });
 
 const BulkEditSecurityMonitoringSignalsSchema = z.object({
-  result: z.unknown(),
+  result: z.unknown().describe(
+    "The result of the bulk operation, mapping signal IDs to per-signal outcomes.",
+  ),
   status: z.string().describe("The status of the bulk operation."),
   type: z.string().describe("The type of the response."),
 });
@@ -369,7 +375,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
 /** Datadog Security Signals — signal search, triage, and archiving */
 export const model = {
   type: "@webframp/datadog/security-signals",
-  version: "2026.07.20.11",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -674,9 +680,15 @@ export const model = {
     search_security_monitoring_signals: {
       description: "Get a list of security signals",
       arguments: z.object({
-        filter: z.unknown().optional(),
-        page: z.unknown().optional(),
-        sort: z.unknown().optional(),
+        filter: z.unknown().optional().describe(
+          "Search filter criteria for the query, such as the query string and time range.",
+        ),
+        page: z.unknown().optional().describe(
+          "Pagination options for the search request, such as cursor and limit.",
+        ),
+        sort: z.unknown().optional().describe(
+          "The order in which the returned security signals are sorted.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -775,8 +787,12 @@ export const model = {
       description: "Modify the triage assignee of a security signal",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
-        assignee: z.unknown(),
-        version: z.unknown().optional(),
+        assignee: z.unknown().describe(
+          "Object representing a given user entity.",
+        ),
+        version: z.unknown().optional().describe(
+          "Version of the signal being updated, used for optimistic concurrency control.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -827,8 +843,12 @@ export const model = {
       description: "Change the related incidents of a security signal",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
-        incident_ids: z.unknown(),
-        version: z.unknown().optional(),
+        incident_ids: z.unknown().describe(
+          "Array of incidents that are associated with this signal.",
+        ),
+        version: z.unknown().optional().describe(
+          "Version of the signal being updated, used for optimistic concurrency control.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -943,10 +963,16 @@ export const model = {
       description: "Change the triage state of a security signal",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
-        archive_comment: z.unknown().optional(),
-        archive_reason: z.unknown().optional(),
-        state: z.unknown(),
-        version: z.unknown().optional(),
+        archive_comment: z.unknown().optional().describe(
+          "Optional comment to display on archived signals.",
+        ),
+        archive_reason: z.unknown().optional().describe(
+          "Reason a signal is archived.",
+        ),
+        state: z.unknown().describe("The new triage state of the signal."),
+        version: z.unknown().optional().describe(
+          "Version of the signal being updated, used for optimistic concurrency control.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1060,11 +1086,21 @@ export const model = {
       description: "Update security signal triage state or assignee",
       arguments: z.object({
         signal_id: z.string().describe("The ID of the signal."),
-        archive_comment: z.unknown().optional(),
-        archive_reason: z.unknown().optional(),
-        assignee: z.unknown().optional(),
-        state: z.unknown().optional(),
-        version: z.unknown().optional(),
+        archive_comment: z.unknown().optional().describe(
+          "Optional comment to display on archived signals.",
+        ),
+        archive_reason: z.unknown().optional().describe(
+          "Reason a signal is archived.",
+        ),
+        assignee: z.unknown().optional().describe(
+          "Object representing a given user entity.",
+        ),
+        state: z.unknown().optional().describe(
+          "The new triage state of the signal.",
+        ),
+        version: z.unknown().optional().describe(
+          "Version of the signal being updated, used for optimistic concurrency control.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

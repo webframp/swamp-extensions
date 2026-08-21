@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -236,14 +236,30 @@ export const model = {
     create_downtime: {
       description: "Schedule a downtime",
       arguments: z.object({
-        display_timezone: z.unknown().optional(),
-        message: z.unknown().optional(),
-        monitor_identifier: z.unknown(),
-        mute_first_recovery_notification: z.unknown().optional(),
-        notify_end_states: z.unknown().optional(),
-        notify_end_types: z.unknown().optional(),
-        schedule: z.unknown().optional(),
-        scope: z.unknown(),
+        display_timezone: z.unknown().optional().describe(
+          "The timezone in which to display the downtime's start and end times in Datadog applications.",
+        ),
+        message: z.unknown().optional().describe(
+          "A message to include with notifications for this downtime.",
+        ),
+        monitor_identifier: z.unknown().describe(
+          "Monitor identifier for the downtime.",
+        ),
+        mute_first_recovery_notification: z.unknown().optional().describe(
+          "If the first recovery notification during a downtime should be muted.",
+        ),
+        notify_end_states: z.unknown().optional().describe(
+          "States that will trigger a monitor notification when the `notify_end_types` action occurs.",
+        ),
+        notify_end_types: z.unknown().optional().describe(
+          "Actions that will trigger a monitor notification if the downtime is in the `notify_end_types` state.",
+        ),
+        schedule: z.unknown().optional().describe(
+          "The schedule that defines when the monitor starts, stops, and recurs.",
+        ),
+        scope: z.unknown().describe(
+          "The scope to which the downtime applies.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -285,7 +301,9 @@ export const model = {
     get_downtime: {
       description: "Get a downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("ID of the downtime to fetch."),
+        downtime_id: z.string().min(1).describe(
+          "ID of the downtime to fetch.",
+        ),
         include: z.string().optional().describe(
           "Comma-separated list of resource paths for related resources to include in th...",
         ),
@@ -339,15 +357,33 @@ export const model = {
     update_downtime: {
       description: "Update a downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("ID of the downtime to update."),
-        display_timezone: z.unknown().optional(),
-        message: z.unknown().optional(),
-        monitor_identifier: z.unknown().optional(),
-        mute_first_recovery_notification: z.unknown().optional(),
-        notify_end_states: z.unknown().optional(),
-        notify_end_types: z.unknown().optional(),
-        schedule: z.unknown().optional(),
-        scope: z.unknown().optional(),
+        downtime_id: z.string().min(1).describe(
+          "ID of the downtime to update.",
+        ),
+        display_timezone: z.unknown().optional().describe(
+          "The timezone in which to display the downtime's start and end times in Datadog applications.",
+        ),
+        message: z.unknown().optional().describe(
+          "A message to include with notifications for this downtime.",
+        ),
+        monitor_identifier: z.unknown().optional().describe(
+          "Monitor identifier for the downtime.",
+        ),
+        mute_first_recovery_notification: z.unknown().optional().describe(
+          "If the first recovery notification during a downtime should be muted.",
+        ),
+        notify_end_states: z.unknown().optional().describe(
+          "States that will trigger a monitor notification when the `notify_end_types` action occurs.",
+        ),
+        notify_end_types: z.unknown().optional().describe(
+          "Actions that will trigger a monitor notification if the downtime is in the `notify_end_types` state.",
+        ),
+        schedule: z.unknown().optional().describe(
+          "The schedule that defines when the monitor starts, stops, and recurs.",
+        ),
+        scope: z.unknown().optional().describe(
+          "The scope to which the downtime applies.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -392,7 +428,9 @@ export const model = {
     cancel_downtime: {
       description: "Cancel a downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("ID of the downtime to cancel."),
+        downtime_id: z.string().min(1).describe(
+          "ID of the downtime to cancel.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -424,7 +462,7 @@ export const model = {
     list_monitor_downtimes: {
       description: "Get active downtimes for a monitor",
       arguments: z.object({
-        monitor_id: z.string().describe("The id of the monitor."),
+        monitor_id: z.string().min(1).describe("The id of the monitor."),
       }),
       execute: async (
         args: Record<string, unknown>,

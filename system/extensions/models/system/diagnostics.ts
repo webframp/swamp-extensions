@@ -131,11 +131,17 @@ async function runCommand(
 /** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Tighten get_processes count to a positive integer — no behavioral change for valid inputs",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -306,6 +312,8 @@ export const model = {
       arguments: z.object({
         count: z
           .number()
+          .int()
+          .min(1)
           .default(20)
           .describe("Number of top processes to return"),
       }),

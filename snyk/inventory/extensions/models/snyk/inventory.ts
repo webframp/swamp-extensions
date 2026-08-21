@@ -132,12 +132,24 @@ const AssetProjectsGroupItemSchema = z.object({
   id: z.string().describe("The unique identifier of the project"),
   type: z.enum(["projects"]).optional().describe("The JSON:API resource type"),
   base_image_remediation: z.object({
-    base_image: z.unknown().optional(),
-    base_image_name: z.string(),
-    base_image_outdated: z.boolean().optional(),
-    code: z.string(),
-    distro_alert: z.string().optional(),
-    proposed_base_images: z.unknown().optional(),
+    base_image: z.unknown().optional().describe(
+      "The current base image reference for this project",
+    ),
+    base_image_name: z.string().describe(
+      "Name of the current base image",
+    ),
+    base_image_outdated: z.boolean().optional().describe(
+      "Whether the current base image is outdated",
+    ),
+    code: z.string().describe(
+      "Recommended Dockerfile snippet to apply the remediation",
+    ),
+    distro_alert: z.string().optional().describe(
+      "Alert about the base image OS distribution, if any",
+    ),
+    proposed_base_images: z.unknown().optional().describe(
+      "Suggested upgraded base image options",
+    ),
   }).optional().describe(
     "Base image upgrade recommendation data from container scanning",
   ),
@@ -145,10 +157,10 @@ const AssetProjectsGroupItemSchema = z.object({
     "Indicates whether this project is the canonical project for its target_file. Projects are grouped...",
   ),
   issues: z.object({
-    critical: z.number().int(),
-    high: z.number().int(),
-    low: z.number().int(),
-    medium: z.number().int(),
+    critical: z.number().int().describe("Count of critical-severity issues"),
+    high: z.number().int().describe("Count of high-severity issues"),
+    low: z.number().int().describe("Count of low-severity issues"),
+    medium: z.number().int().describe("Count of medium-severity issues"),
   }).optional().describe("Issue counts by severity"),
   monitor_created_at: z.string().optional().describe(
     "Timestamp when the monitor was created",
@@ -363,12 +375,24 @@ const AssetProjectsOrgItemSchema = z.object({
   id: z.string().describe("The unique identifier of the project"),
   type: z.enum(["projects"]).optional().describe("The JSON:API resource type"),
   base_image_remediation: z.object({
-    base_image: z.unknown().optional(),
-    base_image_name: z.string(),
-    base_image_outdated: z.boolean().optional(),
-    code: z.string(),
-    distro_alert: z.string().optional(),
-    proposed_base_images: z.unknown().optional(),
+    base_image: z.unknown().optional().describe(
+      "The current base image reference for this project",
+    ),
+    base_image_name: z.string().describe(
+      "Name of the current base image",
+    ),
+    base_image_outdated: z.boolean().optional().describe(
+      "Whether the current base image is outdated",
+    ),
+    code: z.string().describe(
+      "Recommended Dockerfile snippet to apply the remediation",
+    ),
+    distro_alert: z.string().optional().describe(
+      "Alert about the base image OS distribution, if any",
+    ),
+    proposed_base_images: z.unknown().optional().describe(
+      "Suggested upgraded base image options",
+    ),
   }).optional().describe(
     "Base image upgrade recommendation data from container scanning",
   ),
@@ -376,10 +400,10 @@ const AssetProjectsOrgItemSchema = z.object({
     "Indicates whether this project is the canonical project for its target_file. Projects are grouped...",
   ),
   issues: z.object({
-    critical: z.number().int(),
-    high: z.number().int(),
-    low: z.number().int(),
-    medium: z.number().int(),
+    critical: z.number().int().describe("Count of critical-severity issues"),
+    high: z.number().int().describe("Count of high-severity issues"),
+    low: z.number().int().describe("Count of low-severity issues"),
+    medium: z.number().int().describe("Count of medium-severity issues"),
   }).optional().describe("Issue counts by severity"),
   monitor_created_at: z.string().optional().describe(
     "Timestamp when the monitor was created",

@@ -603,7 +603,7 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.08.01.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -630,15 +630,25 @@ export const model = {
       description: "Version bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.21.1",
+      description: "No schema changes (added field descriptions only)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     journalEntry: {
       description: "Record of a journal entry",
       schema: z.object({
-        date: z.string(),
-        file: z.string(),
-        status: z.string(),
-        createdAt: z.string(),
+        date: z.string().describe(
+          "Org-mode date (YYYY-MM-DD dow) for the entry",
+        ),
+        file: z.string().describe("Absolute path to the written journal file"),
+        status: z.string().describe(
+          "Outcome of the write (e.g. written, already-exists, " +
+            "skipped-no-data, committed-not-pushed, written-nothing-to-commit)",
+        ),
+        createdAt: z.string().describe("Timestamp the entry was processed"),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 50,

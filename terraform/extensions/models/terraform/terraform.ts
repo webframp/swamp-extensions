@@ -47,7 +47,7 @@ export async function runTfCommand(
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  workDir: z.string().describe(
+  workDir: z.string().min(1).describe(
     "Path to the initialized Terraform/OpenTofu working directory",
   ),
   workspace: z.string().default("default").describe(
@@ -189,7 +189,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
 
   upgrades: [
     {
@@ -200,6 +200,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Pin zod to 4.4.3 — no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Require a non-empty workDir — no behavioral change for valid configs",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

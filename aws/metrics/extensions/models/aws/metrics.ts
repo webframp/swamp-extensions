@@ -413,8 +413,10 @@ export const model = {
     get_data: {
       description: "Get metric data points for a specific metric",
       arguments: z.object({
-        namespace: z.string().describe("AWS namespace (e.g., AWS/EC2)"),
-        metricName: z.string().describe("Metric name (e.g., CPUUtilization)"),
+        namespace: z.string().min(1).describe("AWS namespace (e.g., AWS/EC2)"),
+        metricName: z.string().min(1).describe(
+          "Metric name (e.g., CPUUtilization)",
+        ),
         dimensions: z
           .array(
             z.object({
@@ -547,8 +549,10 @@ export const model = {
       description:
         "Analyze a metric for trends, anomalies, and summary statistics",
       arguments: z.object({
-        namespace: z.string().describe("AWS namespace (e.g., AWS/EC2)"),
-        metricName: z.string().describe("Metric name (e.g., CPUUtilization)"),
+        namespace: z.string().min(1).describe("AWS namespace (e.g., AWS/EC2)"),
+        metricName: z.string().min(1).describe(
+          "Metric name (e.g., CPUUtilization)",
+        ),
         dimensions: z
           .array(
             z.object({
@@ -701,7 +705,7 @@ export const model = {
     get_ec2_cpu: {
       description: "Convenience method to get EC2 CPU utilization",
       arguments: z.object({
-        instanceId: z.string().describe("EC2 instance ID"),
+        instanceId: z.string().min(1).describe("EC2 instance ID"),
         startTime: z
           .string()
           .default("1h")
@@ -796,7 +800,7 @@ export const model = {
       description:
         "Get key Lambda function metrics (invocations, errors, duration)",
       arguments: z.object({
-        functionName: z.string().describe("Lambda function name"),
+        functionName: z.string().min(1).describe("Lambda function name"),
         startTime: z
           .string()
           .default("1h")

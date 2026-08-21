@@ -99,50 +99,60 @@ type StateData = z.infer<typeof StateSchema>;
 
 /** Schema for issue context fetched from GitHub. */
 const ContextSchema = z.object({
-  issueNumber: z.number(),
-  title: z.string(),
-  body: z.string(),
-  author: z.string(),
-  labels: z.array(z.string()),
-  assignees: z.array(z.string()),
-  state: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  repo: z.string(),
-  url: z.string(),
-  fetchedAt: z.string(),
+  issueNumber: z.number().describe("GitHub issue number"),
+  title: z.string().describe("Issue title"),
+  body: z.string().describe("Issue body text"),
+  author: z.string().describe("Issue author's GitHub login"),
+  labels: z.array(z.string()).describe("Labels currently on the issue"),
+  assignees: z.array(z.string()).describe(
+    "GitHub logins of assignees on the issue",
+  ),
+  state: z.string().describe("GitHub issue state (e.g. OPEN, CLOSED)"),
+  createdAt: z.string().describe("Timestamp the issue was created"),
+  updatedAt: z.string().describe("Timestamp the issue was last updated"),
+  repo: z.string().describe("Repository the issue belongs to"),
+  url: z.string().describe("Full issue URL"),
+  fetchedAt: z.string().describe("Timestamp this context was fetched"),
 });
 
 /** Schema for issue classification after triage. */
 const ClassificationSchema = z.object({
-  issueNumber: z.number(),
-  kind: z.enum(["bug", "feature", "chore", "security", "docs"]),
-  priority: z.enum(["critical", "high", "medium", "low"]).optional(),
+  issueNumber: z.number().describe("GitHub issue number"),
+  kind: z.enum(["bug", "feature", "chore", "security", "docs"]).describe(
+    "Category assigned during triage",
+  ),
+  priority: z.enum(["critical", "high", "medium", "low"]).optional().describe(
+    "Priority assigned during triage",
+  ),
   component: z.string().optional().describe("Affected component or area"),
   notes: z.string().optional().describe("Triage notes"),
-  classifiedAt: z.string(),
+  classifiedAt: z.string().describe("Timestamp the issue was classified"),
 });
 
 /** Schema for implementation plans (versioned). */
 const PlanSchema = z.object({
-  issueNumber: z.number(),
+  issueNumber: z.number().describe("GitHub issue number"),
   iteration: z.number().describe("Plan version (increments on iterate)"),
   summary: z.string().describe("One-line summary of approach"),
   steps: z.array(z.string()).describe("Implementation steps"),
   risks: z.array(z.string()).optional().describe("Known risks or concerns"),
   feedback: z.string().optional().describe("Feedback from last iteration"),
-  createdAt: z.string(),
+  createdAt: z.string().describe("Timestamp the plan was created"),
 });
 
 /** Schema for linked pull request metadata. */
 const PullRequestSchema = z.object({
-  issueNumber: z.number(),
+  issueNumber: z.number().describe("GitHub issue number"),
   prNumber: z.number().nullable().describe("PR number if parseable from URL"),
   prUrl: z.string().describe("Full PR URL"),
   branch: z.string().optional().describe("Branch name"),
-  linkedAt: z.string(),
-  status: z.enum(["open", "merged", "failed"]),
-  failureReason: z.string().optional(),
+  linkedAt: z.string().describe("Timestamp the PR was linked"),
+  status: z.enum(["open", "merged", "failed"]).describe(
+    "Current status of the linked PR",
+  ),
+  failureReason: z.string().optional().describe(
+    "Why the PR failed CI or review",
+  ),
   retryCount: z.number().default(0)
     .describe("Number of times this PR has failed CI/review"),
 });
@@ -1092,32 +1102,44 @@ export const model = {
     triage: {
       description: "Classify the issue and set labels.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
-        kind: z.enum(["bug", "feature", "chore", "security", "docs"]),
-        priority: z.enum(["critical", "high", "medium", "low"]).optional(),
-        component: z.string().optional(),
-        notes: z.string().optional(),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
+        kind: z.enum(["bug", "feature", "chore", "security", "docs"])
+          .describe("Category to assign during triage"),
+        priority: z.enum(["critical", "high", "medium", "low"]).optional()
+          .describe("Priority to assign during triage"),
+        component: z.string().optional().describe(
+          "Affected component or area",
+        ),
+        notes: z.string().optional().describe("Triage notes"),
       }),
       execute: triage,
     },
     plan: {
       description: "Record an implementation plan.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
         summary: z.string().describe("One-line summary of approach"),
         steps: z.array(z.string()).describe("Implementation steps"),
-        risks: z.array(z.string()).optional(),
-        feedback: z.string().optional(),
+        risks: z.array(z.string()).optional().describe(
+          "Known risks or concerns",
+        ),
+        feedback: z.string().optional().describe(
+          "Feedback from the last iteration",
+        ),
       }),
       execute: plan,
     },
     iterate: {
       description: "Revise the plan with feedback (bumps iteration).",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
-        summary: z.string(),
-        steps: z.array(z.string()),
-        risks: z.array(z.string()).optional(),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
+        summary: z.string().describe(
+          "One-line summary of the revised approach",
+        ),
+        steps: z.array(z.string()).describe("Revised implementation steps"),
+        risks: z.array(z.string()).optional().describe(
+          "Known risks or concerns",
+        ),
         feedback: z.string().describe("What changed and why"),
       }),
       execute: iterate,
@@ -1125,7 +1147,7 @@ export const model = {
     approve: {
       description: "Lock the plan — ready for implementation.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
       }),
       execute: approve,
     },
@@ -1150,22 +1172,24 @@ export const model = {
     pr_merged: {
       description: "Record PR merge and close the issue.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
       }),
       execute: prMerged,
     },
     pr_failed: {
       description: "Record that the PR failed CI or review.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
-        reason: z.string().optional(),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
+        reason: z.string().optional().describe(
+          "Why the PR failed CI or review",
+        ),
       }),
       execute: prFailed,
     },
     complete: {
       description: "Mark done without full PR flow.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
         close_issue: z.boolean().optional()
           .describe("Close the GitHub issue (default: true)"),
       }),
@@ -1174,15 +1198,15 @@ export const model = {
     close: {
       description: "Abandon the issue from any state.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
-        reason: z.string().optional(),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
+        reason: z.string().optional().describe("Why the issue was closed"),
       }),
       execute: close,
     },
     status: {
       description: "Read-only: refresh and show current issue state.",
       arguments: z.object({
-        issue_number: z.number().int().min(1),
+        issue_number: z.number().int().min(1).describe("GitHub issue number"),
       }),
       execute: status,
     },

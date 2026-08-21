@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -31,8 +31,12 @@ const MonitorNotificationRulesItemSchema = z.object({
     "Monitor notification rule resource type.",
   ),
   conditional_recipients: z.object({
-    conditions: z.array(z.unknown()),
-    fallback_recipients: z.unknown().optional(),
+    conditions: z.array(z.unknown()).describe(
+      "Conditions for recipients to be notified.",
+    ),
+    fallback_recipients: z.unknown().optional().describe(
+      "Recipients to notify if no conditions are met.",
+    ),
   }).optional().describe(
     "Use conditional recipients to define different recipients for different situations. Cannot be use...",
   ),
@@ -66,8 +70,12 @@ const CreateMonitorNotificationRuleSchema = z.object({
     "Monitor notification rule resource type.",
   ),
   conditional_recipients: z.object({
-    conditions: z.array(z.unknown()),
-    fallback_recipients: z.unknown().optional(),
+    conditions: z.array(z.unknown()).describe(
+      "Conditions for recipients to be notified.",
+    ),
+    fallback_recipients: z.unknown().optional().describe(
+      "Recipients to notify if no conditions are met.",
+    ),
   }).optional().describe(
     "Use conditional recipients to define different recipients for different situations. Cannot be use...",
   ),
@@ -234,10 +242,18 @@ export const model = {
     create_monitor_notification_rule: {
       description: "Create a monitor notification rule",
       arguments: z.object({
-        conditional_recipients: z.unknown().optional(),
-        filter: z.unknown().optional(),
-        name: z.unknown(),
-        recipients: z.unknown().optional(),
+        conditional_recipients: z.unknown().optional().describe(
+          "Use conditional recipients to define different recipients for different situations.",
+        ),
+        filter: z.unknown().optional().describe(
+          "Specifies the matching criteria for monitor notifications.",
+        ),
+        name: z.unknown().describe(
+          "The name of the monitor notification rule.",
+        ),
+        recipients: z.unknown().optional().describe(
+          "A list of recipients to notify.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -285,7 +301,7 @@ export const model = {
     get_monitor_notification_rule: {
       description: "Get a monitor notification rule",
       arguments: z.object({
-        rule_id: z.string().describe(
+        rule_id: z.string().min(1).describe(
           "ID of the monitor notification rule to fetch.",
         ),
         include: z.string().optional().describe(
@@ -341,13 +357,21 @@ export const model = {
     update_monitor_notification_rule: {
       description: "Update a monitor notification rule",
       arguments: z.object({
-        rule_id: z.string().describe(
+        rule_id: z.string().min(1).describe(
           "ID of the monitor notification rule to update.",
         ),
-        conditional_recipients: z.unknown().optional(),
-        filter: z.unknown().optional(),
-        name: z.unknown(),
-        recipients: z.unknown().optional(),
+        conditional_recipients: z.unknown().optional().describe(
+          "Use conditional recipients to define different recipients for different situations.",
+        ),
+        filter: z.unknown().optional().describe(
+          "Specifies the matching criteria for monitor notifications.",
+        ),
+        name: z.unknown().describe(
+          "The name of the monitor notification rule.",
+        ),
+        recipients: z.unknown().optional().describe(
+          "A list of recipients to notify.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -396,7 +420,7 @@ export const model = {
     delete_monitor_notification_rule: {
       description: "Delete a monitor notification rule",
       arguments: z.object({
-        rule_id: z.string().describe(
+        rule_id: z.string().min(1).describe(
           "ID of the monitor notification rule to delete.",
         ),
       }),
@@ -491,8 +515,10 @@ export const model = {
     create_monitor_config_policy: {
       description: "Create a monitor configuration policy",
       arguments: z.object({
-        policy: z.unknown(),
-        policy_type: z.unknown(),
+        policy: z.unknown().describe("Configuration for the policy."),
+        policy_type: z.unknown().describe(
+          "The monitor configuration policy type.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -540,7 +566,7 @@ export const model = {
     get_monitor_config_policy: {
       description: "Get a monitor configuration policy",
       arguments: z.object({
-        policy_id: z.string().describe(
+        policy_id: z.string().min(1).describe(
           "ID of the monitor configuration policy.",
         ),
       }),
@@ -581,11 +607,13 @@ export const model = {
     update_monitor_config_policy: {
       description: "Edit a monitor configuration policy",
       arguments: z.object({
-        policy_id: z.string().describe(
+        policy_id: z.string().min(1).describe(
           "ID of the monitor configuration policy.",
         ),
-        policy: z.unknown(),
-        policy_type: z.unknown(),
+        policy: z.unknown().describe("Configuration for the policy."),
+        policy_type: z.unknown().describe(
+          "The monitor configuration policy type.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -634,7 +662,7 @@ export const model = {
     delete_monitor_config_policy: {
       description: "Delete a monitor configuration policy",
       arguments: z.object({
-        policy_id: z.string().describe(
+        policy_id: z.string().min(1).describe(
           "ID of the monitor configuration policy.",
         ),
       }),

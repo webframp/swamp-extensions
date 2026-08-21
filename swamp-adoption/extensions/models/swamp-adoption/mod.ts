@@ -30,14 +30,22 @@ const GlobalArgsSchema = z.object({
 });
 
 const InteractionSchema = z.object({
-  verb: z.string(),
-  direction: z.string(),
-  frequency: z.string(),
-  pain: z.string(),
+  verb: z.string().describe(
+    "Action performed on the system (e.g. read, write, deploy, monitor, rotate, audit)",
+  ),
+  direction: z.string().describe(
+    "Data/control flow direction: inbound, outbound, or bidirectional",
+  ),
+  frequency: z.string().describe(
+    "How often this interaction occurs (e.g. hourly, daily, weekly, ad-hoc)",
+  ),
+  pain: z.string().describe(
+    "Pain level of this interaction: none, minor, significant, or blocking",
+  ),
 });
 
 const SystemSchema = z.object({
-  name: z.string(),
+  name: z.string().describe("System name as given by the user"),
   type: z.enum([
     "api",
     "database",
@@ -46,24 +54,36 @@ const SystemSchema = z.object({
     "infrastructure",
     "internal-service",
     "other",
-  ]),
-  interactions: z.array(InteractionSchema),
-  authMethod: z.string().optional(),
+  ]).describe("Category of system"),
+  interactions: z.array(InteractionSchema).describe(
+    "How the user interacts with this system",
+  ),
+  authMethod: z.string().optional().describe(
+    "How the user authenticates to this system, if known",
+  ),
 });
 
 const DataFlowSchema = z.object({
-  from: z.string(),
-  to: z.string(),
-  description: z.string(),
-  manual: z.boolean(),
+  from: z.string().describe("Source system name"),
+  to: z.string().describe("Destination system name"),
+  description: z.string().describe("What data flows between these systems"),
+  manual: z.boolean().describe("Whether this transfer requires manual steps"),
 });
 
 const LandscapeSchema = z.object({
-  systems: z.array(SystemSchema),
-  dataFlows: z.array(DataFlowSchema),
-  suggestedFirstExtension: z.string(),
-  reasoning: z.string(),
-  discoveredAt: z.string(),
+  systems: z.array(SystemSchema).describe(
+    "Systems discovered in the user's domain",
+  ),
+  dataFlows: z.array(DataFlowSchema).describe(
+    "Directed data relationships between discovered systems",
+  ),
+  suggestedFirstExtension: z.string().describe(
+    "System name recommended as the first extension to build",
+  ),
+  reasoning: z.string().describe("Why this system was suggested first"),
+  discoveredAt: z.string().describe(
+    "ISO timestamp of when this landscape was discovered",
+  ),
 });
 
 const ExtensionDesignSchema = z.object({
@@ -146,7 +166,7 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.08.01.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -156,6 +176,12 @@ export const model = {
     {
       toVersion: "2026.08.01.1",
       description: "Add import_skill method, no globalArguments changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Added .describe() to previously undocumented landscape schema fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

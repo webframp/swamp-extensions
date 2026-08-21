@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` documentation to every previously undocumented field in the
+resource schemas (`DiffFileSchema`, `MrDiffSchema`, `ReviewDraftSchema`, `ReviewPostedSchema`,
+`LineCommentSchema`). Tightened `host` and `token` in the global arguments to require a
+non-empty string. No behavioral change — a no-op `upgrades` entry was added to keep the
+model's `typeVersion` tracking in sync with the version bump.
+
 ## 2026.08.07.1
 
 **Added:** `post_line_comment` method — posts a comment positioned on a specific

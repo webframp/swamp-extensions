@@ -196,8 +196,12 @@ export const model = {
     listaccountrulesets: {
       description: "List account rulesets",
       arguments: z.object({
-        cursor: z.string().optional(),
-        per_page: z.string().optional(),
+        cursor: z.string().optional().describe(
+          "Opaque token for fetching the next page of results.",
+        ),
+        per_page: z.string().optional().describe(
+          "Number of results per page.",
+        ),
       }),
       execute: async (
         _args: Record<string, unknown>,
@@ -266,7 +270,9 @@ export const model = {
     getaccountentrypointruleset: {
       description: "Get an account entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string(),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -301,7 +307,9 @@ export const model = {
     updateaccountentrypointruleset: {
       description: "Update an account entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string(),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -344,7 +352,9 @@ export const model = {
     listaccountentrypointrulesetversions: {
       description: "List an account entry point ruleset's versions",
       arguments: z.object({
-        ruleset_phase: z.string(),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -379,8 +389,10 @@ export const model = {
     getaccountentrypointrulesetversion: {
       description: "Get an account entry point ruleset version",
       arguments: z.object({
-        ruleset_version: z.string(),
-        ruleset_phase: z.string(),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -415,7 +427,7 @@ export const model = {
     getaccountruleset: {
       description: "Get an account ruleset",
       arguments: z.object({
-        ruleset_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -450,7 +462,7 @@ export const model = {
     updateaccountruleset: {
       description: "Update an account ruleset",
       arguments: z.object({
-        ruleset_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -493,7 +505,7 @@ export const model = {
     deleteaccountruleset: {
       description: "Delete an account ruleset",
       arguments: z.object({
-        ruleset_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -523,7 +535,7 @@ export const model = {
     createaccountrulesetrule: {
       description: "Create an account ruleset rule",
       arguments: z.object({
-        ruleset_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -559,8 +571,10 @@ export const model = {
     updateaccountrulesetrule: {
       description: "Update an account ruleset rule",
       arguments: z.object({
-        rule_id: z.string(),
-        ruleset_id: z.string(),
+        rule_id: z.string().min(1).describe(
+          "Identifier of the rule within the ruleset.",
+        ),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -603,8 +617,10 @@ export const model = {
     deleteaccountrulesetrule: {
       description: "Delete an account ruleset rule",
       arguments: z.object({
-        rule_id: z.string(),
-        ruleset_id: z.string(),
+        rule_id: z.string().min(1).describe(
+          "Identifier of the rule within the ruleset.",
+        ),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -634,7 +650,7 @@ export const model = {
     listaccountrulesetversions: {
       description: "List an account ruleset's versions",
       arguments: z.object({
-        ruleset_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -669,8 +685,8 @@ export const model = {
     getaccountrulesetversion: {
       description: "Get an account ruleset version",
       arguments: z.object({
-        ruleset_version: z.string(),
-        ruleset_id: z.string(),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -705,8 +721,8 @@ export const model = {
     deleteaccountrulesetversion: {
       description: "Delete an account ruleset version",
       arguments: z.object({
-        ruleset_version: z.string(),
-        ruleset_id: z.string(),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -736,9 +752,11 @@ export const model = {
     listaccountrulesetversionrulesbytag: {
       description: "List an account ruleset version's rules by tag",
       arguments: z.object({
-        rule_tag: z.string(),
-        ruleset_version: z.string(),
-        ruleset_id: z.string(),
+        rule_tag: z.string().min(1).describe(
+          "Tag identifying the rule to filter or target.",
+        ),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -773,9 +791,13 @@ export const model = {
     listzonerulesets: {
       description: "List zone rulesets",
       arguments: z.object({
-        zone_id: z.string(),
-        cursor: z.string().optional(),
-        per_page: z.string().optional(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        cursor: z.string().optional().describe(
+          "Opaque token for fetching the next page of results.",
+        ),
+        per_page: z.string().optional().describe(
+          "Number of results per page.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -810,7 +832,7 @@ export const model = {
     createzoneruleset: {
       description: "Create a zone ruleset",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -846,8 +868,10 @@ export const model = {
     getzoneentrypointruleset: {
       description: "Get a zone entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string(),
-        zone_id: z.string(),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -882,8 +906,10 @@ export const model = {
     updatezoneentrypointruleset: {
       description: "Update a zone entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string(),
-        zone_id: z.string(),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -926,8 +952,10 @@ export const model = {
     listzoneentrypointrulesetversions: {
       description: "List a zone entry point ruleset's versions",
       arguments: z.object({
-        ruleset_phase: z.string(),
-        zone_id: z.string(),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -962,9 +990,11 @@ export const model = {
     getzoneentrypointrulesetversion: {
       description: "Get a zone entry point ruleset version",
       arguments: z.object({
-        ruleset_version: z.string(),
-        ruleset_phase: z.string(),
-        zone_id: z.string(),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_phase: z.string().min(1).describe(
+          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -999,8 +1029,8 @@ export const model = {
     getzoneruleset: {
       description: "Get a zone ruleset",
       arguments: z.object({
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1035,8 +1065,8 @@ export const model = {
     updatezoneruleset: {
       description: "Update a zone ruleset",
       arguments: z.object({
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1079,8 +1109,8 @@ export const model = {
     deletezoneruleset: {
       description: "Delete a zone ruleset",
       arguments: z.object({
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1110,8 +1140,8 @@ export const model = {
     createzonerulesetrule: {
       description: "Create a zone ruleset rule",
       arguments: z.object({
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1147,9 +1177,11 @@ export const model = {
     updatezonerulesetrule: {
       description: "Update a zone ruleset rule",
       arguments: z.object({
-        rule_id: z.string(),
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        rule_id: z.string().min(1).describe(
+          "Identifier of the rule within the ruleset.",
+        ),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1192,9 +1224,11 @@ export const model = {
     deletezonerulesetrule: {
       description: "Delete a zone ruleset rule",
       arguments: z.object({
-        rule_id: z.string(),
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        rule_id: z.string().min(1).describe(
+          "Identifier of the rule within the ruleset.",
+        ),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1224,8 +1258,8 @@ export const model = {
     listzonerulesetversions: {
       description: "List a zone ruleset's versions",
       arguments: z.object({
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1260,9 +1294,9 @@ export const model = {
     getzonerulesetversion: {
       description: "Get a zone ruleset version",
       arguments: z.object({
-        ruleset_version: z.string(),
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1297,9 +1331,9 @@ export const model = {
     deletezonerulesetversion: {
       description: "Delete a zone ruleset version",
       arguments: z.object({
-        ruleset_version: z.string(),
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1329,10 +1363,12 @@ export const model = {
     listzonerulesetversionrulesbytag: {
       description: "List a zone ruleset version's rules by tag",
       arguments: z.object({
-        rule_tag: z.string(),
-        ruleset_version: z.string(),
-        ruleset_id: z.string(),
-        zone_id: z.string(),
+        rule_tag: z.string().min(1).describe(
+          "Tag identifying the rule to filter or target.",
+        ),
+        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
+        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,

@@ -22,11 +22,11 @@ const GlobalArgsSchema = z.object({
 });
 
 const NamespacesItemSchema = z.object({
-  id: z.unknown(),
+  id: z.unknown().describe("Namespace identifier tag."),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown(),
+  title: z.unknown().describe("Human-readable name for the namespace."),
 });
 
 const ListNamespacesSchema = z.object({
@@ -36,19 +36,19 @@ const ListNamespacesSchema = z.object({
 });
 
 const CreateANamespaceSchema = z.object({
-  id: z.unknown(),
+  id: z.unknown().describe("Namespace identifier tag."),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown(),
+  title: z.unknown().describe("Human-readable name for the namespace."),
 });
 
 const UpdateWorkersKvNamespaceRenameANamespaceSchema = z.object({
-  id: z.unknown(),
+  id: z.unknown().describe("Namespace identifier tag."),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown(),
+  title: z.unknown().describe("Human-readable name for the namespace."),
 });
 
 const UpdateWorkersKvNamespaceWriteMultipleKeyValuePairsSchema = z.object({
@@ -98,7 +98,7 @@ const ANamespaceSKeysItemSchema = z.object({
     "The time, measured in number of seconds since the UNIX epoch, at which the key will expire. This ...",
   ),
   metadata: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().describe("Name of the key."),
 });
 
 const ListANamespaceSKeysSchema = z.object({
@@ -176,10 +176,18 @@ export const model = {
     list_namespaces: {
       description: "List Namespaces",
       arguments: z.object({
-        page: z.number().optional(),
-        per_page: z.number().optional(),
-        order: z.enum(["id", "title"]).optional(),
-        direction: z.enum(["asc", "desc"]).optional(),
+        page: z.number().optional().describe(
+          "Page number of results to return.",
+        ),
+        per_page: z.number().optional().describe(
+          "Number of results per page.",
+        ),
+        order: z.enum(["id", "title"]).optional().describe(
+          "Field to order results by.",
+        ),
+        direction: z.enum(["asc", "desc"]).optional().describe(
+          "Direction to sort results in.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -232,7 +240,7 @@ export const model = {
     create_a_namespace: {
       description: "Create a Namespace",
       arguments: z.object({
-        title: z.unknown(),
+        title: z.unknown().describe("Human-readable name for the namespace."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -268,7 +276,9 @@ export const model = {
     get_a_namespace: {
       description: "Get a Namespace",
       arguments: z.object({
-        namespace_id: z.string(),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -303,8 +313,12 @@ export const model = {
     update_workers_kv_namespace_rename_a_namespace: {
       description: "Rename a Namespace",
       arguments: z.object({
-        namespace_id: z.string(),
-        title: z.unknown(),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
+        title: z.unknown().describe(
+          "New human-readable name for the namespace.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -350,7 +364,9 @@ export const model = {
     delete_workers_kv_namespace_remove_a_namespace: {
       description: "Remove a Namespace",
       arguments: z.object({
-        namespace_id: z.string(),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -381,14 +397,26 @@ export const model = {
     update_workers_kv_namespace_write_multiple_key_value_pairs: {
       description: "Write multiple key-value pairs",
       arguments: z.object({
-        namespace_id: z.string(),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
         items: z.array(z.object({
-          base64: z.boolean().optional(),
-          expiration: z.unknown().optional(),
-          expiration_ttl: z.unknown().optional(),
-          key: z.unknown(),
-          metadata: z.unknown().optional(),
-          value: z.string().max(26214400),
+          base64: z.boolean().optional().describe(
+            "Whether the server should base64-decode the value before storing it.",
+          ),
+          expiration: z.unknown().optional().describe(
+            "The time, measured in number of seconds since the UNIX epoch, at which the key will expire.",
+          ),
+          expiration_ttl: z.unknown().optional().describe(
+            "Number of seconds for which the key should be visible before it expires.",
+          ),
+          key: z.unknown().describe("Key name to write."),
+          metadata: z.unknown().optional().describe(
+            "Arbitrary JSON to associate with the key-value pair.",
+          ),
+          value: z.string().max(26214400).describe(
+            "Value to store, up to 25 MiB in length.",
+          ),
         })),
       }),
       execute: async (
@@ -431,8 +459,12 @@ export const model = {
     delete_multiple_key_value_pairs: {
       description: "Delete multiple key-value pairs",
       arguments: z.object({
-        namespace_id: z.string(),
-        items: z.array(z.unknown()),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
+        items: z.array(z.unknown()).describe(
+          "Array of keys to delete (maximum of 10,000).",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -471,7 +503,9 @@ export const model = {
     get_multiple_key_value_pairs: {
       description: "Get multiple key-value pairs",
       arguments: z.object({
-        namespace_id: z.string(),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
         keys: z.array(z.unknown()).describe(
           "Array of keys to retrieve (maximum of 100).",
         ),
@@ -526,10 +560,18 @@ export const model = {
     list_a_namespace_s_keys: {
       description: "List a Namespace's Keys",
       arguments: z.object({
-        namespace_id: z.string(),
-        limit: z.number().optional(),
-        prefix: z.string().optional(),
-        cursor: z.string().optional(),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
+        limit: z.number().optional().describe(
+          "Maximum number of keys to return per page.",
+        ),
+        prefix: z.string().optional().describe(
+          "Filter keys to those starting with this prefix.",
+        ),
+        cursor: z.string().optional().describe(
+          "Opaque token for fetching the next page of results.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -583,8 +625,10 @@ export const model = {
     get_workers_kv_namespace_read_the_metadata_for_a_key: {
       description: "Read the metadata for a key",
       arguments: z.object({
-        key_name: z.string(),
-        namespace_id: z.string(),
+        key_name: z.string().min(1).describe("Name of the key to look up."),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -622,8 +666,10 @@ export const model = {
     delete_key_value_pair: {
       description: "Delete key-value pair",
       arguments: z.object({
-        key_name: z.string(),
-        namespace_id: z.string(),
+        key_name: z.string().min(1).describe("Name of the key to delete."),
+        namespace_id: z.string().min(1).describe(
+          "Namespace identifier tag.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

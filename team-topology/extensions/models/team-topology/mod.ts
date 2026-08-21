@@ -32,13 +32,13 @@ const TeamTypeSchema = z.enum([
   "enabling",
   "complicated-subsystem",
   "platform",
-]);
+]).describe("Team Topologies fundamental team type");
 
 const InteractionModeSchema = z.enum([
   "collaboration",
   "x-as-a-service",
   "facilitating",
-]);
+]).describe("Team Topologies interaction mode between two teams");
 
 const CognitiveLoadSchema = z.object({
   intrinsic: z.number().min(0).max(10).describe(
@@ -59,7 +59,7 @@ const WestumCultureSchema = z.enum([
   "pathological",
   "bureaucratic",
   "generative",
-]);
+]).describe("Westrum organizational culture typology");
 
 const TeamSchema = z.object({
   name: z.string().describe("Team name"),
@@ -95,7 +95,9 @@ const InteractionSchema = z.object({
     ),
   health: z.enum(["flowing", "friction", "blocked"]).default("flowing")
     .describe("Current health signal for this interaction"),
-  notes: z.string().optional(),
+  notes: z.string().optional().describe(
+    "Freeform context about this interaction",
+  ),
 });
 
 const SystemDependencySchema = z.object({
@@ -111,10 +113,16 @@ const SystemDependencySchema = z.object({
 // --- Topology snapshot (the primary resource) ---
 
 const TopologySchema = z.object({
-  teams: z.array(TeamSchema),
-  interactions: z.array(InteractionSchema),
-  systemDependencies: z.array(SystemDependencySchema).default([]),
-  discoveredAt: z.string(),
+  teams: z.array(TeamSchema).describe("Teams in this topology snapshot"),
+  interactions: z.array(InteractionSchema).describe(
+    "Interactions between teams in this topology snapshot",
+  ),
+  systemDependencies: z.array(SystemDependencySchema).default([]).describe(
+    "System-level dependencies that cross team boundaries",
+  ),
+  discoveredAt: z.string().describe(
+    "ISO timestamp of when this topology was discovered",
+  ),
   notes: z.string().optional().describe("Context about this topology snapshot"),
 });
 
@@ -137,7 +145,7 @@ const FlowStepSchema = z.object({
   percentCompleteAccurate: z.number().min(0).max(100).optional().describe(
     "%C&A — what percentage of work arrives from upstream without rework needed",
   ),
-  notes: z.string().optional(),
+  notes: z.string().optional().describe("Freeform context about this step"),
 });
 
 const ValueStreamSchema = z.object({
@@ -150,12 +158,16 @@ const ValueStreamSchema = z.object({
   totalLeadTimeDays: z.number().optional().describe(
     "End-to-end lead time (can be computed from steps or measured directly)",
   ),
-  notes: z.string().optional(),
+  notes: z.string().optional().describe(
+    "Freeform context about this value stream",
+  ),
 });
 
 const FlowsSchema = z.object({
-  streams: z.array(ValueStreamSchema),
-  mappedAt: z.string(),
+  streams: z.array(ValueStreamSchema).describe(
+    "Value streams in this flow map",
+  ),
+  mappedAt: z.string().describe("ISO timestamp of when flows were mapped"),
 });
 
 // --- Assessments (agent-produced findings) ---
@@ -171,18 +183,28 @@ const FindingSchema = z.object({
     "team-coupling",
     "culture",
     "other",
-  ]),
-  severity: z.enum(["info", "warning", "critical"]),
-  title: z.string(),
-  description: z.string(),
-  affectedTeams: z.array(z.string()),
-  recommendation: z.string().optional(),
+  ]).describe("Category of organizational-design finding"),
+  severity: z.enum(["info", "warning", "critical"]).describe(
+    "How urgently this finding should be addressed",
+  ),
+  title: z.string().describe("Short finding title"),
+  description: z.string().describe("What the finding is and why it matters"),
+  affectedTeams: z.array(z.string()).describe(
+    "Names of teams this finding affects",
+  ),
+  recommendation: z.string().optional().describe(
+    "Suggested action to address this finding",
+  ),
 });
 
 const AssessmentSchema = z.object({
-  findings: z.array(FindingSchema),
+  findings: z.array(FindingSchema).describe(
+    "Findings produced by analyzing the topology and flows",
+  ),
   summary: z.string().describe("Brief narrative summary of the assessment"),
-  assessedAt: z.string(),
+  assessedAt: z.string().describe(
+    "ISO timestamp of when this assessment was recorded",
+  ),
 });
 
 // =============================================================================
@@ -265,11 +287,16 @@ type MethodContext = {
 /** Team topology and value stream mapping model. */
 export const model = {
   type: "@webframp/team-topology",
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "Added .describe() to previously undocumented schema fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

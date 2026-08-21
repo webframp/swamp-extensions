@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/cloud"
-version: "2026.07.19.1"
+version: "2026.08.21.1"
 description: "Snyk Cloud — cloud environments, scans, and resource posture management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

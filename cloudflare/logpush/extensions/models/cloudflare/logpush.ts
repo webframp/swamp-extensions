@@ -462,7 +462,9 @@ export const model = {
     get_accounts_account_id_logpush_datasets_dataset_id_fields: {
       description: "List fields",
       arguments: z.object({
-        dataset_id: z.string(),
+        dataset_id: z.string().min(1).describe(
+          "Dataset to query for available logpush fields.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -500,7 +502,9 @@ export const model = {
     get_accounts_account_id_logpush_datasets_dataset_id_jobs: {
       description: "List Logpush jobs for a dataset",
       arguments: z.object({
-        dataset_id: z.string(),
+        dataset_id: z.string().min(1).describe(
+          "Dataset to query for available logpush fields.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -615,7 +619,9 @@ export const model = {
       description: "Create Logpush job",
       arguments: z.object({
         dataset: z.unknown().optional(),
-        destination_conf: z.unknown(),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
         frequency: z.unknown().optional(),
@@ -669,7 +675,7 @@ export const model = {
     get_accounts_account_id_logpush_jobs_job_id: {
       description: "Get Logpush job details",
       arguments: z.object({
-        job_id: z.string(),
+        job_id: z.string().min(1).describe("Logpush job identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -707,7 +713,7 @@ export const model = {
     put_accounts_account_id_logpush_jobs_job_id: {
       description: "Update Logpush job",
       arguments: z.object({
-        job_id: z.string(),
+        job_id: z.string().min(1).describe("Logpush job identifier."),
         destination_conf: z.unknown().optional(),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
@@ -765,7 +771,7 @@ export const model = {
     delete_accounts_account_id_logpush_jobs_job_id: {
       description: "Delete Logpush job",
       arguments: z.object({
-        job_id: z.string(),
+        job_id: z.string().min(1).describe("Logpush job identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -795,7 +801,9 @@ export const model = {
     create_post_accounts_account_id_logpush_ownership: {
       description: "Get ownership challenge",
       arguments: z.object({
-        destination_conf: z.unknown(),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -838,7 +846,9 @@ export const model = {
     create_post_accounts_account_id_logpush_ownership_validate: {
       description: "Validate ownership challenge",
       arguments: z.object({
-        destination_conf: z.unknown(),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
         ownership_challenge: z.unknown(),
       }),
       execute: async (
@@ -882,7 +892,9 @@ export const model = {
     delete_accounts_account_id_logpush_validate_destination: {
       description: "Validate destination",
       arguments: z.object({
-        destination_conf: z.unknown(),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -925,7 +937,9 @@ export const model = {
     delete_accounts_account_id_logpush_validate_destination_exists: {
       description: "Check destination exists",
       arguments: z.object({
-        destination_conf: z.unknown(),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1011,8 +1025,10 @@ export const model = {
     get_zones_zone_id_logpush_datasets_dataset_id_fields: {
       description: "List fields",
       arguments: z.object({
-        dataset_id: z.string(),
-        zone_id: z.string(),
+        dataset_id: z.string().min(1).describe(
+          "Dataset to query for available logpush fields.",
+        ),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1050,8 +1066,10 @@ export const model = {
     get_zones_zone_id_logpush_datasets_dataset_id_jobs: {
       description: "List Logpush jobs for a dataset",
       arguments: z.object({
-        dataset_id: z.string(),
-        zone_id: z.string(),
+        dataset_id: z.string().min(1).describe(
+          "Dataset to query for available logpush fields.",
+        ),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1114,7 +1132,7 @@ export const model = {
     get_zones_zone_id_logpush_edge_jobs: {
       description: "List Instant Logs jobs",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1172,7 +1190,7 @@ export const model = {
     create_post_zones_zone_id_logpush_edge_jobs: {
       description: "Create Instant Logs job",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
         fields: z.unknown().optional(),
         filter: z.unknown().optional(),
         sample: z.unknown().optional(),
@@ -1222,7 +1240,7 @@ export const model = {
     get_zones_zone_id_logpush_jobs: {
       description: "List Logpush jobs",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1279,9 +1297,11 @@ export const model = {
     create_post_zones_zone_id_logpush_jobs: {
       description: "Create Logpush job",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
         dataset: z.unknown().optional(),
-        destination_conf: z.unknown(),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
         frequency: z.unknown().optional(),
@@ -1338,8 +1358,8 @@ export const model = {
     get_zones_zone_id_logpush_jobs_job_id: {
       description: "Get Logpush job details",
       arguments: z.object({
-        job_id: z.string(),
-        zone_id: z.string(),
+        job_id: z.string().min(1).describe("Logpush job identifier."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1374,8 +1394,8 @@ export const model = {
     put_zones_zone_id_logpush_jobs_job_id: {
       description: "Update Logpush job",
       arguments: z.object({
-        job_id: z.string(),
-        zone_id: z.string(),
+        job_id: z.string().min(1).describe("Logpush job identifier."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
         destination_conf: z.unknown().optional(),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
@@ -1433,8 +1453,8 @@ export const model = {
     delete_zones_zone_id_logpush_jobs_job_id: {
       description: "Delete Logpush job",
       arguments: z.object({
-        job_id: z.string(),
-        zone_id: z.string(),
+        job_id: z.string().min(1).describe("Logpush job identifier."),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1464,8 +1484,10 @@ export const model = {
     create_post_zones_zone_id_logpush_ownership: {
       description: "Get ownership challenge",
       arguments: z.object({
-        zone_id: z.string(),
-        destination_conf: z.unknown(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1512,8 +1534,10 @@ export const model = {
     create_post_zones_zone_id_logpush_ownership_validate: {
       description: "Validate ownership challenge",
       arguments: z.object({
-        zone_id: z.string(),
-        destination_conf: z.unknown(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
         ownership_challenge: z.unknown(),
       }),
       execute: async (
@@ -1561,8 +1585,10 @@ export const model = {
     create_post_zones_zone_id_logpush_validate_destination: {
       description: "Validate destination",
       arguments: z.object({
-        zone_id: z.string(),
-        destination_conf: z.unknown(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1609,8 +1635,10 @@ export const model = {
     create_post_zones_zone_id_logpush_validate_destination_exists: {
       description: "Check destination exists",
       arguments: z.object({
-        zone_id: z.string(),
-        destination_conf: z.unknown(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        destination_conf: z.unknown().describe(
+          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1657,7 +1685,7 @@ export const model = {
     create_post_zones_zone_id_logpush_validate_origin: {
       description: "Validate origin",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
         logpull_options: z.unknown(),
       }),
       execute: async (

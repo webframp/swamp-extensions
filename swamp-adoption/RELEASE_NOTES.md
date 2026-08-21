@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` to previously undocumented fields on the
+`InteractionSchema`, `SystemSchema`, `DataFlowSchema`, and `LandscapeSchema`
+resource schemas (e.g. `verb`, `direction`, `frequency`, `pain`, `type`,
+`from`, `to`, `manual`, `suggestedFirstExtension`). No behavioral change.
+
 ## 2026.08.01.1
 
 **Added:** New `import_skill` method. If you already have a skill (`SKILL.md`

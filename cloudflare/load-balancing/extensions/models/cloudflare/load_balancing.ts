@@ -1031,7 +1031,9 @@ export const model = {
     get_account_load_balancer_monitor_groups_monitor_group_details: {
       description: "Monitor Group Details",
       arguments: z.object({
-        monitor_group_id: z.string(),
+        monitor_group_id: z.string().min(1).describe(
+          "Monitor group identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1069,7 +1071,9 @@ export const model = {
     update_monitor_group: {
       description: "Update Monitor Group",
       arguments: z.object({
-        monitor_group_id: z.string(),
+        monitor_group_id: z.string().min(1).describe(
+          "Monitor group identifier.",
+        ),
         created_on: z.string().optional().describe(
           "The timestamp of when the monitor group was created",
         ),
@@ -1124,7 +1128,9 @@ export const model = {
     patch_monitor_group: {
       description: "Patch Monitor Group",
       arguments: z.object({
-        monitor_group_id: z.string(),
+        monitor_group_id: z.string().min(1).describe(
+          "Monitor group identifier.",
+        ),
         created_on: z.string().optional().describe(
           "The timestamp of when the monitor group was created",
         ),
@@ -1179,7 +1185,9 @@ export const model = {
     delete_monitor_group: {
       description: "Delete Monitor Group",
       arguments: z.object({
-        monitor_group_id: z.string(),
+        monitor_group_id: z.string().min(1).describe(
+          "Monitor group identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1211,7 +1219,9 @@ export const model = {
     list_monitor_group_references: {
       description: "List Monitor Group References",
       arguments: z.object({
-        monitor_group_id: z.string(),
+        monitor_group_id: z.string().min(1).describe(
+          "Monitor group identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1370,7 +1380,7 @@ export const model = {
     get_account_load_balancer_monitors_monitor_details: {
       description: "Monitor Details",
       arguments: z.object({
-        monitor_id: z.string(),
+        monitor_id: z.string().min(1).describe("Monitor identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1408,7 +1418,7 @@ export const model = {
     update_monitor: {
       description: "Update Monitor",
       arguments: z.object({
-        monitor_id: z.string(),
+        monitor_id: z.string().min(1).describe("Monitor identifier."),
         allow_insecure: z.unknown().optional(),
         consecutive_down: z.unknown().optional(),
         consecutive_up: z.unknown().optional(),
@@ -1467,7 +1477,7 @@ export const model = {
     patch_monitor: {
       description: "Patch Monitor",
       arguments: z.object({
-        monitor_id: z.string(),
+        monitor_id: z.string().min(1).describe("Monitor identifier."),
         allow_insecure: z.unknown().optional(),
         consecutive_down: z.unknown().optional(),
         consecutive_up: z.unknown().optional(),
@@ -1526,7 +1536,7 @@ export const model = {
     delete_monitor: {
       description: "Delete Monitor",
       arguments: z.object({
-        monitor_id: z.string(),
+        monitor_id: z.string().min(1).describe("Monitor identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1556,7 +1566,7 @@ export const model = {
     create_account_load_balancer_monitors_preview_monitor: {
       description: "Preview Monitor",
       arguments: z.object({
-        monitor_id: z.string(),
+        monitor_id: z.string().min(1).describe("Monitor identifier."),
         allow_insecure: z.unknown().optional(),
         consecutive_down: z.unknown().optional(),
         consecutive_up: z.unknown().optional(),
@@ -1619,7 +1629,7 @@ export const model = {
     list_monitor_references: {
       description: "List Monitor References",
       arguments: z.object({
-        monitor_id: z.string(),
+        monitor_id: z.string().min(1).describe("Monitor identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1814,7 +1824,7 @@ export const model = {
     get_account_load_balancer_pools_pool_details: {
       description: "Pool Details",
       arguments: z.object({
-        pool_id: z.string(),
+        pool_id: z.string().min(1).describe("Pool identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1852,7 +1862,7 @@ export const model = {
     update_pool: {
       description: "Update Pool",
       arguments: z.object({
-        pool_id: z.string(),
+        pool_id: z.string().min(1).describe("Pool identifier."),
         check_regions: z.unknown().optional(),
         description: z.unknown().optional(),
         disabled_at: z.unknown().optional(),
@@ -1910,7 +1920,7 @@ export const model = {
     patch_pool: {
       description: "Patch Pool",
       arguments: z.object({
-        pool_id: z.string(),
+        pool_id: z.string().min(1).describe("Pool identifier."),
         check_regions: z.unknown().optional(),
         description: z.unknown().optional(),
         disabled_at: z.unknown().optional(),
@@ -1968,7 +1978,7 @@ export const model = {
     delete_pool: {
       description: "Delete Pool",
       arguments: z.object({
-        pool_id: z.string(),
+        pool_id: z.string().min(1).describe("Pool identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1998,7 +2008,7 @@ export const model = {
     get_account_load_balancer_pools_pool_health_details: {
       description: "Pool Health Details",
       arguments: z.object({
-        pool_id: z.string(),
+        pool_id: z.string().min(1).describe("Pool identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2036,7 +2046,7 @@ export const model = {
     create_account_load_balancer_pools_preview_pool: {
       description: "Preview Pool",
       arguments: z.object({
-        pool_id: z.string(),
+        pool_id: z.string().min(1).describe("Pool identifier."),
         allow_insecure: z.unknown().optional(),
         consecutive_down: z.unknown().optional(),
         consecutive_up: z.unknown().optional(),
@@ -2099,7 +2109,7 @@ export const model = {
     list_pool_references: {
       description: "List Pool References",
       arguments: z.object({
-        pool_id: z.string(),
+        pool_id: z.string().min(1).describe("Pool identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2336,7 +2346,9 @@ export const model = {
     get_account_load_balancers_account_load_balancer_details: {
       description: "Account Load Balancer Details",
       arguments: z.object({
-        load_balancer_id: z.string(),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2374,7 +2386,9 @@ export const model = {
     update_account_load_balancer: {
       description: "Update Account Load Balancer",
       arguments: z.object({
-        load_balancer_id: z.string(),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
         adaptive_routing: z.unknown().optional(),
         country_pools: z.unknown().optional(),
         default_pools: z.unknown(),
@@ -2436,7 +2450,9 @@ export const model = {
     patch_account_load_balancer: {
       description: "Patch Account Load Balancer",
       arguments: z.object({
-        load_balancer_id: z.string(),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
         adaptive_routing: z.unknown().optional(),
         country_pools: z.unknown().optional(),
         default_pools: z.unknown().optional(),
@@ -2498,7 +2514,9 @@ export const model = {
     delete_account_load_balancer: {
       description: "Delete Account Load Balancer",
       arguments: z.object({
-        load_balancer_id: z.string(),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2530,7 +2548,7 @@ export const model = {
     list_load_balancers: {
       description: "List Load Balancers",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2583,7 +2601,7 @@ export const model = {
     create_load_balancer: {
       description: "Create Load Balancer",
       arguments: z.object({
-        zone_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
         adaptive_routing: z.unknown().optional(),
         country_pools: z.unknown().optional(),
         default_pools: z.unknown(),
@@ -2641,8 +2659,10 @@ export const model = {
     get_load_balancers_load_balancer_details: {
       description: "Load Balancer Details",
       arguments: z.object({
-        zone_id: z.string(),
-        load_balancer_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2677,8 +2697,10 @@ export const model = {
     update_load_balancer: {
       description: "Update Load Balancer",
       arguments: z.object({
-        zone_id: z.string(),
-        load_balancer_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
         adaptive_routing: z.unknown().optional(),
         country_pools: z.unknown().optional(),
         default_pools: z.unknown(),
@@ -2740,8 +2762,10 @@ export const model = {
     patch_load_balancer: {
       description: "Patch Load Balancer",
       arguments: z.object({
-        zone_id: z.string(),
-        load_balancer_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
         adaptive_routing: z.unknown().optional(),
         country_pools: z.unknown().optional(),
         default_pools: z.unknown().optional(),
@@ -2802,8 +2826,10 @@ export const model = {
     delete_load_balancer: {
       description: "Delete Load Balancer",
       arguments: z.object({
-        zone_id: z.string(),
-        load_balancer_id: z.string(),
+        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        load_balancer_id: z.string().min(1).describe(
+          "Load balancer identifier.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

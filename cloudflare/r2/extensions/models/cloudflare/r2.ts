@@ -1119,7 +1119,9 @@ export const model = {
     get_bucket: {
       description: "Get Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1154,7 +1156,9 @@ export const model = {
     patch_bucket: {
       description: "Patch Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1197,7 +1201,9 @@ export const model = {
     delete_bucket: {
       description: "Delete Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1228,7 +1234,9 @@ export const model = {
     get_bucket_cors_policy: {
       description: "Get Bucket CORS Policy",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1263,7 +1271,9 @@ export const model = {
     put_bucket_cors_policy: {
       description: "Put Bucket CORS Policy",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         rules: z.array(z.unknown()).optional(),
       }),
       execute: async (
@@ -1307,7 +1317,9 @@ export const model = {
     delete_bucket_cors_policy: {
       description: "Delete Bucket CORS Policy",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1338,7 +1350,9 @@ export const model = {
     list_custom_domains: {
       description: "List Custom Domains of Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1373,7 +1387,9 @@ export const model = {
     create_r2_add_custom_domain: {
       description: "Attach Custom Domain To Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         ciphers: z.array(z.string()).optional().describe(
           "An allowlist of ciphers for TLS termination. These ciphers must be in the Bor...",
         ),
@@ -1428,8 +1444,10 @@ export const model = {
     get_custom_domain_settings: {
       description: "Get Custom Domain Settings",
       arguments: z.object({
-        bucket_name: z.string(),
-        domain: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        domain: z.string().min(1).describe("Name of the custom domain."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1464,8 +1482,10 @@ export const model = {
     update_r2_edit_custom_domain_settings: {
       description: "Configure Custom Domain Settings",
       arguments: z.object({
-        bucket_name: z.string(),
-        domain: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        domain: z.string().min(1).describe("Name of the custom domain."),
         ciphers: z.array(z.string()).optional().describe(
           "An allowlist of ciphers for TLS termination. These ciphers must be in the Bor...",
         ),
@@ -1517,8 +1537,10 @@ export const model = {
     delete_custom_domain: {
       description: "Remove Custom Domain From Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
-        domain: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        domain: z.string().min(1).describe("Name of the custom domain."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1549,7 +1571,9 @@ export const model = {
     get_bucket_public_policy: {
       description: "Get r2.dev Domain of Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1584,7 +1608,9 @@ export const model = {
     put_bucket_public_policy: {
       description: "Update r2.dev Domain of Bucket",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         enabled: z.boolean().describe(
           "Whether to enable public bucket access at the r2.dev domain.",
         ),
@@ -1630,7 +1656,9 @@ export const model = {
     get_bucket_lifecycle_configuration: {
       description: "Get Object Lifecycle Rules",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1665,7 +1693,9 @@ export const model = {
     put_bucket_lifecycle_configuration: {
       description: "Put Object Lifecycle Rules",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         rules: z.array(z.unknown()).optional(),
       }),
       execute: async (
@@ -1709,7 +1739,9 @@ export const model = {
     get_bucket_local_uploads_configuration: {
       description: "Get Local Uploads Configuration",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1744,7 +1776,9 @@ export const model = {
     put_bucket_local_uploads_configuration: {
       description: "Put Local Uploads Configuration",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         enabled: z.boolean().describe(
           "Whether to enable local uploads for this bucket.",
         ),
@@ -1793,7 +1827,9 @@ export const model = {
     get_bucket_lock_configuration: {
       description: "Get Bucket Lock Rules",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1828,7 +1864,9 @@ export const model = {
     put_bucket_lock_configuration: {
       description: "Put Bucket Lock Rules",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         rules: z.array(z.unknown()).optional(),
       }),
       execute: async (
@@ -1872,7 +1910,9 @@ export const model = {
     list_objects: {
       description: "List Objects",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         per_page: z.number().optional(),
         prefix: z.string().optional(),
         delimiter: z.string().optional(),
@@ -1927,7 +1967,9 @@ export const model = {
     delete_objects: {
       description: "Delete Objects",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         prefix: z.string().optional(),
         items: z.array(z.string()),
       }),
@@ -1971,8 +2013,12 @@ export const model = {
     delete_object: {
       description: "Delete Object",
       arguments: z.object({
-        bucket_name: z.string(),
-        object_key: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        object_key: z.string().min(1).describe(
+          "Key of the object in the bucket.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2003,7 +2049,9 @@ export const model = {
     get_bucket_sippy_config: {
       description: "Get Sippy Configuration",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2038,7 +2086,9 @@ export const model = {
     put_bucket_sippy_config: {
       description: "Enable Sippy",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         body: z.union([
           z.object({
             destination: z.object({
@@ -2119,7 +2169,9 @@ export const model = {
     delete_bucket_sippy_config: {
       description: "Disable Sippy",
       arguments: z.object({
-        bucket_name: z.string(),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

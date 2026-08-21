@@ -1,3 +1,9 @@
+## 2026.08.21.1
+
+**Changed:** Tightened `find_errors`'s `logGroupNames` and `get_recent_events`'s
+`logGroupName` to require non-empty values — these are required identifiers the
+CloudWatch Logs API already rejects when empty.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (2 packages)

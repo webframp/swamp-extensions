@@ -1,3 +1,9 @@
+## 2026.08.21.2
+
+**Changed:** Added `.describe()` and `.min(1)` to the identifier arguments
+used across most methods — `project_name`, `deployment_id`, `domain_name`,
+and `tail_id`. No behavioral changes.
+
 ## 2026.08.21.1
 
 **Fixed:** Regenerated with three cloudflare-codegen fixes: (1)

@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -189,12 +189,18 @@ export const model = {
         compute: z.array(z.unknown()).optional().describe(
           "The list of metrics or timeseries to compute for the retrieved buckets.",
         ),
-        filter: z.unknown().optional(),
+        filter: z.unknown().optional().describe(
+          "The search and filter query settings.",
+        ),
         group_by: z.array(z.unknown()).optional().describe(
           "The rules for the group by",
         ),
-        options: z.unknown().optional(),
-        page: z.unknown().optional(),
+        options: z.unknown().optional().describe(
+          "Global query options that are used during the query.",
+        ),
+        page: z.unknown().optional().describe(
+          "Paging settings for the aggregation.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -324,10 +330,18 @@ export const model = {
     list_logs: {
       description: "Search logs (POST)",
       arguments: z.object({
-        filter: z.unknown().optional(),
-        options: z.unknown().optional(),
-        page: z.unknown().optional(),
-        sort: z.unknown().optional(),
+        filter: z.unknown().optional().describe(
+          "Search filters for the logs query (query, from, to, indexes, storage_tier).",
+        ),
+        options: z.unknown().optional().describe(
+          "Global query options that are used during the query (e.g. timezone).",
+        ),
+        page: z.unknown().optional().describe(
+          "Paging attributes for listing logs.",
+        ),
+        sort: z.unknown().optional().describe(
+          "The sort order of the logs matching the query.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

@@ -26,121 +26,153 @@ const GlobalArgsSchema = z.object({
 });
 
 const ProjectSchema = z.object({
-  name: z.string(),
-  pathWithNamespace: z.string(),
-  description: z.string().nullable(),
-  visibility: z.string(),
-  starCount: z.number(),
-  forksCount: z.number(),
-  lastActivityAt: z.string(),
-  defaultBranch: z.string().nullable(),
-  archived: z.boolean(),
-  topics: z.array(z.string()),
+  name: z.string().describe("Project name"),
+  pathWithNamespace: z.string().describe(
+    "Full project path including group/namespace",
+  ),
+  description: z.string().nullable().describe("Project description"),
+  visibility: z.string().describe(
+    "Project visibility level (private/internal/public)",
+  ),
+  starCount: z.number().describe("Number of stars"),
+  forksCount: z.number().describe("Number of forks"),
+  lastActivityAt: z.string().describe("Timestamp of last project activity"),
+  defaultBranch: z.string().nullable().describe("Default branch name"),
+  archived: z.boolean().describe("Whether the project is archived"),
+  topics: z.array(z.string()).describe("Topics/tags assigned to the project"),
 });
 
 const ProjectListSchema = z.object({
-  projects: z.array(ProjectSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  projects: z.array(ProjectSchema).describe(
+    "Projects for the authenticated user",
+  ),
+  count: z.number().describe("Number of projects returned"),
+  truncated: z.boolean().describe(
+    "Whether more projects exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const ProjectInfoSchema = z.object({
-  name: z.string(),
-  pathWithNamespace: z.string(),
-  description: z.string().nullable(),
-  visibility: z.string(),
-  defaultBranch: z.string().nullable(),
-  starCount: z.number(),
-  forksCount: z.number(),
-  openIssuesCount: z.number(),
-  archived: z.boolean(),
-  topics: z.array(z.string()),
-  webUrl: z.string(),
-  createdAt: z.string(),
-  lastActivityAt: z.string(),
-  fetchedAt: z.string(),
+  name: z.string().describe("Project name"),
+  pathWithNamespace: z.string().describe(
+    "Full project path including group/namespace",
+  ),
+  description: z.string().nullable().describe("Project description"),
+  visibility: z.string().describe(
+    "Project visibility level (private/internal/public)",
+  ),
+  defaultBranch: z.string().nullable().describe("Default branch name"),
+  starCount: z.number().describe("Number of stars"),
+  forksCount: z.number().describe("Number of forks"),
+  openIssuesCount: z.number().describe("Number of open issues"),
+  archived: z.boolean().describe("Whether the project is archived"),
+  topics: z.array(z.string()).describe("Topics/tags assigned to the project"),
+  webUrl: z.string().describe("Web URL for the project"),
+  createdAt: z.string().describe("Timestamp the project was created"),
+  lastActivityAt: z.string().describe("Timestamp of last project activity"),
+  fetchedAt: z.string().describe("Timestamp this info was fetched"),
 });
 
 const MergeRequestSchema = z.object({
-  iid: z.number(),
-  title: z.string(),
-  state: z.string(),
-  author: z.object({ username: z.string() }).nullable(),
-  sourceBranch: z.string(),
-  targetBranch: z.string(),
-  draft: z.boolean(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  labels: z.array(z.string()),
+  iid: z.number().describe("Merge request internal ID (project-scoped)"),
+  title: z.string().describe("Merge request title"),
+  state: z.string().describe("Merge request state (opened/closed/merged)"),
+  author: z.object({ username: z.string() }).nullable().describe(
+    "Merge request author, or null if unavailable",
+  ),
+  sourceBranch: z.string().describe("Source branch"),
+  targetBranch: z.string().describe("Target branch"),
+  draft: z.boolean().describe("Whether the merge request is a draft"),
+  createdAt: z.string().describe("Timestamp the merge request was created"),
+  updatedAt: z.string().describe(
+    "Timestamp the merge request was last updated",
+  ),
+  labels: z.array(z.string()).describe("Labels applied to the merge request"),
 });
 
 const MergeRequestListSchema = z.object({
-  project: z.string(),
-  mergeRequests: z.array(MergeRequestSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  state: z.string(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the merge requests belong to"),
+  mergeRequests: z.array(MergeRequestSchema).describe(
+    "Merge requests matching the queried state",
+  ),
+  count: z.number().describe("Number of merge requests returned"),
+  truncated: z.boolean().describe(
+    "Whether more merge requests exist beyond this page",
+  ),
+  state: z.string().describe("State filter used for the query"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const IssueSchema = z.object({
-  iid: z.number(),
-  title: z.string(),
-  state: z.string(),
-  author: z.object({ username: z.string() }).nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  labels: z.array(z.string()),
+  iid: z.number().describe("Issue internal ID (project-scoped)"),
+  title: z.string().describe("Issue title"),
+  state: z.string().describe("Issue state (opened/closed)"),
+  author: z.object({ username: z.string() }).nullable().describe(
+    "Issue author, or null if unavailable",
+  ),
+  createdAt: z.string().describe("Timestamp the issue was created"),
+  updatedAt: z.string().describe("Timestamp the issue was last updated"),
+  labels: z.array(z.string()).describe("Labels applied to the issue"),
 });
 
 const IssueListSchema = z.object({
-  project: z.string(),
-  issues: z.array(IssueSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  state: z.string(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the issues belong to"),
+  issues: z.array(IssueSchema).describe("Issues matching the queried state"),
+  count: z.number().describe("Number of issues returned"),
+  truncated: z.boolean().describe("Whether more issues exist beyond this page"),
+  state: z.string().describe("State filter used for the query"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const IssueDetailSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  title: z.string(),
-  description: z.string(),
-  state: z.string(),
-  webUrl: z.string(),
-  labels: z.array(z.string()),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  project: z.string().describe("Project the issue belongs to"),
+  iid: z.number().describe("Issue internal ID (project-scoped)"),
+  title: z.string().describe("Issue title"),
+  description: z.string().describe("Issue description body"),
+  state: z.string().describe("Issue state (opened/closed)"),
+  webUrl: z.string().describe("Web URL for the issue"),
+  labels: z.array(z.string()).describe("Labels applied to the issue"),
+  createdAt: z.string().describe("Timestamp the issue was created"),
+  updatedAt: z.string().describe("Timestamp the issue was last updated"),
 });
 
 const NoteSchema = z.object({
-  id: z.number(),
-  body: z.string(),
-  author: z.object({ username: z.string() }).nullable(),
-  createdAt: z.string(),
+  id: z.number().describe("Note ID"),
+  body: z.string().describe("Note body text"),
+  author: z.object({ username: z.string() }).nullable().describe(
+    "Note author, or null if unavailable",
+  ),
+  createdAt: z.string().describe("Timestamp the note was created"),
 });
 
 const NoteListSchema = z.object({
-  project: z.string(),
-  noteableType: z.string(),
-  noteableIid: z.number(),
-  notes: z.array(NoteSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the noteable belongs to"),
+  noteableType: z.string().describe(
+    "Type of the commented-on object (issue/merge_request)",
+  ),
+  noteableIid: z.number().describe("Internal ID of the commented-on object"),
+  notes: z.array(NoteSchema).describe("Notes/comments returned"),
+  count: z.number().describe("Number of notes returned"),
+  truncated: z.boolean().describe("Whether older notes exist beyond this page"),
+  fetchedAt: z.string().describe("Timestamp the notes were fetched"),
 });
 
 // A single note inside a discussion thread. `file`/`line` are the slim diff
 // position (null for a general, non-diff comment).
 const DiscussionNoteSchema = z.object({
-  id: z.number(),
-  author: z.string().nullable(),
-  body: z.string(),
-  createdAt: z.string(),
-  file: z.string().nullable(),
-  line: z.number().nullable(),
+  id: z.number().describe("Note ID"),
+  author: z.string().nullable().describe(
+    "Note author's username, or null if unavailable",
+  ),
+  body: z.string().describe("Note body text"),
+  createdAt: z.string().describe("Timestamp the note was created"),
+  file: z.string().nullable().describe(
+    "File path the note is anchored to, null for a general comment",
+  ),
+  line: z.number().nullable().describe(
+    "Line number the note is anchored to, null for a general comment",
+  ),
 });
 
 // A discussion (thread). Resolution state, location, and opener are hoisted to
@@ -149,224 +181,301 @@ const DiscussionNoteSchema = z.object({
 const DiscussionSchema = z.object({
   // GraphQL discussion gid — the exact id add_mr_note(discussionId) and
   // resolve_mr_discussion consume.
-  id: z.string(),
-  resolvable: z.boolean(),
-  resolved: z.boolean(),
-  resolvedBy: z.string().nullable(),
+  id: z.string().describe("GraphQL discussion gid"),
+  resolvable: z.boolean().describe("Whether the discussion can be resolved"),
+  resolved: z.boolean().describe(
+    "Whether the discussion is currently resolved",
+  ),
+  resolvedBy: z.string().nullable().describe(
+    "Username who resolved the discussion, null if unresolved",
+  ),
   // Location + opener, hoisted from the thread's root note.
-  file: z.string().nullable(),
-  line: z.number().nullable(),
-  author: z.string().nullable(),
-  createdAt: z.string(),
-  notes: z.array(DiscussionNoteSchema),
+  file: z.string().nullable().describe(
+    "File path the discussion is anchored to, null for a general comment",
+  ),
+  line: z.number().nullable().describe(
+    "Line number the discussion is anchored to, null for a general comment",
+  ),
+  author: z.string().nullable().describe("Username who opened the discussion"),
+  createdAt: z.string().describe("Timestamp the discussion was opened"),
+  notes: z.array(DiscussionNoteSchema).describe(
+    "Notes in this discussion thread",
+  ),
 });
 
 const DiscussionListSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  discussions: z.array(DiscussionSchema),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
+  discussions: z.array(DiscussionSchema).describe(
+    "Discussion threads on the merge request",
+  ),
+  truncated: z.boolean().describe(
+    "Whether more discussions exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the discussions were fetched"),
 });
 
 const DiscussionResolutionSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  discussionId: z.string(),
-  resolved: z.boolean(),
-  resolvedBy: z.string().nullable(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
+  discussionId: z.string().describe(
+    "GraphQL discussion gid that was resolved/unresolved",
+  ),
+  resolved: z.boolean().describe("Resulting resolution state"),
+  resolvedBy: z.string().nullable().describe(
+    "Username who resolved the discussion, null if unresolved",
+  ),
+  fetchedAt: z.string().describe("Timestamp the resolution was recorded"),
 });
 
 const NoteDeletedSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  noteId: z.number(),
-  deleted: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
+  noteId: z.number().describe("Deleted note's ID"),
+  deleted: z.boolean().describe("Whether the deletion was confirmed"),
+  fetchedAt: z.string().describe("Timestamp the deletion was recorded"),
 });
 
 const MrAssigneesSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
   // Resulting assignee usernames after the set (empty when unassigned).
-  assignees: z.array(z.string()),
-  fetchedAt: z.string(),
+  assignees: z.array(z.string()).describe(
+    "Resulting assignee usernames after the operation (empty when unassigned)",
+  ),
+  fetchedAt: z.string().describe("Timestamp the assignees were recorded"),
 });
 
 const MrReviewersSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
   // Resulting reviewer usernames after the set (empty when cleared).
-  reviewers: z.array(z.string()),
-  fetchedAt: z.string(),
+  reviewers: z.array(z.string()).describe(
+    "Resulting reviewer usernames after the operation (empty when cleared)",
+  ),
+  fetchedAt: z.string().describe("Timestamp the reviewers were recorded"),
 });
 
 const UnassignResultSchema = z.object({
-  project: z.string(),
+  project: z.string().describe("Project the merge requests belong to"),
   // The user removed from each MR (the authenticated user unless overridden).
-  username: z.string(),
+  username: z.string().describe(
+    "The user removed from each MR (the authenticated user unless overridden)",
+  ),
   // Only confirmed removals land here (user absent from the resulting
   // assignees). Anything unconfirmable — null payload, no mergeRequest, or the
   // user still present after a REMOVE — goes to `failed` instead.
   results: z.array(z.object({
-    iid: z.number(),
+    iid: z.number().describe("Merge request internal ID"),
     // Assignees remaining after removal — proof co-assignees are preserved.
-    remainingAssignees: z.array(z.string()),
-  })),
+    remainingAssignees: z.array(z.string()).describe(
+      "Assignees remaining after removal — proof co-assignees are preserved",
+    ),
+  })).describe("Confirmed removals, one entry per successfully updated MR"),
   // Per-MR failures (permission denied, missing MR); one bad MR does not sink
   // the batch.
-  failed: z.array(z.object({ iid: z.number(), error: z.string() })),
-  fetchedAt: z.string(),
+  failed: z.array(z.object({
+    iid: z.number().describe("Merge request internal ID"),
+    error: z.string().describe("Why the removal could not be confirmed"),
+  })).describe("Per-MR failures; one bad MR does not sink the batch"),
+  fetchedAt: z.string().describe("Timestamp the batch was executed"),
 });
 
 const RemoveReviewerResultSchema = z.object({
-  project: z.string(),
+  project: z.string().describe("Project the merge requests belong to"),
   // The reviewer removed from each MR (the authenticated user unless overridden).
-  username: z.string(),
+  username: z.string().describe(
+    "The reviewer removed from each MR (the authenticated user unless overridden)",
+  ),
   // Only confirmed removals land here (user absent from the resulting
   // reviewers). Unconfirmable results — null payload, no mergeRequest, or the
   // user still present after a REMOVE — go to `failed` instead.
   results: z.array(z.object({
-    iid: z.number(),
+    iid: z.number().describe("Merge request internal ID"),
     // Reviewers remaining after removal — proof co-reviewers are preserved.
-    remainingReviewers: z.array(z.string()),
-  })),
-  failed: z.array(z.object({ iid: z.number(), error: z.string() })),
-  fetchedAt: z.string(),
+    remainingReviewers: z.array(z.string()).describe(
+      "Reviewers remaining after removal — proof co-reviewers are preserved",
+    ),
+  })).describe("Confirmed removals, one entry per successfully updated MR"),
+  failed: z.array(z.object({
+    iid: z.number().describe("Merge request internal ID"),
+    error: z.string().describe("Why the removal could not be confirmed"),
+  })).describe("Per-MR failures; one bad MR does not sink the batch"),
+  fetchedAt: z.string().describe("Timestamp the batch was executed"),
 });
 
 const ReleaseSchema = z.object({
-  tagName: z.string(),
-  name: z.string(),
-  createdAt: z.string(),
-  releasedAt: z.string(),
-  upcoming: z.boolean(),
+  tagName: z.string().describe("Git tag associated with the release"),
+  name: z.string().describe("Release title"),
+  createdAt: z.string().describe("Timestamp the release was created"),
+  releasedAt: z.string().describe("Timestamp the release was/will be released"),
+  upcoming: z.boolean().describe(
+    "Whether the release is upcoming (not yet released)",
+  ),
 });
 
 const ReleaseListSchema = z.object({
-  project: z.string(),
-  releases: z.array(ReleaseSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the releases belong to"),
+  releases: z.array(ReleaseSchema).describe("Releases for the project"),
+  count: z.number().describe("Number of releases returned"),
+  truncated: z.boolean().describe(
+    "Whether more releases exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const PipelineSchema = z.object({
-  iid: z.number(),
-  name: z.string().nullable(),
-  status: z.string(),
-  source: z.string(),
-  ref: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
+  iid: z.number().describe("Pipeline internal ID"),
+  name: z.string().nullable().describe("Pipeline name, if set"),
+  status: z.string().describe("Current pipeline status"),
+  source: z.string().describe(
+    "What triggered the pipeline (push, schedule, etc.)",
+  ),
+  ref: z.string().describe("Git ref the pipeline ran against"),
+  createdAt: z.string().describe("Timestamp the pipeline was created"),
+  updatedAt: z.string().describe("Timestamp the pipeline was last updated"),
 });
 
 const PipelineListSchema = z.object({
-  project: z.string(),
-  pipelines: z.array(PipelineSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the pipelines belong to"),
+  pipelines: z.array(PipelineSchema).describe(
+    "Recent pipelines for the project",
+  ),
+  count: z.number().describe("Number of pipelines returned"),
+  truncated: z.boolean().describe(
+    "Whether more pipelines exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const LabelSchema = z.object({
-  name: z.string(),
-  color: z.string(),
-  description: z.string().nullable(),
+  name: z.string().describe("Label name"),
+  color: z.string().describe("Label color"),
+  description: z.string().nullable().describe("Label description"),
 });
 
 const LabelListSchema = z.object({
-  project: z.string(),
-  labels: z.array(LabelSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the labels belong to"),
+  labels: z.array(LabelSchema).describe("Labels defined on the project"),
+  count: z.number().describe("Number of labels returned"),
+  truncated: z.boolean().describe("Whether more labels exist beyond this page"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const MemberSchema = z.object({
-  username: z.string(),
-  name: z.string(),
-  accessLevel: z.number(),
+  username: z.string().describe("Member's GitLab username"),
+  name: z.string().describe("Member's display name"),
+  accessLevel: z.number().describe(
+    "GitLab access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)",
+  ),
 });
 
 const MemberListSchema = z.object({
-  project: z.string(),
-  members: z.array(MemberSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the members belong to"),
+  members: z.array(MemberSchema).describe("Members of the project"),
+  count: z.number().describe("Number of members returned"),
+  truncated: z.boolean().describe(
+    "Whether more members exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const BranchSchema = z.object({
-  name: z.string(),
-  protected: z.boolean(),
-  default: z.boolean(),
+  name: z.string().describe("Branch name"),
+  protected: z.boolean().describe("Whether the branch is protected"),
+  default: z.boolean().describe("Whether this is the project's default branch"),
 });
 
 const BranchListSchema = z.object({
-  project: z.string(),
-  branches: z.array(BranchSchema),
-  count: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  project: z.string().describe("Project the branches belong to"),
+  branches: z.array(BranchSchema).describe("Branches on the project"),
+  count: z.number().describe("Number of branches returned"),
+  truncated: z.boolean().describe(
+    "Whether more branches exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const DashboardMRSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
   // GitLab-flavored, cross-project unique reference (e.g. group/project!123).
   // Autolinks in GitLab markdown; unambiguous in cross-project lists. Optional
   // for read-back parity with dashboards written before this field existed.
-  reference: z.string().optional(),
-  title: z.string(),
-  author: z.string(),
-  updatedAt: z.string(),
-  draft: z.boolean(),
-  labels: z.array(z.string()),
-  webUrl: z.string(),
-  commented: z.boolean(),
-  approvedByMe: z.boolean(),
+  reference: z.string().optional().describe(
+    "GitLab-flavored cross-project reference (e.g. group/project!123)",
+  ),
+  title: z.string().describe("Merge request title"),
+  author: z.string().describe("Merge request author's username"),
+  updatedAt: z.string().describe(
+    "Timestamp the merge request was last updated",
+  ),
+  draft: z.boolean().describe("Whether the merge request is a draft"),
+  labels: z.array(z.string()).describe("Labels applied to the merge request"),
+  webUrl: z.string().describe("Web URL for the merge request"),
+  commented: z.boolean().describe(
+    "Whether the authenticated user has commented",
+  ),
+  approvedByMe: z.boolean().describe(
+    "Whether the authenticated user has approved",
+  ),
   myReviewState: z
     .enum(["pending", "reviewed", "approved", "unapproved"])
-    .nullable(),
+    .nullable()
+    .describe("The authenticated user's review state, null if not a reviewer"),
   // Head pipeline status (success, failed, running, etc.) — null when no
   // pipeline exists. Optional for read-back parity with dashboards written
   // before this field existed.
-  pipelineStatus: z.string().nullable().optional(),
+  pipelineStatus: z.string().nullable().optional().describe(
+    "Head pipeline status (success, failed, running, etc.), null when no pipeline exists",
+  ),
 });
 
 const TodoSchema = z.object({
-  id: z.string(),
-  action: z.string(),
-  body: z.string(),
-  targetType: z.string(),
-  targetUrl: z.string(),
-  project: z.string().nullable(),
+  id: z.string().describe("Todo gid"),
+  action: z.string().describe(
+    "What triggered the todo (e.g. mentioned, assigned)",
+  ),
+  body: z.string().describe("Todo body text"),
+  targetType: z.string().describe(
+    "Type of the target object (MERGEREQUEST, ISSUE, etc.)",
+  ),
+  targetUrl: z.string().describe("URL of the target object"),
+  project: z.string().nullable().describe(
+    "Display name of the project the todo belongs to",
+  ),
   // Work-item iid parsed from targetUrl (null for targets without one).
   // Optional so dashboards written before this field existed still validate.
-  iid: z.number().nullable().optional(),
+  iid: z.number().nullable().optional().describe(
+    "Work-item iid parsed from targetUrl, null for targets without one",
+  ),
   // GitLab-flavored, cross-project unique reference derived from targetUrl:
   // group/project!123 for MRs, group/project#123 for issues (null otherwise).
-  reference: z.string().nullable().optional(),
+  reference: z.string().nullable().optional().describe(
+    "GitLab-flavored cross-project reference derived from targetUrl",
+  ),
   // Target's lifecycle state (opened/closed/merged) for MR/issue targets, null
   // otherwise. Hoisted so "is this todo stale" is a flat CEL filter. Only
   // list_todos populates it; the capped dashboard leaves it null. Optional so
   // dashboards written before this field existed still validate.
-  targetState: z.string().nullable().optional(),
-  author: z.string(),
-  createdAt: z.string(),
+  targetState: z.string().nullable().optional().describe(
+    "Target's lifecycle state (opened/closed/merged), null when unavailable",
+  ),
+  author: z.string().describe("Username who triggered the todo"),
+  createdAt: z.string().describe("Timestamp the todo was created"),
 });
 
 const DashboardSchema = z.object({
-  username: z.string(),
-  reviewing: z.array(DashboardMRSchema),
-  assigned: z.array(DashboardMRSchema),
-  authored: z.array(DashboardMRSchema),
-  todos: z.array(TodoSchema),
-  totalCount: z.number(),
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  username: z.string().describe("Authenticated user's GitLab username"),
+  reviewing: z.array(DashboardMRSchema).describe(
+    "MRs where the user is a reviewer",
+  ),
+  assigned: z.array(DashboardMRSchema).describe("MRs assigned to the user"),
+  authored: z.array(DashboardMRSchema).describe("MRs authored by the user"),
+  todos: z.array(TodoSchema).describe("Pending todos, capped at 20"),
+  totalCount: z.number().describe("Total items across all dashboard sections"),
+  truncated: z.boolean().describe("Whether any section hit its page cap"),
+  fetchedAt: z.string().describe("Timestamp the dashboard was fetched"),
 });
 
 const TodoListSchema = z.object({
@@ -374,101 +483,149 @@ const TodoListSchema = z.object({
   // across every page — unlike the dashboard, which caps todos at 20. Each
   // carries a hoisted `targetState`, so stale todos are a flat CEL filter:
   // `todos.filter(t, t.targetState in ["merged", "closed"])`.
-  todos: z.array(TodoSchema),
-  count: z.number(),
+  todos: z.array(TodoSchema).describe(
+    "All todos for the authenticated user matching the requested state, across every page",
+  ),
+  count: z.number().describe("Number of todos returned"),
   // True when the safety cap (maxTodos) was hit before all pages were read.
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  truncated: z.boolean().describe(
+    "Whether the safety cap (maxTodos) was hit before all pages were read",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
 });
 
 const BulkTodoResultSchema = z.object({
   // Todos confirmed done — todoMarkDone returned a non-null payload with no
   // errors. Anything unconfirmable (null payload, errors) goes to `failed`.
-  results: z.array(z.object({ id: z.string(), state: z.string() })),
+  results: z.array(z.object({
+    id: z.string().describe("Todo id"),
+    state: z.string().describe("Resulting todo state"),
+  })).describe("Todos confirmed marked done"),
   // Per-todo failures; one bad id never sinks the batch.
-  failed: z.array(z.object({ id: z.string(), error: z.string() })),
+  failed: z.array(z.object({
+    id: z.string().describe("Todo id"),
+    error: z.string().describe("Why the todo could not be confirmed done"),
+  })).describe("Per-todo failures; one bad id never sinks the batch"),
   // Total ids submitted (results.length + failed.length).
-  count: z.number(),
-  fetchedAt: z.string(),
+  count: z.number().describe(
+    "Total ids submitted (results.length + failed.length)",
+  ),
+  fetchedAt: z.string().describe("Timestamp the batch was executed"),
 });
 
 const MergeStatusSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
-  title: z.string(),
-  state: z.string(),
-  draft: z.boolean(),
-  sourceBranch: z.string().nullable(),
-  targetBranch: z.string().nullable(),
-  webUrl: z.string().nullable(),
-  mergeable: z.boolean().nullable(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
+  title: z.string().describe("Merge request title"),
+  state: z.string().describe("Merge request state"),
+  draft: z.boolean().describe("Whether the merge request is a draft"),
+  sourceBranch: z.string().nullable().describe("Source branch"),
+  targetBranch: z.string().nullable().describe("Target branch"),
+  webUrl: z.string().nullable().describe("Web URL for the merge request"),
+  mergeable: z.boolean().nullable().describe(
+    "Whether the merge request can currently merge",
+  ),
   // GitLab's detailed_merge_status enum, e.g. mergeable, need_rebase, conflict,
   // ci_must_pass, not_approved, discussions_not_resolved, draft_status.
-  detailedMergeStatus: z.string().nullable(),
-  conflicts: z.boolean().nullable(),
-  headPipelineStatus: z.string().nullable(),
+  detailedMergeStatus: z.string().nullable().describe(
+    "GitLab's detailed_merge_status enum (e.g. mergeable, need_rebase, conflict)",
+  ),
+  conflicts: z.boolean().nullable().describe(
+    "Whether there are merge conflicts",
+  ),
+  headPipelineStatus: z.string().nullable().describe(
+    "Status of the head pipeline",
+  ),
   // Head pipeline id — feed to get_pipeline_jobs to drill into CI failures.
-  headPipelineId: z.number().nullable(),
+  headPipelineId: z.number().nullable().describe(
+    "Head pipeline id — feed to get_pipeline_jobs to drill into CI failures",
+  ),
   // Human-readable reasons the MR cannot merge (empty when mergeable).
-  blockers: z.array(z.string()),
-  summary: z.string(),
-  fetchedAt: z.string(),
+  blockers: z.array(z.string()).describe(
+    "Human-readable reasons the MR cannot merge (empty when mergeable)",
+  ),
+  summary: z.string().describe("Plain-English summary of mergeability"),
+  fetchedAt: z.string().describe("Timestamp the status was fetched"),
 });
 
 const PipelineJobSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  stage: z.string(),
-  status: z.string(),
+  id: z.number().describe("Job ID"),
+  name: z.string().describe("Job name"),
+  stage: z.string().describe("Pipeline stage the job belongs to"),
+  status: z.string().describe("Current job status"),
   // GitLab failure_reason: script_failure (real/code) vs runner_system_failure,
   // stuck_or_timeout_failure, job_execution_timeout, api_failure (transient).
-  failureReason: z.string().nullable(),
-  allowFailure: z.boolean(),
-  webUrl: z.string().nullable(),
+  failureReason: z.string().nullable().describe(
+    "GitLab failure_reason (script_failure is a real/code failure; " +
+      "runner_system_failure, stuck_or_timeout_failure, job_execution_timeout, " +
+      "api_failure are transient)",
+  ),
+  allowFailure: z.boolean().describe(
+    "Whether the job is allowed to fail without blocking the pipeline",
+  ),
+  webUrl: z.string().nullable().describe("Web URL for the job"),
 });
 
 const PipelineJobsSchema = z.object({
-  project: z.string(),
-  pipelineId: z.number(),
-  scope: z.string().nullable(),
-  jobs: z.array(PipelineJobSchema),
-  count: z.number(),
+  project: z.string().describe("Project the pipeline belongs to"),
+  pipelineId: z.number().describe("Pipeline ID"),
+  scope: z.string().nullable().describe(
+    "Status scope filter applied to the query",
+  ),
+  jobs: z.array(PipelineJobSchema).describe("Jobs matching the scope filter"),
+  count: z.number().describe("Number of jobs returned"),
   // true when the pipeline has more jobs than one page (100) returned.
-  truncated: z.boolean(),
-  fetchedAt: z.string(),
+  truncated: z.boolean().describe(
+    "True when the pipeline has more jobs than one page (100) returned",
+  ),
+  fetchedAt: z.string().describe("Timestamp the jobs were fetched"),
 });
 
 const JobLogSchema = z.object({
-  project: z.string(),
-  jobId: z.number(),
-  totalLines: z.number(),
-  returnedLines: z.number(),
-  truncated: z.boolean(),
+  project: z.string().describe("Project the job belongs to"),
+  jobId: z.number().describe("Job ID"),
+  totalLines: z.number().describe("Total lines in the full job trace"),
+  returnedLines: z.number().describe("Number of lines returned (the tail)"),
+  truncated: z.boolean().describe(
+    "Whether the returned tail is shorter than the full trace",
+  ),
   // Tail of the job trace. Common credential patterns are redacted, but CI logs
   // can still leak secrets — treat as sensitive.
-  log: z.string(),
-  fetchedAt: z.string(),
+  log: z.string().describe(
+    "Tail of the job trace. Common credential patterns are redacted, but " +
+      "treat as sensitive — CI logs can still leak secrets",
+  ),
+  fetchedAt: z.string().describe("Timestamp the log was fetched"),
 });
 
 const RetryResultSchema = z.object({
-  project: z.string(),
-  kind: z.enum(["job", "pipeline"]),
+  project: z.string().describe("Project the job/pipeline belongs to"),
+  kind: z.enum(["job", "pipeline"]).describe(
+    "Whether a job or a pipeline was retried",
+  ),
   // The id retried (job id or pipeline id).
-  id: z.number(),
+  id: z.number().describe("The id retried (job id or pipeline id)"),
   // For job retries, the id of the new job GitLab created.
-  newJobId: z.number().nullable(),
-  status: z.string(),
-  fetchedAt: z.string(),
+  newJobId: z.number().nullable().describe(
+    "For job retries, the id of the new job GitLab created; null for pipeline retries",
+  ),
+  status: z.string().describe("Resulting status after the retry"),
+  fetchedAt: z.string().describe("Timestamp the retry was triggered"),
 });
 
 const RebaseResultSchema = z.object({
-  project: z.string(),
-  iid: z.number(),
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
   // "rebased" (finished clean), "error" (see mergeError), or "in_progress"
   // (still running when polling gave up — re-check with get_merge_request).
-  status: z.enum(["rebased", "error", "in_progress"]),
-  mergeError: z.string().nullable(),
-  fetchedAt: z.string(),
+  status: z.enum(["rebased", "error", "in_progress"]).describe(
+    "Rebase outcome: rebased (finished clean), error (see mergeError), or " +
+      "in_progress (still running when polling gave up)",
+  ),
+  mergeError: z.string().nullable().describe(
+    "Error message if the rebase failed",
+  ),
+  fetchedAt: z.string().describe("Timestamp the rebase was triggered"),
 });
 
 // =============================================================================
@@ -1184,7 +1341,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.08.12.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1207,6 +1364,11 @@ export const model = {
       toVersion: "2026.08.12.1",
       description:
         "Add pipelineStatus to dashboard MR entries (null for older data)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "No schema changes (added field descriptions only)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

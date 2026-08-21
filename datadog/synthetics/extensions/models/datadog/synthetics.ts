@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -981,7 +981,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.07.20.11",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1161,7 +1161,7 @@ export const model = {
     get_api_multistep_subtests: {
       description: "Get available subtests for a multistep test",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the API multistep test.",
         ),
       }),
@@ -1226,7 +1226,7 @@ export const model = {
     get_api_multistep_subtest_parents: {
       description: "Get parent tests for a subtest",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the subtest."),
+        public_id: z.string().min(1).describe("The public ID of the subtest."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1412,7 +1412,9 @@ export const model = {
     get_synthetics_downtime: {
       description: "Get a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("The ID of the downtime to retrieve."),
+        downtime_id: z.string().min(1).describe(
+          "The ID of the downtime to retrieve.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1451,7 +1453,9 @@ export const model = {
     update_synthetics_downtime: {
       description: "Update a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("The ID of the downtime to update."),
+        downtime_id: z.string().min(1).describe(
+          "The ID of the downtime to update.",
+        ),
         description: z.string().optional().describe(
           "An optional description of the downtime.",
         ),
@@ -1506,7 +1510,9 @@ export const model = {
     delete_synthetics_downtime: {
       description: "Delete a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("The ID of the downtime to delete."),
+        downtime_id: z.string().min(1).describe(
+          "The ID of the downtime to delete.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1540,8 +1546,8 @@ export const model = {
     add_test_to_synthetics_downtime: {
       description: "Add a test to a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("The ID of the downtime."),
-        test_id: z.string().describe(
+        downtime_id: z.string().min(1).describe("The ID of the downtime."),
+        test_id: z.string().min(1).describe(
           "The public ID of the Synthetics test to associate with the downtime.",
         ),
       }),
@@ -1589,8 +1595,8 @@ export const model = {
     remove_test_from_synthetics_downtime: {
       description: "Remove a test from a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().describe("The ID of the downtime."),
-        test_id: z.string().describe(
+        downtime_id: z.string().min(1).describe("The ID of the downtime."),
+        test_id: z.string().min(1).describe(
           "The public ID of the Synthetics test to disassociate from the downtime.",
         ),
       }),
@@ -1884,7 +1890,7 @@ export const model = {
     get_synthetics_suite: {
       description: "Get a suite",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the suite to get details from.",
         ),
       }),
@@ -1925,7 +1931,9 @@ export const model = {
     edit_synthetics_suite: {
       description: "Edit a test suite",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the suite to edit."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the suite to edit.",
+        ),
         message: z.string().optional().describe(
           "Notification message associated with the suite.",
         ),
@@ -1987,7 +1995,7 @@ export const model = {
     patch_test_suite: {
       description: "Patch a test suite",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the Synthetic test suite to patch.",
         ),
         json_patch: z.array(z.unknown()).optional().describe(
@@ -2039,7 +2047,7 @@ export const model = {
     list_synthetics_browser_test_latest_results: {
       description: "Get a browser test's latest results",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the Synthetic browser test for which to search results.",
         ),
         from_ts: z.number().optional().describe(
@@ -2119,10 +2127,10 @@ export const model = {
     get_synthetics_browser_test_result: {
       description: "Get a browser test result",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the Synthetic browser test to which the target result belongs.",
         ),
-        result_id: z.string().describe("The ID of the result to get."),
+        result_id: z.string().min(1).describe("The ID of the result to get."),
         event_id: z.string().optional().describe(
           "The event ID used to look up the result in the event store.",
         ),
@@ -2336,7 +2344,7 @@ export const model = {
     get_synthetics_network_test: {
       description: "Get a Network Path test",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the Network Path test to get details from.",
         ),
       }),
@@ -2377,7 +2385,7 @@ export const model = {
     update_synthetics_network_test: {
       description: "Edit a Network Path test",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the Network Path test to edit.",
         ),
         config: z.unknown(),
@@ -2507,7 +2515,9 @@ export const model = {
     get_test_file_download_url: {
       description: "Get a presigned URL for downloading a test file",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the Synthetic test."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the Synthetic test.",
+        ),
         bucketKey: z.string().min(1).describe(
           "The bucket key referencing the file to download.",
         ),
@@ -2557,7 +2567,9 @@ export const model = {
     get_test_file_multipart_presigned_urls: {
       description: "Get presigned URLs for uploading a test file",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the Synthetic test."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the Synthetic test.",
+        ),
         bucketKeyPrefix: z.unknown(),
         parts: z.array(z.unknown()).describe(
           "Array of part descriptors for the multipart upload.",
@@ -2611,7 +2623,9 @@ export const model = {
     abort_test_file_multipart_upload: {
       description: "Abort a multipart upload of a test file",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the Synthetic test."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the Synthetic test.",
+        ),
         key: z.string().describe(
           "The full storage path of the file whose upload should be aborted.",
         ),
@@ -2666,7 +2680,9 @@ export const model = {
     complete_test_file_multipart_upload: {
       description: "Complete a multipart upload of a test file",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the Synthetic test."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the Synthetic test.",
+        ),
         key: z.string().describe(
           "The full storage path for the uploaded file.",
         ),
@@ -2725,7 +2741,9 @@ export const model = {
     get_test_parent_suites: {
       description: "Get parent suites for a test",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the Synthetic test."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the Synthetic test.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2788,7 +2806,7 @@ export const model = {
     list_synthetics_test_latest_results: {
       description: "Get a test's latest results",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the Synthetic test for which to search results.",
         ),
         from_ts: z.number().optional().describe(
@@ -2867,10 +2885,10 @@ export const model = {
     get_synthetics_test_result: {
       description: "Get a test result",
       arguments: z.object({
-        public_id: z.string().describe(
+        public_id: z.string().min(1).describe(
           "The public ID of the Synthetic test to which the target result belongs.",
         ),
-        result_id: z.string().describe("The ID of the result to get."),
+        result_id: z.string().min(1).describe("The ID of the result to get."),
         event_id: z.string().optional().describe(
           "The event ID used to look up the result in the event store.",
         ),
@@ -2927,7 +2945,9 @@ export const model = {
     list_synthetics_test_versions: {
       description: "Get version history of a test",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the Synthetic test."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the Synthetic test.",
+        ),
         last_version_number: z.number().optional().describe(
           "The version number of the last item from the previous page. Omit to get the f...",
         ),
@@ -2998,7 +3018,9 @@ export const model = {
     get_synthetics_test_version: {
       description: "Get a specific version of a test",
       arguments: z.object({
-        public_id: z.string().describe("The public ID of the Synthetic test."),
+        public_id: z.string().min(1).describe(
+          "The public ID of the Synthetic test.",
+        ),
         version_number: z.string().describe("The version number to retrieve."),
         include_change_metadata: z.boolean().optional().describe(
           "If `true`, include change metadata in the response.",

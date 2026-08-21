@@ -227,67 +227,111 @@ const GlobalArgsSchema = z.object({});
 
 /** Provider setup guidance. */
 const ProviderSetupSchema = z.object({
-  command: z.string(),
-  permissions: z.array(z.string()),
-  authNotes: z.string(),
+  command: z.string().describe(
+    "Full swamp model create command with all required arguments (blank if already configured)",
+  ),
+  permissions: z.array(z.string()).describe(
+    "Least-privilege permissions required by the provider",
+  ),
+  authNotes: z.string().describe(
+    "Brief explanation of the authentication mechanism",
+  ),
 });
 
 /** Provider status entry. */
 const ProviderStatusSchema = z.object({
-  provider: z.string(),
-  configured: z.boolean(),
-  modelName: z.string(),
-  extensionType: z.string(),
+  provider: z.string().describe("Human-readable provider name"),
+  configured: z.boolean().describe(
+    "Whether scan data was found for this provider's model instance",
+  ),
+  modelName: z.string().describe("Swamp model instance name for the provider"),
+  extensionType: z.string().describe(
+    "Extension type identifier for the provider",
+  ),
   setup: ProviderSetupSchema,
-  lastScanned: z.string().nullable(),
-  totalTokens: z.number().nullable(),
+  lastScanned: z.string().nullable().describe(
+    "ISO 8601 timestamp of the most recent scan, or null if unconfigured",
+  ),
+  totalTokens: z.number().nullable().describe(
+    "Total token count from the latest scan, or null if unconfigured",
+  ),
 });
 
 /** Status output schema. */
 const StatusSchema = z.object({
-  checkedAt: z.string(),
-  providers: z.array(ProviderStatusSchema),
-  configuredCount: z.number(),
-  totalProviders: z.number(),
+  checkedAt: z.string().describe("ISO 8601 timestamp when status was checked"),
+  providers: z.array(ProviderStatusSchema).describe(
+    "Configuration status for every registered provider",
+  ),
+  configuredCount: z.number().describe(
+    "Number of providers with usable scan data",
+  ),
+  totalProviders: z.number().describe(
+    "Total number of registered providers",
+  ),
 });
 
 /** Unified report output schema. */
 const ReportSchema = z.object({
-  generatedAt: z.string(),
-  days: z.number(),
-  periodMinutes: z.number(),
-  coverage: z.array(ProviderStatusSchema),
+  generatedAt: z.string().describe(
+    "ISO 8601 timestamp when the report was generated",
+  ),
+  days: z.number().describe("Expected lookback period, in days"),
+  periodMinutes: z.number().describe("Lookback period expressed in minutes"),
+  coverage: z.array(ProviderStatusSchema).describe(
+    "Configuration status for every registered provider",
+  ),
   providers: z.array(
     z.object({
-      name: z.string(),
-      inputTokens: z.number(),
-      outputTokens: z.number(),
-      totalTokens: z.number(),
-      inputTokensPerMinute: z.number(),
-      outputTokensPerMinute: z.number(),
+      name: z.string().describe("Human-readable provider name"),
+      inputTokens: z.number().describe("Total input/prompt tokens"),
+      outputTokens: z.number().describe("Total output/generated tokens"),
+      totalTokens: z.number().describe("Combined input and output tokens"),
+      inputTokensPerMinute: z.number().describe(
+        "Input tokens per minute over the lookback period",
+      ),
+      outputTokensPerMinute: z.number().describe(
+        "Output tokens per minute over the lookback period",
+      ),
       topAccounts: z.array(
         z.object({
-          name: z.string(),
-          totalTokens: z.number(),
-          percentage: z.number(),
+          name: z.string().describe("Account, project, or resource name"),
+          totalTokens: z.number().describe("Tokens attributed to this group"),
+          percentage: z.number().describe(
+            "Share of the provider's total tokens, as a percentage",
+          ),
         }),
+      ).describe(
+        "Top token-consuming accounts/projects/resources for this provider",
       ),
       topModels: z.array(
         z.object({
-          modelId: z.string(),
-          totalTokens: z.number(),
+          modelId: z.string().describe("Model or deployment identifier"),
+          totalTokens: z.number().describe("Tokens attributed to this model"),
         }),
-      ),
+      ).describe("Top token-consuming models/deployments for this provider"),
     }),
-  ),
+  ).describe("Per-provider usage breakdown for configured providers"),
   grandTotals: z.object({
-    inputTokens: z.number(),
-    outputTokens: z.number(),
-    totalTokens: z.number(),
-    inputTokensPerMinute: z.number(),
-    outputTokensPerMinute: z.number(),
+    inputTokens: z.number().describe(
+      "Sum of input tokens across all configured providers",
+    ),
+    outputTokens: z.number().describe(
+      "Sum of output tokens across all configured providers",
+    ),
+    totalTokens: z.number().describe(
+      "Sum of total tokens across all configured providers",
+    ),
+    inputTokensPerMinute: z.number().describe(
+      "Sum of input tokens per minute across all configured providers",
+    ),
+    outputTokensPerMinute: z.number().describe(
+      "Sum of output tokens per minute across all configured providers",
+    ),
   }),
-  highlights: z.array(z.string()),
+  highlights: z.array(z.string()).describe(
+    "Human-readable summary lines calling out notable usage patterns",
+  ),
 });
 
 // ---------------------------------------------------------------------------

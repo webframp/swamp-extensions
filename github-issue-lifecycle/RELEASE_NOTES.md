@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe()` documentation to previously undocumented fields
+across the resource schemas (`ContextSchema`, `ClassificationSchema`,
+`PlanSchema`, `PullRequestSchema`) and method argument schemas (`triage`,
+`plan`, `iterate`, `approve`, `pr_merged`, `pr_failed`, `close`, `status`). No
+behavioral change.
+
 ## 2026.08.15.1
 
 **Fixed:** Every method that reads lifecycle state (`start`, `triage`, `plan`,

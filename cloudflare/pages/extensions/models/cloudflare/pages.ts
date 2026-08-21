@@ -688,7 +688,7 @@ export const model = {
     get_project: {
       description: "Get project",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -723,7 +723,7 @@ export const model = {
     update_project: {
       description: "Update project",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
         build_config: z.object({
           build_caching: z.boolean().optional(),
           build_command: z.string().optional(),
@@ -801,7 +801,7 @@ export const model = {
     delete_project: {
       description: "Delete project",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -832,7 +832,7 @@ export const model = {
     get_deployments: {
       description: "Get deployments",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
         env: z.enum(["production", "preview"]).optional(),
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -888,8 +888,10 @@ export const model = {
     get_deployment_info: {
       description: "Get deployment info",
       arguments: z.object({
-        deployment_id: z.string(),
-        project_name: z.string(),
+        deployment_id: z.string().min(1).describe(
+          "Identifier of the deployment.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -924,8 +926,10 @@ export const model = {
     delete_deployment: {
       description: "Delete deployment",
       arguments: z.object({
-        deployment_id: z.string(),
-        project_name: z.string(),
+        deployment_id: z.string().min(1).describe(
+          "Identifier of the deployment.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
         force: z.boolean().optional(),
       }),
       execute: async (
@@ -965,8 +969,10 @@ export const model = {
     get_deployment_logs: {
       description: "Get deployment logs",
       arguments: z.object({
-        deployment_id: z.string(),
-        project_name: z.string(),
+        deployment_id: z.string().min(1).describe(
+          "Identifier of the deployment.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1001,8 +1007,10 @@ export const model = {
     pages_deployment_retry_deployment: {
       description: "Retry deployment",
       arguments: z.object({
-        deployment_id: z.string(),
-        project_name: z.string(),
+        deployment_id: z.string().min(1).describe(
+          "Identifier of the deployment.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1038,8 +1046,10 @@ export const model = {
     pages_deployment_rollback_deployment: {
       description: "Rollback deployment",
       arguments: z.object({
-        deployment_id: z.string(),
-        project_name: z.string(),
+        deployment_id: z.string().min(1).describe(
+          "Identifier of the deployment.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1078,8 +1088,10 @@ export const model = {
     create_tail: {
       description: "Create deployment tail",
       arguments: z.object({
-        deployment_id: z.string(),
-        project_name: z.string(),
+        deployment_id: z.string().min(1).describe(
+          "Identifier of the deployment.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
         filters: z.array(z.record(z.string(), z.unknown())).optional().describe(
           "Filters to apply to the tail session.",
         ),
@@ -1122,9 +1134,13 @@ export const model = {
     delete_tail: {
       description: "Delete deployment tail",
       arguments: z.object({
-        tail_id: z.string(),
-        deployment_id: z.string(),
-        project_name: z.string(),
+        tail_id: z.string().min(1).describe(
+          "Identifier of the log tail session.",
+        ),
+        deployment_id: z.string().min(1).describe(
+          "Identifier of the deployment.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1155,7 +1171,7 @@ export const model = {
     get_domains: {
       description: "Get domains",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1208,7 +1224,7 @@ export const model = {
     create_pages_domains_add_domain: {
       description: "Add domain",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
         name: z.unknown(),
       }),
       execute: async (
@@ -1253,8 +1269,10 @@ export const model = {
     get_domain: {
       description: "Get domain",
       arguments: z.object({
-        domain_name: z.string(),
-        project_name: z.string(),
+        domain_name: z.string().min(1).describe(
+          "Custom domain name attached to the project.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1289,8 +1307,10 @@ export const model = {
     patch_domain: {
       description: "Patch domain",
       arguments: z.object({
-        domain_name: z.string(),
-        project_name: z.string(),
+        domain_name: z.string().min(1).describe(
+          "Custom domain name attached to the project.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1333,8 +1353,10 @@ export const model = {
     delete_domain: {
       description: "Delete domain",
       arguments: z.object({
-        domain_name: z.string(),
-        project_name: z.string(),
+        domain_name: z.string().min(1).describe(
+          "Custom domain name attached to the project.",
+        ),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1365,7 +1387,7 @@ export const model = {
     pages_purge_build_cache: {
       description: "Purge build cache",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1401,7 +1423,7 @@ export const model = {
     create_pages_project_connect_project_source: {
       description: "Connect project source",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
         config: z.object({
           deployments_enabled: z.boolean(),
           owner: z.string(),
@@ -1466,7 +1488,7 @@ export const model = {
     delete_pages_project_disconnect_project_source: {
       description: "Disconnect project source",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1497,7 +1519,7 @@ export const model = {
     get_upload_token: {
       description: "Get upload token",
       arguments: z.object({
-        project_name: z.string(),
+        project_name: z.string().min(1).describe("Name of the Pages project."),
       }),
       execute: async (
         args: Record<string, unknown>,

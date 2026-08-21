@@ -15,10 +15,10 @@ import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -124,7 +124,7 @@ export const model = {
     list_incident_impacts: {
       description: "List an incident's impacts",
       arguments: z.object({
-        incident_id: z.string().describe("The UUID of the incident."),
+        incident_id: z.string().min(1).describe("The UUID of the incident."),
         include: z.string().optional().describe(
           "Specifies which related resources should be included in the response.",
         ),
@@ -186,7 +186,7 @@ export const model = {
     create_incident_impact: {
       description: "Create an incident impact",
       arguments: z.object({
-        incident_id: z.string().describe("The UUID of the incident."),
+        incident_id: z.string().min(1).describe("The UUID of the incident."),
         include: z.string().optional().describe(
           "Specifies which related resources should be included in the response.",
         ),
@@ -194,7 +194,9 @@ export const model = {
         end_at: z.string().nullable().optional().describe(
           "Timestamp when the impact ended.",
         ),
-        fields: z.unknown().optional(),
+        fields: z.unknown().optional().describe(
+          "An object mapping impact field names to field values.",
+        ),
         start_at: z.string().describe("Timestamp when the impact started."),
       }),
       execute: async (
@@ -253,8 +255,10 @@ export const model = {
     delete_incident_impact: {
       description: "Delete an incident impact",
       arguments: z.object({
-        incident_id: z.string().describe("The UUID of the incident."),
-        impact_id: z.string().describe("The UUID of the incident impact."),
+        incident_id: z.string().min(1).describe("The UUID of the incident."),
+        impact_id: z.string().min(1).describe(
+          "The UUID of the incident impact.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

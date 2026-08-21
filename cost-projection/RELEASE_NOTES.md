@@ -1,5 +1,14 @@
 # Release Notes
 
+## 2026.08.21.1
+
+**Changed:** Added `.describe(...)` documentation to previously undocumented
+fields across `ScenarioSchema`, `ProjectionSchema`, and (for gpu-capex)
+`SensitivityRowSchema`/`SensitivitySchema` in all three model types
+(gpu-cloud, gpu-rental, gpu-capex), plus the `update_rate`,
+`update_hardware_cost`, and `sensitivity` method argument schemas. No
+behavioral changes.
+
 ## 2026.08.02.1
 
 **Fixed:** The comparison report declared `scope: "workspace"`, which isn't a

@@ -230,7 +230,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
 
   upgrades: [
     {
@@ -279,13 +279,19 @@ export const model = {
         "Documentation-only: retroactive compatibility note for list_issues instance-name change in 2026.08.10.1",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Require non-empty host, apiKey, and create_issue subject — no behavioral change for valid configs",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: z.object({
-    host: z.string().describe(
+    host: z.string().min(1).describe(
       "Redmine instance URL (e.g. https://redmine.example.com)",
     ),
-    apiKey: z.string().meta({ sensitive: true }).describe(
+    apiKey: z.string().min(1).meta({ sensitive: true }).describe(
       "Redmine API key (40-character hex string)",
     ),
     project: z.string().optional().describe(
@@ -927,7 +933,7 @@ export const model = {
     create_issue: {
       description: "Create a new issue",
       arguments: z.object({
-        subject: z.string().describe("Issue subject"),
+        subject: z.string().min(1).describe("Issue subject"),
         project: z.string().optional().describe("Project identifier"),
         trackerId: z.number().optional().describe("Tracker ID"),
         statusId: z.number().optional().describe("Status ID"),

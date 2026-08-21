@@ -15,10 +15,10 @@ import { ddApi, ddApiPostPaginated } from "./_lib/api.ts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe(
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().meta({ sensitive: true }).describe(
+  appKey: z.string().min(1).meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -27,7 +27,9 @@ const GlobalArgsSchema = z.object({
 
 const CreateDoraDeploymentSchema = z.object({
   id: z.string().describe("The ID of the received DORA deployment event."),
-  type: z.unknown().optional(),
+  type: z.unknown().optional().describe(
+    "JSON:API type for DORA deployment events.",
+  ),
 });
 
 const DoraDeploymentsItemSchema = z.object({
@@ -45,8 +47,10 @@ const DoraDeploymentsItemSchema = z.object({
     "The time when the deployment finished.",
   ),
   git: z.object({
-    commit_sha: z.unknown(),
-    repository_id: z.unknown(),
+    commit_sha: z.unknown().describe("Git commit SHA for the deployment."),
+    repository_id: z.unknown().describe(
+      "Git repository identifier for the deployment.",
+    ),
   }).optional().describe("Git info returned by DORA Metrics events."),
   service: z.string().describe("Service name."),
   started_at: z.string().describe("The time when the deployment started."),
@@ -66,7 +70,9 @@ const ListDoraDeploymentsSchema = z.object({
 
 const CreateDoraFailureSchema = z.object({
   id: z.string().describe("The ID of the received DORA incident event."),
-  type: z.unknown().optional(),
+  type: z.unknown().optional().describe(
+    "JSON:API type for DORA incident events.",
+  ),
 });
 
 const DoraFailuresItemSchema = z.object({
@@ -84,8 +90,10 @@ const DoraFailuresItemSchema = z.object({
     "The time when the incident finished.",
   ),
   git: z.object({
-    commit_sha: z.unknown(),
-    repository_url: z.unknown(),
+    commit_sha: z.unknown().describe("Git commit SHA for the incident."),
+    repository_url: z.unknown().describe(
+      "Git repository URL for the incident.",
+    ),
   }).optional().describe("Git info for DORA Metrics events."),
   name: z.string().optional().describe("Incident name."),
   services: z.array(z.string()).optional().describe(
@@ -158,14 +166,18 @@ export const model = {
     create_dora_deployment: {
       description: "Send a deployment event",
       arguments: z.object({
-        custom_tags: z.unknown().optional(),
+        custom_tags: z.unknown().optional().describe(
+          "A list of user-defined `key:value` tags for the deployment.",
+        ),
         env: z.string().optional().describe(
           "Environment name to where the service was deployed.",
         ),
         finished_at: z.number().int().describe(
           "Unix timestamp when the deployment finished. It must be in nanoseconds, milli...",
         ),
-        git: z.unknown().optional(),
+        git: z.unknown().optional().describe(
+          "Git info for the deployment (commit SHA, repository).",
+        ),
         service: z.string().describe("Service name."),
         started_at: z.number().int().describe(
           "Unix timestamp when the deployment started. It must be in nanoseconds, millis...",
@@ -221,7 +233,7 @@ export const model = {
     delete_dora_deployment: {
       description: "Delete a deployment event",
       arguments: z.object({
-        deployment_id: z.string().describe(
+        deployment_id: z.string().min(1).describe(
           "The ID of the deployment event to delete.",
         ),
       }),
@@ -327,7 +339,9 @@ export const model = {
     get_dora_deployment: {
       description: "Get a deployment event",
       arguments: z.object({
-        deployment_id: z.string().describe("The ID of the deployment event."),
+        deployment_id: z.string().min(1).describe(
+          "The ID of the deployment event.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -366,11 +380,15 @@ export const model = {
     patch_dora_deployment: {
       description: "Patch a deployment event",
       arguments: z.object({
-        deployment_id: z.string().describe("The ID of the deployment event."),
+        deployment_id: z.string().min(1).describe(
+          "The ID of the deployment event.",
+        ),
         change_failure: z.boolean().optional().describe(
           "Indicates whether the deployment resulted in a change failure.",
         ),
-        remediation: z.unknown().optional(),
+        remediation: z.unknown().optional().describe(
+          "Remediation details for the change failure.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -419,14 +437,18 @@ export const model = {
     create_dora_failure: {
       description: "Send an incident event",
       arguments: z.object({
-        custom_tags: z.unknown().optional(),
+        custom_tags: z.unknown().optional().describe(
+          "A list of user-defined `key:value` tags for the incident.",
+        ),
         env: z.string().optional().describe(
           "Environment name that was impacted by the incident.",
         ),
         finished_at: z.number().int().optional().describe(
           "Unix timestamp when the incident finished. It must be in nanoseconds, millise...",
         ),
-        git: z.unknown().optional(),
+        git: z.unknown().optional().describe(
+          "Git info for the incident (commit SHA, repository).",
+        ),
         name: z.string().optional().describe("Incident name."),
         services: z.array(z.string()).optional().describe(
           "Service names impacted by the incident. If possible, use names registered in ...",
@@ -482,7 +504,7 @@ export const model = {
     delete_dora_failure: {
       description: "Delete an incident event",
       arguments: z.object({
-        failure_id: z.string().describe(
+        failure_id: z.string().min(1).describe(
           "The ID of the incident event to delete.",
         ),
       }),
@@ -584,7 +606,7 @@ export const model = {
     get_dora_failure: {
       description: "Get an incident event",
       arguments: z.object({
-        failure_id: z.string().describe("The ID of the incident event."),
+        failure_id: z.string().min(1).describe("The ID of the incident event."),
       }),
       execute: async (
         args: Record<string, unknown>,

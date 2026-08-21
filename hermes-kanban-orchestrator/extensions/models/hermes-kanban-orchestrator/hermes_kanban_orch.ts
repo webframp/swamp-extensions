@@ -50,15 +50,21 @@ const NewTaskArgsSchema = z.object({
 type NewTaskArgs = z.infer<typeof NewTaskArgsSchema>;
 
 const KanbanTaskSchema = z.object({
-  kanbanId: z.string(),
-  type: TaskType,
-  title: z.string(),
-  assignee: z.string(),
-  status: z.string(),
-  priority: z.number().int().min(0).max(5).optional(),
-  tags: z.array(z.string()).optional(),
-  bodyPreview: z.string().optional(),
-  createdAt: z.string(),
+  kanbanId: z.string().describe("Hermes kanban task ID"),
+  type: TaskType.describe("Type of task"),
+  title: z.string().describe("Task title"),
+  assignee: z.string().describe("Hermes profile the task is assigned to"),
+  status: z.string().describe(
+    "Current task status (e.g. created, exists, unknown)",
+  ),
+  priority: z.number().int().min(0).max(5).optional().describe(
+    "Priority tiebreaker (higher = more important)",
+  ),
+  tags: z.array(z.string()).optional().describe("Tags for categorization"),
+  bodyPreview: z.string().optional().describe(
+    "First 200 characters of the task body, if provided",
+  ),
+  createdAt: z.string().describe("Timestamp the task record was written"),
 });
 
 const ListRecentArgsSchema = z.object({
@@ -302,12 +308,17 @@ async function listRecent(
 /** Kanban orchestrator model. Creates kanban tasks via `hermes kanban create` and records each as swamp data. */
 export const model = {
   type: "@webframp/hermes-kanban-orchestrator" as const,
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "No schema changes (added field descriptions only)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

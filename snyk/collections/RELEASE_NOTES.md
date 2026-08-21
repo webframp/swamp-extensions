@@ -1,4 +1,8 @@
-## 2026.07.19.1
+## 2026.08.21.1
 
-**Added:** Initial code-generated release of @webframp/snyk/collections with 8
-methods covering the Snyk collections API surface.
+**Changed:** Schema tightening sweep — no behavioral changes.
+
+- Added `.min(1)` to `apiToken`, `orgId`, and the collection `name` field
+  (a collection cannot legitimately have an empty name).
+- Added `.describe(...)` to the previously undocumented `is_generated` field
+  on the collection schemas.

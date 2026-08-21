@@ -1,3 +1,12 @@
+## 2026.08.21.1
+
+**Changed:** Added `.describe(...)` documentation to previously undocumented
+fields in `DeploymentUsageSchema`, `ResourceUsageSchema`, `ResourceListSchema`,
+and `ScanResultsSchema` (deployment/resource identity fields, token counts,
+period and rate fields, and the `truncated` flag). Tightened `clientSecret`
+in `GlobalArgsSchema` to require a non-empty string — an empty secret can
+never succeed against Azure AD's token endpoint. No behavioral changes.
+
 ## 2026.08.14.4
 
 **Fixed:** three issues surfaced after the #360 dedup fix. First, the ARM

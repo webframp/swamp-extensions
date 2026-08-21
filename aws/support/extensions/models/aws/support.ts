@@ -383,6 +383,7 @@ export const model = {
       arguments: z.object({
         displayId: z
           .string()
+          .min(1)
           .describe(
             "Support case display ID (numeric, e.g. '178317700500245')",
           ),
@@ -499,11 +500,13 @@ export const model = {
           .describe("Initial communication body text"),
         serviceCode: z
           .string()
+          .min(1)
           .describe(
             "Service code (use DescribeServices to discover, e.g. 'amazon-elastic-compute-cloud-linux')",
           ),
         categoryCode: z
           .string()
+          .min(1)
           .describe(
             "Category code within the service (e.g. 'general-guidance')",
           ),
@@ -592,6 +595,7 @@ export const model = {
       arguments: z.object({
         caseId: z
           .string()
+          .min(1)
           .describe("Internal case ID (e.g. 'case-123456-...')"),
         body: z
           .string()
@@ -660,6 +664,7 @@ export const model = {
       arguments: z.object({
         caseId: z
           .string()
+          .min(1)
           .describe("Internal case ID (e.g. 'case-123456-...')"),
         profile: z
           .string()

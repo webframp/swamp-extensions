@@ -196,14 +196,30 @@ const CustomerBaseConfigSchema = z.object({
   ),
   // Cosmetic spawn-region bounds (kept for fidelity to the source topology;
   // the simulation does not spatialize customers, so these are informational).
-  startsXMin: z.number().default(0),
-  startsXMax: z.number().default(19),
-  startsYMin: z.number().default(0),
-  startsYMax: z.number().default(2),
-  stopsXMin: z.number().default(0),
-  stopsXMax: z.number().default(19),
-  stopsYMin: z.number().default(17),
-  stopsYMax: z.number().default(19),
+  startsXMin: z.number().default(0).describe(
+    "Cosmetic spawn-region min x (informational; not used by the simulation)",
+  ),
+  startsXMax: z.number().default(19).describe(
+    "Cosmetic spawn-region max x (informational; not used by the simulation)",
+  ),
+  startsYMin: z.number().default(0).describe(
+    "Cosmetic spawn-region min y (informational; not used by the simulation)",
+  ),
+  startsYMax: z.number().default(2).describe(
+    "Cosmetic spawn-region max y (informational; not used by the simulation)",
+  ),
+  stopsXMin: z.number().default(0).describe(
+    "Cosmetic despawn-region min x (informational; not used by the simulation)",
+  ),
+  stopsXMax: z.number().default(19).describe(
+    "Cosmetic despawn-region max x (informational; not used by the simulation)",
+  ),
+  stopsYMin: z.number().default(17).describe(
+    "Cosmetic despawn-region min y (informational; not used by the simulation)",
+  ),
+  stopsYMax: z.number().default(19).describe(
+    "Cosmetic despawn-region max y (informational; not used by the simulation)",
+  ),
 });
 
 const WidgetBaseSchema = z.object({
@@ -1128,11 +1144,16 @@ function slugify(label: string): string {
 /** Organization design simulation model. */
 export const model = {
   type: "@webframp/org-simulation",
-  version: "2026.07.23.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
       description: "Initial release",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "Added .describe() to previously undocumented fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

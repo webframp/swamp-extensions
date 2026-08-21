@@ -35,59 +35,112 @@ const GlobalArgsSchema = z.object({
     .describe("Azure AD application (client) ID"),
   clientSecret: z
     .string()
+    .min(1)
     .meta({ sensitive: true })
     .describe("Azure AD client secret"),
 });
 
 /** Schema for a single deployment's token usage. */
 const DeploymentUsageSchema = z.object({
-  deploymentName: z.string(),
-  promptTokens: z.number(),
-  generatedTokens: z.number(),
-  totalTokens: z.number(),
+  deploymentName: z.string().describe(
+    "Azure OpenAI model deployment name",
+  ),
+  promptTokens: z.number().describe(
+    "Total ProcessedPromptTokens for this deployment over the scanned period",
+  ),
+  generatedTokens: z.number().describe(
+    "Total GeneratedTokens for this deployment over the scanned period",
+  ),
+  totalTokens: z.number().describe(
+    "Sum of promptTokens and generatedTokens for this deployment",
+  ),
 });
 
 /** Schema for per-resource usage results. */
 const ResourceUsageSchema = z.object({
-  subscription: z.string(),
-  resourceGroup: z.string(),
-  resourceName: z.string(),
-  location: z.string(),
-  kind: z.string(),
-  promptTokens: z.number(),
-  generatedTokens: z.number(),
-  totalTokens: z.number(),
-  deployments: z.array(DeploymentUsageSchema),
-  periodMinutes: z.number(),
-  promptTokensPerMinute: z.number(),
-  generatedTokensPerMinute: z.number(),
+  subscription: z.string().describe(
+    "Azure subscription ID that owns this resource",
+  ),
+  resourceGroup: z.string().describe(
+    "Azure resource group containing this resource",
+  ),
+  resourceName: z.string().describe(
+    "Name of the CognitiveServices/OpenAI account",
+  ),
+  location: z.string().describe("Azure region of the resource"),
+  kind: z.string().describe(
+    "CognitiveServices account kind (OpenAI or AIServices)",
+  ),
+  promptTokens: z.number().describe(
+    "Total ProcessedPromptTokens across all deployments over the scanned period",
+  ),
+  generatedTokens: z.number().describe(
+    "Total GeneratedTokens across all deployments over the scanned period",
+  ),
+  totalTokens: z.number().describe(
+    "Sum of promptTokens and generatedTokens for this resource",
+  ),
+  deployments: z.array(DeploymentUsageSchema).describe(
+    "Per-deployment token usage breakdown",
+  ),
+  periodMinutes: z.number().describe(
+    "Length of the scanned lookback period, in minutes",
+  ),
+  promptTokensPerMinute: z.number().describe(
+    "promptTokens divided by periodMinutes",
+  ),
+  generatedTokensPerMinute: z.number().describe(
+    "generatedTokens divided by periodMinutes",
+  ),
 });
 
 /** Schema for discovered AI resources (no metrics). */
 const ResourceListSchema = z.object({
-  discoveredAt: z.string(),
+  discoveredAt: z.string().describe("ISO 8601 timestamp when discovery ran"),
   resources: z.array(z.object({
-    subscription: z.string(),
-    resourceGroup: z.string(),
-    resourceName: z.string(),
-    location: z.string(),
-    kind: z.string(),
-  })),
+    subscription: z.string().describe(
+      "Azure subscription ID that owns this resource",
+    ),
+    resourceGroup: z.string().describe(
+      "Azure resource group containing this resource",
+    ),
+    resourceName: z.string().describe(
+      "Name of the CognitiveServices/OpenAI account",
+    ),
+    location: z.string().describe("Azure region of the resource"),
+    kind: z.string().describe(
+      "CognitiveServices account kind (OpenAI or AIServices)",
+    ),
+  })).describe("Discovered OpenAI/AIServices resources"),
 });
 
 /** Schema for the full scan results. */
 const ScanResultsSchema = z.object({
-  scannedAt: z.string(),
-  days: z.number(),
-  periodMinutes: z.number(),
-  truncated: z.boolean(),
-  resources: z.array(ResourceUsageSchema),
+  scannedAt: z.string().describe("ISO 8601 timestamp when the scan completed"),
+  days: z.number().describe("Lookback period in days used for this scan"),
+  periodMinutes: z.number().describe(
+    "Length of the scanned lookback period, in minutes",
+  ),
+  truncated: z.boolean().describe(
+    "True if any subscription or resource failed during the scan, meaning results may be incomplete",
+  ),
+  resources: z.array(ResourceUsageSchema).describe(
+    "Per-resource usage results, sorted by totalTokens descending",
+  ),
   totals: z.object({
-    promptTokens: z.number(),
-    generatedTokens: z.number(),
-    totalTokens: z.number(),
-    promptTokensPerMinute: z.number(),
-    generatedTokensPerMinute: z.number(),
+    promptTokens: z.number().describe(
+      "Sum of promptTokens across all resources",
+    ),
+    generatedTokens: z.number().describe(
+      "Sum of generatedTokens across all resources",
+    ),
+    totalTokens: z.number().describe("Sum of totalTokens across all resources"),
+    promptTokensPerMinute: z.number().describe(
+      "Total promptTokens divided by periodMinutes",
+    ),
+    generatedTokensPerMinute: z.number().describe(
+      "Total generatedTokens divided by periodMinutes",
+    ),
   }),
 });
 

@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** Added descriptions to the previously undocumented fields in the
+`ProviderSetupSchema`, `ProviderStatusSchema`, `StatusSchema`, and
+`ReportSchema` resource schemas (setup guidance, coverage entries, and the
+unified report's per-provider/top-account/top-model/grand-totals fields). No
+behavioral change.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @webframp/aws/bedrock-usage 2026.08.05.1 → 2026.08.20.1

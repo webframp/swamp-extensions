@@ -1,4 +1,10 @@
-## 2026.07.20.11
+## 2026.08.21.1
 
-**Added:** Initial code-generated release of @webframp/datadog/incidents with 3
-methods covering the Datadog incidents API surface.
+**Changed:** Schema-only tightening pass, no behavioral change.
+- Added `.min(1)` to `apiKey`/`appKey` in the global arguments and to the
+  required `incident_id`/`impact_id` UUID arguments across
+  `list_incident_impacts`, `create_incident_impact`, and
+  `delete_incident_impact`, so empty identifiers are rejected before
+  making an API call.
+- Added `.describe()` to the previously undocumented `fields` argument on
+  `create_incident_impact`.

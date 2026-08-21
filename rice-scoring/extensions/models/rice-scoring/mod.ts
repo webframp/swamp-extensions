@@ -50,8 +50,8 @@ const RationaleSchema = z.object({
 });
 
 const ScoredItemSchema = z.object({
-  name: z.string(),
-  description: z.string(),
+  name: z.string().describe("Short identifier for the item"),
+  description: z.string().describe("What this item is about"),
   reach: z.number().min(0).describe("Reach value per the configured scale"),
   impact: z.number().min(0).describe("Impact multiplier"),
   confidence: z.number().min(0).max(1).describe(
@@ -116,11 +116,17 @@ interface ModelContext {
 /** RICE scoring methodology model. */
 export const model = {
   type: "@webframp/rice-scoring",
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Added .describe() to name/description fields on the scored-item schema",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

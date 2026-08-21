@@ -1,3 +1,10 @@
+## 2026.08.21.1
+
+**Changed:** Tightened `displayId`, `serviceCode`, `categoryCode`, and `caseId`
+arguments across `get_case`, `create_case`, `add_communication`, and
+`resolve_case` to require non-empty strings — these are required identifiers
+the Support API already rejects when empty.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (3 packages)

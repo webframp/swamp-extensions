@@ -92,7 +92,9 @@ const AuditSummarySchema = z.object({
       "Extensions with imports bypassing the import map",
     ),
   }),
-  extensions: z.array(ExtensionStatusSchema),
+  extensions: z.array(ExtensionStatusSchema).describe(
+    "Per-extension dependency and quality status",
+  ),
 });
 
 /** Schema for a single extension's planned bump entry. */
@@ -111,8 +113,8 @@ const BumpPlanEntrySchema = z.object({
       "manifest-pin",
       "manifest-version",
       "source-version",
-    ]),
-  })),
+    ]).describe("Which kind of version reference this change targets"),
+  })).describe("Find/replace edits needed to apply this extension's bump"),
   releaseNotes: z.string().describe("Generated RELEASE_NOTES.md content"),
 });
 
@@ -120,7 +122,9 @@ const BumpPlanEntrySchema = z.object({
 const BumpPlanSchema = z.object({
   plannedAt: z.string().describe("ISO 8601 plan timestamp"),
   totalEntries: z.number().describe("Extensions to bump"),
-  entries: z.array(BumpPlanEntrySchema),
+  entries: z.array(BumpPlanEntrySchema).describe(
+    "Planned bump entries, one per extension to be bumped",
+  ),
   skipped: z.array(z.object({
     name: z.string().describe("Extension manifest name"),
     dir: z.string().describe("Directory relative to repo root"),
@@ -152,28 +156,38 @@ const ApplyResultSchema = z.object({
       "Files where the target string was present, so a real run would rewrite them. Populated on dry runs and real runs alike. On a real run with errors this can exceed filesModified: matches are counted before the write is attempted, so files belonging to an entry that threw are matched but not modified. Cross-reference the errors array to attribute the difference.",
     ),
   errors: z.array(z.object({
-    extension: z.string(),
-    error: z.string(),
-  })),
+    extension: z.string().describe(
+      "Extension manifest name the error belongs to",
+    ),
+    error: z.string().describe("Error message describing the failure"),
+  })).describe("Per-extension errors encountered while applying the plan"),
 });
 
 /** Schema for the quality-gate result resource. */
 const QualityResultSchema = z.object({
   ranAt: z.string().describe("ISO 8601 timestamp"),
-  totalExtensions: z.number(),
-  passed: z.number(),
-  failed: z.number(),
+  totalExtensions: z.number().describe(
+    "Number of extensions the gate ran against",
+  ),
+  passed: z.number().describe("Number of extensions that passed all checks"),
+  failed: z.number().describe(
+    "Number of extensions with at least one failing check",
+  ),
   results: z.array(z.object({
-    name: z.string(),
-    dir: z.string(),
-    check: z.boolean(),
-    lint: z.boolean(),
-    fmt: z.boolean(),
-    test: z.boolean(),
+    name: z.string().describe("Extension manifest name"),
+    dir: z.string().describe("Directory relative to repo root"),
+    check: z.boolean().describe("Whether `deno task check` passed"),
+    lint: z.boolean().describe("Whether `deno task lint` passed"),
+    fmt: z.boolean().describe("Whether `deno task fmt` passed"),
+    test: z.boolean().describe("Whether `deno task test` passed"),
     quality: z.number().describe("Quality score 0-100"),
-    extensionFmt: z.boolean(),
-    errors: z.array(z.string()),
-  })),
+    extensionFmt: z.boolean().describe(
+      "Whether `swamp extension fmt --check` passed",
+    ),
+    errors: z.array(z.string()).describe(
+      "Human-readable descriptions of every failing check",
+    ),
+  })).describe("Per-extension quality gate results"),
 });
 
 // =============================================================================

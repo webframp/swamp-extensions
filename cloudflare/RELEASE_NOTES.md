@@ -1,3 +1,14 @@
+## 2026.08.21.1
+
+**Changed:** Tightened `apiToken`, `zoneId`, and `accountId` in the global
+arguments schema of `cache.ts`, `dns.ts`, `waf.ts`, `worker.ts`, and `zone.ts`
+to require non-empty strings (`.min(1)`), since every API call built from
+these values fails immediately if they are blank. Applied the same
+non-empty-string constraint to required identifier arguments (`recordId`,
+`ruleId`, `scriptName`, `routeId`, and `zoneId` on per-method arguments) across
+these models. No behavioral change for valid input — this only rejects
+already-invalid empty-string input earlier.
+
 ## 2026.08.13.1
 
 **Fixed:** The `deploy` method now correctly maps bindings to the field names

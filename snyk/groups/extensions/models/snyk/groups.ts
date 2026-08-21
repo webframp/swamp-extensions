@@ -23,7 +23,7 @@ const GlobalArgsSchema = z.object({
 const GroupsItemSchema = z.object({
   id: z.string(),
   type: z.string().optional().describe("Content type."),
-  name: z.string().describe("The name of the group."),
+  name: z.string().min(1).describe("The name of the group."),
 });
 
 const ListGroupsSchema = z.object({
@@ -44,7 +44,7 @@ const GetGroupSchema = z.object({
   logo_url: z.string().optional().describe(
     "The URL of an image to use as the group's logo.",
   ),
-  name: z.string().describe("The name of the group."),
+  name: z.string().min(1).describe("The name of the group."),
   slug: z.string().optional().describe("A slug uniquely identifying the group"),
   updated_at: z.string().describe("The time the group was created."),
   tenant_id: z.string().optional().describe("Related tenant ID"),
@@ -86,7 +86,7 @@ const OrgsInGroupItemSchema = z.object({
   is_personal: z.boolean().describe(
     "Whether the organization is independent (that is, not part of a group).",
   ),
-  name: z.string().describe("The display name of the organization."),
+  name: z.string().min(1).describe("The display name of the organization."),
   slug: z.string().describe(
     "The canonical (unique and URL-friendly) name of the organization.",
   ),
@@ -106,8 +106,12 @@ const GroupPoliciesItemSchema = z.object({
     "A unique identifier for this particular occurrence of the group level policy.",
   ),
   type: z.enum(["policy"]).optional(),
-  action: z.union([z.unknown(), z.unknown(), z.unknown()]),
-  action_type: z.enum(["ignore", "annotation", "severity-override"]),
+  action: z.union([z.unknown(), z.unknown(), z.unknown()]).describe(
+    "The action to apply when this policy's conditions match",
+  ),
+  action_type: z.enum(["ignore", "annotation", "severity-override"]).describe(
+    "The kind of action this policy performs",
+  ),
   conditions_group: z.object({
     conditions: z.array(
       z.union([
@@ -125,16 +129,18 @@ const GroupPoliciesItemSchema = z.object({
         z.unknown(),
       ]),
     ),
-    logical_operator: z.unknown(),
-  }),
-  created_at: z.string(),
+    logical_operator: z.unknown().describe(
+      "How the listed conditions are combined (e.g. AND/OR)",
+    ),
+  }).describe("The set of conditions that must match for this policy to apply"),
+  created_at: z.string().describe("When the policy was created"),
   created_by: z.object({
     email: z.string().nullable().optional(),
     id: z.string(),
     name: z.string(),
-  }),
-  name: z.string(),
-  updated_at: z.string(),
+  }).describe("The user who created the policy"),
+  name: z.string().describe("Name of the policy"),
+  updated_at: z.string().describe("When the policy was last updated"),
 });
 
 const ListGroupPoliciesSchema = z.object({
@@ -148,8 +154,12 @@ const CreateGroupPolicySchema = z.object({
     "A unique identifier for this particular occurrence of the group level policy.",
   ),
   type: z.enum(["policy"]).optional(),
-  action: z.union([z.unknown(), z.unknown(), z.unknown()]),
-  action_type: z.enum(["ignore", "annotation", "severity-override"]),
+  action: z.union([z.unknown(), z.unknown(), z.unknown()]).describe(
+    "The action to apply when this policy's conditions match",
+  ),
+  action_type: z.enum(["ignore", "annotation", "severity-override"]).describe(
+    "The kind of action this policy performs",
+  ),
   conditions_group: z.object({
     conditions: z.array(
       z.union([
@@ -167,16 +177,18 @@ const CreateGroupPolicySchema = z.object({
         z.unknown(),
       ]),
     ),
-    logical_operator: z.unknown(),
-  }),
-  created_at: z.string(),
+    logical_operator: z.unknown().describe(
+      "How the listed conditions are combined (e.g. AND/OR)",
+    ),
+  }).describe("The set of conditions that must match for this policy to apply"),
+  created_at: z.string().describe("When the policy was created"),
   created_by: z.object({
     email: z.string().nullable().optional(),
     id: z.string(),
     name: z.string(),
-  }),
-  name: z.string(),
-  updated_at: z.string(),
+  }).describe("The user who created the policy"),
+  name: z.string().describe("Name of the policy"),
+  updated_at: z.string().describe("When the policy was last updated"),
 });
 
 const AssignmentsItemSchema = z.object({
