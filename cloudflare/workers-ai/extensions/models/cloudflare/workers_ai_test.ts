@@ -876,10 +876,24 @@ Deno.test("workers-ai model: has expected resources", () => {
 
 function startMockCfServer(
   responses: Record<string, { result: unknown; isCollection?: boolean }>,
-): { url: string; server: Deno.HttpServer } {
-  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+): {
+  url: string;
+  server: Deno.HttpServer;
+  getLastRequestBody: () => unknown;
+} {
+  let lastRequestBody: unknown = undefined;
+
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    if (req.method !== "GET" && req.body) {
+      try {
+        lastRequestBody = await req.json();
+      } catch {
+        lastRequestBody = undefined;
+      }
+    }
 
     for (
       const [pattern, { result, isCollection }] of Object.entries(responses)
@@ -911,7 +925,11 @@ function startMockCfServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return {
+    url: `http://localhost:${addr.port}`,
+    server,
+    getLastRequestBody: () => lastRequestBody,
+  };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -1206,7 +1224,7 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {};
-    const { url, server } = startMockCfServer({
+    const { url, server, getLastRequestBody } = startMockCfServer({
       "/ai/run/@cf/aisingapore/gemma-sea-lion-v4-27b-it": { result: mockData },
     });
     const uninstall = installFetchMock(url);
@@ -1222,6 +1240,7 @@ Deno.test({
         },
       });
 
+      const requestBody = { prompt: "hello" };
       const result = await (model.methods as Record<
         string,
         {
@@ -1231,10 +1250,11 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it.execute(
-        {},
+        { body: requestBody },
         context,
       );
       assertEquals(result.dataHandles.length, 1);
+      assertEquals(getLastRequestBody(), requestBody);
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
