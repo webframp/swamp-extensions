@@ -2516,34 +2516,6 @@ const ListItemsSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const AiSearchNamespaceInstanceUploadItemSchema = z.object({
-  checksum: z.string(),
-  chunks_count: z.number().int().nullable(),
-  created_at: z.string(),
-  error: z.string().optional(),
-  file_size: z.number().nullable(),
-  id: z.string(),
-  key: z.string(),
-  last_seen_at: z.string(),
-  namespace: z.string(),
-  next_action: z.union([
-    z.literal("INDEX"),
-    z.literal("DELETE"),
-    z.literal(null),
-  ]).nullable(),
-  source_id: z.string().nullable().describe(
-    'Identifies which data source this item belongs to. "builtin" for uploaded files, "{type}:{source}...',
-  ),
-  status: z.enum([
-    "queued",
-    "running",
-    "completed",
-    "error",
-    "skipped",
-    "outdated",
-  ]),
-});
-
 const CreateOrUpdateItemSchema = z.object({
   checksum: z.string(),
   chunks_count: z.number().int().nullable(),
@@ -2826,10 +2798,6 @@ const ListPublicFinetunesSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const WorkersAiUploadFinetuneAssetSchema = z.object({
-  success: z.boolean(),
-});
-
 const GetModelSchemaSchema = z.object({
   input: z.object({
     additionalProperties: z.boolean(),
@@ -2915,8 +2883,6 @@ const CreateWorkersAiPostRunCfFacebookBartLargeCnnSchema = z.object({});
 
 const CreateWorkersAiPostRunCfFacebookNonomniBartLargeCnnSchema = z.object({});
 
-const WorkersAiPostRunCfFacebookNonomniDetrResnet50Schema = z.object({});
-
 const WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema = z.object({});
 
 const CreateWorkersAiPostRunCfGoogleEmbeddinggemma300mSchema = z.object({});
@@ -2980,11 +2946,7 @@ const CreateWorkersAiPostRunCfMetaLlamaGuard38bSchema = z.object({});
 
 const WorkersAiPostRunCfMetaM2m10012bSchema = z.object({});
 
-const WorkersAiPostRunCfMicrosoftNonomniResnet50Schema = z.object({});
-
 const WorkersAiPostRunCfMicrosoftPhi2Schema = z.object({});
-
-const WorkersAiPostRunCfMicrosoftResnet50Schema = z.object({});
 
 const WorkersAiPostRunCfMistralMistral7bInstructV01Schema = z.object({});
 
@@ -3008,11 +2970,7 @@ const WorkersAiPostRunCfOpenaiGptOss120bSchema = z.object({});
 
 const WorkersAiPostRunCfOpenaiGptOss20bSchema = z.object({});
 
-const WorkersAiPostRunCfOpenaiWhisperSchema = z.object({});
-
 const CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema = z.object({});
-
-const WorkersAiPostRunCfOpenaiWhisperTinyEnSchema = z.object({});
 
 const WorkersAiPostRunCfOpenchatOpenchat350106Schema = z.object({});
 
@@ -3158,14 +3116,6 @@ const ListWorkersAiSearchTaskSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const WorkersAiPostToMarkdownSchema = z.object({
-  data: z.string(),
-  format: z.string(),
-  mimeType: z.string(),
-  name: z.string(),
-  tokens: z.string(),
-});
-
 const GetToMarkdownSupportedItemSchema = z.object({
   extension: z.string(),
   mimeType: z.string(),
@@ -3184,7 +3134,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -3514,12 +3464,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
-    "ai_search_namespace_instance_upload_item": {
-      description: "Upload Item.",
-      schema: AiSearchNamespaceInstanceUploadItemSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "or_update_item": {
       description: "Create or Update Item.",
       schema: CreateOrUpdateItemSchema,
@@ -3609,12 +3553,6 @@ export const model = {
       schema: ListPublicFinetunesSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "workers_ai_upload_finetune_asset": {
-      description: "Upload a Finetune Asset",
-      schema: WorkersAiUploadFinetuneAssetSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "model_schema": {
       description: "Get Model Schema",
@@ -3871,12 +3809,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50": {
-      description: "Execute @cf/facebook/nonomni-detr-resnet-50 model.",
-      schema: WorkersAiPostRunCfFacebookNonomniDetrResnet50Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16": {
       description: "Execute @cf/fblgit/una-cybertron-7b-v2-bf16 model.",
       schema: WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema,
@@ -4053,21 +3985,9 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "workers_ai_post_run_cf_microsoft_nonomni_resnet_50": {
-      description: "Execute @cf/microsoft/nonomni-resnet-50 model.",
-      schema: WorkersAiPostRunCfMicrosoftNonomniResnet50Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "workers_ai_post_run_cf_microsoft_phi_2": {
       description: "Execute @cf/microsoft/phi-2 model.",
       schema: WorkersAiPostRunCfMicrosoftPhi2Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_microsoft_resnet_50": {
-      description: "Execute @cf/microsoft/resnet-50 model.",
-      schema: WorkersAiPostRunCfMicrosoftResnet50Schema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -4147,21 +4067,9 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "workers_ai_post_run_cf_openai_whisper": {
-      description: "Execute @cf/openai/whisper model.",
-      schema: WorkersAiPostRunCfOpenaiWhisperSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "workers_ai_post_run_cf_openai_whisper_large_v3_turbo": {
       description: "Execute @cf/openai/whisper-large-v3-turbo model.",
       schema: CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_ai_post_run_cf_openai_whisper_tiny_en": {
-      description: "Execute @cf/openai/whisper-tiny-en model.",
-      schema: WorkersAiPostRunCfOpenaiWhisperTinyEnSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -4383,12 +4291,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
-    "workers_ai_post_to_markdown": {
-      description: "Convert Files into Markdown",
-      schema: WorkersAiPostToMarkdownSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "get_to_markdown_supported": {
       description: "Get all converted formats supported",
       schema: GetToMarkdownSupportedSchema,
@@ -4552,6 +4454,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4698,6 +4601,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5179,6 +5083,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5299,6 +5204,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5718,6 +5624,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5886,6 +5793,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -6020,10 +5928,24 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set([
+          "order_by",
+          "order_by_direction",
+          "filters",
+          "limit",
+        ]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         await cfApi(
           apiToken,
           "DELETE",
-          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/logs`,
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/logs${qs}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.gateway_id });
@@ -6356,6 +6278,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -6635,6 +6558,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -7191,6 +7115,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -7834,6 +7759,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -8635,6 +8561,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -9158,48 +9085,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    ai_search_namespace_instance_upload_item: {
-      description: "Upload Item.",
-      arguments: z.object({
-        id: z.string().describe(
-          "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
-        ),
-        name: z.string().describe("Namespace name"),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items`,
-        );
-
-        const handle = await context.writeResource(
-          "ai_search_namespace_instance_upload_item",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed ai_search_namespace_instance_upload_item",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     create_or_update_item: {
       description: "Create or Update Item.",
       arguments: z.object({
@@ -9370,6 +9255,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -10081,6 +9967,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -10270,42 +10157,6 @@ export const model = {
         context.logger.info("Found {count} public_finetunes", {
           count: results.length,
         });
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_upload_finetune_asset: {
-      description: "Upload a Finetune Asset",
-      arguments: z.object({
-        finetune_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/finetunes/${args.finetune_id}/finetune-assets`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_upload_finetune_asset",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info("Executed workers_ai_upload_finetune_asset", {});
         return { dataHandles: [handle] };
       },
     },
@@ -10642,6 +10493,142 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            requests: z.array(z.union([
+              z.object({
+                frequency_penalty: z.number().min(-2).max(2).optional(),
+                lora: z.string().optional(),
+                max_tokens: z.number().int().optional(),
+                presence_penalty: z.number().min(-2).max(2).optional(),
+                prompt: z.string().min(1),
+                raw: z.boolean().optional(),
+                repetition_penalty: z.number().min(0).max(2).optional(),
+                response_format: z.object({
+                  json_schema: z.unknown().optional(),
+                  type: z.enum(["json_object", "json_schema"]).optional(),
+                }).optional(),
+                seed: z.number().int().min(1).max(9999999999).optional(),
+                stream: z.boolean().optional(),
+                temperature: z.number().min(0).max(5).optional(),
+                top_k: z.number().int().min(1).max(50).optional(),
+                top_p: z.number().min(0.001).max(1).optional(),
+              }),
+              z.object({
+                frequency_penalty: z.number().min(-2).max(2).optional(),
+                functions: z.array(z.object({
+                  code: z.string(),
+                  name: z.string(),
+                })).optional(),
+                max_tokens: z.number().int().optional(),
+                messages: z.array(z.object({
+                  content: z.union([z.unknown(), z.unknown()]),
+                  role: z.string(),
+                })),
+                presence_penalty: z.number().min(-2).max(2).optional(),
+                raw: z.boolean().optional(),
+                repetition_penalty: z.number().min(0).max(2).optional(),
+                response_format: z.object({
+                  json_schema: z.unknown().optional(),
+                  type: z.enum(["json_object", "json_schema"]).optional(),
+                }).optional(),
+                seed: z.number().int().min(1).max(9999999999).optional(),
+                stream: z.boolean().optional(),
+                temperature: z.number().min(0).max(5).optional(),
+                tools: z.array(z.union([
+                  z.object({
+                    description: z.unknown(),
+                    name: z.unknown(),
+                    parameters: z.unknown(),
+                  }),
+                  z.object({
+                    function: z.unknown(),
+                    type: z.unknown(),
+                  }),
+                ])).optional(),
+                top_k: z.number().int().min(1).max(50).optional(),
+                top_p: z.number().min(0.001).max(1).optional(),
+              }),
+            ])),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10659,11 +10646,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -10697,6 +10680,18 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            pooling: z.enum(["mean", "cls"]).optional(),
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              pooling: z.enum(["mean", "cls"]).optional(),
+              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10714,11 +10709,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -10752,6 +10743,18 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            pooling: z.enum(["mean", "cls"]).optional(),
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              pooling: z.enum(["mean", "cls"]).optional(),
+              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10769,11 +10772,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -10807,6 +10806,34 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            contexts: z.array(z.object({
+              text: z.string().min(1).optional(),
+            })),
+            query: z.string().min(1).optional(),
+            truncate_inputs: z.boolean().optional(),
+          }),
+          z.object({
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            truncate_inputs: z.boolean().optional(),
+          }),
+          z.object({
+            requests: z.array(z.union([
+              z.object({
+                contexts: z.array(z.object({
+                  text: z.string().min(1).optional(),
+                })),
+                query: z.string().min(1).optional(),
+                truncate_inputs: z.boolean().optional(),
+              }),
+              z.object({
+                text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+                truncate_inputs: z.boolean().optional(),
+              }),
+            ])),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10824,11 +10851,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -10926,6 +10949,18 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            pooling: z.enum(["mean", "cls"]).optional(),
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              pooling: z.enum(["mean", "cls"]).optional(),
+              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10943,11 +10978,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -10981,6 +11012,18 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            pooling: z.enum(["mean", "cls"]).optional(),
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              pooling: z.enum(["mean", "cls"]).optional(),
+              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10998,11 +11041,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -11036,6 +11075,18 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            pooling: z.enum(["mean", "cls"]).optional(),
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              pooling: z.enum(["mean", "cls"]).optional(),
+              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -11053,11 +11104,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -11091,6 +11138,34 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            contexts: z.array(z.object({
+              text: z.string().min(1).optional(),
+            })),
+            query: z.string().min(1).optional(),
+            truncate_inputs: z.boolean().optional(),
+          }),
+          z.object({
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            truncate_inputs: z.boolean().optional(),
+          }),
+          z.object({
+            requests: z.array(z.union([
+              z.object({
+                contexts: z.array(z.object({
+                  text: z.string().min(1).optional(),
+                })),
+                query: z.string().min(1).optional(),
+                truncate_inputs: z.boolean().optional(),
+              }),
+              z.object({
+                text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+                truncate_inputs: z.boolean().optional(),
+              }),
+            ])),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -11108,11 +11183,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -11146,6 +11217,18 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            pooling: z.enum(["mean", "cls"]).optional(),
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              pooling: z.enum(["mean", "cls"]).optional(),
+              text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -11163,11 +11246,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -12485,6 +12564,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -12502,11 +12660,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -12541,6 +12695,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -12558,11 +12791,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -12596,6 +12825,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -12613,11 +12921,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -12770,59 +13074,90 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50: {
-      description: "Execute @cf/facebook/nonomni-detr-resnet-50 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/facebook/nonomni-detr-resnet-50${qs}`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16: {
       description: "Execute @cf/fblgit/una-cybertron-7b-v2-bf16 model.",
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -12840,11 +13175,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -12935,6 +13266,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -12952,11 +13362,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -12990,6 +13396,81 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  image_url: z.object({
+                    url: z.unknown().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]).optional(),
+              role: z.string().optional(),
+            })),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13007,11 +13488,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13100,6 +13577,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13117,11 +13673,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13329,6 +13881,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13346,11 +13977,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13627,6 +14254,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13644,11 +14350,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13682,6 +14384,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13699,11 +14480,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13737,6 +14514,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13754,11 +14610,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13792,6 +14644,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13809,11 +14740,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13847,6 +14774,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13864,11 +14870,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13902,6 +14904,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13919,11 +15000,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -13957,6 +15034,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -13974,11 +15130,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14012,6 +15164,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14029,11 +15260,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14067,6 +15294,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14084,11 +15390,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14122,6 +15424,89 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            image: z.union([z.array(z.number()), z.string()]).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            prompt: z.string().min(1).max(131072),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            image: z.union([z.array(z.number()), z.string()]).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  image_url: z.object({
+                    url: z.unknown().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+                z.object({
+                  image_url: z.object({
+                    url: z.string().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                }),
+              ]).optional(),
+              role: z.string().optional(),
+              tool_call_id: z.string().optional(),
+            })),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14139,11 +15524,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14177,6 +15558,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14194,11 +15654,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14232,6 +15688,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14249,11 +15784,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14287,6 +15818,103 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              external_reference: z.string().optional(),
+              frequency_penalty: z.number().min(0).max(2).optional(),
+              max_tokens: z.number().int().optional(),
+              presence_penalty: z.number().min(0).max(2).optional(),
+              prompt: z.string().min(1).optional(),
+              repetition_penalty: z.number().min(0).max(2).optional(),
+              response_format: z.object({
+                json_schema: z.unknown().optional(),
+                type: z.enum(["json_object", "json_schema"]).optional(),
+              }).optional(),
+              seed: z.number().int().min(1).max(9999999999).optional(),
+              stream: z.boolean().optional(),
+              temperature: z.number().min(0).max(5).optional(),
+              top_p: z.number().min(0).max(2).optional(),
+            })).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14304,11 +15932,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14342,6 +15966,157 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  image_url: z.object({
+                    url: z.unknown().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+                z.object({
+                  image_url: z.object({
+                    url: z.string().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                }),
+              ]).optional(),
+              role: z.string().optional(),
+              tool_call_id: z.string().optional(),
+            })),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+          z.object({
+            requests: z.array(z.union([
+              z.object({
+                frequency_penalty: z.number().min(0).max(2).optional(),
+                guided_json: z.object({}).optional(),
+                max_tokens: z.number().int().optional(),
+                presence_penalty: z.number().min(0).max(2).optional(),
+                prompt: z.string().min(1),
+                raw: z.boolean().optional(),
+                repetition_penalty: z.number().min(0).max(2).optional(),
+                response_format: z.object({
+                  json_schema: z.unknown().optional(),
+                  type: z.enum(["json_object", "json_schema"]).optional(),
+                }).optional(),
+                seed: z.number().int().min(1).max(9999999999).optional(),
+                stream: z.boolean().optional(),
+                temperature: z.number().min(0).max(5).optional(),
+                top_k: z.number().int().min(1).max(50).optional(),
+                top_p: z.number().min(0).max(2).optional(),
+              }),
+              z.object({
+                frequency_penalty: z.number().min(0).max(2).optional(),
+                functions: z.array(z.object({
+                  code: z.string(),
+                  name: z.string(),
+                })).optional(),
+                guided_json: z.object({}).optional(),
+                max_tokens: z.number().int().optional(),
+                messages: z.array(z.object({
+                  content: z.union([z.unknown(), z.unknown(), z.unknown()])
+                    .optional(),
+                  role: z.string().optional(),
+                  tool_call_id: z.string().optional(),
+                })),
+                presence_penalty: z.number().min(0).max(2).optional(),
+                raw: z.boolean().optional(),
+                repetition_penalty: z.number().min(0).max(2).optional(),
+                response_format: z.object({
+                  json_schema: z.unknown().optional(),
+                  type: z.enum(["json_object", "json_schema"]).optional(),
+                }).optional(),
+                seed: z.number().int().min(1).max(9999999999).optional(),
+                stream: z.boolean().optional(),
+                temperature: z.number().min(0).max(5).optional(),
+                tools: z.array(z.union([
+                  z.object({
+                    description: z.unknown(),
+                    name: z.unknown(),
+                    parameters: z.unknown(),
+                  }),
+                  z.object({
+                    function: z.unknown(),
+                    type: z.unknown(),
+                  }),
+                ])).optional(),
+                top_k: z.number().int().min(1).max(50).optional(),
+                top_p: z.number().min(0).max(2).optional(),
+              }),
+            ])),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14359,11 +16134,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14470,6 +16241,20 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            source_lang: z.string().optional(),
+            target_lang: z.string(),
+            text: z.string().min(1),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              source_lang: z.string().optional(),
+              target_lang: z.string(),
+              text: z.string().min(1),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14487,11 +16272,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14520,59 +16301,90 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    workers_ai_post_run_cf_microsoft_nonomni_resnet_50: {
-      description: "Execute @cf/microsoft/nonomni-resnet-50 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/microsoft/nonomni-resnet-50${qs}`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_microsoft_nonomni_resnet_50",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_microsoft_nonomni_resnet_50",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     workers_ai_post_run_cf_microsoft_phi_2: {
       description: "Execute @cf/microsoft/phi-2 model.",
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14590,11 +16402,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14623,59 +16431,90 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    workers_ai_post_run_cf_microsoft_resnet_50: {
-      description: "Execute @cf/microsoft/resnet-50 model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/microsoft/resnet-50${qs}`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_microsoft_resnet_50",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_microsoft_resnet_50",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1: {
       description: "Execute @cf/mistral/mistral-7b-instruct-v0.1 model.",
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14693,11 +16532,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14731,6 +16566,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14748,11 +16662,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -14787,6 +16697,89 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  image_url: z.object({
+                    url: z.unknown().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+                z.object({
+                  image_url: z.object({
+                    url: z.string().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                }),
+              ]).optional(),
+              role: z.string().optional(),
+              tool_call_id: z.string().optional(),
+            })),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -14804,11 +16797,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15069,6 +17058,392 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            audio: z.object({
+              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
+              voice: z.union([
+                z.string(),
+                z.object({
+                  id: z.string(),
+                }),
+              ]),
+            }).optional(),
+            chat_template_kwargs: z.object({
+              clear_thinking: z.boolean().optional(),
+              enable_thinking: z.boolean().optional(),
+            }).optional(),
+            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
+            function_call: z.union([
+              z.enum(["none", "auto"]),
+              z.object({
+                name: z.string(),
+              }),
+            ]).optional(),
+            functions: z.array(z.object({
+              description: z.string().optional(),
+              name: z.string(),
+              parameters: z.object({}).optional(),
+              strict: z.boolean().nullable().optional(),
+            })).optional(),
+            logit_bias: z.object({}).nullable().optional(),
+            logprobs: z.boolean().nullable().optional(),
+            max_completion_tokens: z.number().int().nullable().optional(),
+            max_tokens: z.number().int().nullable().optional(),
+            metadata: z.object({}).nullable().optional(),
+            modalities: z.array(z.enum(["text", "audio"])).nullable()
+              .optional(),
+            model: z.string().optional(),
+            n: z.number().int().min(1).max(128).nullable().optional(),
+            parallel_tool_calls: z.boolean().optional(),
+            prediction: z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string(),
+                  type: z.enum(["text"]),
+                })),
+              ]),
+              type: z.enum(["content"]),
+            }).optional(),
+            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
+            prompt: z.string().min(1),
+            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
+              .optional(),
+            response_format: z.union([
+              z.object({
+                type: z.enum(["text"]),
+              }),
+              z.object({
+                type: z.enum(["json_object"]),
+              }),
+              z.object({
+                json_schema: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  schema: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["json_schema"]),
+              }),
+            ]).optional(),
+            seed: z.number().int().nullable().optional(),
+            service_tier: z.enum([
+              "auto",
+              "default",
+              "flex",
+              "scale",
+              "priority",
+            ]).nullable().optional(),
+            stop: z.union([z.string(), z.array(z.string())]).optional(),
+            store: z.boolean().nullable().optional(),
+            stream: z.boolean().nullable().optional(),
+            stream_options: z.object({
+              include_obfuscation: z.boolean().optional(),
+              include_usage: z.boolean().optional(),
+            }).optional(),
+            temperature: z.number().min(0).max(2).nullable().optional(),
+            tool_choice: z.union([
+              z.enum(["none", "auto", "required"]),
+              z.object({
+                function: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+              z.object({
+                allowed_tools: z.object({
+                  mode: z.enum(["auto", "required"]),
+                  tools: z.array(z.object({})),
+                }),
+                type: z.enum(["allowed_tools"]),
+              }),
+            ]).optional(),
+            tools: z.array(z.union([
+              z.object({
+                function: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  parameters: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  description: z.string().optional(),
+                  format: z.union([
+                    z.object({
+                      type: z.unknown(),
+                    }),
+                    z.object({
+                      grammar: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ]).optional(),
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+            ])).optional(),
+            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
+            top_p: z.number().min(0).max(1).nullable().optional(),
+            user: z.string().optional(),
+            web_search_options: z.object({
+              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              user_location: z.object({
+                approximate: z.object({
+                  city: z.string().optional(),
+                  country: z.string().optional(),
+                  region: z.string().optional(),
+                  timezone: z.string().optional(),
+                }),
+                type: z.enum(["approximate"]),
+              }).optional(),
+            }).optional(),
+          }),
+          z.object({
+            audio: z.object({
+              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
+              voice: z.union([
+                z.string(),
+                z.object({
+                  id: z.string(),
+                }),
+              ]),
+            }).optional(),
+            chat_template_kwargs: z.object({
+              clear_thinking: z.boolean().optional(),
+              enable_thinking: z.boolean().optional(),
+            }).optional(),
+            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
+            function_call: z.union([
+              z.enum(["none", "auto"]),
+              z.object({
+                name: z.string(),
+              }),
+            ]).optional(),
+            functions: z.array(z.object({
+              description: z.string().optional(),
+              name: z.string(),
+              parameters: z.object({}).optional(),
+              strict: z.boolean().nullable().optional(),
+            })).optional(),
+            logit_bias: z.object({}).nullable().optional(),
+            logprobs: z.boolean().nullable().optional(),
+            max_completion_tokens: z.number().int().nullable().optional(),
+            max_tokens: z.number().int().nullable().optional(),
+            messages: z.array(z.union([
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown(),
+                    type: z.unknown(),
+                  })),
+                ]),
+                name: z.string().optional(),
+                role: z.enum(["developer"]),
+              }),
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown(),
+                    type: z.unknown(),
+                  })),
+                ]),
+                name: z.string().optional(),
+                role: z.enum(["system"]),
+              }),
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    file: z.unknown().optional(),
+                    image_url: z.unknown().optional(),
+                    input_audio: z.unknown().optional(),
+                    text: z.unknown().optional(),
+                    type: z.unknown(),
+                    video_url: z.unknown().optional(),
+                  })),
+                ]),
+                name: z.string().optional(),
+                role: z.enum(["user"]),
+              }),
+              z.object({
+                audio: z.object({
+                  id: z.string(),
+                }).optional(),
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    refusal: z.unknown().optional(),
+                    text: z.unknown().optional(),
+                    type: z.unknown(),
+                  })),
+                ]).optional(),
+                function_call: z.object({
+                  arguments: z.string(),
+                  name: z.string(),
+                }).optional(),
+                name: z.string().optional(),
+                refusal: z.string().nullable().optional(),
+                role: z.enum(["assistant"]),
+                tool_calls: z.array(z.union([
+                  z.object({
+                    function: z.unknown(),
+                    id: z.unknown(),
+                    type: z.unknown(),
+                  }),
+                  z.object({
+                    custom: z.unknown(),
+                    id: z.unknown(),
+                    type: z.unknown(),
+                  }),
+                ])).optional(),
+              }),
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown(),
+                    type: z.unknown(),
+                  })),
+                ]),
+                role: z.enum(["tool"]),
+                tool_call_id: z.string(),
+              }),
+              z.object({
+                content: z.string(),
+                name: z.string(),
+                role: z.enum(["function"]),
+              }),
+            ])),
+            metadata: z.object({}).nullable().optional(),
+            modalities: z.array(z.enum(["text", "audio"])).nullable()
+              .optional(),
+            model: z.string().optional(),
+            n: z.number().int().min(1).max(128).nullable().optional(),
+            parallel_tool_calls: z.boolean().optional(),
+            prediction: z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string(),
+                  type: z.enum(["text"]),
+                })),
+              ]),
+              type: z.enum(["content"]),
+            }).optional(),
+            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
+            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
+              .optional(),
+            response_format: z.union([
+              z.object({
+                type: z.enum(["text"]),
+              }),
+              z.object({
+                type: z.enum(["json_object"]),
+              }),
+              z.object({
+                json_schema: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  schema: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["json_schema"]),
+              }),
+            ]).optional(),
+            seed: z.number().int().nullable().optional(),
+            service_tier: z.enum([
+              "auto",
+              "default",
+              "flex",
+              "scale",
+              "priority",
+            ]).nullable().optional(),
+            stop: z.union([z.string(), z.array(z.string())]).optional(),
+            store: z.boolean().nullable().optional(),
+            stream: z.boolean().nullable().optional(),
+            stream_options: z.object({
+              include_obfuscation: z.boolean().optional(),
+              include_usage: z.boolean().optional(),
+            }).optional(),
+            temperature: z.number().min(0).max(2).nullable().optional(),
+            tool_choice: z.union([
+              z.enum(["none", "auto", "required"]),
+              z.object({
+                function: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+              z.object({
+                allowed_tools: z.object({
+                  mode: z.enum(["auto", "required"]),
+                  tools: z.array(z.object({})),
+                }),
+                type: z.enum(["allowed_tools"]),
+              }),
+            ]).optional(),
+            tools: z.array(z.union([
+              z.object({
+                function: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  parameters: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  description: z.string().optional(),
+                  format: z.union([
+                    z.object({
+                      type: z.unknown(),
+                    }),
+                    z.object({
+                      grammar: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ]).optional(),
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+            ])).optional(),
+            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
+            top_p: z.number().min(0).max(1).nullable().optional(),
+            user: z.string().optional(),
+            web_search_options: z.object({
+              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              user_location: z.object({
+                approximate: z.object({
+                  city: z.string().optional(),
+                  country: z.string().optional(),
+                  region: z.string().optional(),
+                  timezone: z.string().optional(),
+                }),
+                type: z.enum(["approximate"]),
+              }).optional(),
+            }).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15086,11 +17461,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15163,6 +17534,20 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            audio: z.object({
+              body: z.object({}),
+              contentType: z.string(),
+            }),
+          }),
+          z.object({
+            audio: z.string(),
+            channels: z.number().int().optional(),
+            encoding: z.enum(["wav", "flac", "ogg", "linear16"]).optional(),
+            sample_rate: z.number().int().optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15180,11 +17565,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15218,6 +17599,97 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.union([
+            z.object({
+              frequency_penalty: z.number().min(-2).max(2).optional(),
+              lora: z.string().optional(),
+              max_tokens: z.number().int().optional(),
+              presence_penalty: z.number().min(-2).max(2).optional(),
+              prompt: z.string().min(1),
+              raw: z.boolean().optional(),
+              repetition_penalty: z.number().min(0).max(2).optional(),
+              response_format: z.object({
+                json_schema: z.unknown().optional(),
+                type: z.enum(["json_object", "json_schema"]).optional(),
+              }).optional(),
+              seed: z.number().int().min(1).max(9999999999).optional(),
+              stream: z.boolean().optional(),
+              temperature: z.number().min(0).max(5).optional(),
+              top_k: z.number().int().min(1).max(50).optional(),
+              top_p: z.number().min(0.001).max(1).optional(),
+            }),
+            z.object({
+              frequency_penalty: z.number().min(-2).max(2).optional(),
+              functions: z.array(z.object({
+                code: z.string(),
+                name: z.string(),
+              })).optional(),
+              max_tokens: z.number().int().optional(),
+              messages: z.array(z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown().optional(),
+                    type: z.unknown().optional(),
+                  })),
+                ]),
+                role: z.string(),
+              })),
+              presence_penalty: z.number().min(-2).max(2).optional(),
+              raw: z.boolean().optional(),
+              repetition_penalty: z.number().min(0).max(2).optional(),
+              response_format: z.object({
+                json_schema: z.unknown().optional(),
+                type: z.enum(["json_object", "json_schema"]).optional(),
+              }).optional(),
+              seed: z.number().int().min(1).max(9999999999).optional(),
+              stream: z.boolean().optional(),
+              temperature: z.number().min(0).max(5).optional(),
+              tools: z.array(z.union([
+                z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                z.object({
+                  function: z.object({
+                    description: z.string(),
+                    name: z.string(),
+                    parameters: z.object({
+                      properties: z.unknown(),
+                      required: z.unknown().optional(),
+                      type: z.unknown(),
+                    }),
+                  }),
+                  type: z.string(),
+                }),
+              ])).optional(),
+              top_k: z.number().int().min(1).max(50).optional(),
+              top_p: z.number().min(0.001).max(1).optional(),
+            }),
+          ]),
+          z.object({
+            input: z.union([z.string(), z.array(z.unknown())]),
+            reasoning: z.object({
+              effort: z.enum(["low", "medium", "high"]).optional(),
+              summary: z.enum(["auto", "concise", "detailed"]).optional(),
+            }).optional(),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              input: z.union([z.string(), z.array(z.unknown())]),
+              reasoning: z.object({
+                effort: z.enum(["low", "medium", "high"]).optional(),
+                summary: z.enum(["auto", "concise", "detailed"]).optional(),
+              }).optional(),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15235,11 +17707,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15273,6 +17741,97 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.union([
+            z.object({
+              frequency_penalty: z.number().min(-2).max(2).optional(),
+              lora: z.string().optional(),
+              max_tokens: z.number().int().optional(),
+              presence_penalty: z.number().min(-2).max(2).optional(),
+              prompt: z.string().min(1),
+              raw: z.boolean().optional(),
+              repetition_penalty: z.number().min(0).max(2).optional(),
+              response_format: z.object({
+                json_schema: z.unknown().optional(),
+                type: z.enum(["json_object", "json_schema"]).optional(),
+              }).optional(),
+              seed: z.number().int().min(1).max(9999999999).optional(),
+              stream: z.boolean().optional(),
+              temperature: z.number().min(0).max(5).optional(),
+              top_k: z.number().int().min(1).max(50).optional(),
+              top_p: z.number().min(0.001).max(1).optional(),
+            }),
+            z.object({
+              frequency_penalty: z.number().min(-2).max(2).optional(),
+              functions: z.array(z.object({
+                code: z.string(),
+                name: z.string(),
+              })).optional(),
+              max_tokens: z.number().int().optional(),
+              messages: z.array(z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown().optional(),
+                    type: z.unknown().optional(),
+                  })),
+                ]),
+                role: z.string(),
+              })),
+              presence_penalty: z.number().min(-2).max(2).optional(),
+              raw: z.boolean().optional(),
+              repetition_penalty: z.number().min(0).max(2).optional(),
+              response_format: z.object({
+                json_schema: z.unknown().optional(),
+                type: z.enum(["json_object", "json_schema"]).optional(),
+              }).optional(),
+              seed: z.number().int().min(1).max(9999999999).optional(),
+              stream: z.boolean().optional(),
+              temperature: z.number().min(0).max(5).optional(),
+              tools: z.array(z.union([
+                z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                z.object({
+                  function: z.object({
+                    description: z.string(),
+                    name: z.string(),
+                    parameters: z.object({
+                      properties: z.unknown(),
+                      required: z.unknown().optional(),
+                      type: z.unknown(),
+                    }),
+                  }),
+                  type: z.string(),
+                }),
+              ])).optional(),
+              top_k: z.number().int().min(1).max(50).optional(),
+              top_p: z.number().min(0.001).max(1).optional(),
+            }),
+          ]),
+          z.object({
+            input: z.union([z.string(), z.array(z.unknown())]),
+            reasoning: z.object({
+              effort: z.enum(["low", "medium", "high"]).optional(),
+              summary: z.enum(["auto", "concise", "detailed"]).optional(),
+            }).optional(),
+          }),
+          z.object({
+            requests: z.array(z.object({
+              input: z.union([z.string(), z.array(z.unknown())]),
+              reasoning: z.object({
+                effort: z.enum(["low", "medium", "high"]).optional(),
+                summary: z.enum(["auto", "concise", "detailed"]).optional(),
+              }).optional(),
+            })),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15290,11 +17849,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15318,54 +17873,6 @@ export const model = {
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_openai_gpt_oss_20b",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_run_cf_openai_whisper: {
-      description: "Execute @cf/openai/whisper model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/whisper${qs}`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_openai_whisper",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_openai_whisper",
           {},
         );
         return { dataHandles: [handle] };
@@ -15467,59 +17974,90 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    workers_ai_post_run_cf_openai_whisper_tiny_en: {
-      description: "Execute @cf/openai/whisper-tiny-en model.",
-      arguments: z.object({
-        queueRequest: z.string().optional(),
-        tags: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/run/@cf/openai/whisper-tiny-en${qs}`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_run_cf_openai_whisper_tiny_en",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed workers_ai_post_run_cf_openai_whisper_tiny_en",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     workers_ai_post_run_cf_openchat_openchat_3_5_0106: {
       description: "Execute @cf/openchat/openchat-3.5-0106 model.",
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15537,11 +18075,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15708,6 +18242,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15725,11 +18338,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15763,6 +18372,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15780,11 +18468,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15818,6 +18502,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15835,11 +18598,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15873,6 +18632,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15890,11 +18728,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15928,6 +18762,79 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.string(),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -15945,11 +18852,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -15983,6 +18886,142 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            requests: z.array(z.union([
+              z.object({
+                frequency_penalty: z.number().min(-2).max(2).optional(),
+                lora: z.string().optional(),
+                max_tokens: z.number().int().optional(),
+                presence_penalty: z.number().min(-2).max(2).optional(),
+                prompt: z.string().min(1),
+                raw: z.boolean().optional(),
+                repetition_penalty: z.number().min(0).max(2).optional(),
+                response_format: z.object({
+                  json_schema: z.unknown().optional(),
+                  type: z.enum(["json_object", "json_schema"]).optional(),
+                }).optional(),
+                seed: z.number().int().min(1).max(9999999999).optional(),
+                stream: z.boolean().optional(),
+                temperature: z.number().min(0).max(5).optional(),
+                top_k: z.number().int().min(1).max(50).optional(),
+                top_p: z.number().min(0.001).max(1).optional(),
+              }),
+              z.object({
+                frequency_penalty: z.number().min(-2).max(2).optional(),
+                functions: z.array(z.object({
+                  code: z.string(),
+                  name: z.string(),
+                })).optional(),
+                max_tokens: z.number().int().optional(),
+                messages: z.array(z.object({
+                  content: z.union([z.unknown(), z.unknown()]),
+                  role: z.string(),
+                })),
+                presence_penalty: z.number().min(-2).max(2).optional(),
+                raw: z.boolean().optional(),
+                repetition_penalty: z.number().min(0).max(2).optional(),
+                response_format: z.object({
+                  json_schema: z.unknown().optional(),
+                  type: z.enum(["json_object", "json_schema"]).optional(),
+                }).optional(),
+                seed: z.number().int().min(1).max(9999999999).optional(),
+                stream: z.boolean().optional(),
+                temperature: z.number().min(0).max(5).optional(),
+                tools: z.array(z.union([
+                  z.object({
+                    description: z.unknown(),
+                    name: z.unknown(),
+                    parameters: z.unknown(),
+                  }),
+                  z.object({
+                    function: z.unknown(),
+                    type: z.unknown(),
+                  }),
+                ])).optional(),
+                top_k: z.number().int().min(1).max(50).optional(),
+                top_p: z.number().min(0.001).max(1).optional(),
+              }),
+            ])),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16000,11 +19039,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16103,6 +19138,89 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(0).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            guided_json: z.object({}).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  image_url: z.object({
+                    url: z.unknown().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+                z.object({
+                  image_url: z.object({
+                    url: z.string().optional(),
+                  }).optional(),
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                }),
+              ]).optional(),
+              role: z.string().optional(),
+              tool_call_id: z.string().optional(),
+            })),
+            presence_penalty: z.number().min(0).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0).max(2).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16120,11 +19238,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16498,6 +19612,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16515,11 +19708,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16553,6 +19742,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16570,11 +19838,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16608,6 +19872,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16625,11 +19968,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16663,6 +20002,392 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            audio: z.object({
+              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
+              voice: z.union([
+                z.string(),
+                z.object({
+                  id: z.string(),
+                }),
+              ]),
+            }).optional(),
+            chat_template_kwargs: z.object({
+              clear_thinking: z.boolean().optional(),
+              enable_thinking: z.boolean().optional(),
+            }).optional(),
+            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
+            function_call: z.union([
+              z.enum(["none", "auto"]),
+              z.object({
+                name: z.string(),
+              }),
+            ]).optional(),
+            functions: z.array(z.object({
+              description: z.string().optional(),
+              name: z.string(),
+              parameters: z.object({}).optional(),
+              strict: z.boolean().nullable().optional(),
+            })).optional(),
+            logit_bias: z.object({}).nullable().optional(),
+            logprobs: z.boolean().nullable().optional(),
+            max_completion_tokens: z.number().int().nullable().optional(),
+            max_tokens: z.number().int().nullable().optional(),
+            metadata: z.object({}).nullable().optional(),
+            modalities: z.array(z.enum(["text", "audio"])).nullable()
+              .optional(),
+            model: z.string().optional(),
+            n: z.number().int().min(1).max(128).nullable().optional(),
+            parallel_tool_calls: z.boolean().optional(),
+            prediction: z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string(),
+                  type: z.enum(["text"]),
+                })),
+              ]),
+              type: z.enum(["content"]),
+            }).optional(),
+            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
+            prompt: z.string().min(1),
+            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
+              .optional(),
+            response_format: z.union([
+              z.object({
+                type: z.enum(["text"]),
+              }),
+              z.object({
+                type: z.enum(["json_object"]),
+              }),
+              z.object({
+                json_schema: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  schema: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["json_schema"]),
+              }),
+            ]).optional(),
+            seed: z.number().int().nullable().optional(),
+            service_tier: z.enum([
+              "auto",
+              "default",
+              "flex",
+              "scale",
+              "priority",
+            ]).nullable().optional(),
+            stop: z.union([z.string(), z.array(z.string())]).optional(),
+            store: z.boolean().nullable().optional(),
+            stream: z.boolean().nullable().optional(),
+            stream_options: z.object({
+              include_obfuscation: z.boolean().optional(),
+              include_usage: z.boolean().optional(),
+            }).optional(),
+            temperature: z.number().min(0).max(2).nullable().optional(),
+            tool_choice: z.union([
+              z.enum(["none", "auto", "required"]),
+              z.object({
+                function: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+              z.object({
+                allowed_tools: z.object({
+                  mode: z.enum(["auto", "required"]),
+                  tools: z.array(z.object({})),
+                }),
+                type: z.enum(["allowed_tools"]),
+              }),
+            ]).optional(),
+            tools: z.array(z.union([
+              z.object({
+                function: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  parameters: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  description: z.string().optional(),
+                  format: z.union([
+                    z.object({
+                      type: z.unknown(),
+                    }),
+                    z.object({
+                      grammar: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ]).optional(),
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+            ])).optional(),
+            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
+            top_p: z.number().min(0).max(1).nullable().optional(),
+            user: z.string().optional(),
+            web_search_options: z.object({
+              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              user_location: z.object({
+                approximate: z.object({
+                  city: z.string().optional(),
+                  country: z.string().optional(),
+                  region: z.string().optional(),
+                  timezone: z.string().optional(),
+                }),
+                type: z.enum(["approximate"]),
+              }).optional(),
+            }).optional(),
+          }),
+          z.object({
+            audio: z.object({
+              format: z.enum(["wav", "aac", "mp3", "flac", "opus", "pcm16"]),
+              voice: z.union([
+                z.string(),
+                z.object({
+                  id: z.string(),
+                }),
+              ]),
+            }).optional(),
+            chat_template_kwargs: z.object({
+              clear_thinking: z.boolean().optional(),
+              enable_thinking: z.boolean().optional(),
+            }).optional(),
+            frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
+            function_call: z.union([
+              z.enum(["none", "auto"]),
+              z.object({
+                name: z.string(),
+              }),
+            ]).optional(),
+            functions: z.array(z.object({
+              description: z.string().optional(),
+              name: z.string(),
+              parameters: z.object({}).optional(),
+              strict: z.boolean().nullable().optional(),
+            })).optional(),
+            logit_bias: z.object({}).nullable().optional(),
+            logprobs: z.boolean().nullable().optional(),
+            max_completion_tokens: z.number().int().nullable().optional(),
+            max_tokens: z.number().int().nullable().optional(),
+            messages: z.array(z.union([
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown(),
+                    type: z.unknown(),
+                  })),
+                ]),
+                name: z.string().optional(),
+                role: z.enum(["developer"]),
+              }),
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown(),
+                    type: z.unknown(),
+                  })),
+                ]),
+                name: z.string().optional(),
+                role: z.enum(["system"]),
+              }),
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    file: z.unknown().optional(),
+                    image_url: z.unknown().optional(),
+                    input_audio: z.unknown().optional(),
+                    text: z.unknown().optional(),
+                    type: z.unknown(),
+                    video_url: z.unknown().optional(),
+                  })),
+                ]),
+                name: z.string().optional(),
+                role: z.enum(["user"]),
+              }),
+              z.object({
+                audio: z.object({
+                  id: z.string(),
+                }).optional(),
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    refusal: z.unknown().optional(),
+                    text: z.unknown().optional(),
+                    type: z.unknown(),
+                  })),
+                ]).optional(),
+                function_call: z.object({
+                  arguments: z.string(),
+                  name: z.string(),
+                }).optional(),
+                name: z.string().optional(),
+                refusal: z.string().nullable().optional(),
+                role: z.enum(["assistant"]),
+                tool_calls: z.array(z.union([
+                  z.object({
+                    function: z.unknown(),
+                    id: z.unknown(),
+                    type: z.unknown(),
+                  }),
+                  z.object({
+                    custom: z.unknown(),
+                    id: z.unknown(),
+                    type: z.unknown(),
+                  }),
+                ])).optional(),
+              }),
+              z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown(),
+                    type: z.unknown(),
+                  })),
+                ]),
+                role: z.enum(["tool"]),
+                tool_call_id: z.string(),
+              }),
+              z.object({
+                content: z.string(),
+                name: z.string(),
+                role: z.enum(["function"]),
+              }),
+            ])),
+            metadata: z.object({}).nullable().optional(),
+            modalities: z.array(z.enum(["text", "audio"])).nullable()
+              .optional(),
+            model: z.string().optional(),
+            n: z.number().int().min(1).max(128).nullable().optional(),
+            parallel_tool_calls: z.boolean().optional(),
+            prediction: z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string(),
+                  type: z.enum(["text"]),
+                })),
+              ]),
+              type: z.enum(["content"]),
+            }).optional(),
+            presence_penalty: z.number().min(-2).max(2).nullable().optional(),
+            reasoning_effort: z.enum(["low", "medium", "high"]).nullable()
+              .optional(),
+            response_format: z.union([
+              z.object({
+                type: z.enum(["text"]),
+              }),
+              z.object({
+                type: z.enum(["json_object"]),
+              }),
+              z.object({
+                json_schema: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  schema: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["json_schema"]),
+              }),
+            ]).optional(),
+            seed: z.number().int().nullable().optional(),
+            service_tier: z.enum([
+              "auto",
+              "default",
+              "flex",
+              "scale",
+              "priority",
+            ]).nullable().optional(),
+            stop: z.union([z.string(), z.array(z.string())]).optional(),
+            store: z.boolean().nullable().optional(),
+            stream: z.boolean().nullable().optional(),
+            stream_options: z.object({
+              include_obfuscation: z.boolean().optional(),
+              include_usage: z.boolean().optional(),
+            }).optional(),
+            temperature: z.number().min(0).max(2).nullable().optional(),
+            tool_choice: z.union([
+              z.enum(["none", "auto", "required"]),
+              z.object({
+                function: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+              z.object({
+                allowed_tools: z.object({
+                  mode: z.enum(["auto", "required"]),
+                  tools: z.array(z.object({})),
+                }),
+                type: z.enum(["allowed_tools"]),
+              }),
+            ]).optional(),
+            tools: z.array(z.union([
+              z.object({
+                function: z.object({
+                  description: z.string().optional(),
+                  name: z.string(),
+                  parameters: z.object({}).optional(),
+                  strict: z.boolean().nullable().optional(),
+                }),
+                type: z.enum(["function"]),
+              }),
+              z.object({
+                custom: z.object({
+                  description: z.string().optional(),
+                  format: z.union([
+                    z.object({
+                      type: z.unknown(),
+                    }),
+                    z.object({
+                      grammar: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ]).optional(),
+                  name: z.string(),
+                }),
+                type: z.enum(["custom"]),
+              }),
+            ])).optional(),
+            top_logprobs: z.number().int().min(0).max(20).nullable().optional(),
+            top_p: z.number().min(0).max(1).nullable().optional(),
+            user: z.string().optional(),
+            web_search_options: z.object({
+              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              user_location: z.object({
+                approximate: z.object({
+                  city: z.string().optional(),
+                  country: z.string().optional(),
+                  region: z.string().optional(),
+                  timezone: z.string().optional(),
+                }),
+                type: z.enum(["approximate"]),
+              }).optional(),
+            }).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16680,11 +20405,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16773,6 +20494,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16790,11 +20590,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16828,6 +20624,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16845,11 +20720,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16883,6 +20754,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16900,11 +20850,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16938,6 +20884,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -16955,11 +20980,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -16993,6 +21014,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17010,11 +21110,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -17049,6 +21145,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17066,11 +21241,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -17104,6 +21275,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17121,11 +21371,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -17159,6 +21405,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17176,11 +21501,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -17214,6 +21535,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17231,11 +21631,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -17269,6 +21665,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17286,11 +21761,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -17324,6 +21795,85 @@ export const model = {
       arguments: z.object({
         queueRequest: z.string().optional(),
         tags: z.string().optional(),
+        body: z.union([
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            lora: z.string().optional(),
+            max_tokens: z.number().int().optional(),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            prompt: z.string().min(1),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+          z.object({
+            frequency_penalty: z.number().min(-2).max(2).optional(),
+            functions: z.array(z.object({
+              code: z.string(),
+              name: z.string(),
+            })).optional(),
+            max_tokens: z.number().int().optional(),
+            messages: z.array(z.object({
+              content: z.union([
+                z.string(),
+                z.array(z.object({
+                  text: z.string().optional(),
+                  type: z.string().optional(),
+                })),
+              ]),
+              role: z.string(),
+            })),
+            presence_penalty: z.number().min(-2).max(2).optional(),
+            raw: z.boolean().optional(),
+            repetition_penalty: z.number().min(0).max(2).optional(),
+            response_format: z.object({
+              json_schema: z.unknown().optional(),
+              type: z.enum(["json_object", "json_schema"]).optional(),
+            }).optional(),
+            seed: z.number().int().min(1).max(9999999999).optional(),
+            stream: z.boolean().optional(),
+            temperature: z.number().min(0).max(5).optional(),
+            tools: z.array(z.union([
+              z.object({
+                description: z.string(),
+                name: z.string(),
+                parameters: z.object({
+                  properties: z.record(
+                    z.string(),
+                    z.object({
+                      description: z.unknown(),
+                      type: z.unknown(),
+                    }),
+                  ),
+                  required: z.array(z.string()).optional(),
+                  type: z.string(),
+                }),
+              }),
+              z.object({
+                function: z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                type: z.string(),
+              }),
+            ])).optional(),
+            top_k: z.number().int().min(1).max(50).optional(),
+            top_p: z.number().min(0.001).max(1).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17341,11 +21891,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["queueRequest", "tags"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const queryParts: string[] = [];
         const queryKeys = new Set(["queueRequest", "tags"]);
@@ -17378,6 +21924,191 @@ export const model = {
       description: "Execute AI model",
       arguments: z.object({
         model_name: z.string(),
+        body: z.union([
+          z.object({
+            text: z.string().min(1),
+          }),
+          z.object({
+            guidance: z.number().optional(),
+            height: z.number().int().min(256).max(2048).optional(),
+            image: z.array(z.number()).optional(),
+            image_b64: z.string().optional(),
+            mask: z.array(z.number()).optional(),
+            negative_prompt: z.string().optional(),
+            num_steps: z.number().int().max(20).optional(),
+            prompt: z.string().min(1),
+            seed: z.number().int().optional(),
+            strength: z.number().optional(),
+            width: z.number().int().min(256).max(2048).optional(),
+          }),
+          z.object({
+            lang: z.string().optional(),
+            prompt: z.string().min(1),
+          }),
+          z.object({
+            text: z.union([z.string().min(1), z.array(z.string().min(1))]),
+          }),
+          z.union([
+            z.string(),
+            z.object({
+              audio: z.array(z.number()),
+              source_lang: z.string().optional(),
+              target_lang: z.string().optional(),
+            }),
+          ]),
+          z.union([
+            z.string(),
+            z.object({
+              image: z.array(z.number()),
+            }),
+          ]),
+          z.union([
+            z.string(),
+            z.object({
+              image: z.array(z.number()).optional(),
+            }),
+          ]),
+          z.union([
+            z.object({
+              frequency_penalty: z.number().min(-2).max(2).optional(),
+              lora: z.string().optional(),
+              max_tokens: z.number().int().optional(),
+              presence_penalty: z.number().min(-2).max(2).optional(),
+              prompt: z.string().min(1),
+              raw: z.boolean().optional(),
+              repetition_penalty: z.number().min(0).max(2).optional(),
+              response_format: z.object({
+                json_schema: z.unknown().optional(),
+                type: z.enum(["json_object", "json_schema"]).optional(),
+              }).optional(),
+              seed: z.number().int().min(1).max(9999999999).optional(),
+              stream: z.boolean().optional(),
+              temperature: z.number().min(0).max(5).optional(),
+              top_k: z.number().int().min(1).max(50).optional(),
+              top_p: z.number().min(0.001).max(1).optional(),
+            }),
+            z.object({
+              frequency_penalty: z.number().min(-2).max(2).optional(),
+              functions: z.array(z.object({
+                code: z.string(),
+                name: z.string(),
+              })).optional(),
+              max_tokens: z.number().int().optional(),
+              messages: z.array(z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    text: z.unknown().optional(),
+                    type: z.unknown().optional(),
+                  })),
+                ]),
+                role: z.string(),
+              })),
+              presence_penalty: z.number().min(-2).max(2).optional(),
+              raw: z.boolean().optional(),
+              repetition_penalty: z.number().min(0).max(2).optional(),
+              response_format: z.object({
+                json_schema: z.unknown().optional(),
+                type: z.enum(["json_object", "json_schema"]).optional(),
+              }).optional(),
+              seed: z.number().int().min(1).max(9999999999).optional(),
+              stream: z.boolean().optional(),
+              temperature: z.number().min(0).max(5).optional(),
+              tools: z.array(z.union([
+                z.object({
+                  description: z.string(),
+                  name: z.string(),
+                  parameters: z.object({
+                    properties: z.record(z.string(), z.unknown()),
+                    required: z.array(z.unknown()).optional(),
+                    type: z.string(),
+                  }),
+                }),
+                z.object({
+                  function: z.object({
+                    description: z.string(),
+                    name: z.string(),
+                    parameters: z.object({
+                      properties: z.unknown(),
+                      required: z.unknown().optional(),
+                      type: z.unknown(),
+                    }),
+                  }),
+                  type: z.string(),
+                }),
+              ])).optional(),
+              top_k: z.number().int().min(1).max(50).optional(),
+              top_p: z.number().min(0.001).max(1).optional(),
+            }),
+          ]),
+          z.object({
+            source_lang: z.string().optional(),
+            target_lang: z.string(),
+            text: z.string().min(1),
+          }),
+          z.object({
+            input_text: z.string().min(1),
+            max_length: z.number().int().optional(),
+          }),
+          z.union([
+            z.string(),
+            z.object({
+              frequency_penalty: z.number().optional(),
+              image: z.union([z.array(z.number()), z.string()]),
+              max_tokens: z.number().int().optional(),
+              presence_penalty: z.number().optional(),
+              prompt: z.string().optional(),
+              raw: z.boolean().optional(),
+              repetition_penalty: z.number().optional(),
+              seed: z.number().optional(),
+              temperature: z.number().optional(),
+              top_k: z.number().optional(),
+              top_p: z.number().optional(),
+            }),
+          ]),
+          z.union([
+            z.object({
+              frequency_penalty: z.number().optional(),
+              ignore_eos: z.boolean().optional(),
+              image: z.string(),
+              max_tokens: z.number().int().optional(),
+              presence_penalty: z.number().optional(),
+              prompt: z.string().min(1),
+              repetition_penalty: z.number().optional(),
+              seed: z.number().optional(),
+              temperature: z.number().optional(),
+              top_k: z.number().optional(),
+              top_p: z.number().optional(),
+            }),
+            z.object({
+              frequency_penalty: z.number().optional(),
+              ignore_eos: z.boolean().optional(),
+              image: z.string(),
+              max_tokens: z.number().int().optional(),
+              messages: z.array(z.object({
+                content: z.union([
+                  z.string(),
+                  z.array(z.object({
+                    image_url: z.unknown().optional(),
+                    text: z.unknown().optional(),
+                    type: z.unknown(),
+                  })),
+                ]),
+                role: z.string(),
+              })),
+              presence_penalty: z.number().optional(),
+              repetition_penalty: z.number().optional(),
+              seed: z.number().optional(),
+              temperature: z.number().optional(),
+              top_k: z.number().optional(),
+              top_p: z.number().optional(),
+            }),
+          ]),
+          z.object({
+            image: z.string().min(1).optional(),
+            text: z.array(z.string().min(1)).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -17395,11 +22126,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["model_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -17469,40 +22196,6 @@ export const model = {
         context.logger.info("Found {count} workers_ai_search_task", {
           count: results.length,
         });
-        return { dataHandles: [handle] };
-      },
-    },
-    workers_ai_post_to_markdown: {
-      description: "Convert Files into Markdown",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/ai/tomarkdown`,
-        );
-
-        const handle = await context.writeResource(
-          "workers_ai_post_to_markdown",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info("Executed workers_ai_post_to_markdown", {});
         return { dataHandles: [handle] };
       },
     },

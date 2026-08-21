@@ -535,13 +535,6 @@ const GetCaptionOrSubtitleForLanguageSchema = z.object({
   status: z.unknown().optional(),
 });
 
-const UpdateStreamSubtitlesCaptionsUploadCaptionsOrSubtitlesSchema = z.object({
-  generated: z.unknown().optional(),
-  label: z.unknown().optional(),
-  language: z.unknown().optional(),
-  status: z.unknown().optional(),
-});
-
 const StreamSubtitlesCaptionsGenerateCaptionOrSubtitleForLanguageSchema = z
   .object({
     generated: z.unknown().optional(),
@@ -590,7 +583,7 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -767,12 +760,6 @@ export const model = {
     "caption_or_subtitle_for_language": {
       description: "List captions or subtitles for a provided language",
       schema: GetCaptionOrSubtitleForLanguageSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "stream_subtitles_captions_upload_captions_or_subtitles": {
-      description: "Upload captions or subtitles",
-      schema: UpdateStreamSubtitlesCaptionsUploadCaptionsOrSubtitlesSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -1209,6 +1196,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1402,6 +1390,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1673,6 +1662,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1977,6 +1967,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2080,6 +2071,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2207,6 +2199,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2367,6 +2360,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2472,53 +2466,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    update_stream_subtitles_captions_upload_captions_or_subtitles: {
-      description: "Upload captions or subtitles",
-      arguments: z.object({
-        language: z.string(),
-        identifier: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["language", "identifier"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/stream/${args.identifier}/captions/${args.language}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "stream_subtitles_captions_upload_captions_or_subtitles",
-          String(args.identifier),
-          result,
-        );
-        context.logger.info(
-          "Updated stream_subtitles_captions_upload_captions_or_subtitles",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     delete_captions_or_subtitles: {
       description: "Delete captions or subtitles",
       arguments: z.object({
@@ -2540,6 +2487,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2682,6 +2630,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2750,6 +2699,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

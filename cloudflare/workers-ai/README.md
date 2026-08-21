@@ -100,7 +100,6 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 | `update_ai_search_move_instance`                                                | Move an instance to a different namespace.                                         |
 | `create_ai_search_namespace_instance_chat_completion`                           | Chat Completions                                                                   |
 | `list_items`                                                                    | Items List.                                                                        |
-| `ai_search_namespace_instance_upload_item`                                      | Upload Item.                                                                       |
 | `create_or_update_item`                                                         | Create or Update Item.                                                             |
 | `get_item`                                                                      | Get Item.                                                                          |
 | `update_ai_search_namespace_instance_sync_item`                                 | Sync Item.                                                                         |
@@ -120,7 +119,6 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 | `list_finetunes`                                                                | List Finetunes                                                                     |
 | `create_finetune`                                                               | Create a new Finetune                                                              |
 | `list_public_finetunes`                                                         | List Public Finetunes                                                              |
-| `workers_ai_upload_finetune_asset`                                              | Upload a Finetune Asset                                                            |
 | `get_model_schema`                                                              | Get Model Schema                                                                   |
 | `get_workers_ai_search_model`                                                   | Model Search                                                                       |
 | `create_workers_ai_post_run_generic`                                            | Execute AI Model (Generic)                                                         |
@@ -162,7 +160,6 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 | `workers_ai_post_run_cf_defog_sqlcoder_7b_2`                                    | Execute @cf/defog/sqlcoder-7b-2 model.                                             |
 | `create_workers_ai_post_run_cf_facebook_bart_large_cnn`                         | Execute @cf/facebook/bart-large-cnn model.                                         |
 | `create_workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn`                 | Execute @cf/facebook/nonomni-bart-large-cnn model.                                 |
-| `workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50`                        | Execute @cf/facebook/nonomni-detr-resnet-50 model.                                 |
 | `workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16`                        | Execute @cf/fblgit/una-cybertron-7b-v2-bf16 model.                                 |
 | `create_workers_ai_post_run_cf_google_embeddinggemma_300m`                      | Execute @cf/google/embeddinggemma-300m model.                                      |
 | `workers_ai_post_run_cf_google_gemma_2b_it_lora`                                | Execute @cf/google/gemma-2b-it-lora model.                                         |
@@ -192,9 +189,7 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 | `workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct`                    | Execute @cf/meta/llama-4-scout-17b-16e-instruct model.                             |
 | `create_workers_ai_post_run_cf_meta_llama_guard_3_8b`                           | Execute @cf/meta/llama-guard-3-8b model.                                           |
 | `workers_ai_post_run_cf_meta_m2m100_1_2b`                                       | Execute @cf/meta/m2m100-1.2b model.                                                |
-| `workers_ai_post_run_cf_microsoft_nonomni_resnet_50`                            | Execute @cf/microsoft/nonomni-resnet-50 model.                                     |
 | `workers_ai_post_run_cf_microsoft_phi_2`                                        | Execute @cf/microsoft/phi-2 model.                                                 |
-| `workers_ai_post_run_cf_microsoft_resnet_50`                                    | Execute @cf/microsoft/resnet-50 model.                                             |
 | `workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1`                       | Execute @cf/mistral/mistral-7b-instruct-v0.1 model.                                |
 | `workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora`                  | Execute @cf/mistral/mistral-7b-instruct-v0.2-lora model.                           |
 | `workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct`               | Execute @cf/mistralai/mistral-small-3.1-24b-instruct model.                        |
@@ -207,9 +202,7 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 | `workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b`               | Execute @cf/nvidia/nemotron-speech-streaming-en-0.6b model.                        |
 | `workers_ai_post_run_cf_openai_gpt_oss_120b`                                    | Execute @cf/openai/gpt-oss-120b model.                                             |
 | `workers_ai_post_run_cf_openai_gpt_oss_20b`                                     | Execute @cf/openai/gpt-oss-20b model.                                              |
-| `workers_ai_post_run_cf_openai_whisper`                                         | Execute @cf/openai/whisper model.                                                  |
 | `create_workers_ai_post_run_cf_openai_whisper_large_v3_turbo`                   | Execute @cf/openai/whisper-large-v3-turbo model.                                   |
-| `workers_ai_post_run_cf_openai_whisper_tiny_en`                                 | Execute @cf/openai/whisper-tiny-en model.                                          |
 | `workers_ai_post_run_cf_openchat_openchat_3_5_0106`                             | Execute @cf/openchat/openchat-3.5-0106 model.                                      |
 | `create_workers_ai_post_run_cf_pfnet_plamo_embedding_1b`                        | Execute @cf/pfnet/plamo-embedding-1b model.                                        |
 | `get_workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2`                 | Open Websocket connection with @cf/pipecat-ai/smart-turn-v2 model.                 |
@@ -245,7 +238,6 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 | `workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq`                            | Execute @hf/thebloke/zephyr-7b-beta-awq model.                                     |
 | `workers_ai_post_run_model`                                                     | Execute AI model                                                                   |
 | `list_workers_ai_search_task`                                                   | Task Search                                                                        |
-| `workers_ai_post_to_markdown`                                                   | Convert Files into Markdown                                                        |
 | `get_to_markdown_supported`                                                     | Get all converted formats supported                                                |
 
 ## Development

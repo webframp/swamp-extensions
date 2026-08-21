@@ -1,29 +1,30 @@
-## 2026.07.27.1
+## 2026.08.21.1
 
-**Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator
-bugs were repaired (webframp/swamp-extensions#284).
+**Fixed:** Regenerated with three cloudflare-codegen fixes: (1)
+discriminated-union request bodies with a sibling top-level discriminator
+property (e.g. gateway proxy_endpoints kind) now correctly build the body from
+the full oneOf variant instead of silently dropping it to undefined; (2) DELETE
+methods with a request body (e.g. r2 delete_objects bulk-delete-by-list) now
+send that body instead of ignoring it; (3) oneOf/anyOf request body variants
+that are $ref (e.g. r2 sippy config) are now resolved to their real schema
+instead of collapsing to z.unknown(). Same generator fix as workers-scripts in
+#352, now caught up for these 7 services.
 
-1. **Methods referencing an undeclared path parameter did not compile.** The
-   generator derived a method's arguments schema and execute signature from the
-   OpenAPI `parameters` list, but built the request URL from the path template.
-   Where the Cloudflare spec omits a declaration for a `{placeholder}` — which
-   it does in several places — the result was a method with
-   `arguments:
-   z.object({})` and an unused `_args` parameter whose body still
-   interpolated `args.<name>`. Those methods failed type checking and were
-   uncallable even if they had compiled, because the argument was never
-   declared. Path-template placeholders are now unioned into the declared
-   parameters, so the schema, the signature, and the body agree.
+**Changed:** The following methods were removed — they are no longer present
+in the upstream Cloudflare API spec this extension is generated from:
+`ai_search_namespace_instance_upload_item`, `workers_ai_upload_finetune_asset`,
+`workers_ai_post_run_cf_facebook_nonomni_detr_resnet_50`,
+`workers_ai_post_run_cf_microsoft_nonomni_resnet_50`,
+`workers_ai_post_run_cf_microsoft_resnet_50`,
+`workers_ai_post_run_cf_openai_whisper`,
+`workers_ai_post_run_cf_openai_whisper_tiny_en`, `workers_ai_post_to_markdown`.
 
-2. **Generated tests could request a URL the mock server did not serve.** Test
-   arguments merged the request-body fixture over the path-parameter values, so
-   a body property sharing a name with a path parameter (commonly `id`)
-   substituted its own example value into the URL. The request then missed the
-   mock and failed with `Cloudflare API error: Not found`. Path parameters now
-   take precedence, matching what the generated model already does by excluding
-   path-parameter names from the request body.
-
-**Upgrade note:** No API surface change and no method was added or removed. If
-this extension type-checked and tested cleanly before, its behavior is unchanged
-and only the version moved. Extensions that previously failed `deno check` or
-`deno task test` now pass.
+**Changed:** Fix (1) above also applies to the dozens of `workers_ai_post_run_*`
+inference methods (e.g. `workers_ai_post_run_model`,
+`workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it`). Their
+arguments previously had no `body`-shaped field, so the model-specific
+parameters (prompt, messages, temperature, etc.) were silently discarded and
+every call sent an empty request body. They now require a nested
+`body: { ... }` argument matching the model's real input schema. Calls that
+previously passed model parameters at the top level must move them under
+`body`.

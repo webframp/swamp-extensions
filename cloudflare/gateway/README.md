@@ -40,7 +40,6 @@ swamp model create @webframp/cloudflare/gateway cf-gateway \
 | `list_dns_destination_ips`                                               | List Zero Trust Gateway DNS destination IPv4 address pairs      |
 | `get_egress_cidr_pairs`                                                  | Get gateway egress CIDRs pairs assigned to this account         |
 | `list_zero_trust_lists`                                                  | List Zero Trust lists                                           |
-| `list_from_csv`                                                          | Create Zero Trust list from CSV                                 |
 | `list_details`                                                           | Get Zero Trust list details                                     |
 | `list_items`                                                             | Get Zero Trust list items                                       |
 | `list_zero_trust_gateway_locations`                                      | List Zero Trust Gateway locations                               |

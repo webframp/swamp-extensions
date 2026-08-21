@@ -34,7 +34,6 @@ Deno.test("pages model: has expected methods", () => {
   assertExists(model.methods.update_project);
   assertExists(model.methods.delete_project);
   assertExists(model.methods.get_deployments);
-  assertExists(model.methods.create_deployment);
   assertExists(model.methods.get_deployment_info);
   assertExists(model.methods.delete_deployment);
   assertExists(model.methods.get_deployment_logs);
@@ -58,7 +57,6 @@ Deno.test("pages model: has expected resources", () => {
   assertExists(model.resources["get_projects"]);
   assertExists(model.resources["project"]);
   assertExists(model.resources["get_deployments"]);
-  assertExists(model.resources["deployment"]);
   assertExists(model.resources["deployment_info"]);
   assertExists(model.resources["deployment_logs"]);
   assertExists(model.resources["pages_deployment_retry_deployment"]);
@@ -412,7 +410,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "pages model: create_deployment executes and writes resource",
+  name:
+    "pages model: pages_deployment_retry_deployment executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
@@ -469,7 +468,9 @@ Deno.test({
       "uses_functions": true,
     };
     const { url, server } = startMockCfServer({
-      "/pages/projects/test-id-123/deployments": { result: mockData },
+      "/pages/projects/test-id-123/deployments/test-id-123/retry": {
+        result: mockData,
+      },
     });
     const uninstall = installFetchMock(url);
 
@@ -487,7 +488,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_deployment.execute({
+      >).pages_deployment_retry_deployment.execute({
         "aliases": ["https://branchname.projectname.pages.dev"],
         "build_config": null,
         "created_on": "2021-03-09T00:55:03.923456Z",
@@ -539,6 +540,7 @@ Deno.test({
         }],
         "url": "https://f64788e9.ninjakittens.pages.dev",
         "uses_functions": true,
+        "deployment_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

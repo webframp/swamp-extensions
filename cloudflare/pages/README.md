@@ -25,7 +25,6 @@ swamp model create @webframp/cloudflare/pages cf-pages \
 | `update_project`                                 | Update project            |
 | `delete_project`                                 | Delete project            |
 | `get_deployments`                                | Get deployments           |
-| `create_deployment`                              | Create deployment         |
 | `get_deployment_info`                            | Get deployment info       |
 | `delete_deployment`                              | Delete deployment         |
 | `get_deployment_logs`                            | Get deployment logs       |

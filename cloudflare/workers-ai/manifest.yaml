@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/workers-ai"
-version: "2026.07.27.1"
+version: "2026.08.21.1"
 description: "Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

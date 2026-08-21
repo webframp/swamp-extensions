@@ -137,46 +137,6 @@ const GetDeploymentsSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const CreateDeploymentSchema = z.object({
-  aliases: z.array(z.string()).nullable().describe(
-    "A list of alias URLs pointing to this deployment.",
-  ),
-  build_config: z.unknown(),
-  created_on: z.string().describe("When the deployment was created."),
-  deployment_trigger: z.object({
-    metadata: z.object({
-      branch: z.string(),
-      commit_dirty: z.boolean(),
-      commit_hash: z.string(),
-      commit_message: z.string(),
-    }),
-    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]),
-  }).describe("Info about what caused the deployment."),
-  env_vars: z.unknown(),
-  environment: z.enum(["preview", "production"]).describe("Type of deploy."),
-  id: z.string().describe("Id of the deployment."),
-  is_skipped: z.boolean().describe("If the deployment has been skipped."),
-  latest_stage: z.unknown(),
-  modified_on: z.string().describe("When the deployment was last modified."),
-  project_id: z.string().describe("Id of the project."),
-  project_name: z.unknown(),
-  short_id: z.string().describe("Short Id (8 character) of the deployment."),
-  skip_reason: z.enum([
-    "commit_message",
-    "preview_deployments_disabled",
-    "production_deployments_disabled",
-    "path_config",
-    "branch_config",
-    "pages_to_workers_conversion",
-  ]).nullable().optional().describe("Why the deployment was skipped."),
-  source: z.unknown(),
-  stages: z.array(z.unknown()).describe("List of past stages."),
-  url: z.string().describe("The live URL to view this deployment."),
-  uses_functions: z.boolean().nullable().optional().describe(
-    "Whether the deployment uses functions.",
-  ),
-});
-
 const GetDeploymentInfoSchema = z.object({
   aliases: z.array(z.string()).nullable().describe(
     "A list of alias URLs pointing to this deployment.",
@@ -502,7 +462,7 @@ const GetUploadTokenSchema = z.object({
 /** Cloudflare Pages — projects, deployments, domains, build configs */
 export const model = {
   type: "@webframp/cloudflare/pages",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -525,12 +485,6 @@ export const model = {
       schema: GetDeploymentsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "deployment": {
-      description: "Create deployment",
-      schema: CreateDeploymentSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "deployment_info": {
       description: "Get deployment info",
@@ -864,6 +818,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -930,42 +885,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    create_deployment: {
-      description: "Create deployment",
-      arguments: z.object({
-        project_name: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/pages/projects/${args.project_name}/deployments`,
-        );
-
-        const handle = await context.writeResource(
-          "create_deployment",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info("Executed create_deployment", {});
-        return { dataHandles: [handle] };
-      },
-    },
     get_deployment_info: {
       description: "Get deployment info",
       arguments: z.object({
@@ -1024,10 +943,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["force"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         await cfApi(
           apiToken,
           "DELETE",
-          `/accounts/${accountId}/pages/projects/${args.project_name}/deployments/${args.deployment_id}`,
+          `/accounts/${accountId}/pages/projects/${args.project_name}/deployments/${args.deployment_id}${qs}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.project_name });
@@ -1213,6 +1141,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1422,6 +1351,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1553,6 +1483,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

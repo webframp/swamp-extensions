@@ -42,10 +42,6 @@ Deno.test("kv model: has expected methods", () => {
   assertExists(
     model.methods.get_workers_kv_namespace_read_the_metadata_for_a_key,
   );
-  assertExists(
-    model.methods
-      .update_workers_kv_namespace_write_key_value_pair_with_metadata,
-  );
   assertExists(model.methods.delete_key_value_pair);
 });
 
@@ -63,9 +59,6 @@ Deno.test("kv model: has expected resources", () => {
   assertExists(
     model.resources["workers_kv_namespace_read_the_metadata_for_a_key"],
   );
-  assertExists(
-    model.resources["workers_kv_namespace_write_key_value_pair_with_metadata"],
-  );
 });
 
 // ---------------------------------------------------------------------------
@@ -74,10 +67,24 @@ Deno.test("kv model: has expected resources", () => {
 
 function startMockCfServer(
   responses: Record<string, { result: unknown; isCollection?: boolean }>,
-): { url: string; server: Deno.HttpServer } {
-  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+): {
+  url: string;
+  server: Deno.HttpServer;
+  getLastRequestBody: () => unknown;
+} {
+  let lastRequestBody: unknown = undefined;
+
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    if (req.method !== "GET" && req.body) {
+      try {
+        lastRequestBody = await req.json();
+      } catch {
+        lastRequestBody = undefined;
+      }
+    }
 
     for (
       const [pattern, { result, isCollection }] of Object.entries(responses)
@@ -109,7 +116,11 @@ function startMockCfServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return {
+    url: `http://localhost:${addr.port}`,
+    server,
+    getLastRequestBody: () => lastRequestBody,
+  };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -341,7 +352,7 @@ Deno.test({
       "successful_key_count": 100,
       "unsuccessful_keys": ["test-value"],
     };
-    const { url, server } = startMockCfServer({
+    const { url, server, getLastRequestBody } = startMockCfServer({
       "/storage/kv/namespaces/test-id-123/bulk/delete": { result: mockData },
     });
     const uninstall = installFetchMock(url);
@@ -361,11 +372,11 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).delete_multiple_key_value_pairs.execute({
-        "successful_key_count": 100,
-        "unsuccessful_keys": ["test-value"],
         "namespace_id": "test-id-123",
+        "items": ["key-1", "key-2"],
       }, context);
       assertEquals(result.dataHandles.length, 1);
+      assertEquals(getLastRequestBody(), ["key-1", "key-2"]);
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);

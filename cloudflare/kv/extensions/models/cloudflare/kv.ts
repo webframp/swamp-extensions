@@ -69,7 +69,29 @@ const DeleteMultipleKeyValuePairsSchema = z.object({
   ),
 });
 
-const GetMultipleKeyValuePairsSchema = z.union([z.unknown(), z.unknown()]);
+const GetMultipleKeyValuePairsSchema = z.union([
+  z.object({
+    values: z.record(
+      z.string(),
+      z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.string(), z.unknown()),
+      ]),
+    ).optional(),
+  }),
+  z.object({
+    values: z.record(
+      z.string(),
+      z.object({
+        expiration: z.unknown().optional(),
+        metadata: z.unknown(),
+        value: z.unknown(),
+      }).nullable(),
+    ).optional(),
+  }),
+]);
 
 const ANamespaceSKeysItemSchema = z.object({
   expiration: z.number().optional().describe(
@@ -87,9 +109,6 @@ const ListANamespaceSKeysSchema = z.object({
 
 const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({});
 
-const UpdateWorkersKvNamespaceWriteKeyValuePairWithMetadataSchema = z.object({})
-  .nullable();
-
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -97,7 +116,7 @@ const UpdateWorkersKvNamespaceWriteKeyValuePairWithMetadataSchema = z.object({})
 /** Cloudflare Workers KV — namespaces, keys, values, bulk operations */
 export const model = {
   type: "@webframp/cloudflare/kv",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -148,12 +167,6 @@ export const model = {
     "workers_kv_namespace_read_the_metadata_for_a_key": {
       description: "Read the metadata for a key",
       schema: GetWorkersKvNamespaceReadTheMetadataForAKeySchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "workers_kv_namespace_write_key_value_pair_with_metadata": {
-      description: "Write key-value pair with optional metadata",
-      schema: UpdateWorkersKvNamespaceWriteKeyValuePairWithMetadataSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -354,6 +367,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -368,6 +382,14 @@ export const model = {
       description: "Write multiple key-value pairs",
       arguments: z.object({
         namespace_id: z.string(),
+        items: z.array(z.object({
+          base64: z.boolean().optional(),
+          expiration: z.unknown().optional(),
+          expiration_ttl: z.unknown().optional(),
+          key: z.unknown(),
+          metadata: z.unknown().optional(),
+          value: z.string().max(26214400),
+        })),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -385,11 +407,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["namespace_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.items;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -414,6 +432,7 @@ export const model = {
       description: "Delete multiple key-value pairs",
       arguments: z.object({
         namespace_id: z.string(),
+        items: z.array(z.unknown()),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -431,11 +450,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["namespace_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.items;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -604,68 +619,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-    update_workers_kv_namespace_write_key_value_pair_with_metadata: {
-      description: "Write key-value pair with optional metadata",
-      arguments: z.object({
-        key_name: z.string(),
-        namespace_id: z.string(),
-        expiration: z.string().optional(),
-        expiration_ttl: z.string().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set([
-          "key_name",
-          "namespace_id",
-          "expiration",
-          "expiration_ttl",
-        ]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-        const queryParts: string[] = [];
-        const queryKeys = new Set(["expiration", "expiration_ttl"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
-            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/values/${args.key_name}${qs}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "workers_kv_namespace_write_key_value_pair_with_metadata",
-          String(args.namespace_id),
-          result,
-        );
-        context.logger.info(
-          "Updated workers_kv_namespace_write_key_value_pair_with_metadata",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     delete_key_value_pair: {
       description: "Delete key-value pair",
       arguments: z.object({
@@ -687,6 +640,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

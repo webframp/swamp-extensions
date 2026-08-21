@@ -283,23 +283,6 @@ const ListObjectsSchema = z.object({
   fetchedAt: z.string(),
 });
 
-const PutObjectSchema = z.object({
-  etag: z.string().optional().describe(
-    "The entity tag for the uploaded object.",
-  ),
-  key: z.string().optional().describe("The key (name) of the uploaded object."),
-  size: z.string().optional().describe(
-    "The size of the uploaded object in bytes (as a string).",
-  ),
-  storage_class: z.unknown().optional(),
-  uploaded: z.string().optional().describe(
-    "The date and time the object was uploaded.",
-  ),
-  version: z.string().optional().describe(
-    "The version UUID of the uploaded object.",
-  ),
-});
-
 const GetBucketSippyConfigSchema = z.object({
   destination: z.object({
     accessKeyId: z.string().optional(),
@@ -350,7 +333,7 @@ const CreateTempAccessCredentialsSchema = z.object({
 /** Cloudflare R2 object storage — buckets, objects, multipart uploads, notifications */
 export const model = {
   type: "@webframp/cloudflare/r2",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -523,12 +506,6 @@ export const model = {
       schema: ListObjectsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "put_object": {
-      description: "Upload Object",
-      schema: PutObjectSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "bucket_sippy_config": {
       description: "Get Sippy Configuration",
@@ -1237,6 +1214,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1346,6 +1324,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1556,6 +1535,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1949,6 +1929,7 @@ export const model = {
       arguments: z.object({
         bucket_name: z.string(),
         prefix: z.string().optional(),
+        items: z.array(z.string()),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1965,58 +1946,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args.items;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["prefix"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         await cfApi(
           apiToken,
           "DELETE",
-          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects`,
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects${qs}`,
+          body,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.bucket_name });
         return { dataHandles: [] };
-      },
-    },
-    put_object: {
-      description: "Upload Object",
-      arguments: z.object({
-        bucket_name: z.string(),
-        object_key: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["bucket_name", "object_key"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects/${args.object_key}`,
-          body,
-        );
-
-        const handle = await context.writeResource(
-          "put_object",
-          String(args.object_key),
-          result,
-        );
-        context.logger.info("Updated put_object", {});
-        return { dataHandles: [handle] };
       },
     },
     delete_object: {
@@ -2040,6 +1989,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -2089,6 +2039,48 @@ export const model = {
       description: "Enable Sippy",
       arguments: z.object({
         bucket_name: z.string(),
+        body: z.union([
+          z.object({
+            destination: z.object({
+              accessKeyId: z.string().optional(),
+              provider: z.enum(["r2"]).optional(),
+              secretAccessKey: z.string().optional(),
+            }).optional(),
+            source: z.object({
+              accessKeyId: z.string().optional(),
+              bucket: z.string().optional(),
+              provider: z.enum(["aws"]).optional(),
+              region: z.string().optional(),
+              secretAccessKey: z.string().optional(),
+            }).optional(),
+          }),
+          z.object({
+            destination: z.object({
+              accessKeyId: z.string().optional(),
+              provider: z.enum(["r2"]).optional(),
+              secretAccessKey: z.string().optional(),
+            }).optional(),
+            source: z.object({
+              bucket: z.string().optional(),
+              clientEmail: z.string().optional(),
+              privateKey: z.string().optional(),
+              provider: z.enum(["gcs"]).optional(),
+            }).optional(),
+          }),
+          z.object({
+            destination: z.object({
+              accessKeyId: z.string().optional(),
+              provider: z.enum(["r2"]).optional(),
+              secretAccessKey: z.string().optional(),
+            }).optional(),
+            source: z.object({
+              accessKeyId: z.string().optional(),
+              bucketUrl: z.string().optional(),
+              provider: z.enum(["s3"]).optional(),
+              secretAccessKey: z.string().optional(),
+            }).optional(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2106,11 +2098,7 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["bucket_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2148,6 +2136,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

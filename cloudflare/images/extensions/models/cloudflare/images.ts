@@ -21,16 +21,6 @@ const GlobalArgsSchema = z.object({
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
-const CloudflareImagesUploadAnImageViaUrlSchema = z.object({
-  creator: z.unknown().optional(),
-  filename: z.unknown().optional(),
-  id: z.unknown().optional(),
-  meta: z.unknown().optional(),
-  requireSignedURLs: z.unknown().optional(),
-  uploaded: z.unknown().optional(),
-  variants: z.unknown().optional(),
-});
-
 const ListSigningKeysSchema = z.object({
   keys: z.array(z.unknown()).optional(),
 });
@@ -83,13 +73,6 @@ const UpdateImageSchema = z.object({
 
 const ListImagesV2Schema = z.object({
   images: z.array(z.unknown()).optional(),
-});
-
-const CreateAuthenticatedDirectUploadUrlV2Schema = z.object({
-  id: z.string().max(32).optional().describe("Image unique identifier."),
-  uploadURL: z.string().optional().describe(
-    "The URL the unauthenticated upload can be performed to using a single HTTP POST (multipart/form-d...",
-  ),
 });
 
 const ListMigrationsSchema = z.object({
@@ -195,18 +178,12 @@ const GetSourceConnectivitySchema = z.object({
 /** Cloudflare Images — upload, transform, deliver, and manage image pipelines */
 export const model = {
   type: "@webframp/cloudflare/images",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
 
   resources: {
-    "cloudflare_images_upload_an_image_via_url": {
-      description: "Upload an image",
-      schema: CloudflareImagesUploadAnImageViaUrlSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "list_signing_keys": {
       description: "List Signing Keys",
       schema: ListSigningKeysSchema,
@@ -264,12 +241,6 @@ export const model = {
     "list_images_v2": {
       description: "List images V2",
       schema: ListImagesV2Schema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "authenticated_direct_upload_url_v_2": {
-      description: "Create authenticated direct upload URL V2",
-      schema: CreateAuthenticatedDirectUploadUrlV2Schema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -336,43 +307,6 @@ export const model = {
   },
 
   methods: {
-    cloudflare_images_upload_an_image_via_url: {
-      description: "Upload an image",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/images/v1`,
-        );
-
-        const handle = await context.writeResource(
-          "cloudflare_images_upload_an_image_via_url",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed cloudflare_images_upload_an_image_via_url",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     list_signing_keys: {
       description: "List Signing Keys",
       arguments: z.object({}),
@@ -472,6 +406,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -693,6 +628,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -848,6 +784,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -896,43 +833,6 @@ export const model = {
           result,
         );
         context.logger.info("Fetched list_images_v2", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    create_authenticated_direct_upload_url_v_2: {
-      description: "Create authenticated direct upload URL V2",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/images/v2/direct_upload`,
-        );
-
-        const handle = await context.writeResource(
-          "create_authenticated_direct_upload_url_v_2",
-          "latest",
-          result ?? {},
-        );
-        context.logger.info(
-          "Executed create_authenticated_direct_upload_url_v_2",
-          {},
-        );
         return { dataHandles: [handle] };
       },
     },
@@ -1075,6 +975,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1490,6 +1391,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

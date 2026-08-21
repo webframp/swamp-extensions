@@ -75,9 +75,6 @@ Deno.test("stream model: has expected methods", () => {
   assertExists(model.methods.delete_audio_tracks);
   assertExists(model.methods.list_captions_or_subtitles);
   assertExists(model.methods.get_caption_or_subtitle_for_language);
-  assertExists(
-    model.methods.update_stream_subtitles_captions_upload_captions_or_subtitles,
-  );
   assertExists(model.methods.delete_captions_or_subtitles);
   assertExists(
     model.methods
@@ -137,9 +134,6 @@ Deno.test("stream model: has expected resources", () => {
   assertExists(model.resources["edit_audio_tracks"]);
   assertExists(model.resources["captions_or_subtitles"]);
   assertExists(model.resources["caption_or_subtitle_for_language"]);
-  assertExists(
-    model.resources["stream_subtitles_captions_upload_captions_or_subtitles"],
-  );
   assertExists(
     model
       .resources[
