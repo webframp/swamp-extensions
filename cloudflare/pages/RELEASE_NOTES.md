@@ -9,3 +9,6 @@ send that body instead of ignoring it; (3) oneOf/anyOf request body variants
 that are $ref (e.g. r2 sippy config) are now resolved to their real schema
 instead of collapsing to z.unknown(). Same generator fix as workers-scripts in
 #352, now caught up for these 7 services.
+
+**Changed:** `create_deployment` was removed — it is no longer present in the
+upstream Cloudflare API spec this extension is generated from.
