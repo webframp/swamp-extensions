@@ -18,8 +18,8 @@ import {
   GetAttributeValuesCommand,
   GetProductsCommand,
   PricingClient,
-} from "npm:@aws-sdk/client-pricing@3.1111.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1111.0";
+} from "npm:@aws-sdk/client-pricing@3.1114.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
 const MAX_PAGES = 10;
 
@@ -104,7 +104,7 @@ const PriceResultSchema = z.object({
  */
 export const model = {
   type: "@webframp/aws/pricing",
-  version: "2026.08.15.1",
+  version: "2026.08.20.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -119,7 +119,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.15.1",
+      toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

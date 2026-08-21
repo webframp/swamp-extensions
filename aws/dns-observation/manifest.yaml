@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/dns-observation"
-version: "2026.08.15.1"
+version: "2026.08.20.1"
 description: |
   Observe Route53 hosted zones, record sets, and detect orphaned DNS records
   pointing at decommissioned infrastructure.

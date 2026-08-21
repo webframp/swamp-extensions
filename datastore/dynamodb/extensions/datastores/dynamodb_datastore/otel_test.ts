@@ -11,12 +11,12 @@ import {
   type ReadableSpan,
   SimpleSpanProcessor,
 } from "npm:@opentelemetry/sdk-trace-base@2.10.0";
-import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1111.0";
+import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1114.0";
 import {
   DynamoDBDocumentClient,
   PutCommand,
   QueryCommand,
-} from "npm:@aws-sdk/lib-dynamodb@3.1111.0";
+} from "npm:@aws-sdk/lib-dynamodb@3.1114.0";
 
 import { createSyncService } from "./sync.ts";
 import { createDynamoLock } from "./lock.ts";
