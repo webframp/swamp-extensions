@@ -477,7 +477,7 @@ async function withAwsContext<T>(
     return await fn();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`${description} failed: ${message}`);
+    throw new Error(`${description} failed: ${message}`, { cause: err });
   }
 }
 

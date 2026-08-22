@@ -137,7 +137,11 @@ export const vault = {
         // value can quote it back. The host publishes thrown messages to the
         // trace backend, so strip the value we know we sent.
         if (stdin) errMsg = redactSecret(errMsg, stdin);
-        const commandDesc = `gopass ${args.join(" ")}`;
+        // Only the subcommand name goes in the message, not the full args -
+        // the remaining args are the secret path, which the host publishes
+        // to the trace backend on failure and which would otherwise let
+        // anyone with trace-read access enumerate the vault namespace.
+        const commandDesc = `gopass ${args[0] ?? ""}`;
         throw new Error(
           `${commandDesc} exited with code ${code}${
             errMsg ? `: ${errMsg}` : ""

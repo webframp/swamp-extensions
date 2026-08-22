@@ -299,7 +299,7 @@ async function getAccountId(profile: string, region: string): Promise<string> {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
   } catch (err) {
-    wrapApiError("GetCallerIdentity", { profile, region }, err);
+    return wrapApiError("GetCallerIdentity", { profile, region }, err);
   } finally {
     sts.destroy();
   }
@@ -497,7 +497,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("GetServiceQuota", {
+            return wrapApiError("GetServiceQuota", {
               serviceCode: args.serviceCode,
               quotaCode: args.quotaCode,
               profile,
@@ -613,7 +613,7 @@ export const model = {
                 }),
               );
             } catch (err) {
-              wrapApiError("ListServiceQuotas", {
+              return wrapApiError("ListServiceQuotas", {
                 serviceCode: args.serviceCode,
                 profile,
                 page: pages,
@@ -701,7 +701,11 @@ export const model = {
                 }),
               );
             } catch (err) {
-              wrapApiError("ListServices", { profile, page: pages }, err);
+              return wrapApiError(
+                "ListServices",
+                { profile, page: pages },
+                err,
+              );
             }
 
             for (const s of resp.Services ?? []) {
@@ -972,7 +976,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("GetServiceQuota (pre-increase lookup)", {
+            return wrapApiError("GetServiceQuota (pre-increase lookup)", {
               serviceCode: args.serviceCode,
               quotaCode: args.quotaCode,
               profile,
@@ -991,7 +995,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("RequestServiceQuotaIncrease", {
+            return wrapApiError("RequestServiceQuotaIncrease", {
               serviceCode: args.serviceCode,
               quotaCode: args.quotaCode,
               desiredValue: args.desiredValue,
@@ -1083,7 +1087,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("GetRequestedServiceQuotaChange", {
+            return wrapApiError("GetRequestedServiceQuotaChange", {
               requestId: args.requestId,
               profile,
             }, err);
@@ -1291,7 +1295,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("DescribeCases", {
+            return wrapApiError("DescribeCases", {
               displayId: args.displayId,
               profile,
             }, err);
@@ -1329,7 +1333,7 @@ export const model = {
                 }),
               );
             } catch (err) {
-              wrapApiError("DescribeCommunications", {
+              return wrapApiError("DescribeCommunications", {
                 caseId: internalCaseId,
                 displayId: args.displayId,
                 profile,

@@ -200,7 +200,7 @@ async function getAccountId(profile: string): Promise<string> {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
   } catch (err) {
-    wrapApiError("GetCallerIdentity", { profile }, err);
+    return wrapApiError("GetCallerIdentity", { profile }, err);
   } finally {
     sts.destroy();
   }
@@ -371,7 +371,7 @@ export const model = {
                 }),
               );
             } catch (err) {
-              wrapApiError("DescribeCases (list_cases)", {
+              return wrapApiError("DescribeCases (list_cases)", {
                 profile,
                 includeResolved,
                 page: pages,
@@ -452,7 +452,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("DescribeCases (get_case)", {
+            return wrapApiError("DescribeCases (get_case)", {
               displayId: args.displayId,
               profile,
             }, err);
@@ -488,7 +488,7 @@ export const model = {
                 }),
               );
             } catch (err) {
-              wrapApiError("DescribeCommunications (get_case)", {
+              return wrapApiError("DescribeCommunications (get_case)", {
                 caseId: internalCaseId,
                 displayId: args.displayId,
                 profile,
@@ -613,7 +613,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("CreateCase", {
+            return wrapApiError("CreateCase", {
               subject: args.subject,
               serviceCode: args.serviceCode,
               categoryCode: args.categoryCode,
@@ -699,7 +699,7 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("AddCommunicationToCase", {
+            return wrapApiError("AddCommunicationToCase", {
               caseId: args.caseId,
               profile,
             }, err);
@@ -764,7 +764,11 @@ export const model = {
               }),
             );
           } catch (err) {
-            wrapApiError("ResolveCase", { caseId: args.caseId, profile }, err);
+            return wrapApiError(
+              "ResolveCase",
+              { caseId: args.caseId, profile },
+              err,
+            );
           }
 
           const handle = await ctx.writeResource(
