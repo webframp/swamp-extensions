@@ -981,7 +981,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1730,7 +1730,10 @@ export const model = {
         tags: z.array(z.string()).optional().describe(
           "Array of tags attached to the suite.",
         ),
-        tests: z.array(z.unknown()).describe(
+        tests: z.array(z.unknown()).min(
+          1,
+          "tests must contain at least one test",
+        ).describe(
           "Array of Synthetic tests included in the suite.",
         ),
         type: z.unknown(),
@@ -1945,7 +1948,10 @@ export const model = {
         tags: z.array(z.string()).optional().describe(
           "Array of tags attached to the suite.",
         ),
-        tests: z.array(z.unknown()).describe(
+        tests: z.array(z.unknown()).min(
+          1,
+          "tests must contain at least one test",
+        ).describe(
           "Array of Synthetic tests included in the suite.",
         ),
         type: z.unknown(),
@@ -2571,7 +2577,10 @@ export const model = {
           "The public ID of the Synthetic test.",
         ),
         bucketKeyPrefix: z.unknown(),
-        parts: z.array(z.unknown()).describe(
+        parts: z.array(z.unknown()).min(
+          1,
+          "parts must contain at least one part descriptor",
+        ).describe(
           "Array of part descriptors for the multipart upload.",
         ),
       }),
@@ -2686,7 +2695,10 @@ export const model = {
         key: z.string().describe(
           "The full storage path for the uploaded file.",
         ),
-        parts: z.array(z.unknown()).describe(
+        parts: z.array(z.unknown()).min(
+          1,
+          "parts must contain at least one completed part",
+        ).describe(
           "Array of completed parts with their ETags.",
         ),
         uploadId: z.string().describe(

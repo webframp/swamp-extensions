@@ -1084,7 +1084,7 @@ export const model = {
     submit_metrics: {
       description: "Submit metrics",
       arguments: z.object({
-        series: z.array(z.unknown()).describe(
+        series: z.array(z.unknown()).min(1).describe(
           "A list of timeseries to submit to Datadog.",
         ),
       }),

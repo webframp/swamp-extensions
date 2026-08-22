@@ -1,3 +1,31 @@
+## 2026.08.21.2
+
+**Changed:** Cloudflare API failures now surface with the HTTP method, path,
+and status instead of a bare `Cloudflare API error: <message>`. This applies
+across every method in `cache.ts`, `dns.ts`, `waf.ts`, `worker.ts`, and
+`zone.ts`, since all of them share the `_lib/api.ts` request helpers. A
+non-JSON response (e.g. a gateway timeout page) or a network-level fetch
+failure previously bubbled up as a cryptic parse error or unhandled
+rejection; both now say what request was being attempted.
+
+The GraphQL-backed methods (`waf.get_security_events`,
+`cache.get_analytics`) now check `response.ok` and the GraphQL `errors`
+field before reading data, and report the zone ID on failure. A network
+error during `worker.deploy` or `worker.get_script` (source-code fetch) and
+`dns.export` now names the script or zone instead of throwing an unhandled
+rejection.
+
+**Changed:** `dns.create` and `dns.update` now reject MX and SRV records
+that omit `priority` at validation time — Cloudflare rejects these deep
+inside the API with a less specific error. `cache.purge_urls` requires 1-30
+URLs (previously unbounded, including empty); `cache.purge_tags` and
+`cache.purge_prefixes` require at least one entry. `cache.get_analytics`
+requires `since`/`until` to be numeric strings — a non-numeric value
+previously produced a `RangeError` from `Date.toISOString()` with no
+indication of which argument was bad. `waf.create_rule` and
+`waf.toggle_rule` now throw a specific error if Cloudflare returns an empty
+rule/filter list instead of crashing on `undefined.id`.
+
 ## 2026.08.21.1
 
 **Changed:** Tightened `apiToken`, `zoneId`, and `accountId` in the global

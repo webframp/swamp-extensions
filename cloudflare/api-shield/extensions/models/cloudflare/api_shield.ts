@@ -269,7 +269,7 @@ const GetApiShieldEndpointManagementRetrieveOperationsAndFeaturesAsOpenApiSchema
 /** Cloudflare API Shield — schema validation, endpoint discovery, sequence rules */
 export const model = {
   type: "@webframp/cloudflare/api-shield",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -467,11 +467,21 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
-          const result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/api_gateway/configuration`,
-          );
+          let result: Record<string, unknown>;
+          try {
+            result = await cfApi<Record<string, unknown>>(
+              apiToken,
+              "GET",
+              `/zones/${zoneId}/api_gateway/configuration`,
+            );
+          } catch (error) {
+            throw new Error(
+              `Failed to retrieve information about specific configuration properties (zoneId=${zoneId}): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              { cause: error },
+            );
+          }
 
           const handle = await context.writeResource(
             "api_shield_settings_retrieve_information_about_specific_configuration_properties",
@@ -522,12 +532,22 @@ export const model = {
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/zones/${zoneId}/api_gateway/configuration${qs}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/zones/${zoneId}/api_gateway/configuration${qs}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update configuration properties (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "api_shield_settings_set_configuration_properties",
@@ -561,11 +581,21 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
-          const result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/api_gateway/discovery`,
-          );
+          let result: Record<string, unknown>;
+          try {
+            result = await cfApi<Record<string, unknown>>(
+              apiToken,
+              "GET",
+              `/zones/${zoneId}/api_gateway/discovery`,
+            );
+          } catch (error) {
+            throw new Error(
+              `Failed to retrieve discovered operations on a zone rendered as OpenAPI schemas (zoneId=${zoneId}): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              { cause: error },
+            );
+          }
 
           const handle = await context.writeResource(
             "api_shield_api_discovery_retrieve_discovered_operations_on_a_zone_as_openapi",
@@ -603,13 +633,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/zones/${zoneId}/api_gateway/discovery/operations`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/zones/${zoneId}/api_gateway/discovery/operations`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to retrieve discovered operations on a zone (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -656,12 +697,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/zones/${zoneId}/api_gateway/discovery/operations`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PATCH",
+            `/zones/${zoneId}/api_gateway/discovery/operations`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to patch discovered operations (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "patch_discovered_operations",
@@ -675,7 +726,7 @@ export const model = {
     list_api_shield_api_discovery_retrieve_discovered_operation_by_id: {
       description: "Retrieve a discovered operation",
       arguments: z.object({
-        discovery_id: z.string(),
+        discovery_id: z.string().min(1, "discovery_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -698,13 +749,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/zones/${zoneId}/api_gateway/discovery/operations/${args.discovery_id}`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/zones/${zoneId}/api_gateway/discovery/operations/${args.discovery_id}`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to retrieve a discovered operation (zoneId=${zoneId} discovery_id=${args.discovery_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -733,7 +795,7 @@ export const model = {
     patch_discovered_operation: {
       description: "Patch discovered operation",
       arguments: z.object({
-        discovery_id: z.string(),
+        discovery_id: z.string().min(1, "discovery_id must not be empty"),
         state: z.unknown().optional(),
       }),
       execute: async (
@@ -758,12 +820,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/zones/${zoneId}/api_gateway/discovery/operations/${args.discovery_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PATCH",
+            `/zones/${zoneId}/api_gateway/discovery/operations/${args.discovery_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to patch discovered operation (zoneId=${zoneId} discovery_id=${args.discovery_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "patch_discovered_operation",
@@ -800,12 +872,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/api_gateway/expression-template/fallthrough`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/zones/${zoneId}/api_gateway/expression-template/fallthrough`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to generate fallthrough WAF expression template from a set of API hosts (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -844,13 +926,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/zones/${zoneId}/api_gateway/labels`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/zones/${zoneId}/api_gateway/labels`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to retrieve all labels (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -874,7 +967,7 @@ export const model = {
     get_managed_label: {
       description: "Retrieve managed label",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -891,11 +984,21 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/zones/${zoneId}/api_gateway/labels/managed/${args.name}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/zones/${zoneId}/api_gateway/labels/managed/${args.name}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to retrieve managed label (zoneId=${zoneId} name=${args.name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "managed_label",
@@ -909,7 +1012,7 @@ export const model = {
     update_api_shield_labels_replace_operations_attached_to_managed_label: {
       description: "Replace operation(s) attached to a managed label",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
         selector: z.unknown(),
       }),
       execute: async (
@@ -934,12 +1037,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/zones/${zoneId}/api_gateway/labels/managed/${args.name}/resources/operation`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/zones/${zoneId}/api_gateway/labels/managed/${args.name}/resources/operation`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to replace operation(s) attached to a managed label (zoneId=${zoneId} name=${args.name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "api_shield_labels_replace_operations_attached_to_managed_label",
@@ -972,12 +1085,22 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/api_gateway/labels/user`,
-          args,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/zones/${zoneId}/api_gateway/labels/user`,
+            args,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create user labels (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "create_user_labels",
@@ -1006,11 +1129,20 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/api_gateway/labels/user`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/zones/${zoneId}/api_gateway/labels/user`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete user labels (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: "unknown" });
         return { dataHandles: [] };
@@ -1019,7 +1151,7 @@ export const model = {
     get_user_label: {
       description: "Retrieve user label",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1036,11 +1168,21 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to retrieve user label (zoneId=${zoneId} name=${args.name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "user_label",
@@ -1054,7 +1196,7 @@ export const model = {
     put_user_label: {
       description: "Update user label",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
         description: z.unknown().optional(),
         metadata: z.unknown().optional(),
       }),
@@ -1080,12 +1222,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update user label (zoneId=${zoneId} name=${args.name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "put_user_label",
@@ -1099,7 +1251,7 @@ export const model = {
     patch_user_label: {
       description: "Patch user label",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
         description: z.unknown().optional(),
         metadata: z.unknown().optional(),
       }),
@@ -1125,12 +1277,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PATCH",
+            `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to patch user label (zoneId=${zoneId} name=${args.name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "patch_user_label",
@@ -1144,7 +1306,7 @@ export const model = {
     delete_user_label: {
       description: "Delete user label",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1161,11 +1323,20 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/zones/${zoneId}/api_gateway/labels/user/${args.name}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete user label (zoneId=${zoneId} name=${args.name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.name });
         return { dataHandles: [] };
@@ -1174,7 +1345,7 @@ export const model = {
     update_api_shield_labels_replace_operations_attached_to_user_label: {
       description: "Replace operation(s) attached to a user label",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
         selector: z.unknown(),
       }),
       execute: async (
@@ -1199,12 +1370,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/zones/${zoneId}/api_gateway/labels/user/${args.name}/resources/operation`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/zones/${zoneId}/api_gateway/labels/user/${args.name}/resources/operation`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to replace operation(s) attached to a user label (zoneId=${zoneId} name=${args.name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "api_shield_labels_replace_operations_attached_to_user_label",
@@ -1246,13 +1427,24 @@ export const model = {
             if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
           }
 
-          const { results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/zones/${zoneId}/api_gateway/operations`,
-            params,
-          );
+          let results: Record<string, unknown>[];
+          let truncated: boolean;
+          try {
+            ({ results, truncated } = await cfApiPaginated<
+              Record<string, unknown>
+            >(
+              apiToken,
+              `/zones/${zoneId}/api_gateway/operations`,
+              params,
+            ));
+          } catch (error) {
+            throw new Error(
+              `Failed to retrieve information about all operations on a zone (zoneId=${zoneId}): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              { cause: error },
+            );
+          }
 
           if (truncated) {
             context.logger.info(
@@ -1297,12 +1489,22 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/api_gateway/operations`,
-          args,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/zones/${zoneId}/api_gateway/operations`,
+            args,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to add operations to a zone (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "api_shield_endpoint_management_add_operations_to_a_zone",
@@ -1334,11 +1536,20 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/api_gateway/operations`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/zones/${zoneId}/api_gateway/operations`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete multiple operations (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: "unknown" });
         return { dataHandles: [] };
@@ -1369,12 +1580,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/api_gateway/operations/item`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/zones/${zoneId}/api_gateway/operations/item`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to add one operation to a zone (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -1419,12 +1640,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/api_gateway/operations/labels`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/zones/${zoneId}/api_gateway/operations/labels`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to bulk attach label(s) on operation(s) in endpoint management (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -1469,12 +1700,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/zones/${zoneId}/api_gateway/operations/labels`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/zones/${zoneId}/api_gateway/operations/labels`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to bulk replace label(s) on operation(s) in endpoint management (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "put_labels_to_operations",
@@ -1512,11 +1753,20 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/api_gateway/operations/labels`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/zones/${zoneId}/api_gateway/operations/labels`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to bulk remove label(s) on operation(s) in endpoint management (zoneId=${zoneId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: "unknown" });
         return { dataHandles: [] };
@@ -1526,7 +1776,7 @@ export const model = {
       {
         description: "Retrieve information about an operation",
         arguments: z.object({
-          operation_id: z.string(),
+          operation_id: z.string().min(1, "operation_id must not be empty"),
         }),
         execute: async (
           args: Record<string, unknown>,
@@ -1543,11 +1793,21 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
-          const result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/api_gateway/operations/${args.operation_id}`,
-          );
+          let result: Record<string, unknown>;
+          try {
+            result = await cfApi<Record<string, unknown>>(
+              apiToken,
+              "GET",
+              `/zones/${zoneId}/api_gateway/operations/${args.operation_id}`,
+            );
+          } catch (error) {
+            throw new Error(
+              `Failed to retrieve information about an operation (zoneId=${zoneId} operation_id=${args.operation_id}): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              { cause: error },
+            );
+          }
 
           const handle = await context.writeResource(
             "api_shield_endpoint_management_retrieve_information_about_an_operation",
@@ -1564,7 +1824,7 @@ export const model = {
     delete_an_operation: {
       description: "Delete an operation",
       arguments: z.object({
-        operation_id: z.string(),
+        operation_id: z.string().min(1, "operation_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1581,11 +1841,20 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/api_gateway/operations/${args.operation_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/zones/${zoneId}/api_gateway/operations/${args.operation_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an operation (zoneId=${zoneId} operation_id=${args.operation_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.operation_id });
         return { dataHandles: [] };
@@ -1594,7 +1863,7 @@ export const model = {
     create_api_shield_operations_post_labels_to_operation: {
       description: "Attach label(s) on an operation in endpoint management",
       arguments: z.object({
-        operation_id: z.string(),
+        operation_id: z.string().min(1, "operation_id must not be empty"),
         managed: z.array(z.unknown()).optional().describe(
           "List of managed label names.",
         ),
@@ -1624,12 +1893,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to attach label(s) on an operation in endpoint management (zoneId=${zoneId} operation_id=${args.operation_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -1647,7 +1926,7 @@ export const model = {
     put_labels_to_operation: {
       description: "Replace label(s) on an operation in endpoint management",
       arguments: z.object({
-        operation_id: z.string(),
+        operation_id: z.string().min(1, "operation_id must not be empty"),
         managed: z.array(z.unknown()).optional().describe(
           "List of managed label names. Omitting this property or passing an empty array...",
         ),
@@ -1677,12 +1956,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to replace label(s) on an operation in endpoint management (zoneId=${zoneId} operation_id=${args.operation_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "put_labels_to_operation",
@@ -1696,7 +1985,7 @@ export const model = {
     delete_labels_from_operation: {
       description: "Remove label(s) on an operation in endpoint management",
       arguments: z.object({
-        operation_id: z.string(),
+        operation_id: z.string().min(1, "operation_id must not be empty"),
         managed: z.array(z.unknown()).optional().describe(
           "List of managed label names.",
         ),
@@ -1719,11 +2008,20 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/zones/${zoneId}/api_gateway/operations/${args.operation_id}/labels`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to remove label(s) on an operation in endpoint management (zoneId=${zoneId} operation_id=${args.operation_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.operation_id });
         return { dataHandles: [] };
@@ -1750,11 +2048,21 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
-          const result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/api_gateway/schemas`,
-          );
+          let result: Record<string, unknown>;
+          try {
+            result = await cfApi<Record<string, unknown>>(
+              apiToken,
+              "GET",
+              `/zones/${zoneId}/api_gateway/schemas`,
+            );
+          } catch (error) {
+            throw new Error(
+              `Failed to retrieve operations and features as OpenAPI schemas (zoneId=${zoneId}): ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              { cause: error },
+            );
+          }
 
           const handle = await context.writeResource(
             "api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas",

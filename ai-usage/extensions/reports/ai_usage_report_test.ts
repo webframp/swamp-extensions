@@ -20,13 +20,21 @@ type StoredData = Record<
   >
 >;
 
-function createReportContext(storedData: StoredData = {}) {
+function createReportContext(
+  storedData: StoredData = {},
+  warnLog: Array<{ msg: string; props: Record<string, unknown> }> = [],
+) {
   return {
     dataRepository: {
       findBySpec: (modelName: string, specName: string) => {
         const modelData = storedData[modelName];
         if (!modelData) return Promise.resolve([]);
         return Promise.resolve(modelData[specName] || []);
+      },
+    },
+    logger: {
+      warn: (msg: string, props: Record<string, unknown>) => {
+        warnLog.push({ msg, props });
       },
     },
   };
@@ -283,5 +291,32 @@ Deno.test({
     };
 
     assertEquals(json.grandTotals.totalTokens, 10000);
+  },
+});
+
+Deno.test({
+  name:
+    "report logs a warning naming the provider and error when findBySpec throws",
+  fn: async () => {
+    const warnLog: Array<{ msg: string; props: Record<string, unknown> }> = [];
+    const context = createReportContext({}, warnLog);
+    context.dataRepository.findBySpec = (
+      modelName: string,
+      _specName: string,
+    ) => {
+      if (modelName === "bedrock-usage") {
+        return Promise.reject(new Error("connection refused"));
+      }
+      return Promise.resolve([]);
+    };
+
+    const result = await report.execute(context);
+
+    assertExists(result.markdown);
+    const bedrockWarning = warnLog.find((w) =>
+      w.props.modelName === "bedrock-usage"
+    );
+    assertExists(bedrockWarning);
+    assertEquals(bedrockWarning.props.error, "connection refused");
   },
 });

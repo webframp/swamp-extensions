@@ -79,6 +79,38 @@ Deno.test("get_topic requires topicId", () => {
   assertEquals(valid.success, true);
 });
 
+Deno.test("get_topic rejects non-positive or fractional topicId", () => {
+  assertEquals(
+    model.methods.get_topic.arguments.safeParse({ topicId: 0 }).success,
+    false,
+  );
+  assertEquals(
+    model.methods.get_topic.arguments.safeParse({ topicId: -1 }).success,
+    false,
+  );
+  assertEquals(
+    model.methods.get_topic.arguments.safeParse({ topicId: 1.5 }).success,
+    false,
+  );
+});
+
+Deno.test("list_category_topics rejects non-positive categoryId and empty slug", () => {
+  assertEquals(
+    model.methods.list_category_topics.arguments.safeParse({
+      slug: "cyber-news",
+      categoryId: 0,
+    }).success,
+    false,
+  );
+  assertEquals(
+    model.methods.list_category_topics.arguments.safeParse({
+      slug: "",
+      categoryId: 8,
+    }).success,
+    false,
+  );
+});
+
 // =============================================================================
 // Execute Tests (with mocked fetch)
 // =============================================================================
@@ -244,6 +276,55 @@ Deno.test("list_category_topics fetches and stores topics for a category", async
     };
     assertEquals(data.topics[0].title, "New CVE");
     assertEquals(data.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_categories throws a descriptive error on an unexpected response shape", async () => {
+  const restore = mockFetch({
+    // A 200 response missing the expected category_list.categories array —
+    // e.g. an HTML error page or a proxy misconfiguration returning JSON in
+    // a different shape.
+    "/categories.json": { status: 200, body: { unexpected: "shape" } },
+  });
+
+  const { context } = createModelTestContext({
+    globalArgs: { host: "forum.example.com" },
+  });
+
+  try {
+    await assertRejects(
+      // deno-lint-ignore no-explicit-any
+      () => model.methods.list_categories.execute({} as any, context as any),
+      Error,
+      'expected a "category_list.categories" array',
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_latest throws a descriptive error on an unexpected response shape", async () => {
+  const restore = mockFetch({
+    "/latest.json": { status: 200, body: { unexpected: "shape" } },
+  });
+
+  const { context } = createModelTestContext({
+    globalArgs: { host: "forum.example.com" },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.list_latest.execute(
+          { page: 0 },
+          // deno-lint-ignore no-explicit-any
+          context as any,
+        ),
+      Error,
+      'expected a "topic_list.topics" array',
+    );
   } finally {
     restore();
   }

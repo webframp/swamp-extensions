@@ -2,6 +2,7 @@ import {
   assertEquals,
   assertExists,
   assertRejects,
+  assertStringIncludes,
 } from "jsr:@std/assert@1.0.19";
 import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
 import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1114.0";
@@ -165,6 +166,38 @@ Deno.test("heartbeat fails after forceRelease invalidates the nonce", async () =
   });
 });
 
+Deno.test("acquire() wraps a non-contention SDK failure with the lock operation and key", async () => {
+  await withFakeDynamo(async () => {
+    const provider = datastore.createProvider(VALID_CONFIG);
+    const lock = provider.createLock("/test/wrap-error", {
+      ttlMs: 5_000,
+      retryIntervalMs: 50,
+      maxWaitMs: 1_000,
+    });
+
+    // deno-lint-ignore no-explicit-any
+    const originalSend = (DynamoDBDocumentClient.prototype as any).send;
+    // deno-lint-ignore no-explicit-any
+    (DynamoDBDocumentClient.prototype as any).send = () => {
+      return Promise.reject(new Error("simulated ValidationException"));
+    };
+    try {
+      const err = await assertRejects(
+        () => lock.acquire(),
+        Error,
+        "simulated ValidationException",
+      );
+      // The error must name the lock operation and key, not just repeat the
+      // raw SDK error, so an operator can tell which lock's acquire failed.
+      assertStringIncludes((err as Error).message, "acquire");
+      assertStringIncludes((err as Error).message, "/test/wrap-error");
+    } finally {
+      // deno-lint-ignore no-explicit-any
+      (DynamoDBDocumentClient.prototype as any).send = originalSend;
+    }
+  });
+});
+
 Deno.test("verifier reports healthy against an active table", async () => {
   await withFakeDynamo(async () => {
     const provider = datastore.createProvider(VALID_CONFIG);
@@ -180,6 +213,28 @@ Deno.test("verifier reports unhealthy when the table is missing", async () => {
     const provider = datastore.createProvider(VALID_CONFIG);
     const result = await provider.createVerifier().verify();
     assertEquals(result.healthy, false);
+  });
+});
+
+Deno.test("verifier names the failed operation and table when DescribeTable throws", async () => {
+  await withFakeDynamo(async () => {
+    const provider = datastore.createProvider(VALID_CONFIG);
+    // deno-lint-ignore no-explicit-any
+    const originalSend = (DynamoDBClient.prototype as any).send;
+    // deno-lint-ignore no-explicit-any
+    (DynamoDBClient.prototype as any).send = () => {
+      return Promise.reject(new Error("simulated network error"));
+    };
+    try {
+      const result = await provider.createVerifier().verify();
+      assertEquals(result.healthy, false);
+      assertStringIncludes(result.message, "DescribeTable");
+      assertStringIncludes(result.message, VALID_CONFIG.tableName);
+      assertStringIncludes(result.message, "simulated network error");
+    } finally {
+      // deno-lint-ignore no-explicit-any
+      (DynamoDBClient.prototype as any).send = originalSend;
+    }
   });
 });
 

@@ -32,6 +32,30 @@ function getBaseUrl(site: string): string {
 }
 
 /**
+ * Run `fetch` and rewrap any network-level failure (DNS, connection reset,
+ * TLS, etc.) with the Datadog operation being attempted. Without this, a
+ * failed request surfaces only a bare "TypeError: error sending request"
+ * with no indication of which API call was in flight.
+ */
+async function fetchOrThrow(
+  method: string,
+  path: string,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    throw new Error(
+      `Datadog API request failed: ${method} ${path}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error },
+    );
+  }
+}
+
+/**
  * Make a single Datadog API request.
  *
  * Handles:
@@ -60,11 +84,13 @@ export async function ddApi(
     headers["Content-Type"] = "application/json";
   }
 
-  let response = await fetch(url, {
+  const init: RequestInit = {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-  });
+  };
+
+  let response = await fetchOrThrow(method, path, url, init);
 
   // 429 rate limit: read Retry-After, wait, retry once
   if (response.status === 429) {
@@ -74,15 +100,13 @@ export async function ddApi(
     );
     await response.body?.cancel();
     await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-    response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    response = await fetchOrThrow(method, path, url, init);
     if (!response.ok) {
       const text = await response.text();
       throw new Error(
-        `Datadog API rate limited (429) after retry: ${text.slice(0, 500)}`,
+        `Datadog API rate limited (429) after retry on ${method} ${path}: ${
+          text.slice(0, 500)
+        }`,
       );
     }
   }
@@ -90,7 +114,9 @@ export async function ddApi(
   if (!response.ok) {
     const text = await response.text();
     throw new Error(
-      `Datadog API HTTP ${response.status}: ${text.slice(0, 500)}`,
+      `Datadog API ${method} ${path} failed with HTTP ${response.status}: ${
+        text.slice(0, 500)
+      }`,
     );
   }
 
@@ -179,7 +205,7 @@ export async function ddApiPaginated(
         queryParts.length > 0 ? separator + queryParts.join("&") : ""
       }`;
 
-      let response = await fetch(url, { headers });
+      let response = await fetchOrThrow("GET", path, url, { headers });
 
       // 429 retry
       if (response.status === 429) {
@@ -189,11 +215,11 @@ export async function ddApiPaginated(
         );
         await response.body?.cancel();
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-        response = await fetch(url, { headers });
+        response = await fetchOrThrow("GET", path, url, { headers });
         if (!response.ok) {
           const text = await response.text();
           throw new Error(
-            `Datadog API rate limited (429) after retry on page ${page}: ${
+            `Datadog API rate limited (429) after retry on GET ${path} (page ${page}): ${
               text.slice(0, 300)
             }`,
           );
@@ -203,7 +229,9 @@ export async function ddApiPaginated(
       if (!response.ok) {
         const text = await response.text();
         throw new Error(
-          `Datadog API HTTP ${response.status}: ${text.slice(0, 500)}`,
+          `Datadog API GET ${path} failed with HTTP ${response.status} (page ${page}): ${
+            text.slice(0, 500)
+          }`,
         );
       }
 
@@ -248,7 +276,7 @@ export async function ddApiPaginated(
         queryParts.length > 0 ? separator + queryParts.join("&") : ""
       }`;
 
-      let response = await fetch(url, { headers });
+      let response = await fetchOrThrow("GET", path, url, { headers });
 
       // 429 retry
       if (response.status === 429) {
@@ -258,11 +286,11 @@ export async function ddApiPaginated(
         );
         await response.body?.cancel();
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-        response = await fetch(url, { headers });
+        response = await fetchOrThrow("GET", path, url, { headers });
         if (!response.ok) {
           const text = await response.text();
           throw new Error(
-            `Datadog API rate limited (429) after retry on page ${page}: ${
+            `Datadog API rate limited (429) after retry on GET ${path} (page ${page}): ${
               text.slice(0, 300)
             }`,
           );
@@ -272,7 +300,9 @@ export async function ddApiPaginated(
       if (!response.ok) {
         const text = await response.text();
         throw new Error(
-          `Datadog API HTTP ${response.status}: ${text.slice(0, 500)}`,
+          `Datadog API GET ${path} failed with HTTP ${response.status} (page ${page}): ${
+            text.slice(0, 500)
+          }`,
         );
       }
 
@@ -314,7 +344,7 @@ export async function ddApiPaginated(
         queryParts.length > 0 ? separator + queryParts.join("&") : ""
       }`;
 
-      let response = await fetch(url, { headers });
+      let response = await fetchOrThrow("GET", path, url, { headers });
 
       // 429 retry
       if (response.status === 429) {
@@ -324,11 +354,11 @@ export async function ddApiPaginated(
         );
         await response.body?.cancel();
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-        response = await fetch(url, { headers });
+        response = await fetchOrThrow("GET", path, url, { headers });
         if (!response.ok) {
           const text = await response.text();
           throw new Error(
-            `Datadog API rate limited (429) after retry on page ${page}: ${
+            `Datadog API rate limited (429) after retry on GET ${path} (page ${page}): ${
               text.slice(0, 300)
             }`,
           );
@@ -338,7 +368,9 @@ export async function ddApiPaginated(
       if (!response.ok) {
         const text = await response.text();
         throw new Error(
-          `Datadog API HTTP ${response.status}: ${text.slice(0, 500)}`,
+          `Datadog API GET ${path} failed with HTTP ${response.status} (page ${page}): ${
+            text.slice(0, 500)
+          }`,
         );
       }
 
@@ -368,7 +400,7 @@ export async function ddApiPaginated(
       queryParts.length > 0 ? separator + queryParts.join("&") : ""
     }`;
 
-    let response = await fetch(url, { headers });
+    let response = await fetchOrThrow("GET", path, url, { headers });
 
     // 429 retry
     if (response.status === 429) {
@@ -378,11 +410,13 @@ export async function ddApiPaginated(
       );
       await response.body?.cancel();
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-      response = await fetch(url, { headers });
+      response = await fetchOrThrow("GET", path, url, { headers });
       if (!response.ok) {
         const text = await response.text();
         throw new Error(
-          `Datadog API rate limited (429) after retry: ${text.slice(0, 300)}`,
+          `Datadog API rate limited (429) after retry on GET ${path}: ${
+            text.slice(0, 300)
+          }`,
         );
       }
     }
@@ -390,7 +424,9 @@ export async function ddApiPaginated(
     if (!response.ok) {
       const text = await response.text();
       throw new Error(
-        `Datadog API HTTP ${response.status}: ${text.slice(0, 500)}`,
+        `Datadog API GET ${path} failed with HTTP ${response.status}: ${
+          text.slice(0, 500)
+        }`,
       );
     }
 
@@ -551,7 +587,7 @@ export async function ddApiPostPaginated(
     }
 
     const url = `${baseUrl}${path}`;
-    let response = await fetch(url, {
+    let response = await fetchOrThrow("POST", path, url, {
       method: "POST",
       headers,
       body: JSON.stringify(requestBody),
@@ -565,7 +601,7 @@ export async function ddApiPostPaginated(
       );
       await response.body?.cancel();
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-      response = await fetch(url, {
+      response = await fetchOrThrow("POST", path, url, {
         method: "POST",
         headers,
         body: JSON.stringify(requestBody),
@@ -573,7 +609,7 @@ export async function ddApiPostPaginated(
       if (!response.ok) {
         const text = await response.text();
         throw new Error(
-          `Datadog API rate limited (429) after retry on page ${page}: ${
+          `Datadog API rate limited (429) after retry on POST ${path} (page ${page}): ${
             text.slice(0, 300)
           }`,
         );
@@ -583,7 +619,9 @@ export async function ddApiPostPaginated(
     if (!response.ok) {
       const text = await response.text();
       throw new Error(
-        `Datadog API HTTP ${response.status}: ${text.slice(0, 500)}`,
+        `Datadog API POST ${path} failed with HTTP ${response.status} (page ${page}): ${
+          text.slice(0, 500)
+        }`,
       );
     }
 

@@ -82,6 +82,50 @@ Deno.test("model type and version are correct", () => {
   assertMatch(model.version, /^\d{4}\.\d{2}\.\d{2}\.\d+$/);
 });
 
+Deno.test("globalArguments rejects a malformed vpcId", () => {
+  const result = model.globalArguments.safeParse({
+    region: "us-east-1",
+    vpcId: "not-a-vpc-id",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("globalArguments rejects a malformed region", () => {
+  const result = model.globalArguments.safeParse({
+    region: "US_EAST_1!",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test({
+  name: "discover_vpcs failure names the operation and region",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockClients({
+      ec2: () => {
+        throw new Error("boom");
+      },
+    });
+    try {
+      const { context } = makeContext();
+      let message = "";
+      try {
+        await model.methods.discover_vpcs.execute(
+          {} as Record<string, never>,
+          context as ExecuteContext,
+        );
+      } catch (err) {
+        message = err instanceof Error ? err.message : String(err);
+      }
+      assertMatch(message, /DescribeVpcs/);
+      assertMatch(message, /us-east-1/);
+      assertMatch(message, /boom/);
+    } finally {
+      restore();
+    }
+  },
+});
+
 // =============================================================================
 // discover_vpcs Tests
 // =============================================================================

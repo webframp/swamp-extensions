@@ -122,7 +122,7 @@ const ListAllTunnelsSchema = z.object({
 /** Cloudflare Tunnel — tunnel management, configurations, connections */
 export const model = {
   type: "@webframp/cloudflare/tunnel",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -297,7 +297,7 @@ export const model = {
     get_a_cloudflare_tunnel: {
       description: "Get a Cloudflare Tunnel",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -332,7 +332,7 @@ export const model = {
     update_a_cloudflare_tunnel: {
       description: "Update a Cloudflare Tunnel",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
         name: z.unknown().optional(),
         tunnel_secret: z.unknown().optional(),
       }),
@@ -377,7 +377,7 @@ export const model = {
     delete_a_cloudflare_tunnel: {
       description: "Delete a Cloudflare Tunnel",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -407,7 +407,7 @@ export const model = {
     get_configuration: {
       description: "Get configuration",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -442,7 +442,7 @@ export const model = {
     put_configuration: {
       description: "Put configuration",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
         config: z.unknown().optional(),
       }),
       execute: async (
@@ -486,7 +486,7 @@ export const model = {
     list_cloudflare_tunnel_connections: {
       description: "List Cloudflare Tunnel connections",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -543,7 +543,7 @@ export const model = {
     delete_cloudflare_tunnel_clean_up_cloudflare_tunnel_connections: {
       description: "Clean up Cloudflare Tunnel connections",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
         client_id: z.string().optional(),
       }),
       execute: async (
@@ -574,8 +574,8 @@ export const model = {
     get_cloudflare_tunnel_connector: {
       description: "Get Cloudflare Tunnel connector",
       arguments: z.object({
-        tunnel_id: z.string(),
-        connector_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        connector_id: z.string().min(1, "connector_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -610,7 +610,7 @@ export const model = {
     get_a_cloudflare_tunnel_management_token: {
       description: "Get a Cloudflare Tunnel management token",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
         resources: z.array(z.unknown()),
       }),
       execute: async (
@@ -658,7 +658,7 @@ export const model = {
     get_a_cloudflare_tunnel_token: {
       description: "Get a Cloudflare Tunnel token",
       arguments: z.object({
-        tunnel_id: z.string(),
+        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,

@@ -21,7 +21,8 @@ import { z } from "npm:zod@4.4.3";
 /** Global arguments for the vertex-usage model. */
 const GlobalArgsSchema = z.object({
   projects: z
-    .array(z.string())
+    .array(z.string().min(1))
+    .min(1, "At least one GCP project ID must be configured")
     .describe("GCP project IDs to scan for Vertex AI metrics"),
   serviceAccountJson: z
     .string()
@@ -197,9 +198,20 @@ async function getAccessToken(
     );
   }
 
-  const data = (await resp.json()) as { access_token?: string };
+  let data: { access_token?: string };
+  try {
+    data = (await resp.json()) as { access_token?: string };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `GCP token exchange returned malformed JSON for service account "${sa.client_email}": ${msg}`,
+      { cause: err },
+    );
+  }
   if (!data.access_token) {
-    throw new Error("GCP token response missing access_token field");
+    throw new Error(
+      `GCP token exchange response for service account "${sa.client_email}" is missing the access_token field`,
+    );
   }
   return data.access_token;
 }
@@ -219,10 +231,28 @@ function resolveServiceAccount(
             "environment variable is not set. Provide one or the other.",
         );
       }
-      return Deno.readTextFileSync(path);
+      try {
+        return Deno.readTextFileSync(path);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `Failed to read service account key file at GOOGLE_APPLICATION_CREDENTIALS ` +
+            `path "${path}": ${msg}`,
+          { cause: err },
+        );
+      }
     })();
 
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Service account credentials are not valid JSON: ${msg}`,
+      { cause: err },
+    );
+  }
   if (!parsed.client_email || !parsed.private_key) {
     throw new Error(
       "Service account JSON must contain client_email and private_key fields",
@@ -299,10 +329,13 @@ async function queryTokenMetrics(
       if (body.includes("Cannot find metric")) {
         return { data: [], truncated: false };
       }
-      throw new Error(`Monitoring API error for ${project}: ${resp.status}`);
+      throw new Error(
+        `Cloud Monitoring API request failed for project "${project}" ` +
+          `(HTTP ${resp.status}): ${body}`,
+      );
     }
 
-    const data = (await resp.json()) as {
+    let data: {
       timeSeries?: Array<{
         metric?: { labels?: Record<string, string> };
         resource?: { labels?: Record<string, string> };
@@ -312,6 +345,15 @@ async function queryTokenMetrics(
       }>;
       nextPageToken?: string;
     };
+    try {
+      data = await resp.json();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Cloud Monitoring API returned malformed JSON for project "${project}": ${msg}`,
+        { cause: err },
+      );
+    }
 
     for (const ts of data.timeSeries || []) {
       const labels = ts.metric?.labels || {};
@@ -341,7 +383,7 @@ async function queryTokenMetrics(
 /** GCP Vertex AI token usage monitoring model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.07.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -349,6 +391,12 @@ export const model = {
       toVersion: "2026.07.21.1",
       description:
         "Remove gcloud CLI dependency; auth via service account JSON key",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Add error-message context for credentials/JSON parsing/Monitoring API failures; require at least one configured project",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

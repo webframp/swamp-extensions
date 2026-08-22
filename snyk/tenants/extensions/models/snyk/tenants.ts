@@ -565,7 +565,7 @@ const CreateTenantRoleSchema = z.object({
 /** Snyk Tenants — tenant and organization lifecycle management */
 export const model = {
   type: "@webframp/snyk/tenants",
-  version: "2026.07.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

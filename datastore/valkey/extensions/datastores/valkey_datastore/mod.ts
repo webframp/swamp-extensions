@@ -1078,38 +1078,64 @@ function createSyncService(
           ),
       );
       if (oldPaths.length > 0) {
-        // Check which are tombstones (deleted: "true")
-        const pipeline = redis.pipeline();
-        for (const p of oldPaths) {
-          pipeline.hget(metaKey(prefix, p), "deleted");
-        }
-        const gcResults = await pipeline.exec();
-        if (gcResults) {
-          const toEvict: string[] = [];
-          for (let i = 0; i < oldPaths.length; i++) {
-            const [err, val] = gcResults[i];
-            if (!err && val === "true") toEvict.push(oldPaths[i]);
+        // Tombstone GC is best-effort: a connection blip here must not fail
+        // an otherwise-successful push. If either pipeline throws entirely
+        // (rather than resolving with per-command errors), minRetainedKey
+        // simply doesn't advance and stale clients keep falling back to a
+        // full pull — the same safe outcome as a partial-eviction failure.
+        try {
+          // Check which are tombstones (deleted: "true")
+          const pipeline = redis.pipeline();
+          for (const p of oldPaths) {
+            pipeline.hget(metaKey(prefix, p), "deleted");
           }
-          if (toEvict.length > 0) {
-            const gcPipeline = redis.pipeline();
-            for (const p of toEvict) {
-              gcPipeline.zrem(pathIdx, p);
-              gcPipeline.del(metaKey(prefix, p));
+          const gcResults = await pipelineSpan(
+            "tombstoneGcScan",
+            oldPaths.length,
+            async (span) => {
+              const r = await pipeline.exec();
+              recordPipelineResults(span, r);
+              return r;
+            },
+          );
+          if (gcResults) {
+            const toEvict: string[] = [];
+            for (let i = 0; i < oldPaths.length; i++) {
+              const [err, val] = gcResults[i];
+              if (!err && val === "true") toEvict.push(oldPaths[i]);
             }
-            const evictResults = await gcPipeline.exec();
-            // Only advance minRetainedKey if ALL evictions succeeded.
-            // Partial failure leaves orphan entries but doesn't advance the
-            // threshold, so stale clients still get the full-pull fallback.
-            const allSucceeded = evictResults !== null &&
-              evictResults.every(([err]) => err === null);
-            if (allSucceeded) {
-              await commandSpan(
-                "SET",
-                minRetainedKey,
-                () => redis.set(minRetainedKey, String(gcThreshold + 1)),
+            if (toEvict.length > 0) {
+              const gcPipeline = redis.pipeline();
+              for (const p of toEvict) {
+                gcPipeline.zrem(pathIdx, p);
+                gcPipeline.del(metaKey(prefix, p));
+              }
+              const evictResults = await pipelineSpan(
+                "tombstoneGcEvict",
+                toEvict.length * 2,
+                async (span) => {
+                  const r = await gcPipeline.exec();
+                  recordPipelineResults(span, r);
+                  return r;
+                },
               );
+              // Only advance minRetainedKey if ALL evictions succeeded.
+              // Partial failure leaves orphan entries but doesn't advance the
+              // threshold, so stale clients still get the full-pull fallback.
+              const allSucceeded = evictResults !== null &&
+                evictResults.every(([err]) => err === null);
+              if (allSucceeded) {
+                await commandSpan(
+                  "SET",
+                  minRetainedKey,
+                  () => redis.set(minRetainedKey, String(gcThreshold + 1)),
+                );
+              }
             }
           }
+        } catch {
+          // Swallowed deliberately — see comment above. The push itself
+          // already succeeded by the time GC runs.
         }
       }
     }

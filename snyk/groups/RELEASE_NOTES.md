@@ -1,9 +1,11 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Schema tightening sweep — no behavioral changes.
+**Changed:** Snyk API request failures now name the HTTP method and path that
+was attempted (e.g. `Snyk API GET /groups/{groupId}/orgs failed with HTTP 403:
+...`) instead of surfacing only the raw status and body. Network-level
+failures (DNS, timeout, connection reset) are also caught and re-raised with
+the same method/path context and the original error preserved as `cause`,
+rather than propagating an unlabeled fetch error.
 
-- Added `.min(1)` to `apiToken`, `groupId`, and the group/organization
-  `name` fields (they cannot legitimately be empty).
-- Added `.describe(...)` to previously undocumented fields on the group
-  policy schemas: `action`, `action_type`, `conditions_group` (and its
-  `logical_operator`), `created_at`, `created_by`, `name`, and `updated_at`.
+**Upgrade note:** No changes to stored resource schemas. Existing instances
+need no migration.

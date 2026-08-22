@@ -183,7 +183,17 @@ async function waitForQueryCompletion(
 
   while (Date.now() - startTime < maxWaitMs) {
     const command = new GetQueryResultsCommand({ queryId });
-    const response = await client.send(command);
+    let response;
+    try {
+      response = await client.send(command);
+    } catch (err) {
+      throw new Error(
+        `Failed to get results for Logs Insights query "${queryId}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        { cause: err },
+      );
+    }
 
     status = response.status || "Unknown";
 
@@ -268,7 +278,7 @@ async function waitForQueryCompletion(
  */
 export const model = {
   type: "@webframp/aws/logs",
-  version: "2026.08.20.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -290,6 +300,17 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Tighten find_errors/get_recent_events validation, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description: "Error-message quality improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -353,7 +374,19 @@ export const model = {
               nextToken,
               limit: Math.min(50, args.limit - logGroups.length),
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `Failed to describe CloudWatch log groups${
+                  args.prefix ? ` with prefix "${args.prefix}"` : ""
+                } (region=${context.globalArgs.region}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
 
             if (response.logGroups) {
               for (const lg of response.logGroups) {
@@ -403,9 +436,11 @@ export const model = {
       arguments: z.object({
         logGroupNames: z
           .array(z.string())
+          .min(1, "at least one log group name required")
           .describe("Log group names to query"),
         queryString: z
           .string()
+          .min(1, "queryString must not be empty")
           .describe(
             "Logs Insights query string (e.g., 'fields @timestamp, @message | filter @message like /error/i | limit 50')",
           ),
@@ -465,11 +500,25 @@ export const model = {
             endTime: Math.floor(endTime.getTime() / 1000),
           });
 
-          const startResponse = await client.send(startCommand);
+          let startResponse;
+          try {
+            startResponse = await client.send(startCommand);
+          } catch (err) {
+            throw new Error(
+              `Failed to start Logs Insights query on log group(s) [${
+                args.logGroupNames.join(", ")
+              }]: ${err instanceof Error ? err.message : String(err)}`,
+              { cause: err },
+            );
+          }
           const queryId = startResponse.queryId;
 
           if (!queryId) {
-            throw new Error("Failed to start query - no queryId returned");
+            throw new Error(
+              `StartQuery for log group(s) [${
+                args.logGroupNames.join(", ")
+              }] returned no queryId`,
+            );
           }
 
           context.logger.info("Started query {queryId}", { queryId });
@@ -586,11 +635,25 @@ export const model = {
             endTime: Math.floor(endTime.getTime() / 1000),
           });
 
-          const startResponse = await client.send(startCommand);
+          let startResponse;
+          try {
+            startResponse = await client.send(startCommand);
+          } catch (err) {
+            throw new Error(
+              `Failed to start error-pattern query on log group(s) [${
+                args.logGroupNames.join(", ")
+              }]: ${err instanceof Error ? err.message : String(err)}`,
+              { cause: err },
+            );
+          }
           const queryId = startResponse.queryId;
 
           if (!queryId) {
-            throw new Error("Failed to start error query");
+            throw new Error(
+              `StartQuery for error-pattern search on log group(s) [${
+                args.logGroupNames.join(", ")
+              }] returned no queryId`,
+            );
           }
 
           const { results } = await waitForQueryCompletion(
@@ -748,7 +811,17 @@ export const model = {
               nextToken,
             });
 
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `Failed to filter log events for log group "${args.logGroupName}": ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
 
             if (response.events) {
               for (const event of response.events) {

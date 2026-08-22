@@ -1,6 +1,20 @@
+## 2026.08.21.2
+
+**Changed:** Valkey command failures now name the operation and key they were
+acting on instead of surfacing the bare driver error (e.g. a `NOSCRIPT` reply
+now reads as `Valkey EVAL on key "swamp:_lock:..." failed: NOSCRIPT`). The
+original error's name is preserved, so anything matching on
+`error.name`/`instanceof` is unaffected. Tombstone garbage collection during
+`pushChanged`/`commitPush` is now wrapped so a connection blip during GC can no
+longer fail an otherwise-successful push — previously an unguarded pipeline
+failure there propagated and discarded a push that had already committed its
+writes.
+
 ## 2026.08.21.1
 
-**Changed:** Added a description to the previously-undocumented `tls.rejectUnauthorized` field in the config schema, explaining what it verifies and when to disable it.
+**Changed:** Added a description to the previously-undocumented
+`tls.rejectUnauthorized` field in the config schema, explaining what it verifies
+and when to disable it.
 
 ## 2026.08.02.1
 
@@ -19,9 +33,9 @@ delete made deletions invisible to score-range queries.
 **Changed:** Dirty-path diffs are collected in parallel and applied in a single
 `applyChanges` call (1-3 pipeline flushes instead of N separate cycles).
 
-**Changed:** `INCR` for the commit sequence now runs before pipeline writes,
-not after. Each concurrent writer atomically reserves a unique seq. A wasted seq
-on crash is acceptable — seq gaps do not affect correctness.
+**Changed:** `INCR` for the commit sequence now runs before pipeline writes, not
+after. Each concurrent writer atomically reserves a unique seq. A wasted seq on
+crash is acceptable — seq gaps do not affect correctness.
 
 **Changed:** Pull throws on PATH_LIMIT truncation instead of silently dropping
 paths beyond 50,000.
@@ -42,12 +56,12 @@ trips emit one span each (`Valkey SET`, `Valkey ZRANGEBYLEX`,
 `Valkey GETBUFFER`, `Valkey EVAL`, …) carrying `db.system.name`,
 `db.operation.name`, and the key. Pipeline flushes emit
 `Valkey pipeline writeFiles` / `deleteFiles` / `fetchMetadata` / `fetchHashes`
-with the batched command count. The lock emits
-`valkey-datastore lock acquire` / `release` / `withLock` / `inspect` /
-`forceRelease`, with acquire recording wait duration and whether it contended.
-The sync service emits `valkey-datastore pullChanged` / `pushChanged` /
-`hydrateFile` / `preparePush` / `commitPush` with file counts, path counts, the
-remote sequence number, and fast-path indicators.
+with the batched command count. The lock emits `valkey-datastore lock acquire` /
+`release` / `withLock` / `inspect` / `forceRelease`, with acquire recording wait
+duration and whether it contended. The sync service emits
+`valkey-datastore pullChanged` / `pushChanged` / `hydrateFile` / `preparePush` /
+`commitPush` with file counts, path counts, the remote sequence number, and
+fast-path indicators.
 
 **Added:** Lock contention retries are recorded as `retry` span events on the
 acquire span.
@@ -59,15 +73,15 @@ batch would otherwise have left a span reporting success. `pullChanged` also
 reports `datastore.files_skipped` for paths whose metadata read failed, which
 were previously dropped silently.
 
-**Changed:** `pushChanged` and `commitPush` now report
-`datastore.files_pushed` and `datastore.files_deleted` separately. `applyChanges`
-returns a single count covering writes and deletes together, and reporting that
-as a file count would have overstated pushes whenever tombstones were involved.
-The value returned to callers is unchanged.
+**Changed:** `pushChanged` and `commitPush` now report `datastore.files_pushed`
+and `datastore.files_deleted` separately. `applyChanges` returns a single count
+covering writes and deletes together, and reporting that as a file count would
+have overstated pushes whenever tombstones were involved. The value returned to
+callers is unchanged.
 
 **Changed:** Nothing else observable without tracing configured. The extension
-depends on `@opentelemetry/api` only; the host process owns the
-TracerProvider, and every span is a no-op when none is registered.
+depends on `@opentelemetry/api` only; the host process owns the TracerProvider,
+and every span is a no-op when none is registered.
 
 **Note:** Spans are placed on the round trips that carry latency — index range
 scans, blob reads, and pipeline flushes — rather than on every one of the

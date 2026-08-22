@@ -273,8 +273,12 @@ Deno.test({
             ) => Promise<{ dataHandles: unknown[] }>;
           }
         >).create_slo_report_job.execute({ "name": "test-resource" }, context);
-      } catch (_err) {
+      } catch (err) {
         threw = true;
+        // The error must name the HTTP method and path attempted, not just
+        // the raw response body, so failures are identifiable at a glance.
+        assertStringIncludes((err as Error).message, "POST");
+        assertStringIncludes((err as Error).message, "/slo/report");
       }
       assertEquals(threw, true);
     } finally {
@@ -283,3 +287,36 @@ Deno.test({
     }
   },
 });
+
+Deno.test(
+  "slos model: create_slo_report_job rejects to_ts not after from_ts",
+  () => {
+    const result = model.methods.create_slo_report_job.arguments.safeParse({
+      from_ts: 1000,
+      to_ts: 1000,
+      query: "service:web",
+    });
+    assertEquals(result.success, false);
+  },
+);
+
+Deno.test(
+  "slos model: create_slo_report_job rejects empty query",
+  () => {
+    const result = model.methods.create_slo_report_job.arguments.safeParse({
+      from_ts: 1000,
+      to_ts: 2000,
+      query: "",
+    });
+    assertEquals(result.success, false);
+  },
+);
+
+Deno.test(
+  "slos model: get_slo_report_job_status rejects empty report_id",
+  () => {
+    const result = model.methods.get_slo_report_job_status.arguments
+      .safeParse({ report_id: "" });
+    assertEquals(result.success, false);
+  },
+);

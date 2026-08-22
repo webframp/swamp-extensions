@@ -72,13 +72,38 @@ export const report = {
       dataName: string,
       version: number,
     ): Promise<Record<string, unknown> | null> {
+      // Data path: .swamp/data/{modelType}/{modelId}/{dataName}/{version}/raw
+      const dataPath =
+        `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
+      let content: string;
       try {
-        // Data path: .swamp/data/{modelType}/{modelId}/{dataName}/{version}/raw
-        const dataPath =
-          `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
-        const content = await Deno.readTextFile(dataPath);
+        content = await Deno.readTextFile(dataPath);
+      } catch (err) {
+        // A missing file just means that step's data wasn't produced (e.g.
+        // the step didn't run) — that's expected and handled by callers.
+        // Anything else (permissions, I/O errors) is unexpected and worth
+        // surfacing so a silent gap in the report doesn't go unnoticed.
+        if (!(err instanceof Deno.errors.NotFound)) {
+          context.logger.info(
+            "Failed to read report data artifact {path}: {error}",
+            {
+              path: dataPath,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          );
+        }
+        return null;
+      }
+      try {
         return JSON.parse(content);
-      } catch {
+      } catch (err) {
+        context.logger.info(
+          "Failed to parse report data artifact {path} as JSON: {error}",
+          {
+            path: dataPath,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
         return null;
       }
     }

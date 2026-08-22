@@ -417,7 +417,9 @@ export const model = {
           value: z.string().max(26214400).describe(
             "Value to store, up to 25 MiB in length.",
           ),
-        })),
+        })).min(1).describe(
+          "Key-value pairs to write; must contain at least one entry.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -462,8 +464,8 @@ export const model = {
         namespace_id: z.string().min(1).describe(
           "Namespace identifier tag.",
         ),
-        items: z.array(z.unknown()).describe(
-          "Array of keys to delete (maximum of 10,000).",
+        items: z.array(z.unknown()).min(1).max(10000).describe(
+          "Array of keys to delete (1 to 10,000 entries).",
         ),
       }),
       execute: async (
@@ -506,8 +508,8 @@ export const model = {
         namespace_id: z.string().min(1).describe(
           "Namespace identifier tag.",
         ),
-        keys: z.array(z.unknown()).describe(
-          "Array of keys to retrieve (maximum of 100).",
+        keys: z.array(z.unknown()).min(1).max(100).describe(
+          "Array of keys to retrieve (1 to 100 entries).",
         ),
         type: z.enum(["text", "json"]).optional().describe(
           "Whether to parse JSON values in the response.",

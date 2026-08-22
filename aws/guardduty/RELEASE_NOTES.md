@@ -1,33 +1,14 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (2 packages)
+**Changed:** GuardDuty API failures now name the operation and detector/finding
+IDs involved instead of surfacing the raw SDK error. `ListDetectors`,
+`ListFindings`, `GetFindings` (in both `list_findings` and
+`get_finding_details`), and `ListMembers` failures all raise a clear error
+identifying what was being fetched and for which detector, with the original
+SDK error preserved as the cause.
 
-## 2026.08.15.1
+`list_findings`'s `severityMin` argument now enforces the documented 0-10
+range at the schema level instead of silently accepting out-of-range values
+that GuardDuty would reject deep inside the API call.
 
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (2 packages)
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (2 packages)
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (2 packages)
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.30.2`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.30.2`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (2 packages)
-
-## 2026.07.30.2
-
-**Added:** Pre-flight check with actionable error message when no GuardDuty detector
-exists. The error now names the region, explains that GuardDuty must be enabled, and
-provides the exact swamp commands to create a detector via `@swamp/aws/guardduty/detector`.
-
-**Changed:** Extension description and README clarify that this is a read-only
-observability model. A new Prerequisites section documents the detector requirement
-and links to the infrastructure model for setup.
+No schema changes.

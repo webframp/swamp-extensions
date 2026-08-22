@@ -488,3 +488,30 @@ Deno.test({
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Non-empty bulk-update payload validation
+// ---------------------------------------------------------------------------
+
+Deno.test(
+  "update_assets_bulk_group rejects an empty data array",
+  () => {
+    const result = model.methods.update_assets_bulk_group.arguments
+      .safeParse({
+        group_id: "group-1",
+        data: [],
+      });
+    assertEquals(result.success, false);
+  },
+);
+
+Deno.test(
+  "update_assets_bulk_org rejects an empty data array",
+  () => {
+    const result = model.methods.update_assets_bulk_org.arguments
+      .safeParse({
+        data: [],
+      });
+    assertEquals(result.success, false);
+  },
+);

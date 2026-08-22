@@ -278,6 +278,27 @@ function mapFindingSummary(f: AwsSecurityFinding) {
   };
 }
 
+/**
+ * Wrap an error from an external AWS API call with the operation being
+ * attempted and the relevant identifiers, preserving the original error via
+ * `cause`.
+ */
+function wrapApiError(
+  operation: string,
+  detail: Record<string, unknown>,
+  err: unknown,
+): never {
+  const detailStr = Object.entries(detail)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join(", ");
+  const message = err instanceof Error ? err.message : String(err);
+  throw new Error(
+    `${operation} failed (${detailStr}): ${message}`,
+    { cause: err },
+  );
+}
+
 /** Create a collision-resistant instance name from filter parameters. */
 function hashInstanceName(parts: Record<string, unknown>): string {
   const canonical = JSON.stringify(parts, Object.keys(parts).sort());
@@ -297,7 +318,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -313,6 +334,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Wrap SecurityHub/Organizations API errors with operation context, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -466,15 +493,26 @@ export const model = {
             ];
           }
 
-          const resp = await client.send(
-            new GetFindingsCommand({
-              Filters: filters as AwsSecurityFindingFilters,
-              MaxResults: args.limit,
-              SortCriteria: [
-                { Field: "SeverityNormalized", SortOrder: "desc" },
-              ],
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new GetFindingsCommand({
+                Filters: filters as AwsSecurityFindingFilters,
+                MaxResults: args.limit,
+                SortCriteria: [
+                  { Field: "SeverityNormalized", SortOrder: "desc" },
+                ],
+              }),
+            );
+          } catch (err) {
+            wrapApiError("GetFindings (list_findings)", {
+              productName: args.productName,
+              severityLabel: args.severityLabel,
+              accountId: args.accountId,
+              workflowStatus: args.workflowStatus,
+              startTime: startIso,
+            }, err);
+          }
 
           const findings = (resp.Findings ?? []).map(mapFindingSummary);
 
@@ -552,18 +590,26 @@ export const model = {
           const allRawFindings: AwsSecurityFinding[] = [];
           let detailToken: string | undefined;
           for (let page = 0; page < 3; page++) {
-            const resp = await client.send(
-              new GetFindingsCommand({
-                Filters: {
-                  Id: args.findingArns.map((arn) => ({
-                    Value: arn,
-                    Comparison: "EQUALS" as const,
-                  })),
-                },
-                MaxResults: 20,
-                NextToken: detailToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new GetFindingsCommand({
+                  Filters: {
+                    Id: args.findingArns.map((arn) => ({
+                      Value: arn,
+                      Comparison: "EQUALS" as const,
+                    })),
+                  },
+                  MaxResults: 20,
+                  NextToken: detailToken,
+                }),
+              );
+            } catch (err) {
+              wrapApiError("GetFindings (get_finding_details)", {
+                findingArns: args.findingArns,
+                page,
+              }, err);
+            }
             allRawFindings.push(...(resp.Findings ?? []));
             detailToken = resp.NextToken;
             if (!detailToken) break;
@@ -594,6 +640,7 @@ export const model = {
           const data = {
             findings,
             count: findings.length,
+            truncated: !!detailToken,
             notFound: args.findingArns.filter(
               (arn) => !findings.some((f) => f.arn === arn),
             ),
@@ -685,13 +732,23 @@ export const model = {
           const maxPages = 5;
 
           for (let page = 0; page < maxPages; page++) {
-            const resp = await client.send(
-              new GetFindingsCommand({
-                Filters: filters as AwsSecurityFindingFilters,
-                MaxResults: 100,
-                NextToken: nextToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new GetFindingsCommand({
+                  Filters: filters as AwsSecurityFindingFilters,
+                  MaxResults: 100,
+                  NextToken: nextToken,
+                }),
+              );
+            } catch (err) {
+              wrapApiError("GetFindings (get_severity_summary)", {
+                productName: args.productName,
+                workflowStatus: args.workflowStatus,
+                startTime: args.startTime,
+                page,
+              }, err);
+            }
             allFindings.push(...(resp.Findings ?? []));
             nextToken = resp.NextToken;
             if (!nextToken) break;
@@ -949,15 +1006,24 @@ export const model = {
             ];
           }
 
-          const resp = await client.send(
-            new GetFindingsCommand({
-              Filters: filters as AwsSecurityFindingFilters,
-              MaxResults: args.limit,
-              SortCriteria: [
-                { Field: "SeverityNormalized", SortOrder: "desc" },
-              ],
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new GetFindingsCommand({
+                Filters: filters as AwsSecurityFindingFilters,
+                MaxResults: args.limit,
+                SortCriteria: [
+                  { Field: "SeverityNormalized", SortOrder: "desc" },
+                ],
+              }),
+            );
+          } catch (err) {
+            wrapApiError("GetFindings (list_findings_by_type)", {
+              productName: args.productName,
+              severityLabel: args.severityLabel,
+              startTime: args.startTime,
+            }, err);
+          }
 
           const findings = (resp.Findings ?? []).map(mapFindingSummary);
           const grouped: Record<
@@ -1109,15 +1175,24 @@ export const model = {
             ];
           }
 
-          const resp = await client.send(
-            new GetFindingsCommand({
-              Filters: filters as AwsSecurityFindingFilters,
-              MaxResults: args.limit,
-              SortCriteria: [
-                { Field: "SeverityNormalized", SortOrder: "desc" },
-              ],
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new GetFindingsCommand({
+                Filters: filters as AwsSecurityFindingFilters,
+                MaxResults: args.limit,
+                SortCriteria: [
+                  { Field: "SeverityNormalized", SortOrder: "desc" },
+                ],
+              }),
+            );
+          } catch (err) {
+            wrapApiError("GetFindings (diff_findings)", {
+              productName: args.productName,
+              severityLabel: args.severityLabel,
+              startTime: args.startTime,
+            }, err);
+          }
 
           const currentFindings = (resp.Findings ?? []).map(mapFindingSummary);
           const suffix = hashInstanceName({
@@ -1163,7 +1238,7 @@ export const model = {
             resolvedFindings,
             newCount: newFindings.length,
             resolvedCount: resolvedFindings.length,
-            truncated: currentTruncated,
+            truncated: eitherTruncated,
             currentSnapshot: currentFindings,
             fetchedAt: new Date().toISOString(),
           };
@@ -1221,9 +1296,17 @@ export const model = {
           const maxPages = 10;
 
           for (let page = 0; page < maxPages; page++) {
-            const resp = await client.send(
-              new ListAccountsCommand({ NextToken: nextToken, MaxResults: 20 }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new ListAccountsCommand({
+                  NextToken: nextToken,
+                  MaxResults: 20,
+                }),
+              );
+            } catch (err) {
+              wrapApiError("ListAccounts (resolve_accounts)", { page }, err);
+            }
             for (const acct of resp.Accounts ?? []) {
               accounts.push({
                 id: acct.Id ?? "",
@@ -1340,16 +1423,27 @@ export const model = {
           let totalPages = 0;
 
           for (let page = 0; page < args.maxPages; page++) {
-            const resp = await client.send(
-              new GetFindingsCommand({
-                Filters: filters as AwsSecurityFindingFilters,
-                MaxResults: 100,
-                SortCriteria: [
-                  { Field: "SeverityNormalized", SortOrder: "desc" },
-                ],
-                NextToken: nextToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new GetFindingsCommand({
+                  Filters: filters as AwsSecurityFindingFilters,
+                  MaxResults: 100,
+                  SortCriteria: [
+                    { Field: "SeverityNormalized", SortOrder: "desc" },
+                  ],
+                  NextToken: nextToken,
+                }),
+              );
+            } catch (err) {
+              wrapApiError("GetFindings (list_all_findings)", {
+                productName: args.productName,
+                severityLabel: args.severityLabel,
+                workflowStatus: args.workflowStatus,
+                startTime: args.startTime,
+                page,
+              }, err);
+            }
             allFindings.push(
               ...(resp.Findings ?? []).map(mapFindingSummary),
             );
@@ -1438,18 +1532,26 @@ async function updateWorkflowStatus(
       let lookupToken: string | undefined;
       const maxLookupPages = 5;
       for (let page = 0; page < maxLookupPages; page++) {
-        const lookupResp = await client.send(
-          new GetFindingsCommand({
-            Filters: {
-              Id: chunk.map((arn) => ({
-                Value: arn,
-                Comparison: "EQUALS" as const,
-              })),
-            },
-            MaxResults: 20,
-            NextToken: lookupToken,
-          }),
-        );
+        let lookupResp;
+        try {
+          lookupResp = await client.send(
+            new GetFindingsCommand({
+              Filters: {
+                Id: chunk.map((arn) => ({
+                  Value: arn,
+                  Comparison: "EQUALS" as const,
+                })),
+              },
+              MaxResults: 20,
+              NextToken: lookupToken,
+            }),
+          );
+        } catch (err) {
+          wrapApiError(`GetFindings (${status.toLowerCase()} lookup)`, {
+            chunk,
+            page,
+          }, err);
+        }
         foundFindings.push(...(lookupResp.Findings ?? []));
         lookupToken = lookupResp.NextToken;
         if (!lookupToken) break;
@@ -1467,13 +1569,20 @@ async function updateWorkflowStatus(
       ProductArn: f.ProductArn!,
     }));
 
-    const resp = await client.send(
-      new BatchUpdateFindingsCommand({
-        FindingIdentifiers: findingIdentifiers,
-        Workflow: { Status: status },
-        Note: { Text: note, UpdatedBy: "swamp-securityhub-findings" },
-      }),
-    );
+    let resp;
+    try {
+      resp = await client.send(
+        new BatchUpdateFindingsCommand({
+          FindingIdentifiers: findingIdentifiers,
+          Workflow: { Status: status },
+          Note: { Text: note, UpdatedBy: "swamp-securityhub-findings" },
+        }),
+      );
+    } catch (err) {
+      wrapApiError(`BatchUpdateFindings (set status to ${status})`, {
+        findingCount: findingIdentifiers.length,
+      }, err);
+    }
 
     const notFound = findingArns.filter(
       (arn) => !foundFindings.some((f: AwsSecurityFinding) => f.Id === arn),

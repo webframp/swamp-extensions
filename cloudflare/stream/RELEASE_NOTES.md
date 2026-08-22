@@ -1,15 +1,21 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Fixed:** Regenerated with three cloudflare-codegen fixes: (1)
-discriminated-union request bodies with a sibling top-level discriminator
-property (e.g. gateway proxy_endpoints kind) now correctly build the body from
-the full oneOf variant instead of silently dropping it to undefined; (2) DELETE
-methods with a request body (e.g. r2 delete_objects bulk-delete-by-list) now
-send that body instead of ignoring it; (3) oneOf/anyOf request body variants
-that are $ref (e.g. r2 sippy config) are now resolved to their real schema
-instead of collapsing to z.unknown(). Same generator fix as workers-scripts in
-#352, now caught up for these 7 services.
+**Changed:** Errors and validation now say what went wrong and where.
 
-**Changed:** `update_stream_subtitles_captions_upload_captions_or_subtitles`
-was removed — it is no longer present in the upstream Cloudflare API spec
-this extension is generated from.
+- Cloudflare API failures (HTTP errors and `success: false` API responses) now
+  name the HTTP method and path that was attempted, in addition to the
+  original status/message. Previously the error read only
+  `Cloudflare API error: <message>`, with no indication of which endpoint the
+  method call was hitting — now it reads
+  `Cloudflare API request failed: GET /accounts/<account>/stream/<id>: <message>`.
+  This applies to every method on this model, since they all share the same
+  request helper.
+- `identifier`, `live_input_identifier`, `output_identifier`,
+  `audio_identifier`, `download_type`, and `language` are now validated as
+  non-empty before any request is made. Passing an empty string previously
+  sent a request to a malformed URL and produced a confusing 404 from
+  Cloudflare; each now fails fast with a `<field> must not be empty` message.
+
+**Upgrade note:** No method was added, removed, or renamed. Existing callers
+that always pass non-empty identifiers see no behavioral change beyond
+clearer error text.

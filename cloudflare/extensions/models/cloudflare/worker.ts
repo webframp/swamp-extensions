@@ -96,7 +96,7 @@ export function mapBinding(
 /** Cloudflare Workers model definition with methods for script lifecycle, route management, and subdomain toggling. */
 export const model = {
   type: "@webframp/cloudflare/worker",
-  version: "2026.08.13.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -108,6 +108,14 @@ export const model = {
     {
       toVersion: "2026.08.13.1",
       description: "No schema changes — fixed bindings mapping in deploy",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Wrap deploy/get_script request and non-JSON-response failures with " +
+        "the script name and HTTP status; shared _lib/api.ts now wraps " +
+        "Cloudflare API failures with the method/path/status",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -233,12 +241,21 @@ export const model = {
         );
 
         // Get source code
-        const response = await fetch(
-          `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${args.scriptName}/content`,
-          {
-            headers: { "Authorization": `Bearer ${apiToken}` },
-          },
-        );
+        let response: Response;
+        try {
+          response = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${args.scriptName}/content`,
+            {
+              headers: { "Authorization": `Bearer ${apiToken}` },
+            },
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `Worker script content request failed for ${args.scriptName}: ${message}`,
+            { cause: err },
+          );
+        }
 
         if (response.ok) {
           const source = await response.text();
@@ -314,24 +331,45 @@ export const model = {
           new Blob([JSON.stringify(metadata)], { type: "application/json" }),
         );
 
-        const response = await fetch(
-          `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${args.scriptName}`,
-          {
-            method: "PUT",
-            headers: { "Authorization": `Bearer ${apiToken}` },
-            body: formData,
-          },
-        );
+        let response: Response;
+        try {
+          response = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${args.scriptName}`,
+            {
+              method: "PUT",
+              headers: { "Authorization": `Bearer ${apiToken}` },
+              body: formData,
+            },
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `Worker deployment request failed for script ${args.scriptName}: ${message}`,
+            { cause: err },
+          );
+        }
 
-        const data = await response.json() as {
-          success: boolean;
-          errors?: Array<{ message: string }>;
-        };
+        let data: { success: boolean; errors?: Array<{ message: string }> };
+        try {
+          data = await response.json() as {
+            success: boolean;
+            errors?: Array<{ message: string }>;
+          };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `Worker deployment for script ${args.scriptName} returned a ` +
+              `non-JSON response (HTTP ${response.status}): ${message}`,
+            { cause: err },
+          );
+        }
 
         if (!data.success) {
           const errorMsg = data.errors?.map((e) => e.message).join("; ") ??
-            "Unknown error";
-          throw new Error(`Worker deployment failed: ${errorMsg}`);
+            `HTTP ${response.status} with no error detail`;
+          throw new Error(
+            `Worker deployment failed for script ${args.scriptName}: ${errorMsg}`,
+          );
         }
 
         const handle = await context.writeResource(

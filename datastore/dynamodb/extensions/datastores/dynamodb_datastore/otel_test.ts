@@ -2,7 +2,12 @@
 // ABOUTME: names, attributes, error status, retry events, and parent/child
 // ABOUTME: nesting — plus that everything still works with no TracerProvider.
 
-import { assert, assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
+import {
+  assert,
+  assertEquals,
+  assertExists,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { context, trace } from "npm:@opentelemetry/api@1.9.1";
 import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.10.0";
 import {
@@ -567,6 +572,31 @@ Deno.test("retryable records a retry event on the active span", async () => {
     assertEquals(retry.attributes?.["retry.reason"], "retryable_error");
     assertEquals(retry.attributes?.["error.type"], "ThrottlingException");
   });
+});
+
+Deno.test("retryable with an opLabel wraps a non-retryable failure with operation context", async () => {
+  class ValidationException extends Error {
+    override name = "ValidationException";
+  }
+  await assertRejects(
+    () =>
+      retryable(() => Promise.reject(new ValidationException("bad key")), {
+        opLabel: "getShard shard=abc123",
+      }),
+    Error,
+    "DynamoDB getShard shard=abc123 failed: bad key",
+  );
+});
+
+Deno.test("retryable without an opLabel rethrows the raw SDK error unchanged", async () => {
+  class ValidationException extends Error {
+    override name = "ValidationException";
+  }
+  const original = new ValidationException("bad key");
+  await assertRejects(
+    () => retryable(() => Promise.reject(original)),
+    ValidationException,
+  );
 });
 
 Deno.test("withSpan records status, exception, and error type on throw", async () => {

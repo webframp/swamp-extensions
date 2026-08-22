@@ -1,24 +1,21 @@
-## 2026.08.21.2
+## 2026.08.21.3
 
-**Changed:** Added `.describe()` annotations to previously undocumented
-fields across the namespace and key-value schemas (namespace `id`/`title`,
-key `name`, `list_namespaces` paging/order arguments, and the various
-`namespace_id`/`key_name`/`items` method arguments). Added `.min(1)` to
-`namespace_id` and `key_name` fields, which are required identifiers that
-the Cloudflare API never accepts empty. No behavioral changes.
+**Changed:**
 
-## 2026.08.21.1
+- Errors raised when a Cloudflare API call fails now name the HTTP method
+  and path that was attempted (e.g. `Cloudflare API PUT
+  /accounts/.../storage/kv/namespaces/xxx/bulk failed with HTTP 400 ...`)
+  instead of a bare `Cloudflare API error: ...`. Network-level failures
+  (DNS, connection reset, timeout) are now also caught and wrapped with the
+  same operation context instead of surfacing a raw `fetch` error.
+- `delete_multiple_key_value_pairs` and `update_workers_kv_namespace_write_multiple_key_value_pairs`
+  now reject an empty `items` array before making a request, instead of
+  sending a no-op request to Cloudflare.
+- `delete_multiple_key_value_pairs` now enforces the documented 10,000-key
+  limit and `get_multiple_key_value_pairs` now enforces the documented
+  100-key limit at the schema level, so an oversized batch fails immediately
+  with a clear message instead of failing deep inside the Cloudflare API
+  call.
 
-**Fixed:** Regenerated with three cloudflare-codegen fixes: (1)
-discriminated-union request bodies with a sibling top-level discriminator
-property (e.g. gateway proxy_endpoints kind) now correctly build the body from
-the full oneOf variant instead of silently dropping it to undefined; (2) DELETE
-methods with a request body (e.g. r2 delete_objects bulk-delete-by-list) now
-send that body instead of ignoring it; (3) oneOf/anyOf request body variants
-that are $ref (e.g. r2 sippy config) are now resolved to their real schema
-instead of collapsing to z.unknown(). Same generator fix as workers-scripts in
-#352, now caught up for these 7 services.
-
-**Changed:** `update_workers_kv_namespace_write_key_value_pair_with_metadata`
-was removed — it is no longer present in the upstream Cloudflare API spec
-this extension is generated from.
+No breaking changes. Existing calls that already respected these limits are
+unaffected.

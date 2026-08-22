@@ -250,7 +250,7 @@ const GetVersionDetailSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.08.13.2",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -496,7 +496,7 @@ export const model = {
     delete_worker: {
       description: "Delete Worker",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         force: z.boolean().optional().describe(
           "If set to true, delete will not be stopped by associated service binding, durable object, or other binding. Any of these associated bindings/durable objects will be deleted along with the script.",
         ),
@@ -529,7 +529,7 @@ export const model = {
     create_assets_upload_session: {
       description: "Create Assets Upload Session",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         manifest: z.record(z.string(), z.unknown()).describe(
           "A manifest ([path]: {hash, size}) map of files to upload. As an example, `/bl...",
         ),
@@ -576,7 +576,7 @@ export const model = {
     list_deployments: {
       description: "List Deployments",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -611,7 +611,7 @@ export const model = {
     create_deployment: {
       description: "Create Deployment",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         force: z.boolean().optional().describe(
           "If set to true, the deployment will be created even if normally blocked by something such rolling back to an older version when a secret has changed.",
         ),
@@ -674,8 +674,8 @@ export const model = {
     get_deployment: {
       description: "Get Deployment",
       arguments: z.object({
-        script_name: z.string(),
-        deployment_id: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
+        deployment_id: z.string().min(1, "deployment_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -710,8 +710,8 @@ export const model = {
     delete_deployment: {
       description: "Delete Deployment",
       arguments: z.object({
-        script_name: z.string(),
-        deployment_id: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
+        deployment_id: z.string().min(1, "deployment_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -743,7 +743,7 @@ export const model = {
     get_cron_triggers: {
       description: "Get Cron Triggers",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -778,7 +778,7 @@ export const model = {
     update_cron_triggers: {
       description: "Update Cron Triggers",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         items: z.array(z.unknown()),
       }),
       execute: async (
@@ -818,7 +818,7 @@ export const model = {
     get_settings: {
       description: "Get Script Settings",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -853,7 +853,7 @@ export const model = {
     patch_settings: {
       description: "Patch Script Settings",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         logpush: z.unknown().optional(),
         observability: z.unknown().optional(),
         tags: z.unknown().optional(),
@@ -902,7 +902,7 @@ export const model = {
     list_script_secrets: {
       description: "List script secrets",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -955,7 +955,7 @@ export const model = {
     put_script_secret: {
       description: "Add script secret",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         body: z.union([z.unknown(), z.unknown()]).describe(
           "A secret value accessible through a binding.",
         ),
@@ -997,7 +997,7 @@ export const model = {
     patch_script_secrets_bulk: {
       description: "Patch multiple script secrets",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         secrets: z.record(z.string(), z.object({}).nullable()).optional()
           .describe(
             "Map of secret names to secret values: - Set to a secret object to create or u...",
@@ -1047,7 +1047,7 @@ export const model = {
     get_script_secret: {
       description: "Get secret binding",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         secret_name: z.string(),
         url_encoded: z.string().optional(),
       }),
@@ -1084,7 +1084,7 @@ export const model = {
     delete_script_secret: {
       description: "Delete script secret",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         secret_name: z.string(),
         url_encoded: z.string().optional(),
       }),
@@ -1116,7 +1116,7 @@ export const model = {
     get_subdomain: {
       description: "Get Worker subdomain",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1151,7 +1151,7 @@ export const model = {
     create_worker_script_post_subdomain: {
       description: "Post Worker subdomain",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         enabled: z.boolean().describe(
           "Whether the Worker should be available on the workers.dev subdomain.",
         ),
@@ -1203,7 +1203,7 @@ export const model = {
     delete_subdomain: {
       description: "Delete Worker subdomain",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1233,7 +1233,7 @@ export const model = {
     list_tails: {
       description: "List Tails",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1268,7 +1268,7 @@ export const model = {
     worker_tail_logs_start_tail: {
       description: "Start Tail",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1304,7 +1304,7 @@ export const model = {
     delete_tail: {
       description: "Delete Tail",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         id: z.string(),
       }),
       execute: async (
@@ -1335,7 +1335,7 @@ export const model = {
     get_worker_script_fetch_usage_model: {
       description: "Fetch Usage Model",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1370,7 +1370,7 @@ export const model = {
     update_usage_model: {
       description: "Update Usage Model",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         usage_model: z.unknown().optional(),
         user_limits: z.unknown().optional(),
       }),
@@ -1415,7 +1415,7 @@ export const model = {
     list_versions: {
       description: "List Versions",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         deployable: z.boolean().optional().describe(
           "Only return versions that can be used in a deployment. Ignores pagination.",
         ),
@@ -1455,7 +1455,7 @@ export const model = {
     get_version_detail: {
       description: "Get Version Detail",
       arguments: z.object({
-        script_name: z.string(),
+        script_name: z.string().min(1, "script_name must not be empty"),
         version_id: z.string(),
       }),
       execute: async (

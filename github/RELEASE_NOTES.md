@@ -1,3 +1,15 @@
+## 2026.08.21.2
+
+**Changed:** The `repo` argument on `get_repo_info`, `list_prs`, `list_issues`,
+`list_releases`, and `list_workflows` is now validated as an `owner/name` slug up
+front; previously an invalid value (missing slash, bare name, extra path
+segments) passed schema validation and only failed deep inside the `gh` CLI with
+a cryptic error. `gh` command failures now name the exact command that was run
+and include its exit code, instead of a bare "gh command failed: ..." message.
+A non-JSON response from `gh` (e.g. an unexpected CLI warning printed to
+stdout) now raises a clear "returned output that could not be parsed as JSON"
+error naming the command, instead of a raw `JSON.parse` `SyntaxError`.
+
 ## 2026.08.21.1
 
 **Changed:** Added `.describe()` documentation to every previously undocumented field in the

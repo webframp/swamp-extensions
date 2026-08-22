@@ -570,7 +570,9 @@ export const model = {
     get_catalog_details: {
       description: "Get R2 catalog details",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -605,7 +607,9 @@ export const model = {
     create_store_credentials: {
       description: "Store catalog credentials",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         token: z.string().describe(
           "Provides the Cloudflare API token for accessing R2.",
         ),
@@ -652,7 +656,7 @@ export const model = {
     disable_catalog: {
       description: "Disable R2 catalog",
       arguments: z.object({
-        bucket_name: z.string().describe(
+        bucket_name: z.string().min(1).describe(
           "Specifies the R2 bucket name to disable as catalog.",
         ),
       }),
@@ -690,7 +694,7 @@ export const model = {
     enable_catalog: {
       description: "Enable R2 bucket as a catalog",
       arguments: z.object({
-        bucket_name: z.string().describe(
+        bucket_name: z.string().min(1).describe(
           "Specifies the R2 bucket name to enable as catalog.",
         ),
       }),
@@ -728,7 +732,9 @@ export const model = {
     get_maintenance_config: {
       description: "Get catalog maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -763,7 +769,9 @@ export const model = {
     update_maintenance_config: {
       description: "Update catalog maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         compaction: z.unknown().optional(),
         snapshot_expiration: z.unknown().optional(),
       }),
@@ -809,11 +817,13 @@ export const model = {
     list_namespaces: {
       description: "List namespaces in catalog",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
         page_token: z.string().optional().describe(
           "Opaque pagination token from a previous response. Use this to fetch the next page of results. ",
         ),
-        page_size: z.number().optional().describe(
+        page_size: z.number().int().min(1).max(1000).optional().describe(
           "Maximum number of namespaces to return per page. Defaults to 100, maximum 1000. ",
         ),
         parent: z.string().optional().describe(
@@ -859,14 +869,16 @@ export const model = {
     list_tables: {
       description: "List tables in namespace",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        namespace: z.string().min(1).describe(
           'The namespace identifier. For nested namespaces, use %1F as separator (e.g., "bronze%1Fanalytics"). ',
         ),
         page_token: z.string().optional().describe(
           "Opaque pagination token from a previous response. Use this to fetch the next page of results. ",
         ),
-        page_size: z.number().optional().describe(
+        page_size: z.number().int().min(1).max(1000).optional().describe(
           "Maximum number of tables to return per page. Defaults to 100, maximum 1000. ",
         ),
         return_uuids: z.boolean().optional().describe(
@@ -909,11 +921,13 @@ export const model = {
     get_table: {
       description: "Get table details",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        namespace: z.string().min(1).describe(
           'The namespace identifier. For nested namespaces, use %1F as separator (e.g., "bronze%1Fanalytics"). ',
         ),
-        table_name: z.string().describe(
+        table_name: z.string().min(1).describe(
           "The table name within the given namespace.",
         ),
       }),
@@ -950,11 +964,13 @@ export const model = {
     get_table_maintenance_config: {
       description: "Get table maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        namespace: z.string().min(1).describe(
           "The namespace identifier (use %1F as separator for nested namespaces).",
         ),
-        table_name: z.string().describe("The table name."),
+        table_name: z.string().min(1).describe("The table name."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -989,11 +1005,13 @@ export const model = {
     update_table_maintenance_config: {
       description: "Update table maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
+        bucket_name: z.string().min(1).describe(
+          "Specifies the R2 bucket name.",
+        ),
+        namespace: z.string().min(1).describe(
           "The namespace identifier (use %1F as separator for nested namespaces).",
         ),
-        table_name: z.string().describe("The table name."),
+        table_name: z.string().min(1).describe("The table name."),
         compaction: z.unknown().optional(),
         snapshot_expiration: z.unknown().optional(),
       }),

@@ -1,3 +1,11 @@
+## 2026.08.21.1
+
+**Changed:** When a benchmark write iteration fails, the recorded `errorMessage`
+now names the target model and payload size instead of surfacing the bare
+`stderr` from the inner `swamp data write` command. A command that failed with
+no stderr output previously produced an empty error message; it now says so
+explicitly.
+
 ## 2026.07.27.1
 
 **Fixed:** The `fmt` task ran `deno fmt --check`, so `deno task fmt` verified

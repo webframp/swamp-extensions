@@ -55,6 +55,17 @@ const GlobalArgsSchema = z.object({
   subnet_ids: z
     .string()
     .optional()
+    .refine(
+      (v) =>
+        v === undefined ||
+        v.split(",").map((s) => s.trim()).every((s) =>
+          /^subnet-[a-f0-9]+$/.test(s)
+        ),
+      {
+        message:
+          "subnet_ids must be a comma-separated list of subnet IDs matching subnet-[a-f0-9]+",
+      },
+    )
     .describe(
       "Comma-separated subnet IDs in 2+ AZs (uses default VPC subnets if omitted)",
     ),
@@ -83,6 +94,9 @@ const GlobalArgsSchema = z.object({
     .min(1)
     .default(8)
     .describe("Maximum Aurora capacity units"),
+}).refine((v) => v.max_acu >= v.min_acu, {
+  message: "max_acu must be greater than or equal to min_acu",
+  path: ["max_acu"],
 });
 
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;

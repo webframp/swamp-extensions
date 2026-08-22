@@ -560,7 +560,10 @@ async function tryTagApi(
   } catch (e) {
     // Tag API should always be available, but handle gracefully
     throw new Error(
-      `Tag API failed: ${e instanceof Error ? e.message : String(e)}`,
+      `Resource Groups Tagging API GetResources failed in region "${region}": ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
     );
   } finally {
     client.destroy();
@@ -601,7 +604,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -632,6 +635,11 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "Error-message quality improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -747,6 +755,13 @@ export const model = {
               region: region,
             });
             handles.push(handle);
+          } catch (err) {
+            throw new Error(
+              `Failed to list EC2 instances in region "${region}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
           } finally {
             client.destroy();
           }
@@ -817,6 +832,13 @@ export const model = {
               region: region,
             });
             handles.push(handle);
+          } catch (err) {
+            throw new Error(
+              `Failed to list RDS instances in region "${region}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
           } finally {
             client.destroy();
           }
@@ -899,6 +921,13 @@ export const model = {
               region: region,
             });
             handles.push(handle);
+          } catch (err) {
+            throw new Error(
+              `Failed to list DynamoDB tables in region "${region}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
           } finally {
             client.destroy();
           }
@@ -1020,6 +1049,13 @@ export const model = {
               region: region,
             });
             handles.push(handle);
+          } catch (err) {
+            throw new Error(
+              `Failed to list Lambda functions in region "${region}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
           } finally {
             client.destroy();
           }
@@ -1069,6 +1105,13 @@ export const model = {
             count: buckets.length,
           });
           return { dataHandles: [handle] };
+        } catch (err) {
+          throw new Error(
+            `Failed to list S3 buckets: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            { cause: err },
+          );
         } finally {
           client.destroy();
         }
@@ -1164,6 +1207,13 @@ export const model = {
               region: region,
             });
             handles.push(handle);
+          } catch (err) {
+            throw new Error(
+              `Failed to list EBS volumes in region "${region}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
           } finally {
             client.destroy();
           }
@@ -1458,6 +1508,13 @@ export const model = {
               { region, summary: JSON.stringify(summary) },
             );
             allHandles.push(...handles);
+          } catch (err) {
+            throw new Error(
+              `Full inventory scan failed in region "${region}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
           } finally {
             ec2Client.destroy();
             rdsClient.destroy();

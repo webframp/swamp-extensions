@@ -509,9 +509,15 @@ async function exeApi(token: string, command: string): Promise<ExeApiResponse> {
     return { ok: resp.ok, status: resp.status, body };
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error("exe.dev API request timed out after 30 seconds");
+      throw new Error(
+        `exe.dev API request timed out after 30 seconds (command: "${command}")`,
+      );
     }
-    throw err;
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `exe.dev API request failed (command: "${command}"): ${msg}`,
+      { cause: err },
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -537,10 +543,22 @@ function parseJsonResponse<T>(resp: ExeApiResponse, command?: string): T {
   }
   if (!resp.ok) {
     throw new Error(
-      `exe.dev API error (HTTP ${resp.status}): ${resp.body}`,
+      `exe.dev API error (HTTP ${resp.status}) for command "${
+        command ?? "unknown"
+      }": ${resp.body}`,
     );
   }
-  return JSON.parse(resp.body) as T;
+  try {
+    return JSON.parse(resp.body) as T;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `exe.dev API returned malformed JSON for command "${
+        command ?? "unknown"
+      }": ${msg}. Raw response: ${resp.body.slice(0, 500)}`,
+      { cause: err },
+    );
+  }
 }
 
 /** Map the raw `ls -l --json` keys (snake_case) to our schema (camelCase). */
@@ -635,7 +653,7 @@ export function mapVm(raw: RawVm): z.infer<typeof VmSchema> {
  */
 export const model = {
   type: "@webframp/exe-dev/vm",
-  version: "2026.08.04.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {

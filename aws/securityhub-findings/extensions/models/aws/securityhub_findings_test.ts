@@ -546,6 +546,35 @@ Deno.test("get_finding_details rejects empty array", () => {
   );
 });
 
+Deno.test({
+  name: "list_findings wraps raw SDK errors with operation and filter context",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub(() => {
+      throw new Error("Rate exceeded");
+    });
+    try {
+      const ctx = createMockContext();
+      await assertRejects(
+        () =>
+          model.methods.list_findings.execute(
+            {
+              productName: "GuardDuty",
+              workflowStatus: "NEW",
+              startTime: "24h",
+              limit: 100,
+            },
+            ctx,
+          ),
+        Error,
+        "GetFindings (list_findings) failed",
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
 // =============================================================================
 // list_findings_by_type tests
 // =============================================================================

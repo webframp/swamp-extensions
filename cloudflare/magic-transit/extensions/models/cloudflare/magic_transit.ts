@@ -2141,7 +2141,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().optional().describe(
+        per_page: z.number().int().min(10).max(1000).optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -2418,7 +2418,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().optional().describe(
+        per_page: z.number().int().min(10).max(1000).optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -2680,7 +2680,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().optional().describe(
+        per_page: z.number().int().min(10).max(1000).optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -2968,7 +2968,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().optional().describe(
+        per_page: z.number().int().min(10).max(1000).optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -3222,7 +3222,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().optional().describe(
+        per_page: z.number().int().min(10).max(1000).optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -3502,7 +3502,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().optional().describe(
+        per_page: z.number().int().min(10).max(1000).optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -3758,7 +3758,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().optional().describe(
+        per_page: z.number().int().min(10).max(1000).optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(

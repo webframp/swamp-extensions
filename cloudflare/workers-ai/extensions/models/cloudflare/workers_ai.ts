@@ -3134,7 +3134,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -4800,7 +4800,7 @@ export const model = {
         headers: z.string().max(8192).optional(),
         js_example: z.string().optional(),
         link: z.string().optional(),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
         position: z.number().int().optional(),
         slug: z.string(),
       }),
@@ -4965,7 +4965,7 @@ export const model = {
     get_aig_config_fetch_account_provider_cost: {
       description: "Fetch a Account Provider Cost",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5003,7 +5003,7 @@ export const model = {
     update_account_provider_cost: {
       description: "Update a Account Provider Cost",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         cost_in: z.number().optional(),
         cost_out: z.number().optional(),
         cost_type: z.string().optional(),
@@ -5066,7 +5066,7 @@ export const model = {
     delete_account_provider_cost: {
       description: "Delete a Account Provider Cost",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5097,7 +5097,7 @@ export const model = {
     get_aig_config_fetch_account_provider: {
       description: "Fetch a Account Provider",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5132,7 +5132,7 @@ export const model = {
     update_account_provider: {
       description: "Update a Account Provider",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         base_url: z.string().optional(),
         beta: z.boolean().optional(),
         curl_example: z.string().optional(),
@@ -5187,7 +5187,7 @@ export const model = {
     delete_account_provider: {
       description: "Delete a Account Provider",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5388,7 +5388,7 @@ export const model = {
     list_dataset: {
       description: "List Datasets",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         page: z.number().optional(),
         per_page: z.number().optional(),
         name: z.string().optional(),
@@ -5444,7 +5444,7 @@ export const model = {
     create_dataset: {
       description: "Create a new Dataset",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         enable: z.boolean(),
         filters: z.array(z.object({
           key: z.enum([
@@ -5465,7 +5465,7 @@ export const model = {
           operator: z.enum(["eq", "contains", "lt", "gt"]),
           value: z.array(z.union([z.string(), z.number(), z.boolean()])),
         })),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5505,8 +5505,8 @@ export const model = {
     get_aig_config_fetch_dataset: {
       description: "Fetch a Dataset",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5541,8 +5541,8 @@ export const model = {
     update_dataset: {
       description: "Update a Dataset",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
         enable: z.boolean(),
         filters: z.array(z.object({
           key: z.enum([
@@ -5563,7 +5563,7 @@ export const model = {
           operator: z.enum(["eq", "contains", "lt", "gt"]),
           value: z.array(z.union([z.string(), z.number(), z.boolean()])),
         })),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5606,8 +5606,8 @@ export const model = {
     delete_dataset: {
       description: "Delete a Dataset",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5638,7 +5638,7 @@ export const model = {
     list_evaluations: {
       description: "List Evaluations",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         page: z.number().optional(),
         per_page: z.number().optional(),
         name: z.string().optional(),
@@ -5696,10 +5696,10 @@ export const model = {
     create_evaluations: {
       description: "Create a new Evaluation",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         dataset_ids: z.array(z.string()),
         evaluation_type_ids: z.array(z.string()),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5739,8 +5739,8 @@ export const model = {
     get_aig_config_fetch_evaluations: {
       description: "Fetch a Evaluation",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5775,8 +5775,8 @@ export const model = {
     delete_evaluations: {
       description: "Delete a Evaluation",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5807,7 +5807,7 @@ export const model = {
     list_gateway_logs: {
       description: "List Gateway Logs",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         search: z.string().optional(),
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -5895,7 +5895,7 @@ export const model = {
     delete_gateway_logs: {
       description: "Delete Gateway Logs",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         order_by: z.enum([
           "created_at",
           "provider",
@@ -5955,8 +5955,8 @@ export const model = {
     get_gateway_log_detail: {
       description: "Get Gateway Log Detail",
       arguments: z.object({
-        id: z.string(),
-        gateway_id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5991,8 +5991,8 @@ export const model = {
     patch_gateway_log: {
       description: "Patch Gateway Log",
       arguments: z.object({
-        id: z.string(),
-        gateway_id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         feedback: z.number().min(-1).max(1).nullable().optional(),
         metadata: z.record(
           z.string(),
@@ -6041,8 +6041,8 @@ export const model = {
     get_gateway_log_request: {
       description: "Get Gateway Log Request",
       arguments: z.object({
-        id: z.string(),
-        gateway_id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6077,8 +6077,8 @@ export const model = {
     get_gateway_log_response: {
       description: "Get Gateway Log Response",
       arguments: z.object({
-        id: z.string(),
-        gateway_id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6113,7 +6113,7 @@ export const model = {
     list_providers: {
       description: "List Provider Configs",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         page: z.number().optional(),
         per_page: z.number().optional(),
       }),
@@ -6168,7 +6168,7 @@ export const model = {
     create_providers: {
       description: "Create a new Provider Configs",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         alias: z.string(),
         default_config: z.boolean(),
         provider_slug: z.string(),
@@ -6215,8 +6215,8 @@ export const model = {
     update_providers: {
       description: "Update a Provider Configs",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
         secret: z.string(),
       }),
       execute: async (
@@ -6260,8 +6260,8 @@ export const model = {
     delete_providers: {
       description: "Delete a Provider Configs",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6292,7 +6292,7 @@ export const model = {
     list_gateway_dynamic_routes: {
       description: "List all AI Gateway Dynamic Routes.",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         page: z.number().optional().describe("Page number"),
         per_page: z.number().optional().describe("Number of routes per page"),
       }),
@@ -6329,7 +6329,7 @@ export const model = {
     create_aig_config_post_gateway_dynamic_route: {
       description: "Create a new AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
         elements: z.array(z.union([
           z.object({
             id: z.string(),
@@ -6412,7 +6412,7 @@ export const model = {
             type: z.enum(["end"]),
           }),
         ])),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6459,8 +6459,8 @@ export const model = {
     get_gateway_dynamic_route: {
       description: "Get an AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6495,9 +6495,9 @@ export const model = {
     update_gateway_dynamic_route: {
       description: "Update an AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
-        name: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6540,8 +6540,8 @@ export const model = {
     delete_gateway_dynamic_route: {
       description: "Delete an AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6572,8 +6572,8 @@ export const model = {
     list_gateway_dynamic_route_deployments: {
       description: "List all AI Gateway Dynamic Route Deployments.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6611,9 +6611,9 @@ export const model = {
     create_aig_config_post_gateway_dynamic_route_deployment: {
       description: "Create a new AI Gateway Dynamic Route Deployment.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
-        version_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
+        version_id: z.string().min(1, "version_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6660,8 +6660,8 @@ export const model = {
     list_gateway_dynamic_route_versions: {
       description: "List all AI Gateway Dynamic Route Versions.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6696,8 +6696,8 @@ export const model = {
     create_aig_config_post_gateway_dynamic_route_version: {
       description: "Create a new AI Gateway Dynamic Route Version.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
         elements: z.array(z.union([
           z.object({
             id: z.string(),
@@ -6826,9 +6826,9 @@ export const model = {
     get_gateway_dynamic_route_version: {
       description: "Get an AI Gateway Dynamic Route Version.",
       arguments: z.object({
-        gateway_id: z.string(),
-        id: z.string(),
-        version_id: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string().min(1, "id must not be empty"),
+        version_id: z.string().min(1, "version_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6863,8 +6863,8 @@ export const model = {
     get_gateway_url: {
       description: "Get Gateway URL",
       arguments: z.object({
-        gateway_id: z.string(),
-        provider: z.string(),
+        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        provider: z.string().min(1, "provider must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6899,7 +6899,7 @@ export const model = {
     get_aig_config_fetch_gateway: {
       description: "Fetch a Gateway",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6934,7 +6934,7 @@ export const model = {
     update_gateway: {
       description: "Update a Gateway",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         authentication: z.boolean().optional(),
         cache_invalidate_on_update: z.boolean(),
         cache_ttl: z.number().int().min(0).nullable(),
@@ -7098,7 +7098,7 @@ export const model = {
     delete_gateway: {
       description: "Delete a Gateway",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7431,7 +7431,7 @@ export const model = {
     get_ai_search_fetch_instance: {
       description: "Get an AI Search instance.",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7466,7 +7466,7 @@ export const model = {
     update_instance: {
       description: "Update an AI Search instance.",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         ai_gateway_id: z.string().nullable().optional(),
         ai_search_model: z.union([
           z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
@@ -7742,7 +7742,7 @@ export const model = {
     delete_instance: {
       description: "Delete an AI Search instance.",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8048,7 +8048,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string(),
+        job_id: z.string().min(1, "job_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8086,7 +8086,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string(),
+        job_id: z.string().min(1, "job_id must not be empty"),
         action: z.enum(["cancel"]),
       }),
       execute: async (
@@ -8133,7 +8133,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string(),
+        job_id: z.string().min(1, "job_id must not be empty"),
         page: z.number().optional(),
         per_page: z.number().optional(),
       }),
@@ -8427,7 +8427,7 @@ export const model = {
         description: z.string().max(256).nullable().optional().describe(
           "Optional description for the namespace. Max 256 characters.",
         ),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8463,7 +8463,7 @@ export const model = {
     get_ai_search_fetch_namespace: {
       description: "Read namespace.",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8498,7 +8498,7 @@ export const model = {
     update_namespace: {
       description: "Update namespace.",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
         description: z.string().max(256).nullable().optional().describe(
           "Optional description for the namespace. Max 256 characters.",
         ),
@@ -8544,7 +8544,7 @@ export const model = {
     delete_namespace: {
       description: "Delete namespace.",
       arguments: z.object({
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8749,7 +8749,7 @@ export const model = {
     get_ai_search_namespace_fetch_instance: {
       description: "Get an AI Search instance.",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         name: z.string().describe("Namespace name"),
       }),
       execute: async (
@@ -9144,7 +9144,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string(),
+        item_id: z.string().min(1, "item_id must not be empty"),
         name: z.string().describe("Namespace name"),
       }),
       execute: async (
@@ -9183,7 +9183,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string(),
+        item_id: z.string().min(1, "item_id must not be empty"),
         name: z.string().describe("Namespace name"),
         next_action: z.enum(["INDEX"]),
         wait_for_completion: z.boolean().optional().describe(
@@ -9237,7 +9237,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string(),
+        item_id: z.string().min(1, "item_id must not be empty"),
         name: z.string().describe("Namespace name"),
       }),
       execute: async (
@@ -9272,7 +9272,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string(),
+        item_id: z.string().min(1, "item_id must not be empty"),
         name: z.string().describe("Namespace name"),
         limit: z.number().optional(),
         offset: z.number().optional(),
@@ -9337,7 +9337,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string(),
+        item_id: z.string().min(1, "item_id must not be empty"),
         name: z.string().describe("Namespace name"),
         limit: z.number().optional(),
         cursor: z.string().optional(),
@@ -9398,7 +9398,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string(),
+        job_id: z.string().min(1, "job_id must not be empty"),
         name: z.string().describe("Namespace name"),
         action: z.enum(["cancel"]),
       }),
@@ -9832,7 +9832,7 @@ export const model = {
         cf_api_id: z.string(),
         cf_api_key: z.string(),
         legacy: z.boolean().optional(),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9868,7 +9868,7 @@ export const model = {
     get_ai_search_fetch_tokens: {
       description: "Read token.",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9903,11 +9903,11 @@ export const model = {
     update_tokens: {
       description: "Update token.",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         cf_api_id: z.string(),
         cf_api_key: z.string(),
         legacy: z.boolean().optional(),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9950,7 +9950,7 @@ export const model = {
     delete_tokens: {
       description: "Delete token.",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10071,7 +10071,7 @@ export const model = {
       arguments: z.object({
         description: z.string().optional(),
         model: z.string(),
-        name: z.string(),
+        name: z.string().min(1, "name must not be empty"),
         public: z.boolean().optional(),
       }),
       execute: async (
@@ -21923,7 +21923,7 @@ export const model = {
     workers_ai_post_run_model: {
       description: "Execute AI model",
       arguments: z.object({
-        model_name: z.string(),
+        model_name: z.string().min(1, "model_name must not be empty"),
         body: z.union([
           z.object({
             text: z.string().min(1),

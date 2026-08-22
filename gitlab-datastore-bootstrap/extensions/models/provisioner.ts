@@ -93,7 +93,21 @@ async function gitlabApi(
     body: options.body,
   });
   const text = await resp.text();
-  const data = text ? JSON.parse(text) : {};
+  let data: Record<string, unknown> = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `GitLab API request to ${
+          options.method ?? "GET"
+        } ${path} returned a response that could not be parsed as JSON ` +
+          `(HTTP ${resp.status}): ${msg}. Raw response: ${text.slice(0, 300)}`,
+        { cause: err },
+      );
+    }
+  }
   return { ok: resp.ok, status: resp.status, data };
 }
 
@@ -209,7 +223,7 @@ async function createProjectToken(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/gitlab-datastore-bootstrap/provisioner",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

@@ -399,14 +399,18 @@ async function gatherRedmonk(
   return items.slice(0, count);
 }
 
-async function gatherArxiv(count: number) {
+async function gatherArxiv(
+  count: number,
+  onFailure?: (err: unknown) => void,
+) {
   // Catch rate-limit errors gracefully — arXiv is unreliable but valuable
   try {
     return await queryArxiv(
       "cat:cs.AI+OR+cat:cs.LG+OR+cat:cs.CR+OR+cat:cs.SE",
       count,
     );
-  } catch {
+  } catch (e) {
+    onFailure?.(e);
     return {
       entries: [] as z.infer<typeof ArxivEntrySchema>[],
       totalResults: 0,
@@ -745,21 +749,40 @@ async function gatherAll(
   ctx.logger.info("Gathering research data from all sources");
   // Each source is independently wrapped so a single source failure
   // never kills the entire brief — partial data is better than no data.
+  const onSourceFailure = (source: string) => (err: unknown) => {
+    ctx.logger.info(
+      `Source "${source}" failed to gather; continuing with partial data: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  };
   const [hn, lobsters, sre, ifin, redmonk, arxiv, aiDailyBrief] = await Promise
     .all([
-      gatherHnFrontPage(cfg.hnCount).catch(() => ({
-        stories: [],
-        fetchedAt: new Date().toISOString(),
-      })),
-      gatherLobstersHottest(cfg.lobstersCount).catch(() => ({
-        stories: [],
-        fetchedAt: new Date().toISOString(),
-      })),
-      gatherSreWeekly(cfg.sreCount).catch(() => []),
-      gatherIfinDiscourse(cfg.ifinCount).catch(() => []),
-      gatherRedmonk(cfg.redmonkCount).catch(() => []),
-      gatherArxiv(cfg.arxivCount),
-      gatherAiDailyBrief(cfg.aiDailyBriefDays).catch(() => []),
+      gatherHnFrontPage(cfg.hnCount).catch((e) => {
+        onSourceFailure("hnFrontPage")(e);
+        return { stories: [], fetchedAt: new Date().toISOString() };
+      }),
+      gatherLobstersHottest(cfg.lobstersCount).catch((e) => {
+        onSourceFailure("lobstersHottest")(e);
+        return { stories: [], fetchedAt: new Date().toISOString() };
+      }),
+      gatherSreWeekly(cfg.sreCount).catch((e) => {
+        onSourceFailure("sreWeekly")(e);
+        return [];
+      }),
+      gatherIfinDiscourse(cfg.ifinCount).catch((e) => {
+        onSourceFailure("ifin")(e);
+        return [];
+      }),
+      gatherRedmonk(cfg.redmonkCount).catch((e) => {
+        onSourceFailure("redmonk")(e);
+        return [];
+      }),
+      gatherArxiv(cfg.arxivCount, onSourceFailure("arxiv")),
+      gatherAiDailyBrief(cfg.aiDailyBriefDays).catch((e) => {
+        onSourceFailure("aiDailyBrief")(e);
+        return [];
+      }),
     ]);
   const handle = await ctx.writeResource("research", "brief", {
     hnFrontPage: hn,
@@ -794,7 +817,7 @@ async function gatherAll(
 /** Research data collector model. */
 export const model = {
   type: "@webframp/research-collector" as const,
-  version: "2026.07.23.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -819,6 +842,12 @@ export const model = {
       toVersion: "2026.07.23.1",
       description:
         "Adds the digest method and digest resource. No changes to existing global args or the research brief schema; existing instances need no migration.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Logs the underlying error when a source fails to gather instead of silently discarding it. No schema changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

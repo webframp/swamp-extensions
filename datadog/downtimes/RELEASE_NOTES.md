@@ -1,11 +1,12 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Schema-only tightening pass, no behavioral change.
-- Added `.min(1)` to `apiKey`/`appKey` in the global arguments and to the
-  required `downtime_id`/`monitor_id` identifiers on the get, update,
-  cancel, and list-monitor-downtimes methods, so empty identifiers are
-  rejected before making an API call.
-- Added `.describe()` to the previously undocumented `display_timezone`,
-  `message`, `monitor_identifier`, `mute_first_recovery_notification`,
-  `notify_end_states`, `notify_end_types`, `schedule`, and `scope`
-  arguments on the `create_downtime` and `update_downtime` methods.
+**Changed:** Every Datadog API call made by this model (via the shared
+`_lib/api.ts` helper) now names the HTTP method and path in its error
+message, instead of a bare "Datadog API HTTP 500: ...". A failure now reads,
+for example, `Datadog API POST /api/v2/dora/deployment failed with HTTP 500:
+...` rather than just the status code and response body. Network-level
+failures (DNS, connection reset, etc.) that previously surfaced as a raw
+`TypeError` now also say which Datadog operation was being attempted.
+
+No changes to method arguments, resource schemas, or successful-call
+behavior — only error paths are affected.

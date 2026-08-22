@@ -1,3 +1,18 @@
+## 2026.08.21.1
+
+**Changed:** S3 and AgentCore SDK failures now say which object or runtime they
+were acting on — a failed stage now reads as "AgentCore driver: failed to stage
+s3://bucket/task/bundle.js: Access Denied" instead of a bare SDK error with no
+indication of which of the three staged objects (bundle, request envelope,
+status poll) failed. A malformed worker status document now names the S3 key it
+came from instead of surfacing a bare JSON parse error. `createDriver` now
+rejects a non-positive `timeout` or `pollInterval` at construction time instead
+of letting a `0` or negative value cause an immediate timeout or a tight poll
+loop.
+
+**Upgrade note:** No breaking changes; this is validation and error-message
+tightening only.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (3 packages)

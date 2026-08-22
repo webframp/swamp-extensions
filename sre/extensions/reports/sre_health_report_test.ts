@@ -868,6 +868,67 @@ Deno.test("report: step data exists but getContent returns null", async () => {
   assertEquals(httpFinding, undefined);
 });
 
+Deno.test("report: unreadable data artifact is logged instead of silently dropped", async () => {
+  // The stored artifact is not valid JSON, so getData's JSON.parse fails on
+  // both the string-based and type-object-based getContent attempts. That
+  // failure must be logged with the target identifier, not swallowed.
+  const modelType = "@webframp/network";
+  const modelId = "net-probe-id";
+  const { context, getLogsByLevel } = createReportTestContext({
+    scope: "workflow",
+    workflowName: "@webframp/sre-health-check",
+    workflowStatus: "succeeded",
+    stepExecutions: [
+      {
+        jobName: "test-job",
+        stepName: "http-step",
+        modelName: "net-probe",
+        modelType,
+        modelId,
+        methodName: "http_check",
+        status: "succeeded",
+        dataHandles: [{ name: "http-output", dataId: "data-1", version: 1 }],
+        methodArgs: {},
+        globalArgs: {},
+      },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+    dataArtifacts: [
+      {
+        modelType,
+        modelId,
+        data: {
+          name: "http-output",
+          kind: "resource" as const,
+          dataId: "data-1",
+          version: 1,
+          size: 11,
+          contentType: "application/json",
+        },
+        content: new TextEncoder().encode("not-json{{{"),
+      },
+    ],
+  });
+
+  // deno-lint-ignore no-explicit-any
+  const result = await report.execute(context as any);
+
+  const findings = (result.json as Record<string, unknown>)
+    .findings as Array<Record<string, unknown>>;
+  const httpFinding = findings.find((f) => f.check === "HTTP");
+  assertEquals(httpFinding, undefined);
+
+  const infoLogs = getLogsByLevel("info");
+  const failureLog = infoLogs.find((l) =>
+    l.message.includes("Failed to parse report data")
+  );
+  assertEquals(failureLog !== undefined, true);
+  assertStringIncludes(
+    JSON.stringify(failureLog?.args ?? []),
+    "http-output",
+  );
+});
+
 Deno.test("report: disk with unparseable percent is skipped", async () => {
   const steps = [makeStep("sys-diag", "get_disk_usage", "disk-output")];
   const artifacts = [

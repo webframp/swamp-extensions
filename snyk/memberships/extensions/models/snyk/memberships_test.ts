@@ -43,6 +43,19 @@ Deno.test("memberships model: has expected methods", () => {
   assertExists(model.methods.delete_org_membership);
 });
 
+Deno.test("memberships model: list_group_memberships rejects empty group_id", () => {
+  const result = model.methods.list_group_memberships.arguments.safeParse({
+    group_id: "",
+  });
+  assertEquals(result.success, false);
+  if (!result.success) {
+    assertStringIncludes(
+      JSON.stringify(result.error.issues),
+      "group_id must not be empty",
+    );
+  }
+});
+
 Deno.test("memberships model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["group_memberships"]);

@@ -43,6 +43,21 @@ function parseConfig(raw?: Record<string, unknown>): NixDriverConfig {
   if (config.packages.length === 0) {
     throw new Error("Nix driver requires at least one package");
   }
+  const badPackage = config.packages.find(
+    (p) => typeof p !== "string" || p.trim() === "",
+  );
+  if (badPackage !== undefined) {
+    throw new Error(
+      `Nix driver 'packages' entries must be non-empty strings, got ${
+        JSON.stringify(badPackage)
+      }`,
+    );
+  }
+  if (config.timeout !== undefined && config.timeout <= 0) {
+    throw new Error(
+      `Nix driver 'timeout' must be a positive number of milliseconds, got ${config.timeout}`,
+    );
+  }
   return {
     packages: config.packages,
     flakeRef: config.flakeRef ?? "nixpkgs",
@@ -76,6 +91,23 @@ function buildNixArgs(
   }
   args.push("--command", ...command);
   return args;
+}
+
+/**
+ * Turns a caught error into a message for the driver's error result.
+ *
+ * `Deno.Command("nix", ...).spawn()` throws `Deno.errors.NotFound` with a
+ * bare "No such file or directory" when the `nix` binary isn't on PATH —
+ * that message alone gives no hint that "nix" itself is what's missing, so
+ * it's called out explicitly here.
+ */
+function describeSpawnError(error: unknown): string {
+  if (error instanceof Deno.errors.NotFound) {
+    return `Could not run "nix" — is it installed and on PATH? (${
+      error instanceof Error ? error.message : String(error)
+    })`;
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function streamOutput(
@@ -279,7 +311,7 @@ async function executeCommand(
     const durationMs = Math.round(performance.now() - start);
     return {
       status: "error",
-      error: error instanceof Error ? error.message : String(error),
+      error: describeSpawnError(error),
       outputs: [],
       logs,
       durationMs,
@@ -451,7 +483,7 @@ async function executeBundle(
     const durationMs = Math.round(performance.now() - start);
     return {
       status: "error",
-      error: error instanceof Error ? error.message : String(error),
+      error: describeSpawnError(error),
       outputs: [],
       logs,
       durationMs,

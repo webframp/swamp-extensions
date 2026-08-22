@@ -141,7 +141,15 @@ async function countRecentStateChanges(
     EndDate: new Date(),
     MaxRecords: 100,
   });
-  const response = await client.send(command);
+  let response;
+  try {
+    response = await client.send(command);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `DescribeAlarmHistory failed for alarm "${alarmName}": ${message}`,
+    );
+  }
   return (response.AlarmHistoryItems ?? []).length;
 }
 
@@ -413,6 +421,7 @@ export const model = {
       arguments: z.object({
         alarmName: z
           .string()
+          .min(1, "alarmName must not be empty")
           .describe("The exact CloudWatch alarm name to investigate"),
       }),
       execute: async (
@@ -443,7 +452,15 @@ export const model = {
           const command = new DescribeAlarmsCommand({
             AlarmNames: [alarmName],
           });
-          const response = await cwClient.send(command);
+          let response;
+          try {
+            response = await cwClient.send(command);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(
+              `DescribeAlarms failed for alarm "${alarmName}" in region ${region}: ${message}`,
+            );
+          }
 
           const alarms: MetricAlarm[] = [
             ...(response.MetricAlarms ?? []),
@@ -540,7 +557,17 @@ export const model = {
               NextToken: nextToken,
               MaxRecords: Math.min(100, limit - alarms.length),
             });
-            const response = await cwClient.send(command);
+            let response;
+            try {
+              response = await cwClient.send(command);
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              throw new Error(
+                `DescribeAlarms failed during triage (stateFilter=${
+                  stateFilter ?? "none"
+                }): ${message}`,
+              );
+            }
 
             if (response.MetricAlarms) {
               for (const alarm of response.MetricAlarms) {

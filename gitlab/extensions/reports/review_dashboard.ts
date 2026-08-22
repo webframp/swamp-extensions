@@ -19,6 +19,7 @@ export const report = {
     context: any,
   ): Promise<{ markdown: string; json: Record<string, unknown> }> {
     let data: any = null;
+    let loadError: string | null = null;
 
     const handle = (context.dataHandles ?? [])[0];
     if (handle) {
@@ -35,7 +36,7 @@ export const report = {
           handle.version,
         );
         if (raw) data = JSON.parse(new TextDecoder().decode(raw));
-      } catch {
+      } catch (firstErr) {
         try {
           const raw = await context.dataRepository.getContent(
             context.modelType,
@@ -44,11 +45,30 @@ export const report = {
             handle.version,
           );
           if (raw) data = JSON.parse(new TextDecoder().decode(raw));
-        } catch { /* fall through */ }
+        } catch (secondErr) {
+          // Both the typed-arg and raw-modelType call shapes failed. Record
+          // why, rather than reporting "no data" indistinguishably from the
+          // legitimate "no handle yet" case below.
+          const msg1 = firstErr instanceof Error
+            ? firstErr.message
+            : String(firstErr);
+          const msg2 = secondErr instanceof Error
+            ? secondErr.message
+            : String(secondErr);
+          loadError =
+            `Failed to load dashboard data "${handle.name}" (version ${handle.version}) ` +
+            `for model "${context.modelId}": ${msg1} / ${msg2}`;
+        }
       }
     }
 
     if (!data) {
+      if (loadError) {
+        return {
+          markdown: `Dashboard data could not be loaded: ${loadError}`,
+          json: { items: [], error: loadError },
+        };
+      }
       return { markdown: "No dashboard data available.", json: { items: [] } };
     }
 

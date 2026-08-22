@@ -148,7 +148,7 @@ const GetSbomSchema = z.object({
 /** Snyk Projects — project listing, attributes, relationships, and target management */
 export const model = {
   type: "@webframp/snyk/projects",
-  version: "2026.07.19.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -287,7 +287,9 @@ export const model = {
     get_org_project: {
       description: "Get project by project ID.",
       arguments: z.object({
-        project_id: z.string().describe("The ID of the project."),
+        project_id: z.string().min(1, "project_id must not be empty").describe(
+          "The ID of the project.",
+        ),
         expand: z.string().optional().describe("Expand relationships."),
         meta_latest_issue_counts: z.boolean().optional().describe(
           "Include a summary count for the issues found in the most recent scan of this ...",
@@ -341,7 +343,9 @@ export const model = {
     update_org_project: {
       description: "Updates project by project ID.",
       arguments: z.object({
-        project_id: z.string().describe("The ID of the project to patch."),
+        project_id: z.string().min(1, "project_id must not be empty").describe(
+          "The ID of the project to patch.",
+        ),
         expand: z.string().optional().describe("Expand relationships."),
         data: z.object({
           attributes: z.object({
@@ -422,7 +426,9 @@ export const model = {
     delete_org_project: {
       description: "Delete project by project ID.",
       arguments: z.object({
-        project_id: z.string().describe("The ID of the project."),
+        project_id: z.string().min(1, "project_id must not be empty").describe(
+          "The ID of the project.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -453,7 +459,9 @@ export const model = {
     get_sbom: {
       description: "Get a project’s SBOM document",
       arguments: z.object({
-        project_id: z.string().describe("Unique identifier for a project"),
+        project_id: z.string().min(1, "project_id must not be empty").describe(
+          "Unique identifier for a project",
+        ),
         format: z.enum([
           "cyclonedx1.6+json",
           "cyclonedx1.6+xml",

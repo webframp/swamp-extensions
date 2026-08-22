@@ -27,7 +27,7 @@ const GlobalArgsSchema = z.object({
 /** Snyk Issues — vulnerability issues across projects and groups */
 export const model = {
   type: "@webframp/snyk/issues",
-  version: "2026.07.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -63,7 +63,9 @@ export const model = {
     list_group_issues: {
       description: "Get issues by group ID",
       arguments: z.object({
-        group_id: z.string().describe("Group ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Group ID",
+        ),
         scan_item_id: z.string().optional().describe(
           "A scan item id to filter issues through their scan item relationship.",
         ),
@@ -136,8 +138,12 @@ export const model = {
     get_group_issue_by_issue_id: {
       description: "Get an issue",
       arguments: z.object({
-        group_id: z.string().describe("Group ID"),
-        issue_id: z.string().describe("Issue ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Group ID",
+        ),
+        issue_id: z.string().min(1, "issue_id must not be empty").describe(
+          "Issue ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -245,7 +251,9 @@ export const model = {
     get_org_issue_by_issue_id: {
       description: "Get an issue",
       arguments: z.object({
-        issue_id: z.string().describe("Issue ID"),
+        issue_id: z.string().min(1, "issue_id must not be empty").describe(
+          "Issue ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

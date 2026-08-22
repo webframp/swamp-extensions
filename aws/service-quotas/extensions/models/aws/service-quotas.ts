@@ -274,11 +274,32 @@ function redactError(e: unknown): string {
     .trim();
 }
 
+/**
+ * Wrap an error from an external AWS API call with the operation and
+ * relevant identifiers, preserving the original error via `cause`.
+ */
+function wrapApiError(
+  operation: string,
+  detail: Record<string, unknown>,
+  err: unknown,
+): never {
+  const detailStr = Object.entries(detail)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join(", ");
+  const message = err instanceof Error ? err.message : String(err);
+  throw new Error(`${operation} failed (${detailStr}): ${message}`, {
+    cause: err,
+  });
+}
+
 async function getAccountId(profile: string, region: string): Promise<string> {
   const sts = createStsClient(profile, region);
   try {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
+  } catch (err) {
+    return wrapApiError("GetCallerIdentity", { profile, region }, err);
   } finally {
     sts.destroy();
   }
@@ -357,7 +378,7 @@ interface ModelContext {
 /** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.08.20.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -374,6 +395,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Wrap Service Quotas/CloudWatch/STS/Support API errors with operation context, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -461,12 +488,21 @@ export const model = {
         try {
           const accountId = await getAccountId(profile, region);
 
-          const resp = await client.send(
-            new GetServiceQuotaCommand({
-              ServiceCode: args.serviceCode,
-              QuotaCode: args.quotaCode,
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new GetServiceQuotaCommand({
+                ServiceCode: args.serviceCode,
+                QuotaCode: args.quotaCode,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("GetServiceQuota", {
+              serviceCode: args.serviceCode,
+              quotaCode: args.quotaCode,
+              profile,
+            }, err);
+          }
 
           const q = resp.Quota;
           if (!q) {
@@ -567,13 +603,22 @@ export const model = {
           let nextToken: string | undefined;
           let pages = 0;
           do {
-            const resp = await client.send(
-              new ListServiceQuotasCommand({
-                ServiceCode: args.serviceCode,
-                NextToken: nextToken,
-                MaxResults: 100,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new ListServiceQuotasCommand({
+                  ServiceCode: args.serviceCode,
+                  NextToken: nextToken,
+                  MaxResults: 100,
+                }),
+              );
+            } catch (err) {
+              return wrapApiError("ListServiceQuotas", {
+                serviceCode: args.serviceCode,
+                profile,
+                page: pages,
+              }, err);
+            }
 
             for (const q of resp.Quotas ?? []) {
               quotas.push({
@@ -647,12 +692,21 @@ export const model = {
           let nextToken: string | undefined;
           let pages = 0;
           do {
-            const resp = await client.send(
-              new ListServicesCommand({
-                NextToken: nextToken,
-                MaxResults: 100,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new ListServicesCommand({
+                  NextToken: nextToken,
+                  MaxResults: 100,
+                }),
+              );
+            } catch (err) {
+              return wrapApiError(
+                "ListServices",
+                { profile, page: pages },
+                err,
+              );
+            }
 
             for (const s of resp.Services ?? []) {
               services.push({
@@ -913,22 +967,41 @@ export const model = {
         try {
           const accountId = await getAccountId(profile, region);
 
-          const current = await client.send(
-            new GetServiceQuotaCommand({
-              ServiceCode: args.serviceCode,
-              QuotaCode: args.quotaCode,
-            }),
-          );
+          let current;
+          try {
+            current = await client.send(
+              new GetServiceQuotaCommand({
+                ServiceCode: args.serviceCode,
+                QuotaCode: args.quotaCode,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("GetServiceQuota (pre-increase lookup)", {
+              serviceCode: args.serviceCode,
+              quotaCode: args.quotaCode,
+              profile,
+            }, err);
+          }
           const previousValue = current.Quota?.Value ?? 0;
           const quotaName = current.Quota?.QuotaName ?? "";
 
-          const resp = await client.send(
-            new RequestServiceQuotaIncreaseCommand({
-              ServiceCode: args.serviceCode,
-              QuotaCode: args.quotaCode,
-              DesiredValue: args.desiredValue,
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new RequestServiceQuotaIncreaseCommand({
+                ServiceCode: args.serviceCode,
+                QuotaCode: args.quotaCode,
+                DesiredValue: args.desiredValue,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("RequestServiceQuotaIncrease", {
+              serviceCode: args.serviceCode,
+              quotaCode: args.quotaCode,
+              desiredValue: args.desiredValue,
+              profile,
+            }, err);
+          }
 
           const req = resp.RequestedQuota;
           if (!req) {
@@ -1006,11 +1079,19 @@ export const model = {
         try {
           const accountId = await getAccountId(profile, region);
 
-          const resp = await client.send(
-            new GetRequestedServiceQuotaChangeCommand({
-              RequestId: args.requestId,
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new GetRequestedServiceQuotaChangeCommand({
+                RequestId: args.requestId,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("GetRequestedServiceQuotaChange", {
+              requestId: args.requestId,
+              profile,
+            }, err);
+          }
 
           const req = resp.RequestedQuota;
           if (!req) {
@@ -1205,12 +1286,20 @@ export const model = {
         try {
           const accountId = await getAccountId(profile, "us-east-1");
 
-          const casesResp = await support.send(
-            new DescribeCasesCommand({
+          let casesResp;
+          try {
+            casesResp = await support.send(
+              new DescribeCasesCommand({
+                displayId: args.displayId,
+                includeCommunications: false,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("DescribeCases", {
               displayId: args.displayId,
-              includeCommunications: false,
-            }),
-          );
+              profile,
+            }, err);
+          }
 
           const caseDetail = casesResp.cases?.[0];
           if (!caseDetail) {
@@ -1235,12 +1324,22 @@ export const model = {
           let truncated = false;
 
           do {
-            const commsResp = await support.send(
-              new DescribeCommunicationsCommand({
+            let commsResp;
+            try {
+              commsResp = await support.send(
+                new DescribeCommunicationsCommand({
+                  caseId: internalCaseId,
+                  nextToken,
+                }),
+              );
+            } catch (err) {
+              return wrapApiError("DescribeCommunications", {
                 caseId: internalCaseId,
-                nextToken,
-              }),
-            );
+                displayId: args.displayId,
+                profile,
+                page: pages,
+              }, err);
+            }
 
             for (const comm of commsResp.communications ?? []) {
               communications.push({

@@ -177,8 +177,21 @@ export const vault = {
         if (opts.redact?.length) {
           errMsg = redactSecret(errMsg, opts.redact);
         }
+        // `-i` reads its actual subcommand from stdin, so the argv alone
+        // ("-i") wouldn't say what operation ran; include the redacted stdin
+        // line for that case so the error still names what was attempted.
+        const commandDesc = opts.stdin !== undefined
+          ? `security ${args.join(" ")} <<< "${
+            (opts.redact?.length
+              ? redactSecret(opts.stdin, opts.redact)
+              : opts.stdin)
+              .trim()
+          }"`
+          : `security ${args.join(" ")}`;
         throw new Error(
-          errMsg || `security command failed with code ${code}`,
+          `${commandDesc} exited with code ${code}${
+            errMsg ? `: ${errMsg}` : ""
+          }`,
         );
       }
 

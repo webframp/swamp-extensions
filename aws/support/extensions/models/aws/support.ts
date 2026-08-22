@@ -174,11 +174,33 @@ function redactError(e: unknown): string {
     .trim();
 }
 
+/**
+ * Wrap an error from an external AWS Support/STS API call with the
+ * operation and relevant identifiers, preserving the original error via
+ * `cause`.
+ */
+function wrapApiError(
+  operation: string,
+  detail: Record<string, unknown>,
+  err: unknown,
+): never {
+  const detailStr = Object.entries(detail)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join(", ");
+  const message = err instanceof Error ? err.message : String(err);
+  throw new Error(`${operation} failed (${detailStr}): ${message}`, {
+    cause: err,
+  });
+}
+
 async function getAccountId(profile: string): Promise<string> {
   const sts = createStsClient(profile);
   try {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
+  } catch (err) {
+    return wrapApiError("GetCallerIdentity", { profile }, err);
   } finally {
     sts.destroy();
   }
@@ -234,7 +256,7 @@ interface ModelContext {
 /** AWS Support case management model. */
 export const model = {
   type: "@webframp/aws/support",
-  version: "2026.08.20.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -246,6 +268,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Wrap Support/STS API errors with operation context, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -332,14 +360,23 @@ export const model = {
           let nextToken: string | undefined;
           let pages = 0;
           do {
-            const resp = await client.send(
-              new DescribeCasesCommand({
-                includeResolvedCases: includeResolved,
-                includeCommunications: false,
-                maxResults: Math.min(limit - cases.length, 100),
-                nextToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new DescribeCasesCommand({
+                  includeResolvedCases: includeResolved,
+                  includeCommunications: false,
+                  maxResults: Math.min(limit - cases.length, 100),
+                  nextToken,
+                }),
+              );
+            } catch (err) {
+              return wrapApiError("DescribeCases (list_cases)", {
+                profile,
+                includeResolved,
+                page: pages,
+              }, err);
+            }
 
             for (const c of resp.cases ?? []) {
               if (cases.length >= limit) break;
@@ -405,13 +442,21 @@ export const model = {
           const accountId = await getAccountId(profile);
 
           // Fetch the case metadata
-          const casesResp = await client.send(
-            new DescribeCasesCommand({
+          let casesResp;
+          try {
+            casesResp = await client.send(
+              new DescribeCasesCommand({
+                displayId: args.displayId,
+                includeCommunications: false,
+                includeResolvedCases: true,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("DescribeCases (get_case)", {
               displayId: args.displayId,
-              includeCommunications: false,
-              includeResolvedCases: true,
-            }),
-          );
+              profile,
+            }, err);
+          }
 
           const caseDetail = casesResp.cases?.[0];
           if (!caseDetail) {
@@ -434,12 +479,22 @@ export const model = {
           let truncated = false;
 
           do {
-            const commsResp = await client.send(
-              new DescribeCommunicationsCommand({
+            let commsResp;
+            try {
+              commsResp = await client.send(
+                new DescribeCommunicationsCommand({
+                  caseId: internalCaseId,
+                  nextToken,
+                }),
+              );
+            } catch (err) {
+              return wrapApiError("DescribeCommunications (get_case)", {
                 caseId: internalCaseId,
-                nextToken,
-              }),
-            );
+                displayId: args.displayId,
+                profile,
+                page: pages,
+              }, err);
+            }
 
             for (const comm of commsResp.communications ?? []) {
               communications.push({
@@ -543,18 +598,28 @@ export const model = {
         try {
           const accountId = await getAccountId(profile);
 
-          const resp = await client.send(
-            new CreateCaseCommand({
+          let resp;
+          try {
+            resp = await client.send(
+              new CreateCaseCommand({
+                subject: args.subject,
+                communicationBody: args.body,
+                serviceCode: args.serviceCode,
+                categoryCode: args.categoryCode,
+                severityCode,
+                ccEmailAddresses: args.ccEmailAddresses,
+                language: "en",
+                issueType: "technical",
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("CreateCase", {
               subject: args.subject,
-              communicationBody: args.body,
               serviceCode: args.serviceCode,
               categoryCode: args.categoryCode,
-              severityCode,
-              ccEmailAddresses: args.ccEmailAddresses,
-              language: "en",
-              issueType: "technical",
-            }),
-          );
+              profile,
+            }, err);
+          }
 
           const caseId = resp.caseId;
           if (!caseId) {
@@ -624,13 +689,21 @@ export const model = {
         try {
           const accountId = await getAccountId(profile);
 
-          const resp = await client.send(
-            new AddCommunicationToCaseCommand({
+          let resp;
+          try {
+            resp = await client.send(
+              new AddCommunicationToCaseCommand({
+                caseId: args.caseId,
+                communicationBody: args.body,
+                ccEmailAddresses: args.ccEmailAddresses,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError("AddCommunicationToCase", {
               caseId: args.caseId,
-              communicationBody: args.body,
-              ccEmailAddresses: args.ccEmailAddresses,
-            }),
-          );
+              profile,
+            }, err);
+          }
 
           const success = resp.result ?? false;
           const handle = await ctx.writeResource(
@@ -683,11 +756,20 @@ export const model = {
         try {
           const accountId = await getAccountId(profile);
 
-          const resp = await client.send(
-            new ResolveCaseCommand({
-              caseId: args.caseId,
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new ResolveCaseCommand({
+                caseId: args.caseId,
+              }),
+            );
+          } catch (err) {
+            return wrapApiError(
+              "ResolveCase",
+              { caseId: args.caseId, profile },
+              err,
+            );
+          }
 
           const handle = await ctx.writeResource(
             "resolveResult",

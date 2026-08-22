@@ -87,13 +87,22 @@ function buildDnsRecordPayload(
 /** Cloudflare DNS model definition with full CRUD methods and BIND-format export. */
 export const model = {
   type: "@webframp/cloudflare/dns",
-  version: "2026.07.18.2",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Require priority for MX/SRV records at validation time instead of " +
+        "failing deep in the Cloudflare API; wrap export request/HTTP " +
+        "failures with the zone ID; shared _lib/api.ts now wraps Cloudflare " +
+        "API failures with the method/path/status",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -245,10 +254,18 @@ export const model = {
           "Enable Cloudflare proxy (orange cloud)",
         ),
         priority: z.number().optional().describe(
-          "Priority (required for MX records)",
+          "Priority (required for MX and SRV records)",
         ),
         comment: z.string().optional().describe("Comment for the record"),
-      }),
+      }).refine(
+        (args) =>
+          !(["MX", "SRV"].includes(args.type) && args.priority === undefined),
+        {
+          message:
+            "priority is required when type is MX or SRV (Cloudflare rejects these records without it)",
+          path: ["priority"],
+        },
+      ),
       execute: async (
         args: {
           type: string;
@@ -312,9 +329,19 @@ export const model = {
         content: z.string().describe("Record content"),
         ttl: z.number().default(1).describe("TTL in seconds (1 = auto)"),
         proxied: z.boolean().default(false).describe("Enable Cloudflare proxy"),
-        priority: z.number().optional().describe("Priority (for MX records)"),
+        priority: z.number().optional().describe(
+          "Priority (required for MX and SRV records)",
+        ),
         comment: z.string().optional().describe("Comment for the record"),
-      }),
+      }).refine(
+        (args) =>
+          !(["MX", "SRV"].includes(args.type) && args.priority === undefined),
+        {
+          message:
+            "priority is required when type is MX or SRV (Cloudflare rejects these records without it)",
+          path: ["priority"],
+        },
+      ),
       execute: async (
         args: {
           recordId: string;
@@ -405,18 +432,28 @@ export const model = {
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
 
-        const response = await fetch(
-          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/export`,
-          {
-            headers: {
-              "Authorization": `Bearer ${apiToken}`,
+        let response: Response;
+        try {
+          response = await fetch(
+            `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/export`,
+            {
+              headers: {
+                "Authorization": `Bearer ${apiToken}`,
+              },
             },
-          },
-        );
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `DNS export request failed for zone ${zoneId}: ${message}`,
+            { cause: err },
+          );
+        }
 
         if (!response.ok) {
           throw new Error(
-            `Failed to export DNS records: ${response.statusText}`,
+            `Failed to export DNS records for zone ${zoneId} ` +
+              `(HTTP ${response.status}): ${response.statusText}`,
           );
         }
 

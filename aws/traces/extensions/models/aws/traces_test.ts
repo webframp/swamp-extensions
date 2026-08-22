@@ -5,6 +5,7 @@ import {
   assertEquals,
   assertExists,
   assertMatch,
+  assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { XRayClient } from "npm:@aws-sdk/client-xray@3.1114.0";
@@ -534,6 +535,66 @@ Deno.test(
       assertEquals(data.traces[2].traceId, "1-abc-789");
       assertEquals(data.traces[2].hasFault, true);
       assertEquals(data.traces[2].http?.httpStatus, 500);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test("get_traces: rejects limit outside 1-1000 bounds", () => {
+  assertEquals(
+    model.methods.get_traces.arguments.safeParse({
+      startTime: "1h",
+      sampling: true,
+      limit: 0,
+    }).success,
+    false,
+  );
+  assertEquals(
+    model.methods.get_traces.arguments.safeParse({
+      startTime: "1h",
+      sampling: true,
+      limit: 5000,
+    }).success,
+    false,
+  );
+});
+
+Deno.test(
+  "get_traces: wraps raw SDK errors with operation and filter context",
+  { sanitizeResources: false },
+  async () => {
+    const restore = mockXRay(() => {
+      throw new Error("Throttling: Rate exceeded");
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: {
+          id: "test-id",
+          name: "aws-traces",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await assertRejects(
+        () =>
+          model.methods.get_traces.execute(
+            {
+              startTime: "1h",
+              sampling: true,
+              limit: 100,
+              filterExpression: 'service("api")',
+            },
+            context as unknown as Parameters<
+              typeof model.methods.get_traces.execute
+            >[1],
+          ),
+        Error,
+        "GetTraceSummaries (get_traces) failed",
+      );
     } finally {
       restore();
     }

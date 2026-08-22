@@ -31,7 +31,7 @@ const TaskType = z.enum(["daily-journal", "research-topic", "weekly-review"]);
 const NewTaskArgsSchema = z.object({
   type: TaskType
     .describe("Type of task to create"),
-  title: z.string()
+  title: z.string().min(1, "title must not be empty")
     .describe("Task title"),
   assignee: z.string().default("researcher")
     .describe("Hermes profile to assign the task to"),
@@ -117,14 +117,35 @@ async function runHermesKanban(
     cwd: repoDir,
   });
 
-  const child = command.spawn();
+  let child: Deno.ChildProcess;
+  try {
+    child = command.spawn();
+  } catch (e) {
+    throw new Error(
+      `Failed to spawn "${hermesBin}" (board "${board}", args: ${
+        args.join(" ")
+      }): ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    );
+  }
   const timer = setTimeout(() => {
     try {
       child.kill();
     } catch { /* empty */ }
   }, timeoutMs);
-  const output = await child.output();
-  clearTimeout(timer);
+  let output: Deno.CommandOutput;
+  try {
+    output = await child.output();
+  } catch (e) {
+    throw new Error(
+      `Failed to run "${hermesBin} kanban --board ${board} ${
+        args.join(" ")
+      }": ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
   const stdout = new TextDecoder().decode(output.stdout).trim();
   const stderr = new TextDecoder().decode(output.stderr).trim();
 
@@ -210,7 +231,11 @@ async function newTask(
       return { dataHandles: [handle] };
     }
 
-    throw new Error(`Failed to create kanban task: ${result.stdout}`);
+    throw new Error(
+      `Failed to create kanban task (type "${args.type}", title "${args.title}", board "${cfg.board}"): ${
+        result.stdout || "hermes kanban create exited non-zero with no output"
+      }`,
+    );
   }
 
   // Parse the JSON output to extract task ID
@@ -264,7 +289,15 @@ async function listRecent(
   );
 
   if (!result.success) {
-    ctx.logger.warn("Failed to list kanban tasks", { error: result.stdout });
+    ctx.logger.warn(
+      `Failed to list kanban tasks (board "${ctx.globalArgs.board}"${
+        args.type ? `, type "${args.type}"` : ""
+      })`,
+      {
+        error: result.stdout ||
+          "hermes kanban list exited non-zero with no output",
+      },
+    );
     return { dataHandles: [] };
   }
 
@@ -308,7 +341,7 @@ async function listRecent(
 /** Kanban orchestrator model. Creates kanban tasks via `hermes kanban create` and records each as swamp data. */
 export const model = {
   type: "@webframp/hermes-kanban-orchestrator" as const,
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -319,6 +352,12 @@ export const model = {
     {
       toVersion: "2026.08.21.1",
       description: "No schema changes (added field descriptions only)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes other than rejecting an empty title (new_task) — existing stored resources are unaffected.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

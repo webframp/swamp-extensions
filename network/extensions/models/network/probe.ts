@@ -50,6 +50,7 @@ const DnsLookupSchema = z.object({
   server: z.string().nullable(),
   queryTime: z.string().nullable(),
   status: z.string(),
+  error: z.string().nullable(),
   fetchedAt: z.string(),
 });
 
@@ -79,6 +80,7 @@ const WhoisInfoSchema = z.object({
   updatedDate: z.string().nullable(),
   nameservers: z.array(z.string()),
   status: z.array(z.string()),
+  error: z.string().nullable(),
   rawText: z.string(),
   fetchedAt: z.string(),
 });
@@ -111,6 +113,7 @@ const TracerouteSchema = z.object({
   maxHops: z.number(),
   hops: z.array(TracerouteHopSchema),
   reachedTarget: z.boolean(),
+  error: z.string().nullable(),
   fetchedAt: z.string(),
 });
 
@@ -134,9 +137,16 @@ const PortScanSchema = z.object({
 // Helper: Run a shell command
 // =============================================================================
 
-/** Execute a shell command with an optional timeout and return its output. */
+/**
+ * Execute a shell command with an optional timeout and return its output.
+ *
+ * `label` identifies the probe operation and target (e.g. `dig example.com`)
+ * so a missing binary or spawn failure surfaces which command and target
+ * were involved, rather than a bare "No such file or directory".
+ */
 async function runCommand(
   cmd: string[],
+  label: string,
   timeoutMs = 30000,
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
   const command = new Deno.Command(cmd[0], {
@@ -145,7 +155,17 @@ async function runCommand(
     stderr: "piped",
   });
 
-  const child = command.spawn();
+  let child: Deno.ChildProcess;
+  try {
+    child = command.spawn();
+  } catch (e) {
+    throw new Error(
+      `Failed to run "${cmd[0]}" for ${label}: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
+    );
+  }
 
   const timer = setTimeout(() => {
     try {
@@ -155,8 +175,19 @@ async function runCommand(
     }
   }, timeoutMs);
 
-  const output = await child.output();
-  clearTimeout(timer);
+  let output: Deno.CommandOutput;
+  try {
+    output = await child.output();
+  } catch (e) {
+    throw new Error(
+      `Failed to run "${cmd.join(" ")}" for ${label}: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 
   const decoder = new TextDecoder();
   return {
@@ -458,13 +489,21 @@ function computeDaysUntilExpiry(notAfter: string | null): number | null {
  */
 export const model = {
   type: "@webframp/network",
-  version: "2026.07.18.1",
+  version: "2026.08.21.1",
   globalArguments: z.object({}),
 
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Adds a nullable `error` field to dns_records, whois_info, and " +
+        "traceroute resources (populated only when the underlying command " +
+        "fails) — additive, existing stored resources are unaffected.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -512,7 +551,9 @@ export const model = {
     dns_lookup: {
       description: "Run dig to resolve DNS records for a domain",
       arguments: z.object({
-        domain: z.string().describe("Domain name to look up"),
+        domain: z.string().min(1, "domain must not be empty").describe(
+          "Domain name to look up",
+        ),
         recordType: z
           .enum(["A", "AAAA", "MX", "TXT", "NS", "CNAME", "SOA"])
           .default("A")
@@ -522,13 +563,14 @@ export const model = {
         args: { domain: string; recordType: string },
         context: ModelContext,
       ) => {
+        const label = `dns_lookup ${args.domain} ${args.recordType}`;
         // Try dig +json first; if unsupported, fall back to standard text output
         let result = await runCommand([
           "dig",
           "+json",
           args.domain,
           args.recordType,
-        ]);
+        ], label);
 
         let parsed;
         if (
@@ -542,9 +584,13 @@ export const model = {
             "dig",
             args.domain,
             args.recordType,
-          ]);
+          ], label);
           parsed = parseDigText(result.stdout);
         }
+
+        const commandError = result.success
+          ? null
+          : (result.stderr.trim() || "dig exited non-zero with no stderr");
 
         const data = {
           domain: args.domain,
@@ -553,6 +599,7 @@ export const model = {
           server: parsed.server,
           queryTime: parsed.queryTime,
           status: result.success ? parsed.status : "COMMAND_FAILED",
+          error: commandError,
           fetchedAt: new Date().toISOString(),
         };
 
@@ -563,11 +610,18 @@ export const model = {
           data,
         );
 
-        context.logger.info("DNS lookup {domain} {type}: {count} records", {
-          domain: args.domain,
-          type: args.recordType,
-          count: parsed.records.length,
-        });
+        if (commandError) {
+          context.logger.info(
+            "DNS lookup {domain} {type} failed: {error}",
+            { domain: args.domain, type: args.recordType, error: commandError },
+          );
+        } else {
+          context.logger.info("DNS lookup {domain} {type}: {count} records", {
+            domain: args.domain,
+            type: args.recordType,
+            count: parsed.records.length,
+          });
+        }
 
         return { dataHandles: [handle] };
       },
@@ -577,7 +631,9 @@ export const model = {
       description:
         "Fetch a URL and record status code, headers, timing, and redirect chain",
       arguments: z.object({
-        url: z.string().describe("URL to check"),
+        url: z.string().min(1, "url must not be empty").describe(
+          "URL to check",
+        ),
         method: z
           .enum(["GET", "HEAD"])
           .default("HEAD")
@@ -737,13 +793,25 @@ export const model = {
     whois_lookup: {
       description: "Query WHOIS for domain registration details",
       arguments: z.object({
-        domain: z.string().describe("Domain name to look up"),
+        domain: z.string().min(1, "domain must not be empty").describe(
+          "Domain name to look up",
+        ),
       }),
       execute: async (
         args: { domain: string },
         context: ModelContext,
       ) => {
-        const result = await runCommand(["whois", args.domain]);
+        const result = await runCommand(
+          ["whois", args.domain],
+          `whois_lookup ${args.domain}`,
+        );
+
+        // A non-zero exit means the registry/registrar lookup failed (e.g.
+        // rate-limited, unsupported TLD, network error) — the parsed fields
+        // would otherwise silently come back empty with no indication why.
+        const commandError = result.success
+          ? null
+          : (result.stderr.trim() || "whois exited non-zero with no stderr");
 
         const parsed = parseWhoisText(result.stdout);
 
@@ -755,6 +823,7 @@ export const model = {
           updatedDate: parsed.updatedDate,
           nameservers: parsed.nameservers,
           status: parsed.status,
+          error: commandError,
           rawText: result.stdout.slice(0, 4000),
           fetchedAt: new Date().toISOString(),
         };
@@ -765,10 +834,17 @@ export const model = {
           data,
         );
 
-        context.logger.info("WHOIS {domain}: registrar={registrar}", {
-          domain: args.domain,
-          registrar: parsed.registrar ?? "unknown",
-        });
+        if (commandError) {
+          context.logger.info("WHOIS {domain} failed: {error}", {
+            domain: args.domain,
+            error: commandError,
+          });
+        } else {
+          context.logger.info("WHOIS {domain}: registrar={registrar}", {
+            domain: args.domain,
+            registrar: parsed.registrar ?? "unknown",
+          });
+        }
 
         return { dataHandles: [handle] };
       },
@@ -778,7 +854,9 @@ export const model = {
       description:
         "Inspect TLS certificate subject, issuer, and validity dates",
       arguments: z.object({
-        host: z.string().describe("Hostname to check"),
+        host: z.string().min(1, "host must not be empty").describe(
+          "Hostname to check",
+        ),
         port: z.number().default(443).describe("TLS port to connect to"),
       }),
       execute: async (
@@ -789,7 +867,7 @@ export const model = {
           "bash",
           "-c",
           `echo | openssl s_client -connect ${args.host}:${args.port} -servername ${args.host} 2>/dev/null | openssl x509 -noout -dates -subject -issuer -serial`,
-        ]);
+        ], `cert_check ${args.host}:${args.port}`);
 
         const instance = `${args.host}-${args.port}`;
 
@@ -854,7 +932,9 @@ export const model = {
     traceroute: {
       description: "Trace network path to a host",
       arguments: z.object({
-        host: z.string().describe("Target host to trace"),
+        host: z.string().min(1, "host must not be empty").describe(
+          "Target host to trace",
+        ),
         maxHops: z
           .number()
           .default(15)
@@ -866,16 +946,20 @@ export const model = {
       ) => {
         const result = await runCommand(
           ["traceroute", "-m", String(args.maxHops), "-w", "2", args.host],
+          `traceroute ${args.host}`,
           60000,
         );
 
         const parsed = parseTracerouteOutput(result.stdout);
+        const commandError = result.success ? null : (result.stderr.trim() ||
+          "traceroute exited non-zero with no stderr");
 
         const data = {
           host: args.host,
           maxHops: args.maxHops,
           hops: parsed.hops,
           reachedTarget: parsed.reachedTarget,
+          error: commandError,
           fetchedAt: new Date().toISOString(),
         };
 
@@ -885,14 +969,21 @@ export const model = {
           data,
         );
 
-        context.logger.info(
-          "Traceroute {host}: {hopCount} hops, reached={reached}",
-          {
+        if (commandError) {
+          context.logger.info("Traceroute {host} failed: {error}", {
             host: args.host,
-            hopCount: parsed.hops.length,
-            reached: parsed.reachedTarget,
-          },
-        );
+            error: commandError,
+          });
+        } else {
+          context.logger.info(
+            "Traceroute {host}: {hopCount} hops, reached={reached}",
+            {
+              host: args.host,
+              hopCount: parsed.hops.length,
+              reached: parsed.reachedTarget,
+            },
+          );
+        }
 
         return { dataHandles: [handle] };
       },
@@ -901,9 +992,17 @@ export const model = {
     port_check: {
       description: "Test TCP connectivity on specific ports",
       arguments: z.object({
-        host: z.string().describe("Target host to scan"),
+        host: z.string().min(1, "host must not be empty").describe(
+          "Target host to scan",
+        ),
         ports: z
-          .array(z.number())
+          .array(
+            z.number().int().min(1, "port must be >= 1").max(
+              65535,
+              "port must be <= 65535",
+            ),
+          )
+          .min(1, "ports must not be empty")
           .default([80, 443])
           .describe("List of TCP ports to check (defaults to 80, 443)"),
       }),

@@ -46,6 +46,31 @@ function lockBlobPath(container: string, prefix: string, key: string): string {
   return `/${container}/${prefix}/_locks/${encodeURIComponent(key)}.lock`;
 }
 
+/**
+ * Runs a lease-blob network request, wrapping any transport-level failure
+ * (DNS, TLS, connection reset — errors that never reach an HTTP status) with
+ * the blob operation and path that was being attempted. Without this, a
+ * dropped connection during a lease renewal surfaces as an opaque
+ * "TypeError: error sending request" with no indication of which lock was
+ * affected.
+ */
+async function requestWithContext(
+  op: string,
+  path: string,
+  run: () => Promise<BlobResponse>,
+): Promise<BlobResponse> {
+  try {
+    return await retryableRequest(run);
+  } catch (cause) {
+    if (cause instanceof DOMException) throw cause; // abort signals pass through unchanged
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `Azure Blob ${op} request failed for ${path}: ${reason}`,
+      { cause },
+    );
+  }
+}
+
 async function leaseAction(
   client: BlobClient,
   path: string,
@@ -58,14 +83,17 @@ async function leaseAction(
   if (durationSeconds !== undefined) {
     headers["x-ms-lease-duration"] = String(durationSeconds);
   }
-  return await retryableRequest(() =>
-    client.request({
-      op: `lease.${action}`,
-      method: "PUT",
-      path,
-      query: { comp: "lease" },
-      headers,
-    })
+  return await requestWithContext(
+    `lease.${action}`,
+    path,
+    () =>
+      client.request({
+        op: `lease.${action}`,
+        method: "PUT",
+        path,
+        query: { comp: "lease" },
+        headers,
+      }),
   );
 }
 
@@ -73,24 +101,29 @@ async function ensureBlobExists(
   client: BlobClient,
   path: string,
 ): Promise<void> {
-  const resp = await retryableRequest(() =>
-    client.request({
-      op: "createLockBlob",
-      method: "PUT",
-      path,
-      headers: {
-        "If-None-Match": "*",
-        "Content-Length": "0",
-        "x-ms-blob-type": "BlockBlob",
-      },
-      body: new Uint8Array(0),
-    })
+  const resp = await requestWithContext(
+    "createLockBlob",
+    path,
+    () =>
+      client.request({
+        op: "createLockBlob",
+        method: "PUT",
+        path,
+        headers: {
+          "If-None-Match": "*",
+          "Content-Length": "0",
+          "x-ms-blob-type": "BlockBlob",
+        },
+        body: new Uint8Array(0),
+      }),
   );
   // 201 Created, or 412 Precondition Failed (If-None-Match: * means "already
   // exists" — NOT 409, which Azure reserves for lease conflicts) are both fine.
   if (resp.status !== 201 && resp.status !== 412) {
     const message = new TextDecoder().decode(resp.body);
-    throw new Error(`Failed to create lock blob (${resp.status}): ${message}`);
+    throw new Error(
+      `Failed to create lock blob at ${path} (${resp.status}): ${message}`,
+    );
   }
 }
 
@@ -112,27 +145,30 @@ export function createBlobLock(
 
   const stampMetadata = async (id: string): Promise<void> => {
     const holder = `${Deno.env.get("USER") ?? "unknown"}@${Deno.hostname()}`;
-    const resp = await retryableRequest(() =>
-      client.request({
-        op: "setLockMetadata",
-        method: "PUT",
-        path,
-        query: { comp: "metadata" },
-        headers: {
-          "x-ms-lease-id": id,
-          "x-ms-meta-holder": holder,
-          "x-ms-meta-hostname": Deno.hostname(),
-          "x-ms-meta-pid": String(Deno.pid),
-          "x-ms-meta-acquiredat": new Date().toISOString(),
-          "x-ms-meta-ttlms": String(ttlMs),
-          "x-ms-meta-nonce": id,
-        },
-      })
+    const resp = await requestWithContext(
+      "setLockMetadata",
+      path,
+      () =>
+        client.request({
+          op: "setLockMetadata",
+          method: "PUT",
+          path,
+          query: { comp: "metadata" },
+          headers: {
+            "x-ms-lease-id": id,
+            "x-ms-meta-holder": holder,
+            "x-ms-meta-hostname": Deno.hostname(),
+            "x-ms-meta-pid": String(Deno.pid),
+            "x-ms-meta-acquiredat": new Date().toISOString(),
+            "x-ms-meta-ttlms": String(ttlMs),
+            "x-ms-meta-nonce": id,
+          },
+        }),
     );
     if (resp.status !== 200) {
       const message = new TextDecoder().decode(resp.body);
       throw new Error(
-        `Failed to stamp lock metadata (${resp.status}): ${message}`,
+        `Failed to stamp lock metadata for ${path} (${resp.status}): ${message}`,
       );
     }
   };
@@ -202,7 +238,9 @@ export function createBlobLock(
         }
         if (resp.status !== 409) {
           const message = new TextDecoder().decode(resp.body);
-          throw new Error(`Lease acquire failed (${resp.status}): ${message}`);
+          throw new Error(
+            `Lease acquire failed for lock key "${key}" (${resp.status}): ${message}`,
+          );
         }
         contended = true;
         // 409 LeaseAlreadyPresent — another holder has a live lease. Backoff and
@@ -292,12 +330,17 @@ export function createBlobLock(
       return await withSpan("azure-blob-datastore lock inspect", {
         [Attr.LOCK_KEY]: key,
       }, async (span) => {
-        const resp = await client.request({
-          op: "getLockMetadata",
-          method: "GET",
+        const resp = await requestWithContext(
+          "getLockMetadata",
           path,
-          query: { comp: "metadata" },
-        });
+          () =>
+            client.request({
+              op: "getLockMetadata",
+              method: "GET",
+              path,
+              query: { comp: "metadata" },
+            }),
+        );
         if (resp.status === 404) return null;
         if (resp.status !== 200) return null;
         const leaseState = resp.headers.get("x-ms-lease-state");

@@ -66,6 +66,43 @@ Deno.test("dns model: create method has correct arguments schema", () => {
   assertExists(shape.proxied);
 });
 
+Deno.test("dns model: create rejects MX record without priority", () => {
+  const result = model.methods.create.arguments.safeParse({
+    type: "MX",
+    name: "@",
+    content: "mail.example.com",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("dns model: create rejects SRV record without priority", () => {
+  const result = model.methods.create.arguments.safeParse({
+    type: "SRV",
+    name: "_sip._tcp",
+    content: "sip.example.com",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("dns model: create accepts MX record with priority", () => {
+  const result = model.methods.create.arguments.safeParse({
+    type: "MX",
+    name: "@",
+    content: "mail.example.com",
+    priority: 10,
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("dns model: create accepts A record without priority", () => {
+  const result = model.methods.create.arguments.safeParse({
+    type: "A",
+    name: "www",
+    content: "192.0.2.1",
+  });
+  assertEquals(result.success, true);
+});
+
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

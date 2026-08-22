@@ -167,7 +167,7 @@ interface AwsDimension {
  */
 export const model = {
   type: "@webframp/aws/alarms",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -184,6 +184,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message quality pass: no schema changes to stored resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -224,6 +230,9 @@ export const model = {
           .describe("Filter by alarm name prefix"),
         limit: z
           .number()
+          .int()
+          .min(1)
+          .max(10000)
           .default(100)
           .describe("Maximum number of alarms to return"),
       }),
@@ -259,7 +268,23 @@ export const model = {
               NextToken: nextToken,
               MaxRecords: Math.min(100, args.limit - alarms.length),
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `DescribeAlarms failed (region=${context.globalArgs.region}` +
+                  `${
+                    args.stateValue ? `, stateValue=${args.stateValue}` : ""
+                  }` +
+                  `${
+                    args.alarmNamePrefix
+                      ? `, alarmNamePrefix=${args.alarmNamePrefix}`
+                      : ""
+                  }): ${err instanceof Error ? err.message : String(err)}`,
+                { cause: err },
+              );
+            }
 
             if (response.MetricAlarms) {
               for (const alarm of response.MetricAlarms) {
@@ -302,6 +327,9 @@ export const model = {
       arguments: z.object({
         limit: z
           .number()
+          .int()
+          .min(1)
+          .max(10000)
           .default(50)
           .describe("Maximum number of alarms to return"),
       }),
@@ -332,7 +360,18 @@ export const model = {
               NextToken: nextToken,
               MaxRecords: Math.min(100, args.limit - alarms.length),
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `DescribeAlarms failed (region=${context.globalArgs.region}, ` +
+                  `stateValue=ALARM): ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                { cause: err },
+              );
+            }
 
             if (response.MetricAlarms) {
               for (const alarm of response.MetricAlarms) {
@@ -382,6 +421,9 @@ export const model = {
           .describe("End time (ISO date, defaults to now)"),
         limit: z
           .number()
+          .int()
+          .min(1)
+          .max(10000)
           .default(100)
           .describe("Maximum number of history entries to return"),
       }),
@@ -429,7 +471,17 @@ export const model = {
               NextToken: nextToken,
               MaxRecords: Math.min(100, args.limit - entries.length),
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `DescribeAlarmHistory failed (region=${context.globalArgs.region}${
+                  args.alarmName ? `, alarmName=${args.alarmName}` : ""
+                }): ${err instanceof Error ? err.message : String(err)}`,
+                { cause: err },
+              );
+            }
 
             if (response.AlarmHistoryItems) {
               for (const item of response.AlarmHistoryItems) {
@@ -482,6 +534,8 @@ export const model = {
           ),
         historyHours: z
           .number()
+          .positive()
+          .max(24 * 30)
           .default(6)
           .describe("Hours to look back for recent state changes"),
       }),
@@ -513,7 +567,17 @@ export const model = {
               NextToken: nextToken,
               MaxRecords: 100,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `DescribeAlarms failed while building summary (region=${context.globalArgs.region}, page=${pages}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
 
             if (response.MetricAlarms) {
               allAlarms.push(...response.MetricAlarms);
@@ -563,7 +627,17 @@ export const model = {
             EndDate: new Date(),
             MaxRecords: 50,
           });
-          const historyResponse = await client.send(historyCommand);
+          let historyResponse;
+          try {
+            historyResponse = await client.send(historyCommand);
+          } catch (err) {
+            throw new Error(
+              `DescribeAlarmHistory failed while building summary (region=${context.globalArgs.region}, since=${startTime.toISOString()}): ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
 
           if (historyResponse.AlarmHistoryItems) {
             for (const item of historyResponse.AlarmHistoryItems) {

@@ -128,6 +128,31 @@ Deno.test("globalArguments validates cluster_identifier pattern", () => {
   assertEquals(result.success, false);
 });
 
+Deno.test("globalArguments rejects malformed subnet_ids", () => {
+  const result = model.globalArguments.safeParse({
+    master_password: "test1234",
+    subnet_ids: "subnet-abc123,not-a-subnet-id",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("globalArguments accepts well-formed subnet_ids", () => {
+  const result = model.globalArguments.safeParse({
+    master_password: "test1234",
+    subnet_ids: "subnet-abc123, subnet-def456",
+  });
+  assertEquals(result.success, true);
+});
+
+Deno.test("globalArguments rejects max_acu below min_acu", () => {
+  const result = model.globalArguments.safeParse({
+    master_password: "test1234",
+    min_acu: 4,
+    max_acu: 2,
+  });
+  assertEquals(result.success, false);
+});
+
 Deno.test("provision creates all resources when none exist", async () => {
   const { context, written } = createMockContext(DEFAULT_ARGS);
 

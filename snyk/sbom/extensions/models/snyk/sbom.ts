@@ -46,7 +46,7 @@ const GetSbomTestResultSchema = z.object({
 /** Snyk SBOM — software bill of materials testing and analysis */
 export const model = {
   type: "@webframp/snyk/sbom",
-  version: "2026.07.19.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -119,7 +119,9 @@ export const model = {
     get_sbom_test_status: {
       description: "Gets an SBOM test run status (Early Access)",
       arguments: z.object({
-        job_id: z.string().describe("Job ID"),
+        job_id: z.string().min(1, "job_id must not be empty").describe(
+          "Job ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -155,7 +157,9 @@ export const model = {
     get_sbom_test_result: {
       description: "Gets an SBOM test run result (Early Access)",
       arguments: z.object({
-        job_id: z.string().describe("Job ID"),
+        job_id: z.string().min(1, "job_id must not be empty").describe(
+          "Job ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

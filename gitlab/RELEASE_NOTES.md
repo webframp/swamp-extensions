@@ -1,3 +1,13 @@
+## 2026.08.21.2
+
+**Changed:** A malformed (non-JSON) response body from the GitLab GraphQL API
+now raises a clear error naming the host, instead of a raw `JSON.parse`
+`SyntaxError` with no indication of which request failed. The `review-dashboard`
+report now distinguishes "no dashboard data has been generated yet" from "the
+stored dashboard data could not be loaded" — the latter now surfaces the
+underlying read/parse error in both the markdown and JSON output instead of
+being silently treated the same as the empty case.
+
 ## 2026.08.21.1
 
 **Changed:** Added `.describe()` documentation to every previously undocumented field across

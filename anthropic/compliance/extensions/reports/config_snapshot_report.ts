@@ -30,6 +30,7 @@ interface MethodReportContext {
   modelId: string;
   globalArgs: Record<string, unknown>;
   dataRepository: DataRepository;
+  logger: { warn: (msg: string, props: Record<string, unknown>) => void };
 }
 
 interface SettingEntry {
@@ -56,23 +57,37 @@ interface OrganizationEntry {
   type: string | null;
 }
 
-/** Read a data record by name and JSON-parse it. Returns null if absent or unparseable. */
+/**
+ * Read a data record by name and JSON-parse it. Returns null if absent or
+ * unparseable, but logs a warning naming the spec and model when the read or
+ * parse fails outright, so a storage-backend outage isn't silently
+ * indistinguishable from a spec that was simply never collected.
+ */
 async function readSpec(
   repo: DataRepository,
   modelType: unknown,
   modelId: string,
   dataName: string,
+  logger: { warn: (msg: string, props: Record<string, unknown>) => void },
 ): Promise<Record<string, unknown> | null> {
   let raw: Uint8Array | null;
   try {
     raw = await repo.getContent(modelType, modelId, dataName);
-  } catch {
+  } catch (err) {
+    logger.warn(
+      "Failed to read data spec {dataName} for model {modelId}: {error}",
+      { dataName, modelId, error: String(err) },
+    );
     return null;
   }
   if (!raw) return null;
   try {
     return JSON.parse(new TextDecoder().decode(raw));
-  } catch {
+  } catch (err) {
+    logger.warn(
+      "Failed to parse data spec {dataName} for model {modelId} as JSON: {error}",
+      { dataName, modelId, error: String(err) },
+    );
     return null;
   }
 }
@@ -107,11 +122,41 @@ export const report = {
     const repo = context.dataRepository;
     const [settingsData, rolesData, groupsData, orgsData, usersData] =
       await Promise.all([
-        readSpec(repo, context.modelType, context.modelId, "effectiveSettings"),
-        readSpec(repo, context.modelType, context.modelId, "roles"),
-        readSpec(repo, context.modelType, context.modelId, "groups"),
-        readSpec(repo, context.modelType, context.modelId, "all"),
-        readSpec(repo, context.modelType, context.modelId, "users"),
+        readSpec(
+          repo,
+          context.modelType,
+          context.modelId,
+          "effectiveSettings",
+          context.logger,
+        ),
+        readSpec(
+          repo,
+          context.modelType,
+          context.modelId,
+          "roles",
+          context.logger,
+        ),
+        readSpec(
+          repo,
+          context.modelType,
+          context.modelId,
+          "groups",
+          context.logger,
+        ),
+        readSpec(
+          repo,
+          context.modelType,
+          context.modelId,
+          "all",
+          context.logger,
+        ),
+        readSpec(
+          repo,
+          context.modelType,
+          context.modelId,
+          "users",
+          context.logger,
+        ),
       ]);
 
     const json: Record<string, unknown> = {

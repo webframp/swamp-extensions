@@ -1,3 +1,14 @@
+## 2026.08.21.2
+
+**Changed:** `quality-gate` failures now include the actual command output.
+Previously a failing `deno task check`/`lint`/`fmt`/`test` or
+`swamp extension fmt --check` only recorded a bare "check failed" / "lint
+failed" style message with no indication of what broke; the `errors` array now
+embeds a truncated snippet of the command's stderr (or stdout when stderr is
+empty) so you can diagnose a failure from the quality report alone.
+`apply-bump`'s `deno cache` regeneration failure message now includes the
+`deno cache` stderr output instead of a generic "may be out of sync" note.
+
 ## 2026.08.21.1
 
 **Changed:** Added `.describe()` documentation to previously undocumented schema

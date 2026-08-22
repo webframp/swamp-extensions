@@ -290,10 +290,17 @@ const UpdateOrgAppInstallSecretSchema = z.object({
 /** Snyk Apps — OAuth application management, bots, installations */
 export const model = {
   type: "@webframp/snyk/apps",
-  version: "2026.07.20.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Snyk API errors now include the HTTP method and path attempted, and the *_secret methods require a secret value when mode is create/replace. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "get_app_installs_for_group": {
@@ -522,7 +529,13 @@ export const model = {
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
             secret: z.string().optional(),
-          }),
+          }).refine(
+            (attrs) => attrs.mode === "delete" || !!attrs.secret,
+            {
+              message: 'secret is required when mode is "create" or "replace"',
+              path: ["secret"],
+            },
+          ),
           type: z.enum(["app"]),
         }),
       }),
@@ -793,7 +806,13 @@ export const model = {
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
             secret: z.string().optional(),
-          }),
+          }).refine(
+            (attrs) => attrs.mode === "delete" || !!attrs.secret,
+            {
+              message: 'secret is required when mode is "create" or "replace"',
+              path: ["secret"],
+            },
+          ),
           type: z.enum(["app"]),
         }),
       }),
@@ -987,7 +1006,13 @@ export const model = {
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
             secret: z.string().optional(),
-          }),
+          }).refine(
+            (attrs) => attrs.mode === "delete" || !!attrs.secret,
+            {
+              message: 'secret is required when mode is "create" or "replace"',
+              path: ["secret"],
+            },
+          ),
           type: z.enum(["app"]),
         }),
       }),

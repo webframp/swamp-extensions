@@ -751,6 +751,31 @@ Deno.test({
   },
 });
 
+Deno.test({
+  name:
+    "analytics: collect_analytics rejects a malformed startDate before making any request",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context } = testContext();
+      await assertRejects(
+        () =>
+          model.methods.collect_analytics.execute(
+            { startDate: "not-a-date" },
+            context as unknown as ExecCtx,
+          ),
+        Error,
+        "not a valid YYYY-MM-DD date",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 // ---------------------------------------------------------------------------
 // collect_user_usage
 // ---------------------------------------------------------------------------
@@ -1006,6 +1031,31 @@ Deno.test({
           ),
         Error,
         "must be after",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "analytics: collect_user_usage rejects a malformed endDate before making any request",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer();
+    const uninstall = installFetchMock(url);
+    try {
+      const { context } = testContext();
+      await assertRejects(
+        () =>
+          model.methods.collect_user_usage.execute(
+            { startDate: "2026-07-01", endDate: "2026-13-99" },
+            context as unknown as ExecCtx,
+          ),
+        Error,
+        "not a valid YYYY-MM-DD date",
       );
     } finally {
       uninstall();

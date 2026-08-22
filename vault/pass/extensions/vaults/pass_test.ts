@@ -80,6 +80,8 @@ const OriginalCommand = Deno.Command;
  * swamp host publishes thrown error messages to the trace backend.
  */
 let insertEchoesValueOnFailure = false;
+/** When set, the mocked `find` subprocess fails instead of listing files. */
+let findFails = false;
 /** Options handed to the most recent subprocess, for environment assertions. */
 interface CapturedOptions {
   command: string;
@@ -165,6 +167,15 @@ class MockCommand {
     }
 
     if (this.#command === "find") {
+      if (findFails) {
+        return {
+          code: 1,
+          stdout: new Uint8Array(),
+          stderr: enc.encode(
+            `find: '${this.#args[0]}': No such file or directory`,
+          ),
+        };
+      }
       const storeDir = this.#args[0];
       // Collect -not -path glob patterns to mimic real find filtering
       const excludePatterns: string[] = [];
@@ -231,6 +242,7 @@ class MockCommand {
 async function withMockedPass<T>(fn: () => Promise<T>): Promise<T> {
   mockSecrets.clear();
   insertEchoesValueOnFailure = false;
+  findFails = false;
   // deno-lint-ignore no-explicit-any
   (Deno as any).Command = MockCommand;
   try {
@@ -316,6 +328,30 @@ Deno.test("pass vault: list returns stored keys", async () => {
     assertEquals(keys.includes("key-a"), true);
     assertEquals(keys.includes("key-b"), true);
     assertEquals(keys.includes("nested/key-c"), true);
+  });
+});
+
+Deno.test("pass vault: failed get names the pass subcommand and exit code", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("test", { storeDir: "/tmp/store" });
+    const err = await assertRejects(
+      () => provider.get("nonexistent-key"),
+      Error,
+    );
+    assertEquals(err.message.startsWith("pass show"), true);
+    assertEquals(/exited with code \d+/.test(err.message), true);
+  });
+});
+
+Deno.test("pass vault: list throws (not silently empty) when find itself fails", async () => {
+  await withMockedPass(async () => {
+    findFails = true;
+    const provider = vault.createProvider("test", { storeDir: "/tmp/store" });
+    await assertRejects(
+      () => provider.list(),
+      Error,
+      "pass list failed: find /tmp/store exited with code 1",
+    );
   });
 });
 

@@ -701,3 +701,59 @@ Deno.test(
     );
   },
 );
+
+// ---------------------------------------------------------------------------
+// Argument Schema Validation Tests
+// ---------------------------------------------------------------------------
+
+Deno.test("twitch model: ban_user rejects empty userId", () => {
+  const result = model.methods.ban_user.arguments.safeParse({ userId: "" });
+  assertEquals(result.success, false);
+});
+
+Deno.test("twitch model: ban_user rejects out-of-range duration", () => {
+  const tooLong = model.methods.ban_user.arguments.safeParse({
+    userId: "target-user",
+    duration: 1_209_601,
+  });
+  assertEquals(tooLong.success, false);
+
+  const tooShort = model.methods.ban_user.arguments.safeParse({
+    userId: "target-user",
+    duration: 0,
+  });
+  assertEquals(tooShort.success, false);
+
+  const ok = model.methods.ban_user.arguments.safeParse({
+    userId: "target-user",
+    duration: 60,
+  });
+  assertEquals(ok.success, true);
+});
+
+Deno.test("twitch model: unban_user rejects empty userId", () => {
+  const result = model.methods.unban_user.arguments.safeParse({ userId: "" });
+  assertEquals(result.success, false);
+});
+
+Deno.test("twitch model: get_user rejects empty login", () => {
+  const result = model.methods.get_user.arguments.safeParse({ login: "" });
+  assertEquals(result.success, false);
+});
+
+Deno.test("twitch model: send_message rejects empty and over-length message", () => {
+  const empty = model.methods.send_message.arguments.safeParse({
+    message: "",
+  });
+  assertEquals(empty.success, false);
+
+  const tooLong = model.methods.send_message.arguments.safeParse({
+    message: "x".repeat(501),
+  });
+  assertEquals(tooLong.success, false);
+
+  const ok = model.methods.send_message.arguments.safeParse({
+    message: "hello",
+  });
+  assertEquals(ok.success, true);
+});

@@ -137,7 +137,7 @@ const D1TimeTravelRestoreSchema = z.object({
 /** Cloudflare D1 serverless SQL databases — databases, queries */
 export const model = {
   type: "@webframp/cloudflare/d1",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -228,13 +228,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/d1/database`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/d1/database`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list D1 databases for account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -279,14 +290,32 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
+        if (
+          args.name === undefined || args.name === null || args.name === ""
+        ) {
+          throw new Error(
+            "create_database requires a non-empty 'name' for the D1 database",
+          );
+        }
+
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/d1/database`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/d1/database`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create D1 database '${args.name}' in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("database", id, result);
@@ -297,7 +326,7 @@ export const model = {
     get_database: {
       description: "Get D1 Database",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
         fields: z.string().optional().describe(
           "Comma-separated list of fields to include in the response. When omitted, all fields are returned. ",
         ),
@@ -317,11 +346,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/d1/database/${args.database_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/d1/database/${args.database_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "database",
@@ -335,7 +374,7 @@ export const model = {
     update_database: {
       description: "Update D1 Database",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
         read_replication: z.unknown(),
       }),
       execute: async (
@@ -360,12 +399,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/d1/database/${args.database_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/d1/database/${args.database_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "database",
@@ -379,7 +428,7 @@ export const model = {
     update_partial_database: {
       description: "Update D1 Database partially",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
         read_replication: z.unknown().optional(),
       }),
       execute: async (
@@ -404,12 +453,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/accounts/${accountId}/d1/database/${args.database_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PATCH",
+            `/accounts/${accountId}/d1/database/${args.database_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to partially update D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "partial_database",
@@ -423,7 +482,7 @@ export const model = {
     delete_database: {
       description: "Delete D1 Database",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -440,11 +499,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/d1/database/${args.database_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/d1/database/${args.database_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.database_id });
         return { dataHandles: [] };
@@ -453,7 +521,7 @@ export const model = {
     create_d1_export_database: {
       description: "Export D1 Database as SQL",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
         current_bookmark: z.string().optional().describe(
           "To poll an in-progress export, provide the current bookmark (returned by your...",
         ),
@@ -488,12 +556,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/d1/database/${args.database_id}/export`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/d1/database/${args.database_id}/export`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to export D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -508,7 +586,7 @@ export const model = {
     d1_import_database: {
       description: "Import SQL into your D1 Database",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -532,12 +610,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/d1/database/${args.database_id}/import`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/d1/database/${args.database_id}/import`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to import into D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "d1_import_database",
@@ -551,7 +639,7 @@ export const model = {
     d1_query_database: {
       description: "Query D1 Database",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -575,12 +663,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/d1/database/${args.database_id}/query`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/d1/database/${args.database_id}/query`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to query D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "d1_query_database",
@@ -594,7 +692,7 @@ export const model = {
     d1_raw_database_query: {
       description: "Raw D1 Database query",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -618,12 +716,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/d1/database/${args.database_id}/raw`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/d1/database/${args.database_id}/raw`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to run raw D1 query against database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "d1_raw_database_query",
@@ -637,7 +745,7 @@ export const model = {
     get_bookmark: {
       description: "Get D1 database bookmark",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
         timestamp: z.string().optional().describe(
           "An optional ISO 8601 timestamp. If provided, returns the nearest available bookmark at or before this timestamp. If omitted, returns the current bookmark.",
         ),
@@ -657,11 +765,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/bookmark`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/bookmark`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get time-travel bookmark for D1 database ${args.database_id} in account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "bookmark",
@@ -675,7 +793,7 @@ export const model = {
     d1_time_travel_restore: {
       description: "Restore D1 Database to a bookmark or point in time",
       arguments: z.object({
-        database_id: z.string(),
+        database_id: z.string().min(1, "database_id must not be empty"),
         bookmark: z.string().optional().describe(
           "A bookmark to restore the database to. Required if `timestamp` is not provided.",
         ),
@@ -699,6 +817,12 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
+        if (args.bookmark === undefined && args.timestamp === undefined) {
+          throw new Error(
+            "d1_time_travel_restore requires either 'bookmark' or 'timestamp' to identify the restore point",
+          );
+        }
+
         const queryParts: string[] = [];
         const queryKeys = new Set(["bookmark", "timestamp"]);
         for (const [k, v] of Object.entries(args)) {
@@ -707,11 +831,23 @@ export const model = {
           }
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/restore${qs}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/restore${qs}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to restore D1 database ${args.database_id} in account ${accountId} to bookmark=${
+              args.bookmark ?? "n/a"
+            } timestamp=${args.timestamp ?? "n/a"}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "d1_time_travel_restore",

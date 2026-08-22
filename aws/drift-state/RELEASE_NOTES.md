@@ -1,50 +1,14 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @webframp/aws/adopt 2026.08.05.1 → 2026.08.20.1
+**Changed:** Previously-silent catch blocks around stored baseline, drift
+result, and timeline reads (in `compute_drift`, `get_drifted`,
+`get_drift_timeline`, and `get_drift_velocity`) now log a warning naming the
+resource being read and the underlying error before falling back to the
+same graceful "not available yet" behavior. Before, an unexpected read
+failure (as opposed to a simple "not found") was swallowed with no
+diagnostic at all.
 
-**Changed:** Bump @webframp/aws/inventory 2026.08.05.1 → 2026.08.20.1
-
-## 2026.08.15.1
-
-**Changed:** Bump @webframp/aws/adopt 2026.08.02.1 → 2026.08.05.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.08.02.1 → 2026.08.05.1
-
-## 2026.08.05.1
-
-**Changed:** Bump @webframp/aws/adopt 2026.08.01.1 → 2026.08.02.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.08.01.1 → 2026.08.02.1
-
-## 2026.08.02.1
-
-**Changed:** Bump @webframp/aws/adopt 2026.07.30.1 → 2026.08.01.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.07.30.1 → 2026.08.01.1
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.29.1`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.29.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @webframp/aws/adopt 2026.07.26.1 → 2026.07.30.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.07.24.1 → 2026.07.30.1
-
-## 2026.07.29.1
-
-**Fixed:** Terminate upgrade chain at current version (extension was uninstallable due to broken upgrade chain).
-
-## 2026.07.27.1
-
-**Changed:** Bump @webframp/aws/adopt 2026.07.21.1 → 2026.07.26.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.07.21.1 → 2026.07.24.1
-
-
-## 2026.07.24.1
-
-**Changed:** Bump dependency pins to latest published versions:
-- @webframp/aws/adopt 2026.07.18.1 → 2026.07.21.1
-- @webframp/aws/inventory 2026.07.18.1 → 2026.07.21.1
+**Changed:** `compute_drift`'s `sources` argument, if provided, must now be a
+non-empty array instead of silently accepting `[]` and producing an empty
+drift result. `get_drift_timeline`'s `canonicalId` must be a non-empty
+string.

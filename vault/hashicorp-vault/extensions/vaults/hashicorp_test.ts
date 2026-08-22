@@ -283,6 +283,33 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "hashicorp vault: a network-level failure names the operation and key, not just the raw fetch error",
+  sanitizeResources: false,
+  fn: async () => {
+    // Bind and immediately close a port so the address is unreachable —
+    // simulates a connection-refused / DNS-style failure below the HTTP layer.
+    const probe = Deno.serve({ port: 0, onListen() {} }, () => new Response());
+    const addr = probe.addr as Deno.NetAddr;
+    const unreachableUrl = `http://localhost:${addr.port}`;
+    await probe.shutdown();
+
+    const provider = vault.createProvider("test", {
+      address: unreachableUrl,
+      token: "test-token",
+      kvVersion: "2",
+    });
+
+    const err = await assertRejects(
+      () => provider.get("my-key"),
+      Error,
+      "Vault get request failed (key: my-key)",
+    );
+    assertEquals(err.message.includes("could not reach"), true);
+  },
+});
+
+Deno.test({
   name: "hashicorp vault: put stores secret (KV v2)",
   sanitizeResources: false,
   fn: async () => {

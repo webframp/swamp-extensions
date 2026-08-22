@@ -1,3 +1,18 @@
+## 2026.08.21.2
+
+**Changed:** AWS API failures now surface with the operation and identifiers
+involved instead of a bare SDK error. `GetServiceQuota`, `ListServiceQuotas`,
+`ListServices`, `RequestServiceQuotaIncrease`,
+`GetRequestedServiceQuotaChange`, `GetCallerIdentity`, `DescribeCases`, and
+`DescribeCommunications` calls in `get_quota`, `list_quotas`, `list_services`,
+`request_increase`, `get_request_status`, and `get_case_communications` now
+catch failures and rethrow with the service/quota code, profile, or request ID
+that was in flight, plus the original error preserved as `cause`. Previously a
+throttled or permission-denied call surfaced only the raw AWS SDK exception
+with no indication of which quota, profile, or case triggered it. The
+fan-out methods (`check_utilization`, `list_pending_requests`) already
+recorded per-profile failures and are unchanged.
+
 ## 2026.08.21.1
 
 **Changed:** Tightened `serviceCode`, `quotaCode`, `requestId`, and `displayId`

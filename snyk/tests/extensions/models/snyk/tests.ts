@@ -215,7 +215,7 @@ const ListFindingsSchema = z.object({
 /** Snyk Tests — on-demand package and dependency vulnerability testing */
 export const model = {
   type: "@webframp/snyk/tests",
-  version: "2026.07.19.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],

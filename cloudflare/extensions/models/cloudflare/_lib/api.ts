@@ -28,17 +28,39 @@ export async function cfApi<T>(
     "Content-Type": "application/json",
   };
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Cloudflare API request failed (${method} ${path}): ${message}`,
+      { cause: err },
+    );
+  }
 
-  const data = (await response.json()) as CloudflareResponse<T>;
+  let data: CloudflareResponse<T>;
+  try {
+    data = (await response.json()) as CloudflareResponse<T>;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Cloudflare API returned a non-JSON response for ${method} ${path} ` +
+        `(HTTP ${response.status}): ${message}`,
+      { cause: err },
+    );
+  }
 
   if (!data.success) {
-    const errorMsg = data.errors.map((e) => e.message).join("; ");
-    throw new Error(`Cloudflare API error: ${errorMsg}`);
+    const errorMsg = data.errors.map((e) => e.message).join("; ") ||
+      `HTTP ${response.status} with no error detail`;
+    throw new Error(
+      `Cloudflare API error on ${method} ${path}: ${errorMsg}`,
+    );
   }
 
   return data.result;
@@ -70,18 +92,40 @@ export async function cfApiPaginated<T>(
     });
 
     const url = `${CF_API_BASE}${path}?${queryParams}`;
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Cloudflare API request failed (GET ${path}, page ${page}): ${message}`,
+        { cause: err },
+      );
+    }
 
-    const data = (await response.json()) as CloudflareResponse<T[]>;
+    let data: CloudflareResponse<T[]>;
+    try {
+      data = (await response.json()) as CloudflareResponse<T[]>;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Cloudflare API returned a non-JSON response for GET ${path} ` +
+          `(page ${page}, HTTP ${response.status}): ${message}`,
+        { cause: err },
+      );
+    }
 
     if (!data.success) {
-      const errorMsg = data.errors.map((e) => e.message).join("; ");
-      throw new Error(`Cloudflare API error: ${errorMsg}`);
+      const errorMsg = data.errors.map((e) => e.message).join("; ") ||
+        `HTTP ${response.status} with no error detail`;
+      throw new Error(
+        `Cloudflare API error on GET ${path} (page ${page}): ${errorMsg}`,
+      );
     }
 
     allResults.push(...data.result);

@@ -794,7 +794,13 @@ export const model = {
           delay_seconds: z.unknown().optional(),
           lease_id: z.unknown().optional(),
         })).optional(),
-      }),
+      }).refine(
+        (v) => (v.acks?.length ?? 0) > 0 || (v.retries?.length ?? 0) > 0,
+        {
+          message:
+            "At least one of 'acks' or 'retries' must contain an entry; an empty ack/retry request has no effect.",
+        },
+      ),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -841,7 +847,9 @@ export const model = {
         delay_seconds: z.number().optional().describe(
           "The number of seconds to wait for attempting to deliver this batch to consumers",
         ),
-        messages: z.array(z.unknown()).optional(),
+        messages: z.array(z.unknown()).min(1).describe(
+          "Batch of messages to push; must contain at least one message.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -938,7 +946,13 @@ export const model = {
           delay_seconds: z.unknown().optional(),
           lease_id: z.unknown().optional(),
         })).optional(),
-      }),
+      }).refine(
+        (v) => (v.acks?.length ?? 0) > 0 || (v.retries?.length ?? 0) > 0,
+        {
+          message:
+            "At least one of 'acks' or 'retries' must contain an entry; an empty ack/retry request has no effect.",
+        },
+      ),
       execute: async (
         args: Record<string, unknown>,
         context: {

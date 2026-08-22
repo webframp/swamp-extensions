@@ -61,6 +61,12 @@ Deno.test("spectrum model: has expected resources", () => {
   );
 });
 
+Deno.test("spectrum model: rejects empty app_id", () => {
+  const result = model.methods.get_spectrum_application_configuration
+    .arguments.safeParse({ app_id: "" });
+  assertEquals(result.success, false);
+});
+
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

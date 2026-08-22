@@ -1,3 +1,14 @@
+## 2026.08.21.2
+
+**Changed:** `gh` CLI failures raised by the model now name the exact command
+that was run and its exit code, instead of a bare "gh failed: ..." message. A
+non-JSON response from `gh issue view` (used by `start` and `status`) now raises
+a clear "returned output that could not be parsed as JSON" error naming the
+command, instead of a raw `JSON.parse` `SyntaxError`. The `lifecycle-metrics`
+report's data reader now names the resource spec, instance, and model when a
+stored JSON blob fails to parse, instead of throwing an unattributed
+`SyntaxError`.
+
 ## 2026.08.21.1
 
 **Changed:** Added `.describe()` documentation to previously undocumented fields

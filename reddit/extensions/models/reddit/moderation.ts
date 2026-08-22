@@ -165,7 +165,7 @@ interface MethodContext {
 /** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -177,6 +177,12 @@ export const model = {
     {
       toVersion: "2026.08.21.1",
       description: "Require non-empty OAuth2 credential and user-agent fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes (error messages now name the request path and target item/user)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -491,7 +497,9 @@ export const model = {
         const errors = response?.json?.errors ?? [];
         if (errors.length > 0) {
           throw new Error(
-            `Reddit approve failed: ${JSON.stringify(errors)}`,
+            `Reddit approve of "${args.thingId}" failed: ${
+              JSON.stringify(errors)
+            }`,
           );
         }
 
@@ -548,7 +556,9 @@ export const model = {
         const errors = response?.json?.errors ?? [];
         if (errors.length > 0) {
           throw new Error(
-            `Reddit remove failed: ${JSON.stringify(errors)}`,
+            `Reddit remove of "${args.thingId}" failed: ${
+              JSON.stringify(errors)
+            }`,
           );
         }
 
@@ -612,7 +622,9 @@ export const model = {
         const errors = response?.json?.errors ?? [];
         if (errors.length > 0) {
           throw new Error(
-            `Reddit ban_user failed: ${JSON.stringify(errors)}`,
+            `Reddit ban_user of "${args.username}" in r/${subreddit} failed: ${
+              JSON.stringify(errors)
+            }`,
           );
         }
 
@@ -670,7 +682,9 @@ export const model = {
 
         if (response.errors && Object.keys(response.errors).length > 0) {
           throw new Error(
-            `Reddit send_modmail failed: ${JSON.stringify(response.errors)}`,
+            `Reddit send_modmail to "${args.to}" from r/${subreddit} failed: ${
+              JSON.stringify(response.errors)
+            }`,
           );
         }
 
@@ -720,7 +734,9 @@ export const model = {
         const errors = response?.json?.errors ?? [];
         if (errors.length > 0) {
           throw new Error(
-            `Reddit flair_post failed: ${JSON.stringify(errors)}`,
+            `Reddit flair_post of "${args.thingId}" with template "${args.flairTemplateId}" failed: ${
+              JSON.stringify(errors)
+            }`,
           );
         }
 

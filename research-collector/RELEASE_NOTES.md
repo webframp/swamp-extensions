@@ -1,15 +1,11 @@
-## 2026.07.23.1
+## 2026.08.21.1
 
-**Added:** New `digest` method builds a compact daily digest from the latest
-research brief: top items per source (normalized 0-100 prominence score),
-cross-source topic clusters (keywords appearing in 2+ sources), and a delta
-against the previous digest (new vs carried items). Writes a new `digest`
-resource (24h lifetime) for downstream journal/briefing workflows.
+**Changed:** When a source (HN, Lobste.rs, SRE Weekly, IFIN Discourse, RedMonk,
+arXiv, or The AI Daily Brief) fails to gather, `gather` now logs the source
+name and the underlying error message before falling back to an empty result
+for that source. Previously the failure was discarded silently, so a brief
+with `hnFrontPage.stories: []` gave no clue whether HN genuinely had nothing
+new or the fetch failed. `gather` still returns partial data on a single
+source failure — that behavior is unchanged.
 
-**Changed:** The model now reads prior resources via the `readResource` context
-method. `digest` requires a `gather` run first — it throws if no brief exists.
-
-**Upgrade note:** No changes to the `research` brief schema or existing global
-args. Existing instances upgrade in place (no attribute migration needed). The
-new `digest` resource is additive and safe to ignore for workflows that only
-use `gather`.
+**Upgrade note:** No schema changes. Existing instances need no migration.

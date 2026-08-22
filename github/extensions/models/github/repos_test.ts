@@ -129,6 +129,21 @@ Deno.test("list_workflows requires repo argument", () => {
   assertEquals(valid.success, true);
 });
 
+Deno.test("repo argument rejects values that aren't owner/name slugs", () => {
+  for (
+    const bad of ["no-slash", "owner/", "/name", "owner/name/extra", ""]
+  ) {
+    const result = model.methods.get_repo_info.arguments.safeParse({
+      repo: bad,
+    });
+    assertEquals(
+      result.success,
+      false,
+      `repo '${bad}' should be rejected as not owner/name`,
+    );
+  }
+});
+
 // =============================================================================
 // Global Arguments Schema Tests
 // =============================================================================
@@ -589,7 +604,9 @@ Deno.test("gh command failure throws error", async () => {
       await model.methods.list_repos.execute({} as any, context as any);
     } catch (e) {
       threw = true;
-      assertEquals((e as Error).message.includes("gh command failed"), true);
+      assertEquals((e as Error).message.includes("gh repo list"), true);
+      assertEquals((e as Error).message.includes("failed"), true);
+      assertEquals((e as Error).message.includes("auth required"), true);
     }
     assertEquals(threw, true);
   } finally {

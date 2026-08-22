@@ -1,3 +1,13 @@
+## 2026.08.21.1
+
+**Changed:** `incident_report` and `morning_pulse_report` no longer swallow
+filesystem errors silently when reading a step's data artifact. A missing
+artifact (the normal case when a step didn't run) is still handled quietly,
+but permission errors, I/O errors, and malformed JSON are now logged with the
+artifact path and underlying error instead of disappearing into an empty
+catch block — a corrupt or unreadable artifact used to look identical to
+"no data available" in the generated report.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @webframp/aws/logs 2026.08.05.1 → 2026.08.20.1

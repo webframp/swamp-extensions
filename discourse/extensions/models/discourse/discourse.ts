@@ -222,8 +222,16 @@ export const model = {
           apiKey,
           apiUsername,
         ) as {
-          category_list: { categories: Record<string, unknown>[] };
+          category_list?: { categories?: Record<string, unknown>[] };
         };
+        if (!Array.isArray(raw.category_list?.categories)) {
+          throw new Error(
+            `Discourse GET /categories.json on "${host}" returned an unexpected shape: ` +
+              `expected a "category_list.categories" array, got ${
+                JSON.stringify(raw).slice(0, 200)
+              }`,
+          );
+        }
         const categories = raw.category_list.categories.map((c) => ({
           id: c.id as number,
           name: (c.name as string) ?? "",
@@ -243,7 +251,9 @@ export const model = {
     list_latest: {
       description: "List the latest topics across all categories.",
       arguments: z.object({
-        page: z.number().min(0).default(0).describe("Page number (0-based)"),
+        page: z.number().int().min(0).default(0).describe(
+          "Page number (0-based)",
+        ),
       }),
       execute: async (
         args: { page: number },
@@ -256,11 +266,19 @@ export const model = {
           apiKey,
           apiUsername,
         ) as {
-          topic_list: {
-            topics: Record<string, unknown>[];
+          topic_list?: {
+            topics?: Record<string, unknown>[];
             more_topics_url?: string;
           };
         };
+        if (!Array.isArray(raw.topic_list?.topics)) {
+          throw new Error(
+            `Discourse GET /latest.json?page=${args.page} on "${host}" returned an unexpected shape: ` +
+              `expected a "topic_list.topics" array, got ${
+                JSON.stringify(raw).slice(0, 200)
+              }`,
+          );
+        }
         const topics = raw.topic_list.topics.map(mapTopic);
         const truncated = raw.topic_list.more_topics_url != null;
         const handle = await context.writeResource(
@@ -284,9 +302,11 @@ export const model = {
     list_category_topics: {
       description: "List topics in a specific category by slug and ID.",
       arguments: z.object({
-        slug: z.string().describe("Category slug (e.g. cyber-news)"),
-        categoryId: z.number().describe("Category ID"),
-        page: z.number().min(0).default(0).describe("Page number (0-based)"),
+        slug: z.string().min(1).describe("Category slug (e.g. cyber-news)"),
+        categoryId: z.number().int().positive().describe("Category ID"),
+        page: z.number().int().min(0).default(0).describe(
+          "Page number (0-based)",
+        ),
       }),
       execute: async (
         args: { slug: string; categoryId: number; page: number },
@@ -301,11 +321,19 @@ export const model = {
           apiKey,
           apiUsername,
         ) as {
-          topic_list: {
-            topics: Record<string, unknown>[];
+          topic_list?: {
+            topics?: Record<string, unknown>[];
             more_topics_url?: string;
           };
         };
+        if (!Array.isArray(raw.topic_list?.topics)) {
+          throw new Error(
+            `Discourse GET /c/${args.slug}/${args.categoryId}.json?page=${args.page} on "${host}" returned an unexpected shape: ` +
+              `expected a "topic_list.topics" array, got ${
+                JSON.stringify(raw).slice(0, 200)
+              }`,
+          );
+        }
         const topics = raw.topic_list.topics.map(mapTopic);
         const truncated = raw.topic_list.more_topics_url != null;
         const handle = await context.writeResource(
@@ -329,7 +357,7 @@ export const model = {
     get_topic: {
       description: "Get a full topic with all posts.",
       arguments: z.object({
-        topicId: z.number().describe("Topic ID"),
+        topicId: z.number().int().positive().describe("Topic ID"),
       }),
       execute: async (
         args: { topicId: number },
@@ -380,7 +408,9 @@ export const model = {
       arguments: z.object({
         query: z.string().min(1).describe("Search query"),
         // Discourse search API is 1-based (unlike topic listing which is 0-based)
-        page: z.number().min(1).default(1).describe("Page number (1-based)"),
+        page: z.number().int().min(1).default(1).describe(
+          "Page number (1-based)",
+        ),
       }),
       execute: async (
         args: { query: string; page: number },

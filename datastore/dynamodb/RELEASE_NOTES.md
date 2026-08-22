@@ -1,3 +1,24 @@
+## 2026.08.21.1
+
+**Changed:** Error messages name the DynamoDB operation and lock key/path
+involved, instead of a bare SDK error.
+
+- Lock operations (`acquire`, `renew`/`heartbeat`, `inspect`, `forceRelease`)
+  wrap any SDK failure other than the expected
+  `ConditionalCheckFailedException` contention signal with the operation and
+  lock key (e.g. `DynamoDB acquire failed for lock "/repo/state" in table
+  "swamp-datastore": <reason>`), instead of a bare AWS error with no
+  indication of which lock was affected.
+- `retryable()` now accepts an `opLabel`, wired up across sync push/pull
+  (shard/partition queries, chunk fetches, file writes, tombstones, the
+  commit-sequence watermark, partition registration) so a failure names the
+  file or partition it was operating on instead of an opaque SDK exception.
+- The table health check (`createVerifier`) now reports the failed operation
+  and table name instead of the bare `String(error)`.
+
+No changes to request/response shapes, retry behavior, or existing
+successful-path behavior.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (2 packages)

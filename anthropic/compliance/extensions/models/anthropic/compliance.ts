@@ -383,7 +383,14 @@ export const model = {
         }
         // The Compliance API expects dotted range filters (created_at.gte),
         // not bracketed ones (created_at[gte]) — the latter returns HTTP 400.
-        if (args.since) params["created_at.gte"] = args.since;
+        if (args.since) {
+          if (Number.isNaN(new Date(args.since).getTime())) {
+            throw new Error(
+              `since (${args.since}) is not a valid ISO-8601 timestamp`,
+            );
+          }
+          params["created_at.gte"] = args.since;
+        }
         const pageLimit = args.limit ? parseInt(args.limit, 10) || 100 : 100;
         params.limit = String(Math.min(pageLimit, 5000));
 
@@ -585,8 +592,14 @@ export const model = {
             (g: any) => g.id === args.groupId,
           );
           if (match) groupName = match.name;
-        } catch {
-          // Non-fatal — use groupId as name
+        } catch (err) {
+          // Non-fatal — use groupId as name, but surface why the lookup
+          // failed so a persistent auth/permissions issue isn't silently
+          // masked as "group just has no friendly name".
+          ctx.logger.info(
+            "Could not resolve display name for group {groupId}, falling back to ID: {error}",
+            { groupId: args.groupId, error: String(err) },
+          );
         }
 
         const result = {

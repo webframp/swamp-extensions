@@ -436,7 +436,7 @@ class GitLabStateClient {
 
     if (!response.ok) {
       throw new Error(
-        `GitLab API error: ${response.status} ${response.statusText}`,
+        `GitLab getState failed for state "${stateName}": ${response.status} ${response.statusText}`,
       );
     }
 
@@ -544,7 +544,7 @@ class GitLabStateClient {
     if (!response.ok) {
       const body = response.body;
       throw new Error(
-        `GitLab API error: ${response.status} ${response.statusText}: ${body}`,
+        `GitLab putState failed for state "${stateName}": ${response.status} ${response.statusText}: ${body}`,
       );
     }
 
@@ -564,7 +564,7 @@ class GitLabStateClient {
 
     if (!response.ok && response.status !== 404) {
       throw new Error(
-        `GitLab API error: ${response.status} ${response.statusText}`,
+        `GitLab deleteState failed for state "${stateName}": ${response.status} ${response.statusText}`,
       );
     }
   }
@@ -590,7 +590,12 @@ class GitLabStateClient {
         };
         projectPath = project.path_with_namespace;
       } else {
-        return [];
+        // Swallowing this as an empty list would make pushChanged's
+        // tombstoning logic believe no remote states exist and delete
+        // everything locally present — surface the failure instead.
+        throw new Error(
+          `GitLab listStates failed: could not resolve project path for project "${projectPath}": ${projectResponse.status} ${projectResponse.statusText}`,
+        );
       }
     }
 
@@ -617,7 +622,9 @@ class GitLabStateClient {
     });
 
     if (!response.ok) {
-      return [];
+      throw new Error(
+        `GitLab listStates GraphQL query failed for project "${projectPath}": ${response.status} ${response.statusText}`,
+      );
     }
 
     const result = JSON.parse(response.body) as {
@@ -662,7 +669,7 @@ class GitLabStateClient {
     }
 
     throw new Error(
-      `GitLab lock error: ${response.status} ${response.statusText}`,
+      `GitLab lock failed for state "${stateName}": ${response.status} ${response.statusText}`,
     );
   }
 
@@ -699,7 +706,7 @@ class GitLabStateClient {
     }
 
     throw new Error(
-      `GitLab unlock error: ${response.status} ${response.statusText}`,
+      `GitLab unlock failed for state "${stateName}": ${response.status} ${response.statusText}`,
     );
   }
 
@@ -723,7 +730,12 @@ class GitLabStateClient {
     }
 
     if (!response.ok) {
-      return null;
+      // Treating any other failure (5xx, 403, ...) as "no lock" would let
+      // acquire() and forceRelease() proceed as if the state were free when
+      // it might actually be held — surface the failure instead.
+      throw new Error(
+        `GitLab getLockInfo failed for state "${stateName}": ${response.status} ${response.statusText}`,
+      );
     }
 
     return JSON.parse(response.body) as GitLabLockInfo;

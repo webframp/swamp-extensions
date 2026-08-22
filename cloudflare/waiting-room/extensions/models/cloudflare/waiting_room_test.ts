@@ -74,6 +74,12 @@ Deno.test("waiting-room model: has expected resources", () => {
   assertExists(model.resources["waiting_room_status"]);
 });
 
+Deno.test("waiting-room model: rejects empty waiting_room_id", () => {
+  const result = model.methods.get_waiting_room_waiting_room_details.arguments
+    .safeParse({ waiting_room_id: "" });
+  assertEquals(result.success, false);
+});
+
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

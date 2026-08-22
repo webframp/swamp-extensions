@@ -178,9 +178,13 @@ export const datastore = {
               },
             };
           } catch (error) {
+            const reason = error instanceof Error
+              ? error.message
+              : String(error);
             return {
               healthy: false,
-              message: String(error),
+              message:
+                `getContainerProperties failed for container "${parsed.container}": ${reason}`,
               latencyMs: Math.round(performance.now() - start),
               datastoreType: "@webframp/azure-blob-datastore",
             };

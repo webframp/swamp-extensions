@@ -1,3 +1,20 @@
+## 2026.08.21.3
+
+**Changed:**
+
+- `search` now rejects an empty `query` with a clear validation error,
+  instead of sending an empty search to Redmine and writing a resource
+  under an empty instance name.
+- Redmine API and network-level errors now name the HTTP method and
+  request path (e.g. "Redmine API GET /issues.json failed (500): ..."),
+  instead of only the status code. A connection failure (DNS, refused,
+  timeout) now names the method, path, and host instead of surfacing a bare
+  fetch exception.
+- `upload_file` failures now name the file path and issue id when the file
+  can't be read, and the filename, host, and issue id when the upload
+  itself fails — instead of a bare "Upload failed: &lt;status&gt;" with no
+  indication of what was being uploaded or to where.
+
 ## 2026.08.21.2
 
 **Changed:** Tightened `host` and `apiKey` on the global-args schema, and

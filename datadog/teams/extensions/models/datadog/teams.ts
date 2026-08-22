@@ -438,7 +438,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -821,7 +821,9 @@ export const model = {
     get_team_hierarchy_link: {
       description: "Get a team hierarchy link",
       arguments: z.object({
-        link_id: z.string().describe("The team hierarchy link's identifier"),
+        link_id: z.string().min(1, "link_id must not be empty").describe(
+          "The team hierarchy link's identifier",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -860,7 +862,9 @@ export const model = {
     remove_team_hierarchy_link: {
       description: "Remove a team hierarchy link",
       arguments: z.object({
-        link_id: z.string().describe("The team hierarchy link's identifier"),
+        link_id: z.string().min(1, "link_id must not be empty").describe(
+          "The team hierarchy link's identifier",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

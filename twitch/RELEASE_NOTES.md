@@ -1,30 +1,22 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Tightened `channel`, `moderatorId`, `clientId`, `clientSecret`,
-`accessToken`, and `refreshToken` on the global-args schema to require
-non-empty strings. All six are required identifiers/tokens that the Twitch
-API never accepts empty — this catches misconfigured vault references or
-blank `--global-arg` values at model-create time instead of a confusing
-Helix API failure on first method call.
+**Changed:**
+- `ban_user`, `unban_user`, and `get_user` now reject empty `userId`/`login`
+  values before making any API call, instead of sending a blank ID to Twitch
+  and surfacing whatever cryptic error Helix happens to return.
+- `ban_user`'s `duration` (timeout length) is now validated against Twitch's
+  actual limits — an integer between 1 second and 1,209,600 seconds (2
+  weeks). Out-of-range values are rejected immediately with a clear message
+  rather than failing deep in the Helix API call.
+- `send_message` now enforces the documented 500-character limit on
+  `message` (and rejects empty messages) instead of letting the API reject
+  an oversized message after the request is already sent.
+- `ban_user`'s `reason` field is capped at 500 characters to match Twitch's
+  API limit.
+- Errors raised by failed Helix API requests now name the HTTP method and
+  path that was attempted (e.g. `GET /moderation/banned?... returned 404`)
+  instead of just the status code and response body, making it clear which
+  operation failed when multiple API calls happen in one method.
 
-## 2026.07.30.1
-
-**Added:** `hasBroadcasterAuth` global arg (boolean, default `false`). When
-false, `get_banned_users` and `get_mod_events` throw a clear error explaining
-the broadcaster must have OAuth'd the app, instead of silently hitting a
-Twitch 401.
-
-**Changed:** Manifest description now separates methods into "Moderator auth"
-and "Broadcaster auth" tables so users can see at a glance what works with
-their token level. The OAuth scope URL replaces the deprecated `moderation:read`
-with the granular `moderator:read:banned_users`.
-
-**Changed:** Workflow step descriptions for `get-banned-users` and
-`get-mod-events` note the broadcaster auth requirement. Both steps retain
-`allowFailure: true` so the workflow completes even without broadcaster tokens.
-
-**Upgrade note:** Existing model instances default to `hasBroadcasterAuth=false`
-after upgrade. If you previously used `get_banned_users` or `get_mod_events`
-successfully (because the broadcaster had authorized your app), update your
-instances to restore that behavior:
-`swamp model update <name> --global-arg hasBroadcasterAuth=true`
+No behavioral changes for well-formed inputs — existing valid calls are
+unaffected.

@@ -50,16 +50,49 @@ async function readData(
   modelId: string,
   dataName: string,
   version: number,
+  logger?: { info: (msg: string, props: Record<string, unknown>) => void },
 ): Promise<Record<string, unknown> | null> {
+  const baseUrl = new URL(`file://${repoDir}/.swamp/data/`);
+  const resolved = new URL(
+    `${modelType}/${modelId}/${dataName}/${version}/raw`,
+    baseUrl,
+  ).pathname;
+  if (!resolved.startsWith(baseUrl.pathname)) {
+    logger?.info(
+      "Refusing to read report data artifact outside repo data dir: {path}",
+      { path: resolved },
+    );
+    return null;
+  }
+  let content: string;
   try {
-    const baseUrl = new URL(`file://${repoDir}/.swamp/data/`);
-    const resolved = new URL(
-      `${modelType}/${modelId}/${dataName}/${version}/raw`,
-      baseUrl,
-    ).pathname;
-    if (!resolved.startsWith(baseUrl.pathname)) return null;
-    return JSON.parse(await Deno.readTextFile(resolved));
-  } catch {
+    content = await Deno.readTextFile(resolved);
+  } catch (err) {
+    // A missing file just means that step's data wasn't produced (e.g. the
+    // step didn't run) — expected and handled by callers. Anything else
+    // (permissions, I/O errors) is unexpected and worth surfacing so a
+    // silent gap in the report doesn't go unnoticed.
+    if (!(err instanceof Deno.errors.NotFound)) {
+      logger?.info(
+        "Failed to read report data artifact {path}: {error}",
+        {
+          path: resolved,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+    }
+    return null;
+  }
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    logger?.info(
+      "Failed to parse report data artifact {path} as JSON: {error}",
+      {
+        path: resolved,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    );
     return null;
   }
 }
@@ -129,6 +162,7 @@ export const report = {
         loc.modelId,
         loc.name,
         loc.version,
+        ctx.logger,
       );
     }
 
@@ -244,6 +278,7 @@ export const report = {
         h.modelId,
         h.name,
         h.version,
+        ctx.logger,
       );
       if (data && "byVerdict" in data) {
         const d = data as unknown as {

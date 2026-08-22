@@ -178,10 +178,17 @@ const ListScanSchema = z.object({
 /** Snyk Cloud — cloud environments, scans, and resource posture management */
 export const model = {
   type: "@webframp/snyk/cloud",
-  version: "2026.07.19.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "environments": {

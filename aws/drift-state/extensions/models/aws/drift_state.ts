@@ -455,7 +455,7 @@ const NORMALIZERS: Record<
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -471,6 +471,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message quality pass: no schema changes to stored resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -522,7 +528,7 @@ export const model = {
             "dns",
             "event_topology",
           ]),
-        ).optional()
+        ).min(1, "sources, if provided, must not be empty").optional()
           .describe("Upstream sources to compose. Omit for all available."),
         adoptModelName: z.string().optional().default("aws-adopt").describe(
           "Name of the @webframp/aws/adopt model instance",
@@ -675,8 +681,15 @@ export const model = {
                 }]),
               );
             }
-          } catch {
-            // No baseline stored yet
+          } catch (err) {
+            context.logger.warn(
+              "Failed to read stored baseline for source {source}; " +
+                "treating all resources from this source as unbaselined: {error}",
+              {
+                source,
+                error: err instanceof Error ? err.message : String(err),
+              },
+            );
           }
 
           for (const resource of sourceResources) {
@@ -729,8 +742,15 @@ export const model = {
                   const firstDrift = events.find((e) => e.status === "drifted");
                   firstDriftDetected = firstDrift?.timestamp ?? null;
                 }
-              } catch {
-                // No timeline yet
+              } catch (err) {
+                context.logger.warn(
+                  "Failed to read existing timeline for {canonicalId}; " +
+                    "firstDriftDetected will be reset to now: {error}",
+                  {
+                    canonicalId: resource.canonicalId,
+                    error: err instanceof Error ? err.message : String(err),
+                  },
+                );
               }
 
               driftResources.push({
@@ -817,8 +837,15 @@ export const model = {
                 typeof TimelineEventSchema
               >[]) ?? [];
             }
-          } catch {
-            // No existing timeline
+          } catch (err) {
+            context.logger.warn(
+              "Failed to read existing timeline for {canonicalId}; " +
+                "starting a new timeline: {error}",
+              {
+                canonicalId: resource.canonicalId,
+                error: err instanceof Error ? err.message : String(err),
+              },
+            );
           }
 
           // Skip in_sync resources with no prior timeline (no information value)
@@ -1022,8 +1049,11 @@ export const model = {
               typeof DriftResultSchema
             >;
           }
-        } catch {
-          // No drift result yet
+        } catch (err) {
+          context.logger.warn(
+            "Failed to read stored drift result 'latest': {error}",
+            { error: err instanceof Error ? err.message : String(err) },
+          );
         }
 
         if (!driftResult) {
@@ -1063,9 +1093,10 @@ export const model = {
     get_drift_timeline: {
       description: "View the drift status change history for a resource.",
       arguments: z.object({
-        canonicalId: z.string().describe(
-          "Canonical resource ID (ARN or composite key)",
-        ),
+        canonicalId: z.string().min(1, "canonicalId must not be empty")
+          .describe(
+            "Canonical resource ID (ARN or composite key)",
+          ),
         limit: z.number().min(1).optional().default(50).describe(
           "Maximum events to return",
         ),
@@ -1084,8 +1115,14 @@ export const model = {
               typeof TimelineEventSchema
             >[]) ?? [];
           }
-        } catch {
-          // No timeline for this resource
+        } catch (err) {
+          context.logger.warn(
+            "Failed to read timeline for {canonicalId}: {error}",
+            {
+              canonicalId: args.canonicalId,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          );
         }
 
         // Most recent first, capped at limit
@@ -1125,8 +1162,11 @@ export const model = {
               typeof DriftResultSchema
             >;
           }
-        } catch {
-          // No drift result
+        } catch (err) {
+          context.logger.warn(
+            "Failed to read stored drift result 'latest' for velocity: {error}",
+            { error: err instanceof Error ? err.message : String(err) },
+          );
         }
 
         if (!driftResult) {

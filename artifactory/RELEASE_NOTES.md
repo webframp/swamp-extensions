@@ -1,11 +1,12 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Added descriptions to the previously undocumented fields across
-the `health`, `repos`, `packages`, `package-diff`, and `storage` resource
-schemas, and to the `diff_packages` method's `limit` argument. Tightened the
-global `token` argument to require a non-empty string.
+**Changed:** `list_repos`, `get_repo_health`, `diff_packages`, and
+`get_storage_info` used to raise a bare `HTTP <status>` error on a
+non-200 response, discarding the response body. They now include the
+request URL and the server's response body in the error message, matching
+`query_packages`'s existing behavior, so a failed call says what was
+attempted and why the server rejected it instead of just the status code.
 
-## 2026.07.18.1
-
-**Added:** An `upgrades` array entry (no-op) to `artifactory.ts` for proper
-`typeVersion` tracking on existing instances. No schema or behavior changes.
+`query_packages` and `diff_packages` now reject an empty `query` argument
+before making any request, rather than sending it to Artifactory and
+surfacing whatever error AQL returns for an empty query string.

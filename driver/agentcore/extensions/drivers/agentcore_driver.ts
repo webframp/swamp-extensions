@@ -58,6 +58,16 @@ function parseConfig(raw?: Record<string, unknown>): AgentCoreDriverConfig {
       "AgentCore driver requires 's3Bucket' in config for coordination",
     );
   }
+  if (config.timeout !== undefined && config.timeout <= 0) {
+    throw new Error(
+      `AgentCore driver 'timeout' must be a positive number of milliseconds, got ${config.timeout}`,
+    );
+  }
+  if (config.pollInterval !== undefined && config.pollInterval <= 0) {
+    throw new Error(
+      `AgentCore driver 'pollInterval' must be a positive number of milliseconds, got ${config.pollInterval}`,
+    );
+  }
   return {
     runtimeArn: config.runtimeArn,
     region: config.region ?? "us-east-1",
@@ -156,13 +166,21 @@ async function stageToS3(
   const content = typeof body === "string"
     ? new TextEncoder().encode(body)
     : body;
-  await s3.send(
-    new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-      Body: content,
-    }),
-  );
+  try {
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: content,
+      }),
+    );
+  } catch (error) {
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `AgentCore driver: failed to stage s3://${bucket}/${key}: ${cause}`,
+      { cause: error },
+    );
+  }
 }
 
 /** Reads an S3 object, returning null if the key does not exist. */
@@ -184,7 +202,11 @@ async function readFromS3(
     ) {
       return null;
     }
-    throw error;
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `AgentCore driver: failed to read s3://${bucket}/${key}: ${cause}`,
+      { cause: error },
+    );
   }
 }
 
@@ -202,7 +224,16 @@ async function pollForStatus(
   while (Date.now() < deadline) {
     const data = await readFromS3(s3, bucket, statusKey);
     if (data) {
-      const status = JSON.parse(new TextDecoder().decode(data)) as TaskStatus;
+      let status: TaskStatus;
+      try {
+        status = JSON.parse(new TextDecoder().decode(data)) as TaskStatus;
+      } catch (error) {
+        const cause = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `AgentCore driver: worker status document at s3://${bucket}/${statusKey} is not valid JSON: ${cause}`,
+          { cause: error },
+        );
+      }
       if (status.state === "success" || status.state === "error") {
         return status;
       }
@@ -227,12 +258,20 @@ async function invokeRuntime(
 ): Promise<void> {
   const payload = new TextEncoder().encode(JSON.stringify(manifest));
 
-  await client.send(
-    new InvokeAgentRuntimeCommand({
-      agentRuntimeArn: runtimeArn,
-      payload,
-    }),
-  );
+  try {
+    await client.send(
+      new InvokeAgentRuntimeCommand({
+        agentRuntimeArn: runtimeArn,
+        payload,
+      }),
+    );
+  } catch (error) {
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `AgentCore driver: failed to invoke runtime "${runtimeArn}" for task "${manifest.taskId}": ${cause}`,
+      { cause: error },
+    );
+  }
 }
 
 /**

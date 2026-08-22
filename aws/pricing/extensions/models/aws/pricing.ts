@@ -104,7 +104,7 @@ const PriceResultSchema = z.object({
  */
 export const model = {
   type: "@webframp/aws/pricing",
-  version: "2026.08.20.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -121,6 +121,18 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Tighten serviceCode/attributeName/instanceType validation, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Error-message quality and validation improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -182,7 +194,17 @@ export const model = {
               ServiceCode: args.serviceCode,
               NextToken: nextToken,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `Failed to describe AWS Pricing services${
+                  args.serviceCode ? ` (serviceCode="${args.serviceCode}")` : ""
+                }: ${err instanceof Error ? err.message : String(err)}`,
+                { cause: err },
+              );
+            }
 
             if (response.Services) {
               for (const svc of response.Services) {
@@ -251,7 +273,17 @@ export const model = {
               AttributeName: args.attributeName,
               NextToken: nextToken,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `Failed to get attribute values for "${args.serviceCode}.${args.attributeName}": ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
 
             if (response.AttributeValues) {
               for (const av of response.AttributeValues) {
@@ -309,6 +341,9 @@ export const model = {
           .describe("Filters to narrow pricing results"),
         maxResults: z
           .number()
+          .int()
+          .min(1)
+          .max(1000)
           .default(10)
           .describe("Maximum number of price items to return"),
       }),
@@ -353,7 +388,17 @@ export const model = {
               NextToken: nextToken,
               MaxResults: Math.min(100, args.maxResults - fetched),
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `Failed to get products/pricing for service "${args.serviceCode}": ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
 
             if (response.PriceList) {
               for (const priceJson of response.PriceList) {
@@ -467,7 +512,17 @@ export const model = {
             MaxResults: 10,
           });
 
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `Failed to get EC2 pricing for instanceType="${args.instanceType}", region="${args.region}", os="${args.operatingSystem}", tenancy="${args.tenancy}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
           const items: Array<{
             serviceCode: string;
             product: Record<string, unknown>;

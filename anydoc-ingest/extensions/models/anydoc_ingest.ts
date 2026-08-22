@@ -23,6 +23,9 @@ import { z } from "npm:zod@4.4.3";
 /** Global arguments configuring the documents directory and behavior. */
 const GlobalArgsSchema = z.object({
   documentsDir: z.string().min(1)
+    .refine((p) => p.startsWith("/"), {
+      message: "documentsDir must be an absolute path (starting with /)",
+    })
     .describe("Absolute path to the directory containing documents to ingest"),
   recursive: z.boolean().default(true)
     .describe("Whether to scan subdirectories recursively"),
@@ -260,7 +263,11 @@ async function* discoverDocuments(
     if (err instanceof Deno.errors.NotFound) {
       throw new Error(`documentsDir does not exist: ${dir}`);
     }
-    throw err;
+    if (err instanceof Error && err.message.startsWith("documentsDir")) {
+      throw err;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to stat documentsDir ${dir}: ${message}`);
   }
 
   const maxBytes = args.maxFileSizeMb * 1024 * 1024;

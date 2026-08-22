@@ -11,6 +11,28 @@ interface TokenState {
   expiresAt: number;
 }
 
+/**
+ * Wrap `fetch` so a network-level failure (DNS, connection refused, TLS)
+ * names the request it was attempting instead of surfacing a bare fetch
+ * exception with no indication of which Reddit endpoint was unreachable.
+ */
+async function fetchOrThrow(
+  label: string,
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    throw new Error(
+      `Reddit ${label} request to ${url} failed: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
+    );
+  }
+}
+
 export interface RedditCredentials {
   clientId: string;
   clientSecret: string;
@@ -63,7 +85,7 @@ export function createRedditClient(creds: RedditCredentials) {
       password: creds.password,
     });
 
-    const resp = await fetch(TOKEN_URL, {
+    const resp = await fetchOrThrow("OAuth2 token", TOKEN_URL, {
       method: "POST",
       headers: {
         "Authorization": `Basic ${basicAuth}`,
@@ -75,7 +97,9 @@ export function createRedditClient(creds: RedditCredentials) {
 
     if (!resp.ok) {
       const text = await resp.text();
-      throw new Error(`Reddit auth failed (${resp.status}): ${text}`);
+      throw new Error(
+        `Reddit OAuth2 token request failed for user "${creds.username}" (${resp.status}): ${text}`,
+      );
     }
 
     const data = await resp.json();
@@ -100,7 +124,7 @@ export function createRedditClient(creds: RedditCredentials) {
       }
     }
 
-    const resp = await fetch(url.toString(), {
+    const resp = await fetchOrThrow("API GET", url.toString(), {
       headers: {
         "Authorization": `Bearer ${token}`,
         "User-Agent": creds.userAgent,
@@ -111,7 +135,7 @@ export function createRedditClient(creds: RedditCredentials) {
     if (resp.status === 401) {
       tokenState = null;
       const newToken = await authenticate();
-      const retry = await fetch(url.toString(), {
+      const retry = await fetchOrThrow("API GET", url.toString(), {
         headers: {
           "Authorization": `Bearer ${newToken}`,
           "User-Agent": creds.userAgent,
@@ -120,7 +144,8 @@ export function createRedditClient(creds: RedditCredentials) {
       trackRateLimit(retry);
       if (!retry.ok) {
         throw new Error(
-          `Reddit API error (${retry.status}): ${await retry.text()}`,
+          `Reddit API GET ${path} failed (${retry.status}): ${await retry
+            .text()}`,
         );
       }
       return (await retry.json()) as T;
@@ -128,7 +153,8 @@ export function createRedditClient(creds: RedditCredentials) {
 
     if (!resp.ok) {
       throw new Error(
-        `Reddit API error (${resp.status}): ${await resp.text()}`,
+        `Reddit API GET ${path} failed (${resp.status}): ${await resp
+          .text()}`,
       );
     }
 
@@ -205,14 +231,18 @@ export function createRedditClient(creds: RedditCredentials) {
       reqBody = params.toString();
     }
 
-    const resp = await fetch(url, { method: "POST", headers, body: reqBody });
+    const resp = await fetchOrThrow("API POST", url, {
+      method: "POST",
+      headers,
+      body: reqBody,
+    });
     trackRateLimit(resp);
 
     if (resp.status === 401) {
       tokenState = null;
       const newToken = await authenticate();
       headers["Authorization"] = `Bearer ${newToken}`;
-      const retry = await fetch(url, {
+      const retry = await fetchOrThrow("API POST", url, {
         method: "POST",
         headers,
         body: reqBody,
@@ -220,7 +250,8 @@ export function createRedditClient(creds: RedditCredentials) {
       trackRateLimit(retry);
       if (!retry.ok) {
         throw new Error(
-          `Reddit API error (${retry.status}): ${await retry.text()}`,
+          `Reddit API POST ${path} failed (${retry.status}): ${await retry
+            .text()}`,
         );
       }
       return await parseJsonResponse<T>(retry);
@@ -228,7 +259,8 @@ export function createRedditClient(creds: RedditCredentials) {
 
     if (!resp.ok) {
       throw new Error(
-        `Reddit API error (${resp.status}): ${await resp.text()}`,
+        `Reddit API POST ${path} failed (${resp.status}): ${await resp
+          .text()}`,
       );
     }
 

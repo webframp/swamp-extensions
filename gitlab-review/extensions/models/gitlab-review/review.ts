@@ -237,7 +237,16 @@ async function graphqlRequest(
     const body = await resp.text();
     throw new Error(`GraphQL request failed: ${resp.status} ${body}`);
   }
-  const result = await resp.json();
+  let result: any;
+  try {
+    result = await resp.json();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `GraphQL response from ${host} was not valid JSON: ${msg}`,
+      { cause: err },
+    );
+  }
   if (result.errors?.length) {
     throw new Error(
       `GraphQL errors: ${result.errors.map((e: any) => e.message).join("; ")}`,
@@ -279,7 +288,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -297,6 +306,12 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "No schema changes (added field descriptions and required-string min-length checks)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes (method arguments now validate project/iid shape; malformed JSON responses raise a clear error)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -331,8 +346,10 @@ export const model = {
       description:
         "Fetch MR metadata via GraphQL and file diffs via REST (raw diff content not available in GraphQL).",
       arguments: z.object({
-        project: z.string().describe("Project path (e.g. mygroup/myproject)"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe(
+          "Project path (e.g. mygroup/myproject)",
+        ),
+        iid: z.number().int().positive().describe("Merge request IID"),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -360,7 +377,16 @@ export const model = {
           token,
           `/projects/${pid}/merge_requests/${args.iid}/changes?access_raw_diffs=true`,
         );
-        const changesData = await changesResp.json();
+        let changesData: unknown;
+        try {
+          changesData = await changesResp.json();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `get_mr_diff ${args.project}!${args.iid} changes: response was not valid JSON: ${msg}`,
+            { cause: err },
+          );
+        }
         const raw = (changesData as Record<string, unknown>).changes;
         const allRawDiffs: Record<string, unknown>[] = Array.isArray(raw)
           ? raw
@@ -411,8 +437,8 @@ export const model = {
         "Store an AI-generated review draft for human review before posting. " +
         "The caller (agent/workflow) provides the analysis text.",
       arguments: z.object({
-        project: z.string().describe("Project path"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
         body: z.string().describe("Review comment body (markdown)"),
       }),
       execute: async (
@@ -443,8 +469,8 @@ export const model = {
         "Replace the current review draft body. Creates a new version " +
         "(previous versions retained per garbageCollection policy).",
       arguments: z.object({
-        project: z.string().describe("Project path"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
         body: z.string().describe("Updated review comment body (markdown)"),
       }),
       execute: async (
@@ -474,8 +500,8 @@ export const model = {
     approve_mr: {
       description: "Approve a merge request without posting a comment.",
       arguments: z.object({
-        project: z.string().describe("Project path"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -504,8 +530,8 @@ export const model = {
     unapprove_mr: {
       description: "Remove approval from a merge request (request changes).",
       arguments: z.object({
-        project: z.string().describe("Project path"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -546,8 +572,8 @@ export const model = {
       description:
         "Edit an existing review comment on a GitLab MR via GraphQL updateNote mutation.",
       arguments: z.object({
-        project: z.string().describe("Project path"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
         noteId: z.number().describe("Note ID to update"),
       }),
       execute: async (
@@ -612,8 +638,8 @@ export const model = {
         "Post the current review draft as a comment via GraphQL createNote, " +
         "optionally approving or requesting changes (REST).",
       arguments: z.object({
-        project: z.string().describe("Project path"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
         action: z
           .enum(["comment", "approve", "request_changes"])
           .default("comment")
@@ -735,8 +761,8 @@ export const model = {
         "Post a comment positioned on a specific file/line in an MR diff " +
         "(GitLab REST discussions API — position requires the MR's current diff versions).",
       arguments: z.object({
-        project: z.string().describe("Project path"),
-        iid: z.number().describe("Merge request IID"),
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
         body: z.string().describe("Comment body (markdown)"),
         newPath: z.string().describe("File path on the new side of the diff"),
         oldPath: z.string().optional().describe(
@@ -778,7 +804,16 @@ export const model = {
           token,
           `/projects/${pid}/merge_requests/${args.iid}/versions`,
         );
-        const versions = await versionsResp.json();
+        let versions: unknown;
+        try {
+          versions = await versionsResp.json();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `post_line_comment ${args.project}!${args.iid} versions: response was not valid JSON: ${msg}`,
+            { cause: err },
+          );
+        }
         const latest = Array.isArray(versions) ? versions[0] : undefined;
         if (!latest?.base_commit_sha) {
           throw new Error(
@@ -807,7 +842,16 @@ export const model = {
             body: JSON.stringify({ body: args.body, position }),
           },
         );
-        const discussion = await discussionResp.json();
+        let discussion: any;
+        try {
+          discussion = await discussionResp.json();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `post_line_comment ${args.project}!${args.iid} discussion: response was not valid JSON: ${msg}`,
+            { cause: err },
+          );
+        }
         const note = Array.isArray(discussion?.notes)
           ? discussion.notes[0]
           : undefined;

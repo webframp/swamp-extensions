@@ -1276,6 +1276,11 @@ Deno.test({
   },
 });
 
+Deno.test("redmine model: search rejects an empty query", () => {
+  const result = model.methods.search.arguments.safeParse({ query: "" });
+  assertEquals(result.success, false);
+});
+
 Deno.test({
   name: "redmine model: search returns results and encodes project in URL",
   sanitizeResources: false,
@@ -1592,5 +1597,20 @@ Deno.test("redmine model: list_issue_categories throws without project", async (
       ),
     Error,
     "list_issue_categories requires a project identifier",
+  );
+});
+
+Deno.test("redmine model: upload_file names the path and issue when the file can't be read", async () => {
+  const { context } = makeContext();
+  await assertRejects(
+    () =>
+      model.methods.upload_file.execute(
+        { issueId: 100, filePath: "/nonexistent/path/does-not-exist.txt" },
+        context as unknown as Parameters<
+          typeof model.methods.upload_file.execute
+        >[1],
+      ),
+    Error,
+    "/nonexistent/path/does-not-exist.txt",
   );
 });

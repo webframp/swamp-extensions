@@ -91,7 +91,21 @@ export function sqlSpan<T>(
     [Attr.DB_SYSTEM]: "postgresql",
     [Attr.DB_OPERATION]: dbOperation,
     [Attr.DB_COLLECTION]: table,
-  }, fn);
+  }, async (span) => {
+    try {
+      return await fn(span);
+    } catch (err) {
+      // Decorate in place rather than wrapping in a new Error: callers and
+      // tests rely on the original error's `name`/`code` (e.g. Postgres
+      // error codes used for retry classification) surviving unchanged —
+      // only the message gains the operation/table context that a bare
+      // driver error (e.g. "relation does not exist") lacks.
+      if (err instanceof Error) {
+        err.message = `PostgreSQL ${op} on "${table}" failed: ${err.message}`;
+      }
+      throw err;
+    }
+  });
 }
 
 /**

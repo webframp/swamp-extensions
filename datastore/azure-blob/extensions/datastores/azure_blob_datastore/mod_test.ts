@@ -2,6 +2,7 @@ import {
   assertEquals,
   assertExists,
   assertRejects,
+  assertStringIncludes,
 } from "jsr:@std/assert@1.0.19";
 import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
 import { createBlobLock } from "./lock.ts";
@@ -253,6 +254,11 @@ Deno.test("verifier reports healthy against a reachable container, unhealthy on 
         .createVerifier()
         .verify();
       assertEquals(unhealthy.healthy, false);
+      // The message must name the failed operation and container, not just
+      // repeat the raw fetch error, so an operator can tell which container
+      // check failed without re-running with tracing enabled.
+      assertStringIncludes(unhealthy.message, "getContainerProperties");
+      assertStringIncludes(unhealthy.message, VALID_CONFIG.container);
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -290,11 +296,16 @@ Deno.test("acquire() is retryable after a failure in the post-acquire metadata w
 
     try {
       failNext = true;
-      await assertRejects(
+      const err = await assertRejects(
         () => lock.acquire(),
         Error,
         "simulated transient network error",
       );
+      // The error must also name the operation and blob path that was in
+      // flight, not just repeat the raw network error, so an operator can
+      // tell which lock's metadata write failed.
+      assertStringIncludes((err as Error).message, "setLockMetadata");
+      assertStringIncludes((err as Error).message, "wedge");
 
       // The failed acquire() must not have left this instance wedged...
       await lock.acquire();

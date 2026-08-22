@@ -242,6 +242,41 @@ Deno.test({
   },
 });
 
+Deno.test("query_packages rejects an empty query", () => {
+  const result = model.methods.query_packages.arguments.safeParse({
+    query: "",
+    limit: 1000,
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test({
+  name: "query_packages error includes HTTP status and response body",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockFetch(() => ({
+      status: 400,
+      body: { error: "malformed AQL" },
+    }));
+    try {
+      const { context } = makeContext();
+      let message = "";
+      try {
+        await model.methods.query_packages.execute(
+          { query: 'items.find({"repo":"npm-local"})', limit: 1000 },
+          context as AnyContext,
+        );
+      } catch (err) {
+        message = err instanceof Error ? err.message : String(err);
+      }
+      assertStringIncludes(message, "400");
+      assertStringIncludes(message, "malformed AQL");
+    } finally {
+      restore();
+    }
+  },
+});
+
 // =============================================================================
 // diff_packages
 // =============================================================================

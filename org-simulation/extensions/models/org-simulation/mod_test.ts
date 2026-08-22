@@ -382,6 +382,30 @@ Deno.test("design_topology rejects a connector referencing an unknown widget id"
   );
 });
 
+Deno.test("design_topology rejects duplicate widget ids", async () => {
+  const { context } = createOrgContext();
+
+  await assertRejects(
+    () =>
+      model.methods.design_topology.execute(
+        {
+          scenarioLabel: "current",
+          widgets: [SAMPLE_TEAM, { ...SAMPLE_REPO, id: "team-a" }],
+          connectors: [],
+          metrics: {
+            horizon: "12mo" as const,
+            aggregation: "month" as const,
+            charts: [],
+          },
+        },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "Duplicate widget id",
+  );
+});
+
 Deno.test("design_topology logs widget and connector counts", async () => {
   const { context, getLogsByLevel } = createOrgContext();
 

@@ -363,7 +363,10 @@ export const model = {
         const { status, data } = await rtfApi("GET", "/api/repositories", opts);
 
         if (status !== 200) {
-          throw new Error(`Failed to list repos: HTTP ${status}`);
+          const msg = typeof data === "string" ? data : JSON.stringify(data);
+          throw new Error(
+            `Failed to list repos from ${url}/api/repositories: HTTP ${status}: ${msg}`,
+          );
         }
 
         const raw = Array.isArray(data) ? data : [];
@@ -419,7 +422,10 @@ export const model = {
             });
             return { dataHandles: [h] };
           }
-          throw new Error(`Storage info failed: HTTP ${status}`);
+          const msg = typeof data === "string" ? data : JSON.stringify(data);
+          throw new Error(
+            `Failed to fetch storage info from ${url}/api/storageinfo (for repo health): HTTP ${status}: ${msg}`,
+          );
         }
         const repoList =
           ((data as Record<string, unknown>)?.repositoriesSummaryList ??
@@ -464,7 +470,7 @@ export const model = {
       description:
         "Execute an AQL query and store results (keyed by query hash for diffing)",
       arguments: z.object({
-        query: z.string().describe(
+        query: z.string().min(1, "query must not be empty").describe(
           'AQL query string (e.g., items.find({"repo":"my-repo"}))',
         ),
         limit: z.number().int().min(1).max(10000).default(1000)
@@ -539,7 +545,7 @@ export const model = {
       description:
         "Compare current AQL results against previous run for the same query",
       arguments: z.object({
-        query: z.string().describe(
+        query: z.string().min(1, "query must not be empty").describe(
           "AQL query string (same as used in query_packages)",
         ),
         limit: z.number().int().min(1).max(10000).default(1000)
@@ -594,7 +600,10 @@ export const model = {
         );
 
         if (status !== 200) {
-          throw new Error(`AQL query failed (${status})`);
+          const msg = typeof data === "string" ? data : JSON.stringify(data);
+          throw new Error(
+            `AQL query failed (hash=${queryHash}, ${status}): ${msg}`,
+          );
         }
 
         const raw = data as Record<string, unknown>;
@@ -706,7 +715,10 @@ export const model = {
           }
 
           if (status !== 200) {
-            throw new Error(`Storage info failed: HTTP ${status}`);
+            const msg = typeof data === "string" ? data : JSON.stringify(data);
+            throw new Error(
+              `Failed to fetch storage info from ${url}/api/storageinfo: HTTP ${status}: ${msg}`,
+            );
           }
 
           const d =

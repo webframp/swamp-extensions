@@ -96,7 +96,23 @@ export function commandSpan<T>(
     [Attr.DB_SYSTEM]: "valkey",
     [Attr.DB_OPERATION]: operation,
     ...(key ? { [Attr.VALKEY_KEY]: key } : {}),
-  }, fn);
+  }, async (span) => {
+    try {
+      return await fn(span);
+    } catch (err) {
+      // Decorate in place rather than wrapping in a new Error: callers rely
+      // on the original error's `name` (asserted via Attr.ERROR_TYPE, e.g.
+      // ioredis's ReplyError) surviving unchanged — only the message gains
+      // the operation/key context a bare driver error (e.g. "NOSCRIPT")
+      // lacks.
+      if (err instanceof Error) {
+        err.message = key
+          ? `Valkey ${operation} on key "${key}" failed: ${err.message}`
+          : `Valkey ${operation} failed: ${err.message}`;
+      }
+      throw err;
+    }
+  });
 }
 
 /**

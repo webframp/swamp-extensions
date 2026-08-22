@@ -61,13 +61,20 @@ const ZoneSettingsSchema = z.object({
 /** Cloudflare Zone model definition with methods for listing, inspecting, pausing, and configuring zones. */
 export const model = {
   type: "@webframp/cloudflare/zone",
-  version: "2026.07.18.2",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Shared _lib/api.ts now wraps Cloudflare API failures with the " +
+        "method/path/status instead of a bare error, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

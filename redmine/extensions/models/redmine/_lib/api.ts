@@ -28,18 +28,28 @@ export async function redmineApi<T = null>(
     headers["X-Redmine-Username"] = username;
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    throw new Error(
+      `Redmine ${method} ${path} request to ${host} failed: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
+    );
+  }
 
   if (response.status === 204) {
     return null as T;
   }
 
   if (!response.ok) {
-    let errorMsg = `Redmine API error ${response.status}`;
+    let errorMsg = `Redmine API ${method} ${path} failed (${response.status})`;
     try {
       const data = await response.json();
       if (data.errors && Array.isArray(data.errors)) {
@@ -88,12 +98,22 @@ export async function redmineApiPaginated<T>(
     if (username) {
       fetchHeaders["X-Redmine-Username"] = username;
     }
-    const response = await fetch(url, {
-      headers: fetchHeaders,
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: fetchHeaders,
+      });
+    } catch (e) {
+      throw new Error(
+        `Redmine GET ${path} request to ${host} failed: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        { cause: e },
+      );
+    }
 
     if (!response.ok) {
-      let errorMsg = `Redmine API error ${response.status}`;
+      let errorMsg = `Redmine API GET ${path} failed (${response.status})`;
       try {
         const data = await response.json();
         if (data.errors && Array.isArray(data.errors)) {

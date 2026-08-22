@@ -44,6 +44,23 @@ Deno.test("self model: has expected methods", () => {
   assertExists(model.methods.delete_personal_access_token);
 });
 
+Deno.test(
+  "self model: delete_user_app_install_by_id rejects empty install_id",
+  () => {
+    const result = model.methods.delete_user_app_install_by_id.arguments
+      .safeParse({
+        install_id: "",
+      });
+    assertEquals(result.success, false);
+    if (!result.success) {
+      assertStringIncludes(
+        JSON.stringify(result.error.issues),
+        "install_id must not be empty",
+      );
+    }
+  },
+);
+
 Deno.test("self model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["self"]);

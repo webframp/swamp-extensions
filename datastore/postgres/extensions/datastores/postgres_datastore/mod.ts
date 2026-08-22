@@ -275,11 +275,24 @@ export function createPostgresLock(
 
     heartbeat: async (): Promise<boolean> => {
       if (!nonce) return false;
-      const result = await sql.unsafe(
-        `UPDATE ${locksTable} SET acquired_at = now() WHERE key = $1 AND nonce = $2`,
-        [key, nonce],
-      );
-      return Number(result.count) > 0;
+      // Deliberately not wrapped in a span (see otel_test.ts) — heartbeats
+      // fire every ttlMs/3 and would dominate trace volume. Context is
+      // still added to the error message so a connection failure here
+      // names the lock key rather than surfacing a bare driver error.
+      try {
+        const result = await sql.unsafe(
+          `UPDATE ${locksTable} SET acquired_at = now() WHERE key = $1 AND nonce = $2`,
+          [key, nonce],
+        );
+        return Number(result.count) > 0;
+      } catch (err) {
+        throw new Error(
+          `postgres-datastore heartbeat failed for lock key "${key}": ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+          { cause: err },
+        );
+      }
     },
 
     withLock: async <T>(fn: () => Promise<T>): Promise<T> => {

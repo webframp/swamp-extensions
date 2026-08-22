@@ -60,6 +60,13 @@ Deno.test("vectorize model: has expected resources", () => {
   assertExists(model.resources["vectorize_upsert_vector"]);
 });
 
+Deno.test("vectorize model: rejects empty index_name", () => {
+  const result = model.methods.get_vectorize_index.arguments.safeParse({
+    index_name: "",
+  });
+  assertEquals(result.success, false);
+});
+
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

@@ -41,10 +41,12 @@ import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 const GlobalArgsSchema = z.object({
   region: z
     .string()
+    .regex(/^[a-z0-9-]+$/, "region must look like a valid AWS region")
     .default("us-east-1")
     .describe("AWS region to discover"),
   vpcId: z
     .string()
+    .regex(/^vpc-[a-f0-9]+$/, "vpcId must look like vpc-xxxxxxxx")
     .optional()
     .describe("Filter discovery to a specific VPC"),
   profile: z
@@ -461,6 +463,24 @@ function makeClientConfig(
 /** Maximum pagination pages to fetch per API call to prevent unbounded loops. */
 const MAX_PAGES = 5;
 
+/**
+ * Run an AWS SDK call, rethrowing failures with the operation name and any
+ * identifying context (region, VPC, stack name, etc.) prefixed onto the raw
+ * SDK error message so a discovery failure names what was being attempted
+ * instead of surfacing a bare SDK exception.
+ */
+async function withAwsContext<T>(
+  description: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`${description} failed: ${message}`, { cause: err });
+  }
+}
+
 /** Discover VPCs in the target region, optionally filtered by VPC ID. */
 async function discoverVpcs(
   ec2: EC2Client,
@@ -475,11 +495,17 @@ async function discoverVpcs(
   let pages = 0;
 
   do {
-    const response = await ec2.send(
-      new DescribeVpcsCommand({
-        ...(filters.length > 0 ? { Filters: filters } : {}),
-        NextToken: nextToken,
-      }),
+    const response = await withAwsContext(
+      `DescribeVpcs (region ${globalArgs.region}${
+        globalArgs.vpcId ? `, vpcId ${globalArgs.vpcId}` : ""
+      })`,
+      () =>
+        ec2.send(
+          new DescribeVpcsCommand({
+            ...(filters.length > 0 ? { Filters: filters } : {}),
+            NextToken: nextToken,
+          }),
+        ),
     );
     for (const vpc of response.Vpcs ?? []) {
       if (!vpc.VpcId) continue;
@@ -513,11 +539,17 @@ async function discoverSubnets(
   let pages = 0;
 
   do {
-    const response = await ec2.send(
-      new DescribeSubnetsCommand({
-        ...(filters.length > 0 ? { Filters: filters } : {}),
-        NextToken: nextToken,
-      }),
+    const response = await withAwsContext(
+      `DescribeSubnets (region ${globalArgs.region}${
+        globalArgs.vpcId ? `, vpcId ${globalArgs.vpcId}` : ""
+      })`,
+      () =>
+        ec2.send(
+          new DescribeSubnetsCommand({
+            ...(filters.length > 0 ? { Filters: filters } : {}),
+            NextToken: nextToken,
+          }),
+        ),
     );
     for (const subnet of response.Subnets ?? []) {
       if (!subnet.SubnetId) continue;
@@ -554,11 +586,17 @@ async function discoverInternetGateways(
   let pages = 0;
 
   do {
-    const response = await ec2.send(
-      new DescribeInternetGatewaysCommand({
-        ...(filters.length > 0 ? { Filters: filters } : {}),
-        NextToken: nextToken,
-      }),
+    const response = await withAwsContext(
+      `DescribeInternetGateways (region ${globalArgs.region}${
+        globalArgs.vpcId ? `, vpcId ${globalArgs.vpcId}` : ""
+      })`,
+      () =>
+        ec2.send(
+          new DescribeInternetGatewaysCommand({
+            ...(filters.length > 0 ? { Filters: filters } : {}),
+            NextToken: nextToken,
+          }),
+        ),
     );
     for (const igw of response.InternetGateways ?? []) {
       if (!igw.InternetGatewayId) continue;
@@ -594,11 +632,17 @@ async function discoverRouteTables(
   let pages = 0;
 
   do {
-    const response = await ec2.send(
-      new DescribeRouteTablesCommand({
-        ...(filters.length > 0 ? { Filters: filters } : {}),
-        NextToken: nextToken,
-      }),
+    const response = await withAwsContext(
+      `DescribeRouteTables (region ${globalArgs.region}${
+        globalArgs.vpcId ? `, vpcId ${globalArgs.vpcId}` : ""
+      })`,
+      () =>
+        ec2.send(
+          new DescribeRouteTablesCommand({
+            ...(filters.length > 0 ? { Filters: filters } : {}),
+            NextToken: nextToken,
+          }),
+        ),
     );
     for (const rt of response.RouteTables ?? []) {
       if (!rt.RouteTableId) continue;
@@ -644,11 +688,17 @@ async function discoverSecurityGroups(
   let pages = 0;
 
   do {
-    const response = await ec2.send(
-      new DescribeSecurityGroupsCommand({
-        ...(filters.length > 0 ? { Filters: filters } : {}),
-        NextToken: nextToken,
-      }),
+    const response = await withAwsContext(
+      `DescribeSecurityGroups (region ${globalArgs.region}${
+        globalArgs.vpcId ? `, vpcId ${globalArgs.vpcId}` : ""
+      })`,
+      () =>
+        ec2.send(
+          new DescribeSecurityGroupsCommand({
+            ...(filters.length > 0 ? { Filters: filters } : {}),
+            NextToken: nextToken,
+          }),
+        ),
     );
     for (const sg of response.SecurityGroups ?? []) {
       if (!sg.GroupId) continue;
@@ -681,8 +731,9 @@ async function discoverRdsClusters(
   let pages = 0;
 
   do {
-    const response = await rds.send(
-      new DescribeDBClustersCommand({ Marker: marker }),
+    const response = await withAwsContext(
+      "DescribeDBClusters",
+      () => rds.send(new DescribeDBClustersCommand({ Marker: marker })),
     );
     for (const cluster of response.DBClusters ?? []) {
       if (!cluster.DBClusterIdentifier) continue;
@@ -725,8 +776,9 @@ async function discoverRdsInstances(
   let pages = 0;
 
   do {
-    const response = await rds.send(
-      new DescribeDBInstancesCommand({ Marker: marker }),
+    const response = await withAwsContext(
+      "DescribeDBInstances",
+      () => rds.send(new DescribeDBInstancesCommand({ Marker: marker })),
     );
     for (const db of response.DBInstances ?? []) {
       if (!db.DBInstanceIdentifier) continue;
@@ -762,8 +814,9 @@ async function discoverDbSubnetGroups(
   let pages = 0;
 
   do {
-    const response = await rds.send(
-      new DescribeDBSubnetGroupsCommand({ Marker: marker }),
+    const response = await withAwsContext(
+      "DescribeDBSubnetGroups",
+      () => rds.send(new DescribeDBSubnetGroupsCommand({ Marker: marker })),
     );
     for (const g of response.DBSubnetGroups ?? []) {
       if (!g.DBSubnetGroupName) continue;
@@ -793,8 +846,9 @@ async function discoverSecrets(
   let pages = 0;
 
   do {
-    const response = await sm.send(
-      new ListSecretsCommand({ NextToken: nextToken }),
+    const response = await withAwsContext(
+      "ListSecrets",
+      () => sm.send(new ListSecretsCommand({ NextToken: nextToken })),
     );
     for (const s of response.SecretList ?? []) {
       if (!s.Name) continue;
@@ -1042,11 +1096,15 @@ async function listStackResourcesRecursive(
   let nestedCount = 0;
 
   do {
-    const response = await cfn.send(
-      new ListStackResourcesCommand({
-        StackName: stackName,
-        NextToken: nextToken,
-      }),
+    const response = await withAwsContext(
+      `ListStackResources (stack ${stackName})`,
+      () =>
+        cfn.send(
+          new ListStackResourcesCommand({
+            StackName: stackName,
+            NextToken: nextToken,
+          }),
+        ),
     );
     for (const r of response.StackResourceSummaries ?? []) {
       if (!r.LogicalResourceId || !r.ResourceType) continue;
@@ -1170,7 +1228,7 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1198,6 +1256,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message improvements and input validation, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

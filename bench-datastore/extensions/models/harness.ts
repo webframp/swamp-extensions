@@ -158,7 +158,11 @@ async function runModelMethod(
     const output = await child.output();
     if (!output.success) {
       const stderr = new TextDecoder().decode(output.stderr);
-      throw new Error(stderr.trim());
+      throw new Error(
+        `swamp data write to model ${target} failed (payload ${payload.length} bytes): ${
+          stderr.trim() || `command/shell execute exited with no stderr output`
+        }`,
+      );
     }
   } finally {
     try {
@@ -172,8 +176,17 @@ async function runModelMethod(
 /** Harness model definition. */
 export const model = {
   type: "@webframp/bench-datastore/harness",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
+  upgrades: [
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Wrap swamp data write failures with the target model and payload " +
+        "size instead of surfacing bare stderr, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     setup: {
       description: "Setup result — models created for this worker.",

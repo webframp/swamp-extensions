@@ -1,36 +1,12 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (3 packages)
+**Changed:** Per-profile scan failures in `discover_roles`, `discover_users`,
+and `discover_policies` are now logged at `warn` level instead of `info` —
+they were previously indistinguishable from routine progress messages, so a
+credential failure or throttled account could silently disappear from the
+scan with no visible signal. The log message now also names the discovery
+operation (`discover_roles`/`discover_users`/`discover_policies`) alongside
+the profile, and uses the underlying error's message rather than its full
+string representation.
 
-## 2026.08.15.1
-
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (3 packages)
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (3 packages)
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (3 packages)
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.29.1`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.29.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (3 packages)
-
-## 2026.07.29.1
-
-**Fixed:** Terminate upgrade chain at current version (extension was uninstallable due to broken upgrade chain).
-
-## 2026.07.27.1
-
-**Changed:** Bump @aws-sdk/* 3.1094.0 → 3.1096.0 (3 packages)
-
-
-## 2026.07.24.1
-
-**Changed:** Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).
+No schema changes.

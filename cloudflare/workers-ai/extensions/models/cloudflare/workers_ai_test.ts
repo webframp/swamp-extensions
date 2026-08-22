@@ -870,6 +870,12 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["get_to_markdown_supported"]);
 });
 
+Deno.test("workers-ai model: rejects empty id", () => {
+  const result = model.methods.update_account_provider_cost.arguments
+    .safeParse({ id: "" });
+  assertEquals(result.success, false);
+});
+
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

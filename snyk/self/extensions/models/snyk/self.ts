@@ -119,7 +119,7 @@ const ListPersonalAccessTokenSchema = z.object({
 /** Snyk Self — current user context, org listing, and app management */
 export const model = {
   type: "@webframp/snyk/self",
-  version: "2026.07.19.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -365,7 +365,9 @@ export const model = {
     delete_user_app_install_by_id: {
       description: "Revoke a Snyk App by install ID",
       arguments: z.object({
-        install_id: z.string().describe("Install ID"),
+        install_id: z.string().min(1, "install_id must not be empty").describe(
+          "Install ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -396,7 +398,9 @@ export const model = {
     delete_revoke_user_installed_app: {
       description: "Revoke a Snyk App by app ID",
       arguments: z.object({
-        app_id: z.string().describe("App ID"),
+        app_id: z.string().min(1, "app_id must not be empty").describe(
+          "App ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -427,7 +431,9 @@ export const model = {
     get_user_app_sessions: {
       description: "Get a list of active OAuth sessions by app ID",
       arguments: z.object({
-        app_id: z.string().describe("App ID"),
+        app_id: z.string().min(1, "app_id must not be empty").describe(
+          "App ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -483,8 +489,12 @@ export const model = {
     delete_revoke_user_app_session: {
       description: "Revoke the Snyk App session of an active user",
       arguments: z.object({
-        app_id: z.string().describe("App ID"),
-        session_id: z.string().describe("Session ID"),
+        app_id: z.string().min(1, "app_id must not be empty").describe(
+          "App ID",
+        ),
+        session_id: z.string().min(1, "session_id must not be empty").describe(
+          "Session ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -569,7 +579,10 @@ export const model = {
     delete_personal_access_token: {
       description: "Deletes a personal access token",
       arguments: z.object({
-        personal_access_token_id: z.string().describe(
+        personal_access_token_id: z.string().min(
+          1,
+          "personal_access_token_id must not be empty",
+        ).describe(
           "The personal access token id",
         ),
       }),

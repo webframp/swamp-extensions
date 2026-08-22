@@ -84,6 +84,16 @@ Deno.test("model globalArguments accepts projects array", () => {
   assertEquals(parsed.projects, ["my-project"]);
 });
 
+Deno.test("model globalArguments rejects empty projects array", () => {
+  const result = model.globalArguments.safeParse({ projects: [] });
+  assertEquals(result.success, false);
+});
+
+Deno.test("model globalArguments rejects empty-string project id", () => {
+  const result = model.globalArguments.safeParse({ projects: [""] });
+  assertEquals(result.success, false);
+});
+
 Deno.test("model globalArguments accepts optional serviceAccountJson", () => {
   const parsed = model.globalArguments.parse({
     projects: ["p1"],

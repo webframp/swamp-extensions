@@ -1,7 +1,11 @@
 // AWS Event Topology Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { EventBridgeClient } from "npm:@aws-sdk/client-eventbridge@3.1114.0";
 import { SNSClient } from "npm:@aws-sdk/client-sns@3.1114.0";
@@ -626,29 +630,33 @@ const sampleGraph = {
 };
 
 Deno.test("analyze: returns error when no graph data exists", async () => {
-  const { context, getWrittenResources } = makeContext();
+  const { context } = makeContext();
   const patched = context as unknown as Record<string, unknown>;
   patched.readResource = () => Promise.resolve(null);
 
-  await model.methods.analyze.execute(
-    { query: "hubs", threshold: 3 },
-    context as unknown as AnalyzeContext,
+  await assertRejects(
+    () =>
+      model.methods.analyze.execute(
+        { query: "hubs", threshold: 3 },
+        context as unknown as AnalyzeContext,
+      ),
+    Error,
+    "No stored event topology graph found",
   );
-
-  const resources = getWrittenResources();
-  assertEquals(resources.length, 0);
 });
 
 Deno.test("analyze: path query requires nodeId", async () => {
-  const { context, getWrittenResources } = makeAnalyzeContext(sampleGraph);
+  const { context } = makeAnalyzeContext(sampleGraph);
 
-  await model.methods.analyze.execute(
-    { query: "path", nodeId: undefined, threshold: 3 },
-    context as unknown as AnalyzeContext,
+  await assertRejects(
+    () =>
+      model.methods.analyze.execute(
+        { query: "path", nodeId: undefined, threshold: 3 },
+        context as unknown as AnalyzeContext,
+      ),
+    Error,
+    'requires a "nodeId" argument',
   );
-
-  const resources = getWrittenResources();
-  assertEquals(resources.length, 0);
 });
 
 Deno.test("analyze: hubs query finds nodes above threshold", async () => {

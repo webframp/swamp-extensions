@@ -94,7 +94,7 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
 /** Cloudflare Spectrum — TCP/UDP proxying for non-HTTP applications */
 export const model = {
   type: "@webframp/cloudflare/spectrum",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -380,7 +380,7 @@ export const model = {
     get_spectrum_application_configuration: {
       description: "Get Spectrum application configuration",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -416,7 +416,7 @@ export const model = {
       description:
         "Update Spectrum application configuration using a name for the origin",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -462,7 +462,7 @@ export const model = {
     delete_spectrum_application: {
       description: "Delete Spectrum application",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,

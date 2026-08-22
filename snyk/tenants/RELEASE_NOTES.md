@@ -1,10 +1,9 @@
-## 2026.07.20.1
+## 2026.08.21.1
 
-**Fixed:** Org-scoped methods (paths under `/orgs/{org_id}/...`) dropped their
-`org_id` path parameter. The generated code referenced `args.org_id`, but the
-argument was never declared or forwarded, so requests went to
-`/orgs/undefined/...` and returned HTTP 404. These methods now declare and
-forward `org_id` correctly.
-
-**Upgrade note:** Org-scoped methods now take a required `org_id` argument.
-Calls that previously failed with a 404 succeed once `org_id` is supplied.
+**Changed:** Errors from the Snyk API are now easier to diagnose. Previously,
+a connection failure (DNS outage, timeout, refused connection) surfaced only
+the raw fetch error with no indication of which Snyk endpoint was being
+called. HTTP error responses named the status code but not the request that
+triggered it. Both cases now include the HTTP method and path (e.g.
+`GET /tenants/.../brokers/...`), so a failure can be traced back to the
+method that caused it without reproducing the call.

@@ -134,6 +134,13 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
   try {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
+  } catch (err) {
+    throw new Error(
+      `GetCallerIdentity failed (region=${globalArgs.region}${
+        globalArgs.profile ? `, profile=${globalArgs.profile}` : ""
+      }): ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
   } finally {
     sts.destroy();
   }
@@ -146,7 +153,7 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -161,6 +168,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message quality pass: no schema changes to stored resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -205,12 +218,23 @@ export const model = {
           let pages = 0;
 
           do {
-            const resp = await client.send(
-              new DescribeComplianceByConfigRuleCommand({
-                ComplianceTypes: ["NON_COMPLIANT"],
-                NextToken: nextToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new DescribeComplianceByConfigRuleCommand({
+                  ComplianceTypes: ["NON_COMPLIANT"],
+                  NextToken: nextToken,
+                }),
+              );
+            } catch (err) {
+              throw new Error(
+                `DescribeComplianceByConfigRule failed (region=${region}, ` +
+                  `complianceTypes=NON_COMPLIANT, page=${pages}): ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                { cause: err },
+              );
+            }
             for (const rule of resp.ComplianceByConfigRules ?? []) {
               if (rule.ConfigRuleName) {
                 nonCompliantRules.push(rule.ConfigRuleName);
@@ -233,15 +257,26 @@ export const model = {
             let rulePages = 0;
 
             do {
-              const resp = await client.send(
-                new GetComplianceDetailsByConfigRuleCommand({
-                  ConfigRuleName: ruleName,
-                  ComplianceTypes: args.includeCompliant
-                    ? ["NON_COMPLIANT", "COMPLIANT"]
-                    : ["NON_COMPLIANT"],
-                  NextToken: ruleToken,
-                }),
-              );
+              let resp;
+              try {
+                resp = await client.send(
+                  new GetComplianceDetailsByConfigRuleCommand({
+                    ConfigRuleName: ruleName,
+                    ComplianceTypes: args.includeCompliant
+                      ? ["NON_COMPLIANT", "COMPLIANT"]
+                      : ["NON_COMPLIANT"],
+                    NextToken: ruleToken,
+                  }),
+                );
+              } catch (err) {
+                throw new Error(
+                  `GetComplianceDetailsByConfigRule failed for rule ` +
+                    `"${ruleName}" (region=${region}, page=${rulePages}): ${
+                      err instanceof Error ? err.message : String(err)
+                    }`,
+                  { cause: err },
+                );
+              }
 
               for (const result of resp.EvaluationResults ?? []) {
                 const qualifier = result.EvaluationResultIdentifier
@@ -326,11 +361,22 @@ export const model = {
           let pages = 0;
 
           do {
-            const resp = await client.send(
-              new DescribeComplianceByConfigRuleCommand({
-                NextToken: nextToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new DescribeComplianceByConfigRuleCommand({
+                  NextToken: nextToken,
+                }),
+              );
+            } catch (err) {
+              throw new Error(
+                `DescribeComplianceByConfigRule failed while building ` +
+                  `compliance summary (region=${region}, page=${pages}): ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                { cause: err },
+              );
+            }
 
             for (const rule of resp.ComplianceByConfigRules ?? []) {
               if (!rule.ConfigRuleName) continue;
@@ -357,9 +403,20 @@ export const model = {
           >();
 
           do {
-            const resp = await client.send(
-              new DescribeConfigRulesCommand({ NextToken: ruleToken }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new DescribeConfigRulesCommand({ NextToken: ruleToken }),
+              );
+            } catch (err) {
+              throw new Error(
+                `DescribeConfigRules failed while enriching compliance ` +
+                  `summary (region=${region}, page=${rulePages}): ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                { cause: err },
+              );
+            }
             for (const rule of resp.ConfigRules ?? []) {
               if (!rule.ConfigRuleName) continue;
               ruleMetadata.set(rule.ConfigRuleName, {
@@ -421,9 +478,19 @@ export const model = {
           let pages = 0;
 
           do {
-            const resp = await client.send(
-              new DescribeConfigRulesCommand({ NextToken: nextToken }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new DescribeConfigRulesCommand({ NextToken: nextToken }),
+              );
+            } catch (err) {
+              throw new Error(
+                `DescribeConfigRules failed while listing rules (region=${region}, page=${pages}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
             for (const rule of resp.ConfigRules ?? []) {
               if (!rule.ConfigRuleName) continue;
               rules.push({

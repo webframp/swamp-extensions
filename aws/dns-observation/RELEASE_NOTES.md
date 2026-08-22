@@ -1,31 +1,16 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (3 packages)
+**Changed:** Route53/STS API failures across `list_zones`, `list_records`,
+and `detect_orphans` now raise or log an error naming the failing operation
+(`GetCallerIdentity`, `ListHostedZones`, `GetHostedZone`,
+`ListResourceRecordSets`) plus the relevant zone ID or page number, instead of
+either propagating a raw SDK error with no context or, in the case of
+non-critical lookups, swallowing the failure silently.
 
-## 2026.08.15.1
+**Changed:** Warnings for missing upstream data in `detect_orphans` (stored
+record scan, inventory data, adopt data) now include the underlying error
+message instead of a generic "could not read" note with no detail.
 
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (3 packages)
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (3 packages)
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (3 packages)
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.30.1`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.30.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (3 packages)
-
-## 2026.07.30.1
-
-**Added:** Optional `profile` global argument for multi-account credential resolution.
-When set, credentials resolve via `fromIni` (supports SSO token cache and shared-config
-profiles). When omitted, the default credential chain applies as before. Fully backward
-compatible — no changes required for existing instances.
-
+**Changed:** `inventoryModelName` and `adoptModelName` on `detect_orphans`
+now require non-empty strings instead of accepting an empty string that would
+silently fail to match any stored data.

@@ -1,36 +1,12 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (2 packages)
+**Changed:** CloudWatch API failures during `scan_accounts`, `get_token_usage`,
+and `list_active_models` now raise an error naming the failing operation
+(`ListMetrics`, `GetMetricData`) along with the profile, region, and — where
+applicable — the model ID being queried. Previously these calls surfaced the
+raw AWS SDK error with no indication of which account, region, or metric
+request had failed.
 
-## 2026.08.15.1
-
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (2 packages)
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (2 packages)
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (2 packages)
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.29.1`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.29.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (2 packages)
-
-## 2026.07.29.1
-
-**Fixed:** Terminate upgrade chain at current version (extension was uninstallable due to broken upgrade chain).
-
-## 2026.07.27.1
-
-**Changed:** Bump @aws-sdk/* 3.1094.0 → 3.1096.0 (2 packages)
-
-
-## 2026.07.24.1
-
-**Changed:** Bump AWS SDK from 3.1091.0 to 3.1094.0 (patch-level update).
+**Changed:** The `profiles` and `regions` global arguments now require at
+least one non-empty entry each. Previously an empty array silently produced
+a no-op scan instead of a clear validation error.

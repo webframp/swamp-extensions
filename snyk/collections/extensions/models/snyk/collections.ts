@@ -71,10 +71,17 @@ const GetProjectsOfCollectionSchema = z.object({
 /** Snyk Collections — project collection groupings and management */
 export const model = {
   type: "@webframp/snyk/collections",
-  version: "2026.07.19.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Snyk API errors now include the HTTP method and path attempted. update_collection_with_projects and delete_projects_collection now require a non-empty project list. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "get_collections": {
@@ -418,7 +425,8 @@ export const model = {
         data: z.array(z.object({
           id: z.string(),
           type: z.enum(["project"]),
-        })).describe("IDs of items to add to a collection"),
+        })).min(1, "At least one project id is required to add to a collection")
+          .describe("IDs of items to add to a collection"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -470,7 +478,11 @@ export const model = {
         data: z.array(z.object({
           id: z.string(),
           type: z.enum(["project"]),
-        })).describe("IDs of items to remove from a collection"),
+        })).min(
+          1,
+          "At least one project id is required to remove from a collection",
+        )
+          .describe("IDs of items to remove from a collection"),
       }),
       execute: async (
         args: Record<string, unknown>,

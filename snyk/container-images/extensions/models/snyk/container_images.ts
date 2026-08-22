@@ -218,10 +218,17 @@ const ListImageTargetRefsSchema = z.object({
 /** Snyk Container Images — container image scanning and vulnerability data */
 export const model = {
   type: "@webframp/snyk/container-images",
-  version: "2026.07.19.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "container_image": {

@@ -1,3 +1,10 @@
+## 2026.08.21.2
+
+**Changed:** `globalArguments.subscriptions` now requires at least one
+subscription ID. Previously an empty array passed validation and both
+`scan_subscriptions` and `list_ai_resources` would silently return zero
+resources with no indication that the model was misconfigured.
+
 ## 2026.08.21.1
 
 **Changed:** Added `.describe(...)` documentation to previously undocumented

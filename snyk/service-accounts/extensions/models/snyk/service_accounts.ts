@@ -391,7 +391,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
 /** Snyk Service Accounts — automated access management for CI/CD */
 export const model = {
   type: "@webframp/snyk/service-accounts",
-  version: "2026.07.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -451,7 +451,7 @@ export const model = {
     get_many_group_service_account: {
       description: "Get a list of group service accounts.",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The ID of the Snyk Group that owns the service accounts.",
         ),
       }),
@@ -509,7 +509,7 @@ export const model = {
     create_group_service_account: {
       description: "Create a service account for a group.",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The ID of the Snyk Group that is creating and owns the service account",
         ),
         data: z.object({
@@ -572,10 +572,13 @@ export const model = {
     get_one_group_service_account: {
       description: "Get a group service account.",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
       }),
@@ -613,10 +616,13 @@ export const model = {
     update_group_service_account: {
       description: "Update a group service account.",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
         data: z.object({
@@ -668,10 +674,13 @@ export const model = {
     delete_one_group_service_account: {
       description: "Delete a group service account.",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
       }),
@@ -706,10 +715,13 @@ export const model = {
     update_service_account_secret: {
       description: "Manage a group service account's client secret.",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
         data: z.object({
@@ -878,7 +890,10 @@ export const model = {
     get_one_org_service_account: {
       description: "Get an organization service account.",
       arguments: z.object({
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
       }),
@@ -916,7 +931,10 @@ export const model = {
     update_org_service_account: {
       description: "Update an organization service account.",
       arguments: z.object({
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
         data: z.object({
@@ -968,7 +986,10 @@ export const model = {
     delete_service_account: {
       description: "Delete a service account in an organization.",
       arguments: z.object({
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
       }),
@@ -1003,7 +1024,10 @@ export const model = {
     update_org_service_account_secret: {
       description: "Manage an organization service account's client secret.",
       arguments: z.object({
-        serviceaccount_id: z.string().describe(
+        serviceaccount_id: z.string().min(
+          1,
+          "serviceaccount_id must not be empty",
+        ).describe(
           "The ID of the service account.",
         ),
         data: z.object({

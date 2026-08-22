@@ -379,6 +379,56 @@ Deno.test("network model: each method has arguments and execute", () => {
 });
 
 // ===========================================================================
+// Argument validation
+// ===========================================================================
+
+Deno.test("dns_lookup: rejects empty domain", () => {
+  const r = model.methods.dns_lookup.arguments.safeParse({ domain: "" });
+  assertEquals(r.success, false);
+});
+
+Deno.test("http_check: rejects empty url", () => {
+  const r = model.methods.http_check.arguments.safeParse({ url: "" });
+  assertEquals(r.success, false);
+});
+
+Deno.test("whois_lookup: rejects empty domain", () => {
+  const r = model.methods.whois_lookup.arguments.safeParse({ domain: "" });
+  assertEquals(r.success, false);
+});
+
+Deno.test("cert_check: rejects empty host", () => {
+  const r = model.methods.cert_check.arguments.safeParse({ host: "" });
+  assertEquals(r.success, false);
+});
+
+Deno.test("traceroute: rejects empty host", () => {
+  const r = model.methods.traceroute.arguments.safeParse({ host: "" });
+  assertEquals(r.success, false);
+});
+
+Deno.test("port_check: rejects empty host", () => {
+  const r = model.methods.port_check.arguments.safeParse({ host: "" });
+  assertEquals(r.success, false);
+});
+
+Deno.test("port_check: rejects empty ports array", () => {
+  const r = model.methods.port_check.arguments.safeParse({
+    host: "example.com",
+    ports: [],
+  });
+  assertEquals(r.success, false);
+});
+
+Deno.test("port_check: rejects out-of-range port numbers", () => {
+  const r = model.methods.port_check.arguments.safeParse({
+    host: "example.com",
+    ports: [0, 70000],
+  });
+  assertEquals(r.success, false);
+});
+
+// ===========================================================================
 // Parser unit tests
 // ===========================================================================
 
@@ -726,6 +776,7 @@ Deno.test({
           }>;
           status: string;
           server: string | null;
+          error: string | null;
         };
 
         assertEquals(data.domain, "example.com");
@@ -733,6 +784,49 @@ Deno.test({
         assertEquals(data.records.length, 1);
         assertEquals(data.records[0].data, "93.184.216.34");
         assertEquals(data.server, "8.8.8.8");
+        assertEquals(data.error, null);
+      },
+    );
+  },
+});
+
+Deno.test({
+  name: "dns_lookup: command failure surfaces stderr in error field",
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockedCommand(
+      (_cmd, _args) => ({
+        stdout: "",
+        stderr: "dig: couldn't get address for 'bad..domain': not found",
+        success: false,
+      }),
+      async () => {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {},
+          definition: {
+            id: "test-id",
+            name: "test-probe",
+            version: 1,
+            tags: {},
+          },
+        });
+
+        await model.methods.dns_lookup.execute(
+          { domain: "bad..domain", recordType: "A" },
+          context as unknown as Parameters<
+            typeof model.methods.dns_lookup.execute
+          >[1],
+        );
+
+        const data = getWrittenResources()[0].data as {
+          status: string;
+          error: string | null;
+        };
+        assertEquals(data.status, "COMMAND_FAILED");
+        assertEquals(
+          data.error?.includes("couldn't get address"),
+          true,
+        );
       },
     );
   },
@@ -786,11 +880,50 @@ Deno.test({
           domain: string;
           registrar: string | null;
           nameservers: string[];
+          error: string | null;
         };
 
         assertEquals(data.domain, "example.com");
         assertEquals(data.registrar, "Example Registrar, Inc.");
         assertEquals(data.nameservers.length, 2);
+        assertEquals(data.error, null);
+      },
+    );
+  },
+});
+
+Deno.test({
+  name: "whois_lookup: command failure surfaces stderr in error field",
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockedCommand(
+      (_cmd, _args) => ({
+        stdout: "",
+        stderr: "whois: connection refused",
+        success: false,
+      }),
+      async () => {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {},
+          definition: {
+            id: "test-id",
+            name: "test-probe",
+            version: 1,
+            tags: {},
+          },
+        });
+
+        await model.methods.whois_lookup.execute(
+          { domain: "example.com" },
+          context as unknown as Parameters<
+            typeof model.methods.whois_lookup.execute
+          >[1],
+        );
+
+        const data = getWrittenResources()[0].data as {
+          error: string | null;
+        };
+        assertEquals(data.error, "whois: connection refused");
       },
     );
   },
@@ -845,6 +978,7 @@ Deno.test({
             ip: string | null;
           }>;
           reachedTarget: boolean;
+          error: string | null;
         };
 
         assertEquals(data.host, "example.com");
@@ -852,6 +986,44 @@ Deno.test({
         assertEquals(data.hops.length, 3);
         assertEquals(data.hops[0].hop, 1);
         assertEquals(data.hops[0].host, "gateway");
+        assertEquals(data.error, null);
+      },
+    );
+  },
+});
+
+Deno.test({
+  name: "traceroute: command failure surfaces stderr in error field",
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockedCommand(
+      (_cmd, _args) => ({
+        stdout: "",
+        stderr: "traceroute: unknown host bad.host",
+        success: false,
+      }),
+      async () => {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {},
+          definition: {
+            id: "test-id",
+            name: "test-probe",
+            version: 1,
+            tags: {},
+          },
+        });
+
+        await model.methods.traceroute.execute(
+          { host: "bad.host", maxHops: 15 },
+          context as unknown as Parameters<
+            typeof model.methods.traceroute.execute
+          >[1],
+        );
+
+        const data = getWrittenResources()[0].data as {
+          error: string | null;
+        };
+        assertEquals(data.error, "traceroute: unknown host bad.host");
       },
     );
   },

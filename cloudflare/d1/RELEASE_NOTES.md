@@ -1,29 +1,22 @@
-## 2026.07.27.1
+## 2026.08.21.1
 
-**Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator
-bugs were repaired (webframp/swamp-extensions#284).
+**Changed:** Error messages for API failures and invalid input are now
+specific instead of generic.
 
-1. **Methods referencing an undeclared path parameter did not compile.** The
-   generator derived a method's arguments schema and execute signature from the
-   OpenAPI `parameters` list, but built the request URL from the path template.
-   Where the Cloudflare spec omits a declaration for a `{placeholder}` — which
-   it does in several places — the result was a method with
-   `arguments:
-   z.object({})` and an unused `_args` parameter whose body still
-   interpolated `args.<name>`. Those methods failed type checking and were
-   uncallable even if they had compiled, because the argument was never
-   declared. Path-template placeholders are now unioned into the declared
-   parameters, so the schema, the signature, and the body agree.
+- Every method that calls the Cloudflare API now wraps failures with the
+  operation and the database/account ID involved, instead of surfacing the
+  raw SDK error with no context.
+- All methods that take a `database_id` now reject an empty value up front
+  with a clear validation error, instead of sending a malformed request to
+  the Cloudflare API.
+- `create_database` now validates that `name` is present before calling the
+  API, instead of letting Cloudflare reject the request with a generic
+  error.
+- `d1_time_travel_restore` now requires either `bookmark` or `timestamp` to
+  be supplied, instead of silently sending a restore request with neither
+  and letting Cloudflare reject it.
 
-2. **Generated tests could request a URL the mock server did not serve.** Test
-   arguments merged the request-body fixture over the path-parameter values, so
-   a body property sharing a name with a path parameter (commonly `id`)
-   substituted its own example value into the URL. The request then missed the
-   mock and failed with `Cloudflare API error: Not found`. Path parameters now
-   take precedence, matching what the generated model already does by excluding
-   path-parameter names from the request body.
-
-**Upgrade note:** No API surface change and no method was added or removed. If
-this extension type-checked and tested cleanly before, its behavior is unchanged
-and only the version moved. Extensions that previously failed `deno check` or
-`deno task test` now pass.
+**Upgrade note:** No behavioral change for valid requests. Callers relying on
+an empty `database_id`, a missing `name` on create, or a restore request with
+neither `bookmark` nor `timestamp` to fail inside the Cloudflare API call will
+now get an immediate, descriptive validation error instead.

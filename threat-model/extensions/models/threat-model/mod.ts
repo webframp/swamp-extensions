@@ -237,7 +237,7 @@ interface ModelContext {
 /** Agile threat modeling concept model. */
 export const model = {
   type: "@webframp/threat-model",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -250,6 +250,11 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Added .describe() to previously undocumented resource schema fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description: "No schema changes — added stricter method validation",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -475,6 +480,20 @@ AGENT GUIDANCE:
           typeof ThreatScenarioSchema
         >[];
 
+        const knownThreatIds = new Set(threats.map((t) => t.id));
+        const unknownAdjustmentIds = args.adjustments
+          .map((a) => a.threatId)
+          .filter((id) => !knownThreatIds.has(id));
+        if (unknownAdjustmentIds.length > 0) {
+          throw new Error(
+            `evaluate: adjustments reference unknown threat ID(s) [${
+              unknownAdjustmentIds.join(", ")
+            }] — no matching threat in the current assessment. Known IDs: [${
+              [...knownThreatIds].join(", ")
+            }]`,
+          );
+        }
+
         for (const adj of args.adjustments) {
           threats = threats.map((t) => {
             if (t.id !== adj.threatId) return t;
@@ -588,6 +607,29 @@ Call with controls, acceptances, and recommendation.`,
         let threats = (existing.threats ?? []) as z.infer<
           typeof ThreatScenarioSchema
         >[];
+
+        const knownThreatIds = new Set(threats.map((t) => t.id));
+        const unknownIds = new Set<string>();
+        for (const c of args.controls) {
+          for (const tid of c.mitigates) {
+            if (!knownThreatIds.has(tid)) unknownIds.add(tid);
+          }
+        }
+        for (const a of args.acceptances) {
+          if (!knownThreatIds.has(a.threatId)) unknownIds.add(a.threatId);
+        }
+        for (const tid of args.deferred) {
+          if (!knownThreatIds.has(tid)) unknownIds.add(tid);
+        }
+        if (unknownIds.size > 0) {
+          throw new Error(
+            `mitigate: controls, acceptances, or deferred reference unknown threat ID(s) [${
+              [...unknownIds].join(", ")
+            }] — no matching threat in the current assessment. Known IDs: [${
+              [...knownThreatIds].join(", ")
+            }]`,
+          );
+        }
 
         // Determine which threats are fully mitigated by controls.
         // Only "full" effectiveness changes threat status to "mitigated".

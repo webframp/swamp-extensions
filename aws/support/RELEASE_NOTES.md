@@ -1,3 +1,16 @@
+## 2026.08.21.2
+
+**Changed:** AWS Support and STS API failures now surface with the operation
+and identifiers involved instead of a bare SDK error. `DescribeCases`,
+`DescribeCommunications`, `CreateCase`, `AddCommunicationToCase`,
+`ResolveCase`, and `GetCallerIdentity` calls in `list_cases`, `get_case`,
+`create_case`, `add_communication`, and `resolve_case` now catch failures and
+rethrow with the display ID, case ID, or profile that was in flight, plus the
+original error preserved as `cause`. Previously a throttled or
+permission-denied call surfaced only the raw AWS SDK exception with no
+indication of which case or profile triggered it. `scan_accounts` already
+recorded per-profile failures and is unchanged.
+
 ## 2026.08.21.1
 
 **Changed:** Tightened `displayId`, `serviceCode`, `categoryCode`, and `caseId`

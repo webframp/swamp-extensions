@@ -118,7 +118,7 @@ const GetRotateSecretSchema = z.object({
 /** Cloudflare Turnstile — CAPTCHA-free challenges, site widgets */
 export const model = {
   type: "@webframp/cloudflare/turnstile",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -293,7 +293,7 @@ export const model = {
     get_get: {
       description: "Turnstile Widget Details",
       arguments: z.object({
-        sitekey: z.string(),
+        sitekey: z.string().min(1, "sitekey must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -328,7 +328,7 @@ export const model = {
     get_update: {
       description: "Update a Turnstile Widget",
       arguments: z.object({
-        sitekey: z.string(),
+        sitekey: z.string().min(1, "sitekey must not be empty"),
         bot_fight_mode: z.unknown().optional(),
         clearance_level: z.unknown().optional(),
         domains: z.unknown(),
@@ -379,7 +379,7 @@ export const model = {
     get_delete: {
       description: "Delete a Turnstile Widget",
       arguments: z.object({
-        sitekey: z.string(),
+        sitekey: z.string().min(1, "sitekey must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -409,7 +409,7 @@ export const model = {
     get_rotate_secret: {
       description: "Rotate Secret for a Turnstile Widget",
       arguments: z.object({
-        sitekey: z.string(),
+        sitekey: z.string().min(1, "sitekey must not be empty"),
         invalidate_immediately: z.unknown().optional(),
       }),
       execute: async (

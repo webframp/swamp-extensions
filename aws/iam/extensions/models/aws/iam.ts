@@ -288,7 +288,10 @@ function tagsToRecord(
 
 interface ModelContext {
   globalArgs: z.infer<typeof GlobalArgsSchema>;
-  logger: { info: (msg: string, meta?: Record<string, unknown>) => void };
+  logger: {
+    info: (msg: string, meta?: Record<string, unknown>) => void;
+    warn: (msg: string, meta?: Record<string, unknown>) => void;
+  };
   writeResource: (
     specName: string,
     instanceName: string,
@@ -313,7 +316,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -329,6 +332,11 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "Error-message quality improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -481,9 +489,13 @@ export const model = {
               },
             );
           } catch (err) {
-            ctx.logger.info(
-              "Failed to scan roles for profile {profile}: {err}",
-              { profile, err: String(err) },
+            ctx.logger.warn(
+              "IAM role discovery failed for profile {profile}: {err}",
+              {
+                profile,
+                operation: "discover_roles",
+                err: err instanceof Error ? err.message : String(err),
+              },
             );
           } finally {
             iam.destroy();
@@ -638,9 +650,13 @@ export const model = {
               },
             );
           } catch (err) {
-            ctx.logger.info(
-              "Failed to scan users for profile {profile}: {err}",
-              { profile, err: String(err) },
+            ctx.logger.warn(
+              "IAM user discovery failed for profile {profile}: {err}",
+              {
+                profile,
+                operation: "discover_users",
+                err: err instanceof Error ? err.message : String(err),
+              },
             );
           } finally {
             iam.destroy();
@@ -736,9 +752,13 @@ export const model = {
               },
             );
           } catch (err) {
-            ctx.logger.info(
-              "Failed to scan policies for profile {profile}: {err}",
-              { profile, err: String(err) },
+            ctx.logger.warn(
+              "IAM policy discovery failed for profile {profile}: {err}",
+              {
+                profile,
+                operation: "discover_policies",
+                err: err instanceof Error ? err.message : String(err),
+              },
             );
           } finally {
             iam.destroy();

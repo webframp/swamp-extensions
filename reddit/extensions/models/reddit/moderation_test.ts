@@ -990,6 +990,57 @@ Deno.test({
       } catch (e) {
         threw = true;
         assertEquals((e as Error).message.includes("NOT_FOUND"), true);
+        assertEquals((e as Error).message.includes("t3_invalid"), true);
+      }
+      assertEquals(threw, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "moderation model: a non-2xx Reddit response names the request path in the error",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    const server = startMockRedditServer({
+      handler: (req) => {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/v1/access_token") return tokenResponse();
+        return new Response("internal error", { status: 500 });
+      },
+    });
+
+    const { port } = server.addr as Deno.NetAddr;
+    const mockBase = `http://127.0.0.1:${port}`;
+    const uninstall = installFetchMock(mockBase);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: DEFAULT_GLOBAL_ARGS,
+        definition: {
+          id: "test-id",
+          name: "test-reddit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      let threw = false;
+      try {
+        await model.methods.get_modqueue.execute(
+          {},
+          context as unknown as Parameters<
+            typeof model.methods.get_modqueue.execute
+          >[1],
+        );
+      } catch (e) {
+        threw = true;
+        assertEquals((e as Error).message.includes("modqueue"), true);
+        assertEquals((e as Error).message.includes("500"), true);
       }
       assertEquals(threw, true);
     } finally {

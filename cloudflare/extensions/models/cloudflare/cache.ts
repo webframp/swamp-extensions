@@ -108,13 +108,23 @@ async function fetchCacheSettings(
 /** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
-  version: "2026.07.18.2",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Require at least one URL/tag/prefix for purge_urls/purge_tags/" +
+        "purge_prefixes and numeric since/until for get_analytics at " +
+        "validation time; wrap GraphQL analytics request/HTTP/query " +
+        "failures with the zone ID; shared _lib/api.ts now wraps Cloudflare " +
+        "API failures with the method/path/status",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -183,7 +193,9 @@ export const model = {
     purge_urls: {
       description: "Purge specific URLs from cache",
       arguments: z.object({
-        urls: z.array(z.string()).describe("List of URLs to purge (max 30)"),
+        urls: z.array(z.string()).min(1).max(30).describe(
+          "List of URLs to purge (1-30)",
+        ),
       }),
       execute: async (
         args: { urls: string[] },
@@ -200,10 +212,6 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-
-        if (args.urls.length > 30) {
-          throw new Error("Maximum 30 URLs can be purged at once");
-        }
 
         await cfApi(
           apiToken,
@@ -229,7 +237,9 @@ export const model = {
     purge_tags: {
       description: "Purge cache by Cache-Tag headers (Enterprise only)",
       arguments: z.object({
-        tags: z.array(z.string()).describe("List of Cache-Tag values to purge"),
+        tags: z.array(z.string()).min(1).describe(
+          "List of Cache-Tag values to purge",
+        ),
       }),
       execute: async (
         args: { tags: string[] },
@@ -271,7 +281,9 @@ export const model = {
     purge_prefixes: {
       description: "Purge cache by URL prefixes (Enterprise only)",
       arguments: z.object({
-        prefixes: z.array(z.string()).describe("List of URL prefixes to purge"),
+        prefixes: z.array(z.string()).min(1).describe(
+          "List of URL prefixes to purge",
+        ),
       }),
       execute: async (
         args: { prefixes: string[] },
@@ -432,10 +444,10 @@ export const model = {
     get_analytics: {
       description: "Get cache analytics (hit rate, bandwidth)",
       arguments: z.object({
-        since: z.string().default("-1440").describe(
+        since: z.string().regex(/^-?\d+$/).default("-1440").describe(
           "Start time (minutes ago, e.g., '-1440' for last 24h)",
         ),
-        until: z.string().default("0").describe(
+        until: z.string().regex(/^-?\d+$/).default("0").describe(
           "End time (minutes ago, '0' for now)",
         ),
       }),
@@ -478,22 +490,40 @@ export const model = {
           }
         `;
 
-        const response = await fetch(
-          "https://api.cloudflare.com/client/v4/graphql",
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${apiToken}`,
-              "Content-Type": "application/json",
+        let response: Response;
+        try {
+          response = await fetch(
+            "https://api.cloudflare.com/client/v4/graphql",
+            {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${apiToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                query,
+                variables: { zoneTag: zoneId, dateStart, dateEnd },
+              }),
             },
-            body: JSON.stringify({
-              query,
-              variables: { zoneTag: zoneId, dateStart, dateEnd },
-            }),
-          },
-        );
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `Cloudflare GraphQL analytics request failed for zone ${zoneId}: ${message}`,
+            { cause: err },
+          );
+        }
+
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(
+            `Cloudflare GraphQL analytics request failed for zone ${zoneId} ` +
+              `(HTTP ${response.status}): ${body}`,
+          );
+        }
 
         const data = await response.json() as {
+          errors?: Array<{ message: string }>;
           data?: {
             viewer?: {
               zones?: Array<{
@@ -509,6 +539,13 @@ export const model = {
             };
           };
         };
+
+        if (data.errors && data.errors.length > 0) {
+          const errorMsg = data.errors.map((e) => e.message).join("; ");
+          throw new Error(
+            `Cloudflare GraphQL analytics query failed for zone ${zoneId}: ${errorMsg}`,
+          );
+        }
 
         const stats = data.data?.viewer?.zones?.[0]?.httpRequests1dGroups?.[0]
           ?.sum;
