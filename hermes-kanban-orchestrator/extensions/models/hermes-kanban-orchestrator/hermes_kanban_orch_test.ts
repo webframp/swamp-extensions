@@ -81,6 +81,20 @@ Deno.test("new_task requires type and title", () => {
   assertEquals(valid.success, true);
 });
 
+Deno.test("new_task rejects empty title", () => {
+  const r = model.methods.new_task.arguments.safeParse({
+    type: "daily-journal",
+    title: "",
+  });
+  assertEquals(r.success, false);
+  if (!r.success) {
+    assertEquals(
+      r.error.issues.some((i) => i.message.includes("must not be empty")),
+      true,
+    );
+  }
+});
+
 Deno.test("list_recent defaults limit to 10", () => {
   const r = model.methods.list_recent.arguments.safeParse({});
   assertEquals(r.success, true);

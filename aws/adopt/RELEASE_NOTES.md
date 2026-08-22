@@ -1,61 +1,13 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (5 packages)
+**Changed:** Every AWS SDK call (EC2, RDS, Secrets Manager, CloudFormation)
+used to propagate its raw SDK exception with no indication of which
+operation was running or what it was scoped to. Failures now name the
+operation (e.g. `DescribeVpcs`, `ListStackResources`) and, where relevant,
+the region, VPC ID, or stack name, while preserving the original error
+message — a discovery failure now says what was being attempted instead of
+surfacing a bare SDK error.
 
-**Changed:** Bump @swamp/aws/ec2 2026.08.14.1 → 2026.08.20.1
-
-**Changed:** Bump @swamp/aws/rds 2026.08.15.1 → 2026.08.19.1
-
-**Changed:** Bump @swamp/aws/secretsmanager 2026.08.14.1 → 2026.08.20.1
-
-## 2026.08.15.1
-
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (5 packages)
-
-**Changed:** Bump @swamp/aws/ec2 2026.08.05.1 → 2026.08.14.1
-
-**Changed:** Bump @swamp/aws/rds 2026.08.05.1 → 2026.08.15.1
-
-**Changed:** Bump @swamp/aws/secretsmanager 2026.08.05.1 → 2026.08.14.1
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (5 packages)
-
-**Changed:** Bump @swamp/aws/ec2 2026.08.02.1 → 2026.08.05.1
-
-**Changed:** Bump @swamp/aws/rds 2026.08.02.1 → 2026.08.05.1
-
-**Changed:** Bump @swamp/aws/secretsmanager 2026.08.02.1 → 2026.08.05.1
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (5 packages)
-
-**Changed:** Bump @swamp/aws/ec2 2026.07.30.1 → 2026.08.02.1
-
-**Changed:** Bump @swamp/aws/rds 2026.07.30.1 → 2026.08.02.1
-
-**Changed:** Bump @swamp/aws/secretsmanager 2026.07.30.1 → 2026.08.02.1
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.30.1`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.30.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (5 packages)
-
-**Changed:** Bump @swamp/aws/ec2 2026.07.27.1 → 2026.07.30.1
-
-**Changed:** Bump @swamp/aws/rds 2026.07.27.1 → 2026.07.30.1
-
-**Changed:** Bump @swamp/aws/secretsmanager 2026.07.27.1 → 2026.07.30.1
-
-## 2026.07.30.1
-
-**Added:** Optional `profile` global argument for multi-account credential resolution.
-When set, credentials resolve via `fromIni` (supports SSO token cache and shared-config
-profiles). When omitted, the default credential chain applies as before. Fully backward
-compatible — no changes required for existing instances.
-
+`region` and `vpcId` global arguments are now validated at model-creation
+time (region must match AWS region shape, `vpcId` must match `vpc-[a-f0-9]+`)
+instead of accepting any string and failing deep inside the first API call.

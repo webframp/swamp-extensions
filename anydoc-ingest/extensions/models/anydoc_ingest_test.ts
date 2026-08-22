@@ -63,6 +63,28 @@ const failureConverter: DocumentConverter = (
 };
 
 // ---------------------------------------------------------------------------
+// globalArguments validation
+// ---------------------------------------------------------------------------
+
+Deno.test("globalArguments rejects a relative documentsDir", () => {
+  const result = model.globalArguments.safeParse({
+    documentsDir: "relative/path",
+  });
+  assertEquals(result.success, false);
+  if (!result.success) {
+    const message = result.error.issues.map((i) => i.message).join("; ");
+    assertEquals(message.includes("absolute path"), true);
+  }
+});
+
+Deno.test("globalArguments accepts an absolute documentsDir", () => {
+  const result = model.globalArguments.safeParse({
+    documentsDir: "/tmp/some/dir",
+  });
+  assertEquals(result.success, true);
+});
+
+// ---------------------------------------------------------------------------
 // scan method tests
 // ---------------------------------------------------------------------------
 

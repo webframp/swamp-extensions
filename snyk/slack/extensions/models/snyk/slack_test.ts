@@ -508,6 +508,7 @@ Deno.test({
       });
 
       let threw = false;
+      let message = "";
       try {
         await (model.methods as Record<
           string,
@@ -520,13 +521,70 @@ Deno.test({
         >).get_slack_default_notification_settings.execute({
           "bot_id": "test-id-123",
         }, context);
-      } catch (_err) {
+      } catch (err) {
         threw = true;
+        message = err instanceof Error ? err.message : String(err);
       }
       assertEquals(threw, true);
+      // The error must name the operation and endpoint, not just the raw
+      // HTTP status, so failures are diagnosable without reproducing them.
+      assertStringIncludes(message, "GET");
+      assertStringIncludes(message, "/slack_app/test-id-123");
+      assertStringIncludes(message, "HTTP 500");
+      assertStringIncludes(message, "Internal Server Error");
     } finally {
       globalThis.fetch = originalFetch;
       await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "slack model: get_slack_default_notification_settings surfaces network failures with context",
+  sanitizeResources: false,
+  fn: async () => {
+    // Simulate a connection failure (e.g. DNS/network outage) rather than an
+    // HTTP error response — fetch() itself rejects.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () => {
+      throw new TypeError("error sending request for url");
+    };
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: { id: "test-id", name: "test-slack", version: 1, tags: {} },
+      });
+
+      let threw = false;
+      let message = "";
+      try {
+        await (model.methods as Record<
+          string,
+          {
+            execute: (
+              args: Record<string, unknown>,
+              ctx: unknown,
+            ) => Promise<{ dataHandles: unknown[] }>;
+          }
+        >).get_slack_default_notification_settings.execute({
+          "bot_id": "test-id-123",
+        }, context);
+      } catch (err) {
+        threw = true;
+        message = err instanceof Error ? err.message : String(err);
+      }
+      assertEquals(threw, true);
+      assertStringIncludes(message, "GET");
+      assertStringIncludes(message, "/slack_app/test-id-123");
+      assertStringIncludes(message, "error sending request for url");
+    } finally {
+      globalThis.fetch = originalFetch;
     }
   },
 });

@@ -141,7 +141,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/networking",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -157,6 +157,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message quality and validation improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -248,6 +254,13 @@ export const model = {
             { count: gateways.length, region: context.globalArgs.region },
           );
           return { dataHandles: [handle] };
+        } catch (err) {
+          throw new Error(
+            `Failed to list NAT Gateways in region "${context.globalArgs.region}": ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            { cause: err },
+          );
         } finally {
           client.destroy();
         }
@@ -362,6 +375,13 @@ export const model = {
             { count: loadBalancers.length, region: context.globalArgs.region },
           );
           return { dataHandles: [handle] };
+        } catch (err) {
+          throw new Error(
+            `Failed to list load balancers (and their target groups/health) in region "${context.globalArgs.region}": ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            { cause: err },
+          );
         } finally {
           client.destroy();
         }
@@ -425,6 +445,13 @@ export const model = {
             },
           );
           return { dataHandles: [handle] };
+        } catch (err) {
+          throw new Error(
+            `Failed to describe Elastic IP addresses in region "${context.globalArgs.region}": ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            { cause: err },
+          );
         } finally {
           client.destroy();
         }
@@ -437,6 +464,9 @@ export const model = {
       arguments: z.object({
         days: z
           .number()
+          .int()
+          .min(1)
+          .max(365)
           .default(7)
           .describe("Number of days to look back"),
         natGatewayIds: z
@@ -629,6 +659,13 @@ export const model = {
             },
           );
           return { dataHandles: [handle] };
+        } catch (err) {
+          throw new Error(
+            `Failed to collect data-transfer metrics for region "${region}" over ${args.days} day(s): ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            { cause: err },
+          );
         } finally {
           cwClient.destroy();
           elbClient.destroy();

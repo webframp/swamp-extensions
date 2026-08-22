@@ -1144,7 +1144,7 @@ function slugify(label: string): string {
 /** Organization design simulation model. */
 export const model = {
   type: "@webframp/org-simulation",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
@@ -1154,6 +1154,12 @@ export const model = {
     {
       toVersion: "2026.08.21.1",
       description: "Added .describe() to previously undocumented fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes other than rejecting duplicate widget ids in design_topology — existing stored resources are unaffected.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1250,7 +1256,25 @@ just what changed.`,
         args: z.infer<typeof DesignTopologyArgsSchema>,
         context: MethodContext,
       ) => {
-        const ids = new Set(args.widgets.map((w) => w.id));
+        // Widget ids must be unique — the simulation looks widgets up by id
+        // via a Map built from this array, so a duplicate id would silently
+        // collapse to whichever widget was listed last, with no indication
+        // that the topology was ambiguous.
+        const seenIds = new Set<string>();
+        const duplicateIds = new Set<string>();
+        for (const w of args.widgets) {
+          if (seenIds.has(w.id)) duplicateIds.add(w.id);
+          seenIds.add(w.id);
+        }
+        if (duplicateIds.size > 0) {
+          throw new Error(
+            `Duplicate widget id(s) in topology "${args.scenarioLabel}": ${
+              Array.from(duplicateIds).join(", ")
+            }. Widget ids must be unique across the topology.`,
+          );
+        }
+
+        const ids = seenIds;
         for (const c of args.connectors) {
           if (!ids.has(c.fromId)) {
             throw new Error(

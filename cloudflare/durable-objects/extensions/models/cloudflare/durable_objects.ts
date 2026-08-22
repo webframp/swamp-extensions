@@ -55,7 +55,7 @@ const ListObjectsSchema = z.object({
 /** Cloudflare Durable Objects — namespaces, object management, alarms */
 export const model = {
   type: "@webframp/cloudflare/durable-objects",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -103,13 +103,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/workers/durable_objects/namespaces`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/workers/durable_objects/namespaces`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list Durable Object namespaces for account ${accountId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -133,7 +144,7 @@ export const model = {
     list_objects: {
       description: "List Objects",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id (namespace ID) must not be empty"),
         limit: z.number().optional(),
         cursor: z.string().optional(),
       }),
@@ -162,11 +173,21 @@ export const model = {
           ? `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects?${qs}`
           : `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects`;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          url,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            url,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to list objects in Durable Object namespace ${args.id} (account ${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
         const items = (result as { result?: unknown[] })?.result ??
           (Array.isArray(result) ? result : [result]);
 

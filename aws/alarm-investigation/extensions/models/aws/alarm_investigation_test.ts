@@ -465,6 +465,46 @@ Deno.test({
   },
 });
 
+Deno.test("investigate: rejects an empty alarmName", () => {
+  const result = model.methods.investigate.arguments.safeParse({
+    alarmName: "",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test({
+  name:
+    "investigate: DescribeAlarms failure names the alarm and region instead of the raw SDK error",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockBoth(
+      (cmd) => {
+        if (cmdName(cmd) === "DescribeAlarmsCommand") {
+          throw new Error("Throttling");
+        }
+        return {};
+      },
+      defaultSnsHandler(),
+    );
+    try {
+      const { context } = createCtx();
+      await assertRejects(
+        () =>
+          model.methods.investigate.execute(
+            { alarmName: "my-alarm" },
+            context as unknown as Parameters<
+              typeof model.methods.investigate.execute
+            >[1],
+          ),
+        Error,
+        'DescribeAlarms failed for alarm "my-alarm"',
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
 // =============================================================================
 // investigate: SNS enrichment
 // =============================================================================

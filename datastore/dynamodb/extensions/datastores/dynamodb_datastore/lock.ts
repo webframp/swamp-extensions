@@ -51,6 +51,28 @@ function isConditionalCheckFailed(err: unknown): boolean {
   return err instanceof Error && err.name === "ConditionalCheckFailedException";
 }
 
+/**
+ * Wraps a DynamoDB SDK failure with the lock operation, key, and table that
+ * was in flight. `ConditionalCheckFailedException` passes through unchanged
+ * — callers treat it as an expected contention signal, not a failure — but
+ * every other SDK error (throttling, network failure, missing table,
+ * expired credentials) would otherwise surface as a bare AWS error with no
+ * indication of which lock was affected.
+ */
+function wrapLockError(
+  op: string,
+  tableName: string,
+  key: string,
+  err: unknown,
+): never {
+  if (isConditionalCheckFailed(err)) throw err;
+  const reason = err instanceof Error ? err.message : String(err);
+  throw new Error(
+    `DynamoDB ${op} failed for lock "${key}" in table "${tableName}": ${reason}`,
+    { cause: err },
+  );
+}
+
 export function createDynamoLock(
   rawDoc: DynamoDBDocumentClient,
   tableName: string,
@@ -95,7 +117,7 @@ export function createDynamoLock(
       return true;
     } catch (err) {
       if (isConditionalCheckFailed(err)) return false;
-      throw err;
+      wrapLockError("renew", tableName, key, err);
     }
   };
 
@@ -167,7 +189,9 @@ export function createDynamoLock(
             });
             return;
           } catch (err) {
-            if (!isConditionalCheckFailed(err)) throw err;
+            if (!isConditionalCheckFailed(err)) {
+              wrapLockError("acquire", tableName, key, err);
+            }
             // Lost the race — another holder has a non-expired lock. Fall through to backoff.
             contended = true;
           }
@@ -269,9 +293,14 @@ export function createDynamoLock(
       return await withSpan("dynamodb-datastore lock inspect", {
         [Attr.LOCK_KEY]: key,
       }, async (span) => {
-        const result = await doc.send(
-          new GetCommand({ TableName: tableName, Key: { pk, sk } }),
-        );
+        let result;
+        try {
+          result = await doc.send(
+            new GetCommand({ TableName: tableName, Key: { pk, sk } }),
+          );
+        } catch (err) {
+          wrapLockError("inspect", tableName, key, err);
+        }
         const item = result.Item;
         if (!item) return null;
         if (item.holder) {
@@ -318,7 +347,7 @@ export function createDynamoLock(
           return true;
         } catch (err) {
           if (isConditionalCheckFailed(err)) return false;
-          throw err;
+          wrapLockError("forceRelease", tableName, key, err);
         }
       });
     },

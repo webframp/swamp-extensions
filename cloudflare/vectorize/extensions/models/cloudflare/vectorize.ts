@@ -133,7 +133,7 @@ const VectorizeUpsertVectorSchema = z.object({
 /** Cloudflare Vectorize — vector indexes, insert/query/delete operations */
 export const model = {
   type: "@webframp/cloudflare/vectorize",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -314,7 +314,7 @@ export const model = {
     get_vectorize_index: {
       description: "Get Vectorize Index",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -349,7 +349,7 @@ export const model = {
     delete_vectorize_index: {
       description: "Delete Vectorize Index",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -379,7 +379,7 @@ export const model = {
     delete_vectors_by_id: {
       description: "Delete Vectors By Identifier",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         ids: z.array(z.unknown()).optional().describe(
           "A list of vector identifiers to delete from the index indicated by the path.",
         ),
@@ -426,7 +426,7 @@ export const model = {
     get_vectors_by_id: {
       description: "Get Vectors By Identifier",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         ids: z.array(z.unknown()).optional().describe(
           "A list of vector identifiers to retrieve from the index indicated by the path.",
         ),
@@ -473,7 +473,7 @@ export const model = {
     get_vectorize_index_info: {
       description: "Get Vectorize Index Info",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -508,7 +508,7 @@ export const model = {
     vectorize_insert_vector: {
       description: "Insert Vectors",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         unparsable_behavior: z.enum(["error", "discard"]).optional(),
       }),
       execute: async (
@@ -553,7 +553,7 @@ export const model = {
     list_vectors: {
       description: "List Vectors",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         count: z.number().optional(),
         cursor: z.string().optional(),
       }),
@@ -590,7 +590,7 @@ export const model = {
     create_metadata_index: {
       description: "Create Metadata Index",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         indexType: z.enum(["string", "number", "boolean"]).describe(
           "Specifies the type of metadata property to index.",
         ),
@@ -640,7 +640,7 @@ export const model = {
     delete_metadata_index: {
       description: "Delete Metadata Index",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         propertyName: z.string().describe(
           "Specifies the metadata property for which the index must be deleted.",
         ),
@@ -687,7 +687,7 @@ export const model = {
     list_metadata_indexes: {
       description: "List Metadata Indexes",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -722,7 +722,7 @@ export const model = {
     create_vectorize_query_vector: {
       description: "Query Vectors",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         filter: z.object({}).optional().describe(
           "A metadata filter expression used to limit nearest neighbor results.",
         ),
@@ -781,7 +781,7 @@ export const model = {
     vectorize_upsert_vector: {
       description: "Upsert Vectors",
       arguments: z.object({
-        index_name: z.string(),
+        index_name: z.string().min(1, "index_name must not be empty"),
         unparsable_behavior: z.enum(["error", "discard"]).optional(),
       }),
       execute: async (

@@ -58,6 +58,7 @@ function makeStep(
 function makeContext(
   tmpDir: string,
   stepExecutions: StepExecution[] = [],
+  logs: Array<{ msg: string; props: Record<string, unknown> }> = [],
 ) {
   return {
     workflowId: "wf-flow",
@@ -67,7 +68,9 @@ function makeContext(
     stepExecutions,
     repoDir: tmpDir,
     logger: {
-      info: (_msg: string, _props: Record<string, unknown>) => {},
+      info: (msg: string, props: Record<string, unknown>) => {
+        logs.push({ msg, props });
+      },
     },
   };
 }
@@ -93,6 +96,46 @@ Deno.test({
 
       assertEquals(typeof result.markdown, "string");
       assertStringIncludes(result.markdown, "No issue data");
+    } finally {
+      await Deno.remove(tmpDir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "report logs the path when stored issue-list data is unreadable",
+  sanitizeResources: false, // async file operations in temp dirs
+  async fn() {
+    const tmpDir = await Deno.makeTempDir();
+    try {
+      const modelType = "@webframp/redmine";
+      const modelId = "tracker";
+      const dir =
+        `${tmpDir}/.swamp/data/${modelType}/${modelId}/list_issues-all/1`;
+      await Deno.mkdir(dir, { recursive: true });
+      // Malformed JSON — getData must catch the parse failure and log it,
+      // not swallow it silently.
+      await Deno.writeTextFile(`${dir}/raw`, "{not valid json");
+
+      const steps = [
+        makeStep(
+          "tracker",
+          modelType,
+          modelId,
+          "list_issues",
+          "list_issues-all",
+        ),
+      ];
+      const logs: Array<{ msg: string; props: Record<string, unknown> }> = [];
+      const context = makeContext(tmpDir, steps, logs);
+      const result = await report.execute(context);
+
+      assertStringIncludes(result.markdown, "No issue data");
+      const matched = logs.some((l) =>
+        l.msg.includes("Could not read or parse data") &&
+        String(l.props.path).includes("list_issues-all/1/raw")
+      );
+      assertEquals(matched, true);
     } finally {
       await Deno.remove(tmpDir, { recursive: true });
     }

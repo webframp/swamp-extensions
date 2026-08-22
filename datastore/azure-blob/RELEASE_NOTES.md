@@ -1,3 +1,30 @@
+## 2026.08.21.1
+
+**Changed:** Error messages name the operation and blob path that failed,
+instead of a bare HTTP status or raw network error.
+
+- Lock operations (`acquire`, `renew`, `release`, `stampMetadata`,
+  `createLockBlob`, `inspect`) now wrap transport-level failures — DNS
+  errors, connection resets, timeouts — with the specific lease action and
+  blob path in flight (e.g. `Azure Blob lease.acquire request failed for
+  /container/prefix/_locks/my-lock.lock: <reason>`). Previously these
+  surfaced as an unlabeled fetch error with no indication of which lock was
+  affected.
+- `Lease acquire failed`, `Failed to create lock blob`, and `Failed to stamp
+  lock metadata` errors now include the blob path, not just the HTTP status.
+- Sync operations (`listIndexShards`, `getShard`, `updateShard`,
+  `fetchContent`, `readCommitSeq`, `incrementCommitSeq`, blob upload) now
+  include the response body in their error messages, not just the HTTP
+  status code — the body carries Azure's actual error code (e.g.
+  `ContainerNotFound`, `AuthenticationFailed`), which was previously
+  discarded.
+- The container health check (`createVerifier`) now reports which operation
+  and container failed (e.g. `getContainerProperties failed for container
+  "swamp-datastore": <reason>`) instead of the bare `String(error)`.
+
+No changes to request/response shapes, retry behavior, or existing
+successful-path behavior.
+
 ## 2026.07.29.1
 
 **Added:** Targeted shard fetch for dirty-path pushes. Computes shard keys for

@@ -1,3 +1,22 @@
+## 2026.08.21.2
+
+**Changed:** Error messages and input validation are more specific.
+
+- API errors now name the HTTP method and path that was attempted (e.g.
+  `Datadog API HTTP 404: GET /api/v2/synthetics/tests/browser/abc-123/results`)
+  instead of just the raw status code and response body.
+- A network-level failure (DNS error, connection reset, timeout) reaching the
+  Datadog API now raises `Datadog API request failed: <METHOD> <path>: <reason>`
+  instead of an unlabeled fetch error.
+- `create_synthetics_suite` and `edit_synthetics_suite` now reject an empty
+  `tests` array before making a request.
+- `get_test_file_multipart_presigned_urls` and
+  `complete_test_file_multipart_upload` now reject an empty `parts` array
+  before making a request, instead of letting Datadog return an opaque
+  validation error for a multipart upload with no parts.
+
+No changes to request/response shapes or existing successful-path behavior.
+
 ## 2026.08.21.1
 
 **Changed:** Tightened Zod schemas as part of a repo-wide schema audit.

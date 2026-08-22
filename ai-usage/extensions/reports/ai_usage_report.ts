@@ -53,6 +53,9 @@ export const report = {
         Array<{ attributes: Record<string, unknown>; updatedAt?: string }>
       >;
     };
+    logger: {
+      warn: (msg: string, props: Record<string, unknown>) => void;
+    };
   }) => {
     const sections: string[] = [];
     const jsonData: Record<string, unknown> = {};
@@ -85,8 +88,17 @@ export const report = {
             `| ${p.name} | \u26A0\uFE0F Not configured | Create \`${p.modelName}\` model instance |`,
           );
         }
-      } catch {
+      } catch (err) {
         cachedData.set(p.modelName, []);
+        context.logger.warn(
+          "Failed to fetch scan data for provider, treating as unconfigured",
+          {
+            provider: p.name,
+            modelName: p.modelName,
+            scanSpec: p.scanSpec,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
         coverageRows.push(
           `| ${p.name} | \u26A0\uFE0F Not configured | Create \`${p.modelName}\` model instance |`,
         );

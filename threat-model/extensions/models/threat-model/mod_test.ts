@@ -215,6 +215,46 @@ Deno.test("evaluate merges open questions across calls", async () => {
   assertEquals(questions.includes("Q3"), true);
 });
 
+Deno.test("evaluate rejects adjustments referencing unknown threat IDs", async () => {
+  const { ctx } = createMockContext({
+    subject: "T",
+    scope: "s",
+    currentPosture: "p",
+    assessedAt: "2026-01-01",
+    assets: [],
+    threats: [
+      {
+        id: "T1",
+        title: "t1",
+        description: "d",
+        likelihood: "certain",
+        impact: "high",
+        inherentRisk: "high",
+        exploitation: "e",
+        mitigatingFactors: "m",
+        status: "unaddressed",
+      },
+    ],
+    controls: [],
+    acceptances: [],
+    recommendation: "",
+    openQuestions: [],
+    updatedAt: "2026-01-01",
+  });
+  await assertRejects(
+    () =>
+      model.methods.evaluate.execute(
+        {
+          openQuestions: [],
+          adjustments: [{ threatId: "T99", impact: "low" }],
+        },
+        ctx,
+      ),
+    Error,
+    "unknown threat ID(s) [T99]",
+  );
+});
+
 // =============================================================================
 // mitigate
 // =============================================================================
@@ -388,6 +428,54 @@ Deno.test("mitigate: accumulates controls across calls", async () => {
   >;
   assertEquals(acceptances.length, 1);
   assertEquals(acceptances[0].threatId, "T99");
+});
+
+Deno.test("mitigate rejects controls/acceptances/deferred referencing unknown threat IDs", async () => {
+  const { ctx } = createMockContext({
+    subject: "T",
+    scope: "s",
+    currentPosture: "p",
+    assessedAt: "2026-01-01",
+    assets: [],
+    threats: [
+      {
+        id: "T1",
+        title: "t1",
+        description: "d",
+        likelihood: "certain",
+        impact: "high",
+        inherentRisk: "high",
+        exploitation: "e",
+        mitigatingFactors: "m",
+        status: "unaddressed",
+      },
+    ],
+    controls: [],
+    acceptances: [],
+    recommendation: "",
+    openQuestions: [],
+    updatedAt: "2026-01-01",
+  });
+  await assertRejects(
+    () =>
+      model.methods.mitigate.execute(
+        {
+          controls: [{
+            id: "C1",
+            description: "ctrl",
+            mitigates: ["T404"],
+            effectiveness: "full" as const,
+            implemented: false,
+          }],
+          acceptances: [],
+          deferred: [],
+          recommendation: "rec",
+        },
+        ctx,
+      ),
+    Error,
+    "unknown threat ID(s) [T404]",
+  );
 });
 
 // =============================================================================

@@ -1107,7 +1107,7 @@ const GetLastSeenIdentitySchema = z.object({
 /** Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates */
 export const model = {
   type: "@webframp/cloudflare/access",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1534,13 +1534,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/ai-controls/mcp/portals`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/ai-controls/mcp/portals`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list MCP Portals (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -1566,7 +1577,7 @@ export const model = {
           "Allow remote code execution in Dynamic Workers (beta)",
         ),
         description: z.string().max(512).optional(),
-        hostname: z.string(),
+        hostname: z.string().min(1, "hostname must not be empty"),
         name: z.string().max(350),
         secure_web_gateway: z.boolean().optional().describe(
           "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
@@ -1607,12 +1618,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/ai-controls/mcp/portals`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/ai-controls/mcp/portals`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create a new MCP Portal (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("portals", id, result);
@@ -1623,7 +1644,7 @@ export const model = {
     get_mcp_portals_api_fetch_gateways: {
       description: "Read details of an MCP Portal",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1640,11 +1661,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to read details of an MCP Portal (accountId=${accountId} id=${args.id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "mcp_portals_api_fetch_gateways",
@@ -1658,7 +1689,7 @@ export const model = {
     update_portals: {
       description: "Update a MCP Portal",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         allow_code_mode: z.boolean().optional().describe(
           "Allow remote code execution in Dynamic Workers (beta)",
         ),
@@ -1708,12 +1739,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update a MCP Portal (accountId=${accountId} id=${args.id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "portals",
@@ -1727,7 +1768,7 @@ export const model = {
     delete_portals: {
       description: "Delete a MCP Portal",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1744,11 +1785,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a MCP Portal (accountId=${accountId} id=${args.id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.id });
         return { dataHandles: [] };
@@ -1782,13 +1832,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/ai-controls/mcp/servers`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/ai-controls/mcp/servers`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list MCP Servers (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -1813,7 +1874,7 @@ export const model = {
         auth_credentials: z.string().optional(),
         auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
         description: z.string().max(512).nullable().optional(),
-        hostname: z.string(),
+        hostname: z.string().min(1, "hostname must not be empty"),
         is_shared_oauth_callback_enabled: z.boolean().optional().describe(
           "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback...",
         ),
@@ -1852,12 +1913,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/ai-controls/mcp/servers`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/ai-controls/mcp/servers`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create a new MCP Server (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("servers", id, result);
@@ -1868,7 +1939,7 @@ export const model = {
     get_mcp_portals_api_fetch_servers: {
       description: "Read the details of a MCP Server",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1885,11 +1956,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to read the details of a MCP Server (accountId=${accountId} id=${args.id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "mcp_portals_api_fetch_servers",
@@ -1903,7 +1984,7 @@ export const model = {
     update_servers: {
       description: "Update a MCP Server",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
         auth_credentials: z.string().optional(),
         description: z.string().max(512).nullable().optional(),
         is_shared_oauth_callback_enabled: z.boolean().optional().describe(
@@ -1948,12 +2029,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update a MCP Server (accountId=${accountId} id=${args.id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "servers",
@@ -1967,7 +2058,7 @@ export const model = {
     delete_servers: {
       description: "Delete a MCP Server",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1984,11 +2075,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a MCP Server (accountId=${accountId} id=${args.id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.id });
         return { dataHandles: [] };
@@ -1997,7 +2097,7 @@ export const model = {
     mcp_portals_api_sync_server: {
       description: "Sync MCP Server Capabilities",
       arguments: z.object({
-        id: z.string(),
+        id: z.string().min(1, "id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2015,11 +2115,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}/sync`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}/sync`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to sync MCP Server Capabilities (accountId=${accountId} id=${args.id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "mcp_portals_api_sync_server",
@@ -2061,13 +2171,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/apps`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/apps`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list Access applications (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -2111,12 +2232,22 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/apps`,
-          args,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/apps`,
+            args,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to add an Access application (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_applications_add_an_application",
@@ -2156,13 +2287,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/apps/ca`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/apps/ca`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list short-lived certificate CAs (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -2190,7 +2332,7 @@ export const model = {
     get_an_access_application: {
       description: "Get an Access application",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2207,11 +2349,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/apps/${args.app_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/apps/${args.app_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get an Access application (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_application",
@@ -2225,7 +2377,7 @@ export const model = {
     update_an_access_application: {
       description: "Update an Access application",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2249,12 +2401,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/apps/${args.app_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/apps/${args.app_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update an Access application (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_application",
@@ -2268,7 +2430,7 @@ export const model = {
     delete_an_access_application: {
       description: "Delete an Access application",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2285,11 +2447,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/apps/${args.app_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/apps/${args.app_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an Access application (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.app_id });
         return { dataHandles: [] };
@@ -2298,7 +2469,7 @@ export const model = {
     get_a_short_lived_certificate_ca: {
       description: "Get a short-lived certificate CA",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2315,11 +2486,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get a short-lived certificate CA (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_short_lived_certificate_ca",
@@ -2333,7 +2514,7 @@ export const model = {
     create_a_short_lived_certificate_ca: {
       description: "Create a short-lived certificate CA",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2351,11 +2532,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create a short-lived certificate CA (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "create_a_short_lived_certificate_ca",
@@ -2369,7 +2560,7 @@ export const model = {
     delete_a_short_lived_certificate_ca: {
       description: "Delete a short-lived certificate CA",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2386,11 +2577,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a short-lived certificate CA (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.app_id });
         return { dataHandles: [] };
@@ -2423,13 +2623,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list Access application policies (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -2487,12 +2698,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create an Access application policy (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -2525,11 +2746,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get an Access application policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_policy",
@@ -2574,12 +2805,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update an Access application policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_policy",
@@ -2611,11 +2852,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an Access application policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });
         return { dataHandles: [] };
@@ -2649,12 +2899,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}/make_reusable`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}/make_reusable`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to convert an Access application policy to a reusable policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_policies_convert_reusable",
@@ -2668,7 +2928,7 @@ export const model = {
     access_applications_revoke_service_tokens: {
       description: "Revoke application tokens",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2686,11 +2946,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/apps/${args.app_id}/revoke_tokens`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/apps/${args.app_id}/revoke_tokens`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to revoke application tokens (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_applications_revoke_service_tokens",
@@ -2707,7 +2977,7 @@ export const model = {
     update_access_application_settings: {
       description: "Update Access application settings",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
         allow_iframe: z.unknown().optional(),
         skip_interstitial: z.unknown().optional(),
       }),
@@ -2733,12 +3003,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/apps/${args.app_id}/settings`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/apps/${args.app_id}/settings`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update Access application settings (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_application_settings",
@@ -2752,7 +3032,7 @@ export const model = {
     get_access_applications_test_access_policies: {
       description: "Test Access policies",
       arguments: z.object({
-        app_id: z.string(),
+        app_id: z.string().min(1, "app_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2769,11 +3049,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/apps/${args.app_id}/user_policy_checks`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/apps/${args.app_id}/user_policy_checks`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to test Access policies (accountId=${accountId} app_id=${args.app_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_applications_test_access_policies",
@@ -2811,13 +3101,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/authenticator_device_aaguids`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/authenticator_device_aaguids`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list authenticator device AAGUIDs (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -2862,13 +3163,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/certificates`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/certificates`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list mTLS certificates (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -2918,12 +3230,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/certificates`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/certificates`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to add an mTLS certificate (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -2962,13 +3284,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/certificates/settings`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/certificates/settings`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list all mTLS hostname settings (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -3017,12 +3350,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/certificates/settings`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/certificates/settings`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update an mTLS certificate's hostname settings (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_mtls_certificate_settings",
@@ -3036,7 +3379,7 @@ export const model = {
     get_an_mtls_certificate: {
       description: "Get an mTLS certificate",
       arguments: z.object({
-        certificate_id: z.string(),
+        certificate_id: z.string().min(1, "certificate_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3053,11 +3396,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get an mTLS certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_mtls_certificate",
@@ -3071,7 +3424,7 @@ export const model = {
     update_an_mtls_certificate: {
       description: "Update an mTLS certificate",
       arguments: z.object({
-        certificate_id: z.string(),
+        certificate_id: z.string().min(1, "certificate_id must not be empty"),
         associated_hostnames: z.unknown(),
         name: z.unknown().optional(),
       }),
@@ -3097,12 +3450,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update an mTLS certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_mtls_certificate",
@@ -3116,7 +3479,7 @@ export const model = {
     delete_an_mtls_certificate: {
       description: "Delete an mTLS certificate",
       arguments: z.object({
-        certificate_id: z.string(),
+        certificate_id: z.string().min(1, "certificate_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3133,11 +3496,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an mTLS certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", {
           id: args.certificate_id,
@@ -3171,13 +3543,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/custom_pages`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/custom_pages`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list custom pages (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -3227,12 +3610,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/custom_pages`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/custom_pages`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create a custom page (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("a_custom_page", id, result);
@@ -3243,7 +3636,7 @@ export const model = {
     get_a_custom_page: {
       description: "Get a custom page",
       arguments: z.object({
-        custom_page_id: z.string(),
+        custom_page_id: z.string().min(1, "custom_page_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3260,11 +3653,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get a custom page (accountId=${accountId} custom_page_id=${args.custom_page_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_custom_page",
@@ -3278,7 +3681,7 @@ export const model = {
     update_a_custom_page: {
       description: "Update a custom page",
       arguments: z.object({
-        custom_page_id: z.string(),
+        custom_page_id: z.string().min(1, "custom_page_id must not be empty"),
         app_count: z.unknown().optional(),
         created_at: z.unknown().optional(),
         custom_html: z.string().describe("Custom page HTML."),
@@ -3309,12 +3712,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update a custom page (accountId=${accountId} custom_page_id=${args.custom_page_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_custom_page",
@@ -3328,7 +3741,7 @@ export const model = {
     delete_a_custom_page: {
       description: "Delete a custom page",
       arguments: z.object({
-        custom_page_id: z.string(),
+        custom_page_id: z.string().min(1, "custom_page_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3345,11 +3758,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a custom page (accountId=${accountId} custom_page_id=${args.custom_page_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", {
           id: args.custom_page_id,
@@ -3381,13 +3803,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/gateway_ca`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/gateway_ca`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list SSH Certificate Authorities (CA) (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -3425,11 +3858,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/gateway_ca`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/gateway_ca`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to add a new SSH Certificate Authority (CA) (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_gateway_ca_add_an_ssh_ca",
@@ -3443,7 +3886,7 @@ export const model = {
     delete_an_ssh_ca: {
       description: "Delete an SSH Certificate Authority (CA)",
       arguments: z.object({
-        certificate_id: z.string(),
+        certificate_id: z.string().min(1, "certificate_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3460,11 +3903,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/gateway_ca/${args.certificate_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/gateway_ca/${args.certificate_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an SSH Certificate Authority (CA) (accountId=${accountId} certificate_id=${args.certificate_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", {
           id: args.certificate_id,
@@ -3499,13 +3951,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/groups`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/groups`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list Access groups (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -3553,12 +4016,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/groups`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/groups`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create an Access group (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -3573,7 +4046,7 @@ export const model = {
     get_an_access_group: {
       description: "Get an Access group",
       arguments: z.object({
-        group_id: z.string(),
+        group_id: z.string().min(1, "group_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3590,11 +4063,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/groups/${args.group_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/groups/${args.group_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get an Access group (accountId=${accountId} group_id=${args.group_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_group",
@@ -3608,7 +4091,7 @@ export const model = {
     update_an_access_group: {
       description: "Update an Access group",
       arguments: z.object({
-        group_id: z.string(),
+        group_id: z.string().min(1, "group_id must not be empty"),
         exclude: z.unknown().optional(),
         include: z.unknown(),
         is_default: z.unknown().optional(),
@@ -3637,12 +4120,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/groups/${args.group_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/groups/${args.group_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update an Access group (accountId=${accountId} group_id=${args.group_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_group",
@@ -3656,7 +4149,7 @@ export const model = {
     delete_an_access_group: {
       description: "Delete an Access group",
       arguments: z.object({
-        group_id: z.string(),
+        group_id: z.string().min(1, "group_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3673,11 +4166,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/groups/${args.group_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/groups/${args.group_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an Access group (accountId=${accountId} group_id=${args.group_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.group_id });
         return { dataHandles: [] };
@@ -3710,13 +4212,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/identity_providers`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/identity_providers`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list Access identity providers (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -3760,12 +4273,22 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/identity_providers`,
-          args,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/identity_providers`,
+            args,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to add an Access identity provider (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_identity_providers_add_an_access_identity_provider",
@@ -3782,7 +4305,10 @@ export const model = {
     get_an_access_identity_provider: {
       description: "Get an Access identity provider",
       arguments: z.object({
-        identity_provider_id: z.string(),
+        identity_provider_id: z.string().min(
+          1,
+          "identity_provider_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3799,11 +4325,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get an Access identity provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_identity_provider",
@@ -3817,7 +4353,10 @@ export const model = {
     update_an_access_identity_provider: {
       description: "Update an Access identity provider",
       arguments: z.object({
-        identity_provider_id: z.string(),
+        identity_provider_id: z.string().min(
+          1,
+          "identity_provider_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3841,12 +4380,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update an Access identity provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_identity_provider",
@@ -3860,7 +4409,10 @@ export const model = {
     delete_an_access_identity_provider: {
       description: "Delete an Access identity provider",
       arguments: z.object({
-        identity_provider_id: z.string(),
+        identity_provider_id: z.string().min(
+          1,
+          "identity_provider_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3877,11 +4429,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an Access identity provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", {
           id: args.identity_provider_id,
@@ -3892,7 +4453,10 @@ export const model = {
     create_saml_certificate_for_identity_provider: {
       description: "Create SAML encryption certificate for Identity Provider",
       arguments: z.object({
-        identity_provider_id: z.string(),
+        identity_provider_id: z.string().min(
+          1,
+          "identity_provider_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3910,11 +4474,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/saml_certificate`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/saml_certificate`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create SAML encryption certificate for Identity Provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "create_saml_certificate_for_identity_provider",
@@ -3931,7 +4505,10 @@ export const model = {
     list_scim_group_resources: {
       description: "List SCIM Group resources",
       arguments: z.object({
-        identity_provider_id: z.string(),
+        identity_provider_id: z.string().min(
+          1,
+          "identity_provider_id must not be empty",
+        ),
         cf_resource_id: z.string().optional(),
         idp_resource_id: z.string().optional(),
         name: z.string().optional(),
@@ -3962,13 +4539,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/groups`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/groups`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list SCIM Group resources (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -3996,7 +4584,10 @@ export const model = {
     list_scim_user_resources: {
       description: "List SCIM User resources",
       arguments: z.object({
-        identity_provider_id: z.string(),
+        identity_provider_id: z.string().min(
+          1,
+          "identity_provider_id must not be empty",
+        ),
         cf_resource_id: z.string().optional(),
         idp_resource_id: z.string().optional(),
         username: z.string().optional(),
@@ -4029,13 +4620,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/users`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/users`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list SCIM User resources (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -4085,12 +4687,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/idp_federation_grants`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/idp_federation_grants`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create an IdP federation grant (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("create", id, result);
@@ -4118,11 +4730,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get an IdP federation grant (accountId=${accountId} grant_id=${args.grant_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "get",
@@ -4153,11 +4775,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an IdP federation grant (accountId=${accountId} grant_id=${args.grant_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.grant_id });
         return { dataHandles: [] };
@@ -4181,11 +4812,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/keys`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/keys`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get the Access key configuration (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "the_access_key_configuration",
@@ -4219,12 +4860,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/keys`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/keys`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update the Access key configuration (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "the_access_key_configuration",
@@ -4254,11 +4905,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/keys/rotate`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/keys/rotate`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to rotate Access keys (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_key_configuration_rotate_access_keys",
@@ -4349,13 +5010,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/logs/access_requests`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/logs/access_requests`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to get Access authentication logs (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -4418,13 +5090,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/logs/scim/updates`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/logs/scim/updates`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list Access SCIM update logs (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -4467,11 +5150,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/organizations`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/organizations`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get your Zero Trust organization (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "your_zero_trust_organization",
@@ -4519,12 +5212,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/organizations`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/organizations`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create your Zero Trust organization (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -4576,12 +5279,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/organizations`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/organizations`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update your Zero Trust organization (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "your_zero_trust_organization",
@@ -4610,11 +5323,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/organizations/doh`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/organizations/doh`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get your Zero Trust organization DoH settings (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "your_zero_trust_organization_doh_settings",
@@ -4654,12 +5377,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/organizations/doh`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/organizations/doh`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update your Zero Trust organization DoH settings (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "your_zero_trust_organization_doh_settings",
@@ -4717,12 +5450,22 @@ export const model = {
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/organizations/revoke_user${qs}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/organizations/revoke_user${qs}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to revoke all Access tokens for a user (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -4763,13 +5506,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/policies`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/policies`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list Access reusable policies (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -4821,12 +5575,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/policies`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/policies`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create an Access reusable policy (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -4841,7 +5605,7 @@ export const model = {
     get_an_access_reusable_policy: {
       description: "Get an Access reusable policy",
       arguments: z.object({
-        policy_id: z.string(),
+        policy_id: z.string().min(1, "policy_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4858,11 +5622,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/policies/${args.policy_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/policies/${args.policy_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get an Access reusable policy (accountId=${accountId} policy_id=${args.policy_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_reusable_policy",
@@ -4876,7 +5650,7 @@ export const model = {
     update_an_access_reusable_policy: {
       description: "Update an Access reusable policy",
       arguments: z.object({
-        policy_id: z.string(),
+        policy_id: z.string().min(1, "policy_id must not be empty"),
         decision: z.unknown(),
         exclude: z.unknown().optional(),
         include: z.unknown(),
@@ -4905,12 +5679,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/policies/${args.policy_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/policies/${args.policy_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update an Access reusable policy (accountId=${accountId} policy_id=${args.policy_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_access_reusable_policy",
@@ -4924,7 +5708,7 @@ export const model = {
     delete_an_access_reusable_policy: {
       description: "Delete an Access reusable policy",
       arguments: z.object({
-        policy_id: z.string(),
+        policy_id: z.string().min(1, "policy_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4941,11 +5725,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/policies/${args.policy_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/policies/${args.policy_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete an Access reusable policy (accountId=${accountId} policy_id=${args.policy_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });
         return { dataHandles: [] };
@@ -4974,12 +5767,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/policy-tests`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/policy-tests`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to start Access policy test (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -4994,7 +5797,7 @@ export const model = {
     get_an_update: {
       description: "Get the current status of a given Access policy test",
       arguments: z.object({
-        policy_test_id: z.string(),
+        policy_test_id: z.string().min(1, "policy_test_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5011,11 +5814,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get the current status of a given Access policy test (accountId=${accountId} policy_test_id=${args.policy_test_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "an_update",
@@ -5029,7 +5842,7 @@ export const model = {
     get_a_user_page: {
       description: "Get an Access policy test users page",
       arguments: z.object({
-        policy_test_id: z.string(),
+        policy_test_id: z.string().min(1, "policy_test_id must not be empty"),
         per_page: z.number().optional(),
         status: z.enum(["success", "fail", "error"]).optional().describe(
           "Filter users by their policy evaluation status.",
@@ -5056,13 +5869,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}/users`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}/users`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to get an Access policy test users page (accountId=${accountId} policy_test_id=${args.policy_test_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -5117,13 +5941,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/saml_certificates`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/saml_certificates`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list SAML certificate sets (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -5166,11 +6001,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get SAML certificate set (accountId=${accountId} saml_cert_set_id=${args.saml_cert_set_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "certificate_set",
@@ -5204,11 +6049,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}/rotate`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}/rotate`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to rotate SAML certificate (accountId=${accountId} saml_cert_set_id=${args.saml_cert_set_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_saml_certificates_rotate_certificate",
@@ -5243,12 +6098,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PATCH",
-          `/accounts/${accountId}/access/seats`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PATCH",
+            `/accounts/${accountId}/access/seats`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update a user seat (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_user_seat",
@@ -5286,13 +6151,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/service_tokens`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/service_tokens`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list service tokens (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -5339,12 +6215,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/service_tokens`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/service_tokens`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create a service token (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -5359,7 +6245,10 @@ export const model = {
     get_a_service_token: {
       description: "Get a service token",
       arguments: z.object({
-        service_token_id: z.string(),
+        service_token_id: z.string().min(
+          1,
+          "service_token_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5376,11 +6265,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_service_token",
@@ -5394,7 +6293,10 @@ export const model = {
     update_a_service_token: {
       description: "Update a service token",
       arguments: z.object({
-        service_token_id: z.string(),
+        service_token_id: z.string().min(
+          1,
+          "service_token_id must not be empty",
+        ),
         client_secret_version: z.unknown().optional(),
         duration: z.unknown().optional(),
         name: z.unknown().optional(),
@@ -5422,12 +6324,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_service_token",
@@ -5441,7 +6353,10 @@ export const model = {
     delete_a_service_token: {
       description: "Delete a service token",
       arguments: z.object({
-        service_token_id: z.string(),
+        service_token_id: z.string().min(
+          1,
+          "service_token_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5458,11 +6373,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", {
           id: args.service_token_id,
@@ -5473,7 +6397,10 @@ export const model = {
     access_service_tokens_refresh_a_service_token: {
       description: "Refresh a service token",
       arguments: z.object({
-        service_token_id: z.string(),
+        service_token_id: z.string().min(
+          1,
+          "service_token_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5491,11 +6418,21 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/refresh`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/refresh`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to refresh a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "access_service_tokens_refresh_a_service_token",
@@ -5512,7 +6449,10 @@ export const model = {
     create_access_service_tokens_rotate_a_service_token: {
       description: "Rotate a service token",
       arguments: z.object({
-        service_token_id: z.string(),
+        service_token_id: z.string().min(
+          1,
+          "service_token_id must not be empty",
+        ),
         previous_client_secret_expires_at: z.string().optional().describe(
           "The expiration of the previous `client_secret`. If not provided, it defaults ...",
         ),
@@ -5539,12 +6479,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/rotate`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/rotate`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to rotate a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource(
@@ -5585,13 +6535,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/tags`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/tags`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to list tags (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -5633,12 +6594,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/tags`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/tags`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create a tag (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("tag", id, result);
@@ -5649,7 +6620,7 @@ export const model = {
     get_a_tag: {
       description: "Get a tag",
       arguments: z.object({
-        tag_name: z.string(),
+        tag_name: z.string().min(1, "tag_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5666,11 +6637,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/tags/${args.tag_name}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/tags/${args.tag_name}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get a tag (accountId=${accountId} tag_name=${args.tag_name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_tag",
@@ -5684,7 +6665,7 @@ export const model = {
     update_a_tag: {
       description: "Update a tag",
       arguments: z.object({
-        tag_name: z.string(),
+        tag_name: z.string().min(1, "tag_name must not be empty"),
         created_at: z.unknown().optional(),
         name: z.unknown(),
         updated_at: z.unknown().optional(),
@@ -5711,12 +6692,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/tags/${args.tag_name}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/tags/${args.tag_name}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update a tag (accountId=${accountId} tag_name=${args.tag_name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_tag",
@@ -5730,7 +6721,7 @@ export const model = {
     delete_a_tag: {
       description: "Delete a tag",
       arguments: z.object({
-        tag_name: z.string(),
+        tag_name: z.string().min(1, "tag_name must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5747,11 +6738,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/tags/${args.tag_name}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/tags/${args.tag_name}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a tag (accountId=${accountId} tag_name=${args.tag_name}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.tag_name });
         return { dataHandles: [] };
@@ -5785,13 +6785,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/users`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/users`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to get users (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -5836,12 +6847,22 @@ export const model = {
 
         const body = args;
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/access/users`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "POST",
+            `/accounts/${accountId}/access/users`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to create a user (accountId=${accountId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const id = (result as { id?: string }).id ?? "created";
         const handle = await context.writeResource("user", id, result);
@@ -5852,7 +6873,7 @@ export const model = {
     get_user: {
       description: "Get a user",
       arguments: z.object({
-        user_id: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5869,11 +6890,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/users/${args.user_id}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/users/${args.user_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get a user (accountId=${accountId} user_id=${args.user_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "user",
@@ -5887,7 +6918,7 @@ export const model = {
     update_user: {
       description: "Update a user",
       arguments: z.object({
-        user_id: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
         email: z.unknown(),
         name: z.unknown(),
       }),
@@ -5913,12 +6944,22 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "PUT",
-          `/accounts/${accountId}/access/users/${args.user_id}`,
-          body,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "PUT",
+            `/accounts/${accountId}/access/users/${args.user_id}`,
+            body,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to update a user (accountId=${accountId} user_id=${args.user_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "user",
@@ -5932,7 +6973,7 @@ export const model = {
     delete_user: {
       description: "Delete a user",
       arguments: z.object({
-        user_id: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5949,11 +6990,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/users/${args.user_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/users/${args.user_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a user (accountId=${accountId} user_id=${args.user_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", { id: args.user_id });
         return { dataHandles: [] };
@@ -5962,7 +7012,7 @@ export const model = {
     get_active_sessions: {
       description: "Get active sessions",
       arguments: z.object({
-        user_id: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5985,13 +7035,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/users/${args.user_id}/active_sessions`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/users/${args.user_id}/active_sessions`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to get active sessions (accountId=${accountId} user_id=${args.user_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -6019,8 +7080,8 @@ export const model = {
     get_active_session: {
       description: "Get single active session",
       arguments: z.object({
-        user_id: z.string(),
-        nonce: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
+        nonce: z.string().min(1, "nonce must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6037,11 +7098,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/users/${args.user_id}/active_sessions/${args.nonce}`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/users/${args.user_id}/active_sessions/${args.nonce}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get single active session (accountId=${accountId} user_id=${args.user_id} nonce=${args.nonce}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "active_session",
@@ -6055,7 +7126,7 @@ export const model = {
     get_failed_logins: {
       description: "Get failed logins",
       arguments: z.object({
-        user_id: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6078,13 +7149,24 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        const { results, truncated } = await cfApiPaginated<
-          Record<string, unknown>
-        >(
-          apiToken,
-          `/accounts/${accountId}/access/users/${args.user_id}/failed_logins`,
-          params,
-        );
+        let results: Record<string, unknown>[];
+        let truncated: boolean;
+        try {
+          ({ results, truncated } = await cfApiPaginated<
+            Record<string, unknown>
+          >(
+            apiToken,
+            `/accounts/${accountId}/access/users/${args.user_id}/failed_logins`,
+            params,
+          ));
+        } catch (error) {
+          throw new Error(
+            `Failed to get failed logins (accountId=${accountId} user_id=${args.user_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (truncated) {
           context.logger.info(
@@ -6112,7 +7194,7 @@ export const model = {
     get_last_seen_identity: {
       description: "Get last seen identity",
       arguments: z.object({
-        user_id: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6129,11 +7211,21 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/access/users/${args.user_id}/last_seen_identity`,
-        );
+        let result: Record<string, unknown>;
+        try {
+          result = await cfApi<Record<string, unknown>>(
+            apiToken,
+            "GET",
+            `/accounts/${accountId}/access/users/${args.user_id}/last_seen_identity`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to get last seen identity (accountId=${accountId} user_id=${args.user_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const handle = await context.writeResource(
           "last_seen_identity",
@@ -6147,8 +7239,11 @@ export const model = {
     delete_mfa_authenticator: {
       description: "Delete a user's MFA device",
       arguments: z.object({
-        user_id: z.string(),
-        authenticator_id: z.string(),
+        user_id: z.string().min(1, "user_id must not be empty"),
+        authenticator_id: z.string().min(
+          1,
+          "authenticator_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6165,11 +7260,20 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/access/users/${args.user_id}/mfa_authenticators/${args.authenticator_id}`,
-        );
+        try {
+          await cfApi(
+            apiToken,
+            "DELETE",
+            `/accounts/${accountId}/access/users/${args.user_id}/mfa_authenticators/${args.authenticator_id}`,
+          );
+        } catch (error) {
+          throw new Error(
+            `Failed to delete a user's MFA device (accountId=${accountId} user_id=${args.user_id} authenticator_id=${args.authenticator_id}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         context.logger.info("Deleted resource {id}", {
           id: args.authenticator_id,

@@ -1,4 +1,10 @@
-## 2026.07.19.1
+## 2026.08.21.1
 
-**Added:** Initial code-generated release of @webframp/snyk/self with 10 methods
-covering the Snyk self API surface.
+**Changed:** `app_id`, `install_id`, `session_id`, and
+`personal_access_token_id` now must be non-empty strings — previously an empty
+value passed schema validation and only failed deep inside the Snyk API call
+with a generic 404. Errors from the Snyk API now name the HTTP method and path
+that was attempted instead of just the bare status and body. Network-level
+failures (DNS, connection refused, TLS errors) reaching the Snyk API are now
+also caught and reported with the operation and path that was being attempted,
+rather than surfacing as an unhandled `fetch` exception.

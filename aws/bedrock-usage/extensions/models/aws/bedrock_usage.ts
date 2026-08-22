@@ -24,11 +24,13 @@ import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 /** Global arguments for the bedrock-usage model. */
 const GlobalArgsSchema = z.object({
   profiles: z
-    .array(z.string())
+    .array(z.string().min(1))
+    .min(1, "profiles must contain at least one AWS profile name")
     .default(["default"])
     .describe("AWS CLI profile names to scan (supports cross-account roles)"),
   regions: z
-    .array(z.string())
+    .array(z.string().min(1))
+    .min(1, "regions must contain at least one AWS region")
     .default(["us-east-1", "us-west-2"])
     .describe("AWS regions to query for Bedrock metrics"),
 });
@@ -119,19 +121,31 @@ function createClient(profile: string, region: string): CloudWatchClient {
  */
 async function listBedrockModels(
   client: CloudWatchClient,
+  profile: string,
+  region: string,
 ): Promise<{ models: string[]; truncated: boolean }> {
   const models = new Set<string>();
   let nextToken: string | undefined;
   const MAX_PAGES = 50;
   let pages = 0;
   do {
-    const resp = await client.send(
-      new ListMetricsCommand({
-        Namespace: "AWS/Bedrock",
-        MetricName: "InputTokenCount",
-        NextToken: nextToken,
-      }),
-    );
+    let resp;
+    try {
+      resp = await client.send(
+        new ListMetricsCommand({
+          Namespace: "AWS/Bedrock",
+          MetricName: "InputTokenCount",
+          NextToken: nextToken,
+        }),
+      );
+    } catch (err) {
+      throw new Error(
+        `ListMetrics (AWS/Bedrock InputTokenCount) failed for profile=${profile} region=${region}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        { cause: err },
+      );
+    }
     for (const m of resp.Metrics || []) {
       for (const d of m.Dimensions || []) {
         if (d.Name === "ModelId" && d.Value) models.add(d.Value);
@@ -156,6 +170,8 @@ async function getTokenCounts(
   client: CloudWatchClient,
   startTime: Date,
   endTime: Date,
+  profile: string,
+  region: string,
   modelId?: string,
 ): Promise<{ inputTokens: number; outputTokens: number }> {
   const period = Math.min(
@@ -193,13 +209,23 @@ async function getTokenCounts(
     },
   ];
 
-  const resp = await client.send(
-    new GetMetricDataCommand({
-      StartTime: startTime,
-      EndTime: endTime,
-      MetricDataQueries: queries,
-    }),
-  );
+  let resp;
+  try {
+    resp = await client.send(
+      new GetMetricDataCommand({
+        StartTime: startTime,
+        EndTime: endTime,
+        MetricDataQueries: queries,
+      }),
+    );
+  } catch (err) {
+    throw new Error(
+      `GetMetricData (AWS/Bedrock token counts) failed for profile=${profile} region=${region}${
+        modelId ? ` modelId=${modelId}` : ""
+      }: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
+  }
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -223,30 +249,42 @@ async function getInvocations(
   client: CloudWatchClient,
   startTime: Date,
   endTime: Date,
+  profile: string,
+  region: string,
 ): Promise<number | null> {
   const period = Math.min(
     Math.ceil((endTime.getTime() - startTime.getTime()) / 1000),
     86400,
   );
-  const resp = await client.send(
-    new GetMetricDataCommand({
-      StartTime: startTime,
-      EndTime: endTime,
-      MetricDataQueries: [
-        {
-          Id: "invocations",
-          MetricStat: {
-            Metric: {
-              Namespace: "AWS/Bedrock",
-              MetricName: "Invocations",
+  let resp;
+  try {
+    resp = await client.send(
+      new GetMetricDataCommand({
+        StartTime: startTime,
+        EndTime: endTime,
+        MetricDataQueries: [
+          {
+            Id: "invocations",
+            MetricStat: {
+              Metric: {
+                Namespace: "AWS/Bedrock",
+                MetricName: "Invocations",
+              },
+              Period: period,
+              Stat: "Sum",
             },
-            Period: period,
-            Stat: "Sum",
           },
-        },
-      ],
-    }),
-  );
+        ],
+      }),
+    );
+  } catch (err) {
+    throw new Error(
+      `GetMetricData (AWS/Bedrock Invocations) failed for profile=${profile} region=${region}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      { cause: err },
+    );
+  }
   const values = resp.MetricDataResults?.[0]?.Values || [];
   return values.length > 0 ? values.reduce((a, b) => a + b, 0) : null;
 }
@@ -258,7 +296,7 @@ async function getInvocations(
 /** AWS Bedrock token usage monitoring model. */
 export const model = {
   type: "@webframp/aws/bedrock-usage",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -275,6 +313,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message quality pass: no schema changes to stored resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -341,6 +385,8 @@ export const model = {
                 client,
                 startTime,
                 endTime,
+                profile,
+                region,
               );
               if (totals.inputTokens === 0 && totals.outputTokens === 0) {
                 continue; // Skip accounts/regions with no usage
@@ -348,7 +394,7 @@ export const model = {
 
               // Get per-model breakdown
               const { models: modelIds, truncated: modelsTruncated } =
-                await listBedrockModels(client);
+                await listBedrockModels(client, profile, region);
               const models: z.infer<typeof ModelUsageSchema>[] = [];
               if (modelsTruncated) anyTruncated = true;
 
@@ -358,7 +404,14 @@ export const model = {
                 const batch = modelIds.slice(i, i + batchSize);
                 const results = await Promise.all(
                   batch.map((modelId) =>
-                    getTokenCounts(client, startTime, endTime, modelId)
+                    getTokenCounts(
+                      client,
+                      startTime,
+                      endTime,
+                      profile,
+                      region,
+                      modelId,
+                    )
                       .then((usage) => ({ modelId, ...usage, failed: false }))
                       .catch(() => ({
                         modelId,
@@ -389,6 +442,8 @@ export const model = {
                 client,
                 startTime,
                 endTime,
+                profile,
+                region,
               );
 
               accounts.push({
@@ -496,6 +551,8 @@ export const model = {
           const { models, truncated: modelsTruncated } =
             await listBedrockModels(
               client,
+              profile,
+              region,
             );
 
           const result = {
@@ -559,9 +616,15 @@ export const model = {
         const periodMinutes = args.days * 24 * 60;
         const client = createClient(profile, region);
         try {
-          const totals = await getTokenCounts(client, startTime, endTime);
+          const totals = await getTokenCounts(
+            client,
+            startTime,
+            endTime,
+            profile,
+            region,
+          );
           const { models: modelIds, truncated: modelsTruncated } =
-            await listBedrockModels(client);
+            await listBedrockModels(client, profile, region);
           const models: z.infer<typeof ModelUsageSchema>[] = [];
           let anyTruncated = modelsTruncated;
 
@@ -570,7 +633,14 @@ export const model = {
             const batch = modelIds.slice(i, i + batchSize);
             const results = await Promise.all(
               batch.map((modelId) =>
-                getTokenCounts(client, startTime, endTime, modelId)
+                getTokenCounts(
+                  client,
+                  startTime,
+                  endTime,
+                  profile,
+                  region,
+                  modelId,
+                )
                   .then((usage) => ({ modelId, ...usage, failed: false }))
                   .catch(() => ({
                     modelId,
@@ -596,7 +666,13 @@ export const model = {
             }
           }
 
-          const invocations = await getInvocations(client, startTime, endTime);
+          const invocations = await getInvocations(
+            client,
+            startTime,
+            endTime,
+            profile,
+            region,
+          );
 
           const result = {
             scannedAt: new Date().toISOString(),

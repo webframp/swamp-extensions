@@ -1,3 +1,18 @@
+## 2026.08.21.2
+
+**Changed:** AWS Pricing API failures now say which service, attribute, or
+instance type was being queried instead of surfacing the raw SDK error.
+`DescribeServices`, `GetAttributeValues`, and `GetProducts` (in both
+`get_price` and `get_ec2_price`) failures all raise a clear error naming the
+relevant service code/attribute/instance type, with the original SDK error
+preserved as the cause.
+
+`get_price`'s `maxResults` argument now requires an integer between 1 and
+1000 instead of accepting any number — a zero or negative value previously
+produced no items with no explanation.
+
+No schema changes.
+
 ## 2026.08.21.1
 
 **Changed:** Tightened `serviceCode`, `attributeName`, and `instanceType` arguments

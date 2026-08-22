@@ -29,16 +29,24 @@ export async function cfApi<T>(
     "Content-Type": "application/json",
   };
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (cause) {
+    throw new Error(
+      `Cloudflare API request failed: ${method} ${path}`,
+      { cause },
+    );
+  }
 
   if (!response.ok) {
     const text = await response.text();
     throw new Error(
-      `Cloudflare API HTTP ${response.status} ${response.statusText}: ${
+      `Cloudflare API ${method} ${path} failed with HTTP ${response.status} ${response.statusText}: ${
         text.slice(0, 500)
       }`,
     );
@@ -49,7 +57,9 @@ export async function cfApi<T>(
   if (!data.success) {
     const errorMsg = (data.errors ?? []).map((e) => e.message).join("; ") ||
       "Unknown error";
-    throw new Error(`Cloudflare API error: ${errorMsg}`);
+    throw new Error(
+      `Cloudflare API ${method} ${path} returned an error: ${errorMsg}`,
+    );
   }
 
   return data.result;
@@ -81,16 +91,24 @@ export async function cfApiPaginated<T>(
     });
 
     const url = `${CF_API_BASE}${path}?${queryParams}`;
-    const response = await fetch(url, {
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${apiToken}`,
+        },
+      });
+    } catch (cause) {
+      throw new Error(
+        `Cloudflare API request failed: GET ${path} (page ${page})`,
+        { cause },
+      );
+    }
 
     if (!response.ok) {
       const text = await response.text();
       throw new Error(
-        `Cloudflare API HTTP ${response.status} ${response.statusText}: ${
+        `Cloudflare API GET ${path} (page ${page}) failed with HTTP ${response.status} ${response.statusText}: ${
           text.slice(0, 500)
         }`,
       );
@@ -101,7 +119,9 @@ export async function cfApiPaginated<T>(
     if (!data.success) {
       const errorMsg = (data.errors ?? []).map((e) => e.message).join("; ") ||
         "Unknown error";
-      throw new Error(`Cloudflare API error: ${errorMsg}`);
+      throw new Error(
+        `Cloudflare API GET ${path} (page ${page}) returned an error: ${errorMsg}`,
+      );
     }
 
     allResults.push(...(data.result ?? []));

@@ -305,6 +305,25 @@ interface GraphPagedResponse<T> {
 
 const MAX_CHANNEL_PAGES = 5;
 
+/**
+ * Run a Graph API call, and on failure rethrow with the operation being
+ * attempted and its identifying arguments prepended, preserving the original
+ * error (GraphApiError's status/code or a network error) as `cause`.
+ */
+async function withGraphContext<T>(
+  op: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    throw new Error(
+      `${op}: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    );
+  }
+}
+
 function chatLabel(ch: GraphChat): string {
   if (ch.topic) return ch.topic;
   const names = (ch.members ?? [])
@@ -323,7 +342,7 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -340,6 +359,13 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "No schema changes (added field descriptions and required-string min-length checks)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes other than rejecting empty teamId/channelId/chatId " +
+        "method arguments — existing stored resources are unaffected.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -460,10 +486,14 @@ export const model = {
       ) => {
         const accessToken = await getAccessToken(context.globalArgs);
 
-        const result = await graphRequestPaginated<GraphTeam>(
-          accessToken,
-          "/me/joinedTeams",
-          { "$select": "id,displayName,description" },
+        const result = await withGraphContext(
+          "Failed to list joined teams",
+          () =>
+            graphRequestPaginated<GraphTeam>(
+              accessToken,
+              "/me/joinedTeams",
+              { "$select": "id,displayName,description" },
+            ),
         );
 
         const handle = await context.writeResource("teams", "main", {
@@ -481,7 +511,9 @@ export const model = {
     list_channels: {
       description: "List channels in a team",
       arguments: z.object({
-        teamId: z.string().describe("Team ID (from list_teams output)"),
+        teamId: z.string().min(1, "teamId must not be empty").describe(
+          "Team ID (from list_teams output)",
+        ),
       }),
       execute: async (
         args: { teamId: string },
@@ -499,16 +531,24 @@ export const model = {
       ) => {
         const accessToken = await getAccessToken(context.globalArgs);
 
-        const team = await graphRequest<GraphTeam>(
-          accessToken,
-          "GET",
-          `/teams/${args.teamId}`,
+        const team = await withGraphContext(
+          `Failed to fetch team "${args.teamId}"`,
+          () =>
+            graphRequest<GraphTeam>(
+              accessToken,
+              "GET",
+              `/teams/${args.teamId}`,
+            ),
         );
 
-        const channelsResult = await graphRequestPaginated<GraphChannel>(
-          accessToken,
-          `/teams/${args.teamId}/channels`,
-          { "$select": "id,displayName,description,membershipType" },
+        const channelsResult = await withGraphContext(
+          `Failed to list channels for team "${args.teamId}"`,
+          () =>
+            graphRequestPaginated<GraphChannel>(
+              accessToken,
+              `/teams/${args.teamId}/channels`,
+              { "$select": "id,displayName,description,membershipType" },
+            ),
         );
 
         const handle = await context.writeResource(
@@ -536,8 +576,12 @@ export const model = {
         "with replies nested, ordered by most recently active thread first. " +
         "Each root costs one additional round-trip for replies.",
       arguments: z.object({
-        teamId: z.string().describe("Team ID"),
-        channelId: z.string().describe("Channel ID"),
+        teamId: z.string().min(1, "teamId must not be empty").describe(
+          "Team ID",
+        ),
+        channelId: z.string().min(1, "channelId must not be empty").describe(
+          "Channel ID",
+        ),
         limit: z.number().int().min(1).max(100).default(30).describe(
           "Maximum root messages to fetch (replies under each are always fetched in full)",
         ),
@@ -566,10 +610,14 @@ export const model = {
       ) => {
         const accessToken = await getAccessToken(context.globalArgs);
 
-        const channel = await graphRequest<GraphChannel>(
-          accessToken,
-          "GET",
-          `/teams/${args.teamId}/channels/${args.channelId}`,
+        const channel = await withGraphContext(
+          `Failed to fetch channel "${args.channelId}" in team "${args.teamId}"`,
+          () =>
+            graphRequest<GraphChannel>(
+              accessToken,
+              "GET",
+              `/teams/${args.teamId}/channels/${args.channelId}`,
+            ),
         );
 
         // Fetch root messages (Graph returns newest-active first).
@@ -582,10 +630,9 @@ export const model = {
         while (
           nextUrl && roots.length < args.limit && pages < MAX_CHANNEL_PAGES
         ) {
-          const page: GraphPagedResponse<GraphMessage> = await graphRequest(
-            accessToken,
-            "GET",
-            nextUrl,
+          const page: GraphPagedResponse<GraphMessage> = await withGraphContext(
+            `Failed to fetch messages for channel "${args.channelId}" in team "${args.teamId}"`,
+            () => graphRequest(accessToken, "GET", nextUrl!),
           );
 
           for (const m of page.value) {
@@ -605,13 +652,17 @@ export const model = {
         // Fetch replies for each root (capped at 10 pages per thread).
         if (args.includeReplies) {
           for (const root of userRoots) {
-            const repliesResult = await graphRequestPaginated<GraphMessage>(
-              accessToken,
-              `/teams/${args.teamId}/channels/${args.channelId}/messages/${root.id}/replies`,
-              undefined,
-              undefined,
-              undefined,
-              10,
+            const repliesResult = await withGraphContext(
+              `Failed to fetch replies for message "${root.id}" in channel "${args.channelId}" (team "${args.teamId}")`,
+              () =>
+                graphRequestPaginated<GraphMessage>(
+                  accessToken,
+                  `/teams/${args.teamId}/channels/${args.channelId}/messages/${root.id}/replies`,
+                  undefined,
+                  undefined,
+                  undefined,
+                  10,
+                ),
             );
             (root as GraphMessage & { replies: GraphMessage[] }).replies =
               repliesResult.items.filter(
@@ -695,10 +746,9 @@ export const model = {
         while (
           nextUrl && allChats.length < args.limit && chatPages < MAX_CHAT_PAGES
         ) {
-          const page: GraphPagedResponse<GraphChat> = await graphRequest(
-            accessToken,
-            "GET",
-            nextUrl,
+          const page: GraphPagedResponse<GraphChat> = await withGraphContext(
+            "Failed to list chats",
+            () => graphRequest(accessToken, "GET", nextUrl!),
           );
           chatPages++;
 
@@ -739,7 +789,9 @@ export const model = {
     chat_messages: {
       description: "Fetch messages from a specific Teams chat, newest first",
       arguments: z.object({
-        chatId: z.string().describe("Chat ID (from list_chats output)"),
+        chatId: z.string().min(1, "chatId must not be empty").describe(
+          "Chat ID (from list_chats output)",
+        ),
         since: z.string().optional().describe(
           "Only messages at or after this ISO 8601 timestamp",
         ),
@@ -769,10 +821,9 @@ export const model = {
           `https://graph.microsoft.com/v1.0/chats/${args.chatId}/messages?$top=50`;
 
         while (nextUrl && messages.length < args.limit) {
-          const page: GraphPagedResponse<GraphMessage> = await graphRequest(
-            accessToken,
-            "GET",
-            nextUrl,
+          const page: GraphPagedResponse<GraphMessage> = await withGraphContext(
+            `Failed to fetch messages for chat "${args.chatId}"`,
+            () => graphRequest(accessToken, "GET", nextUrl!),
           );
 
           for (const m of page.value) {
@@ -847,10 +898,14 @@ export const model = {
         // Get caller identity for mention matching.
         let me: GraphUser = { id: "" };
         if (args.mode !== "unread_only") {
-          me = await graphRequest<GraphUser>(
-            accessToken,
-            "GET",
-            "/me?$select=id,displayName",
+          me = await withGraphContext(
+            "Failed to fetch signed-in user identity",
+            () =>
+              graphRequest<GraphUser>(
+                accessToken,
+                "GET",
+                "/me?$select=id,displayName",
+              ),
           );
         }
 
@@ -868,10 +923,9 @@ export const model = {
           }`;
 
         while (nextUrl && chats.length < args.chatLimit) {
-          const page: GraphPagedResponse<GraphChat> = await graphRequest(
-            accessToken,
-            "GET",
-            nextUrl,
+          const page: GraphPagedResponse<GraphChat> = await withGraphContext(
+            "Failed to list chats for attention scan",
+            () => graphRequest(accessToken, "GET", nextUrl!),
           );
 
           const remaining = args.chatLimit - chats.length;
@@ -918,11 +972,11 @@ export const model = {
           let msgPages = 0;
 
           while (msgUrl && msgPages < MAX_MSG_PAGES_PER_CHAT) {
-            const page: GraphPagedResponse<GraphMessage> = await graphRequest(
-              accessToken,
-              "GET",
-              msgUrl,
-            );
+            const page: GraphPagedResponse<GraphMessage> =
+              await withGraphContext(
+                `Failed to fetch messages for chat "${ch.id}" during attention scan`,
+                () => graphRequest(accessToken, "GET", msgUrl!),
+              );
             msgPages++;
 
             for (const m of page.value) {

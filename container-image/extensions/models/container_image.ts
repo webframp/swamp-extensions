@@ -114,12 +114,22 @@ async function runCommand(
   cmd: string,
   args: string[],
 ): Promise<{ stdout: string; stderr: string; success: boolean; code: number }> {
-  const command = new Deno.Command(cmd, {
-    args,
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const output = await command.output();
+  let output: Deno.CommandOutput;
+  try {
+    const command = new Deno.Command(cmd, {
+      args,
+      stdout: "piped",
+      stderr: "piped",
+    });
+    output = await command.output();
+  } catch (error) {
+    throw new Error(
+      `Failed to run "${cmd} ${args.join(" ")}": ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error },
+    );
+  }
   return {
     stdout: new TextDecoder().decode(output.stdout),
     stderr: new TextDecoder().decode(output.stderr),
@@ -179,27 +189,39 @@ export const model = {
       ) => {
         const cli = context.globalArgs.command;
 
-        const cmd = new Deno.Command(cli, {
-          args: [
-            "login",
-            "--username",
-            args.username,
-            "--password-stdin",
-            args.registry,
-          ],
-          stdin: "piped",
-          stdout: "piped",
-          stderr: "piped",
-        });
-        const process = cmd.spawn();
-        const writer = process.stdin.getWriter();
-        await writer.write(new TextEncoder().encode(args.password));
-        await writer.close();
-        const output = await process.output();
+        let output: Deno.CommandOutput;
+        try {
+          const cmd = new Deno.Command(cli, {
+            args: [
+              "login",
+              "--username",
+              args.username,
+              "--password-stdin",
+              args.registry,
+            ],
+            stdin: "piped",
+            stdout: "piped",
+            stderr: "piped",
+          });
+          const process = cmd.spawn();
+          const writer = process.stdin.getWriter();
+          await writer.write(new TextEncoder().encode(args.password));
+          await writer.close();
+          output = await process.output();
+        } catch (error) {
+          throw new Error(
+            `Failed to run "${cli} login" against registry ${args.registry}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         if (!output.success) {
           const stderr = new TextDecoder().decode(output.stderr);
-          throw new Error(`Login failed: ${stderr}`);
+          throw new Error(
+            `Login to registry ${args.registry} failed (exit ${output.code}): ${stderr}`,
+          );
         }
 
         context.logger.info("Authenticated to {registry}", {
@@ -274,6 +296,11 @@ export const model = {
           ]
           : ["image", "inspect", args.tag, "--format", "{{.Id}}"];
         const inspect = await runCommand(cli, inspectArgs);
+        if (!inspect.success) {
+          throw new Error(
+            `Built ${args.tag} but failed to inspect it for image ID (exit ${inspect.code}): ${inspect.stderr}`,
+          );
+        }
         const imageId = inspect.stdout.trim();
 
         const data = {
@@ -346,6 +373,11 @@ export const model = {
             "{{index .RepoDigests 0}}",
           ];
         const digestResult = await runCommand(cli, digestArgs);
+        if (!digestResult.success) {
+          throw new Error(
+            `Pushed ${args.tag} but failed to inspect its digest (exit ${digestResult.code}): ${digestResult.stderr}`,
+          );
+        }
         const digestLine = digestResult.stdout.trim();
         const digest = digestLine.includes("@")
           ? digestLine.split("@")[1] ?? digestLine
@@ -355,6 +387,11 @@ export const model = {
           ? ["inspect", "--type=image", "--format", "{{.Size}}", args.tag]
           : ["image", "inspect", args.tag, "--format", "{{.Size}}"];
         const sizeResult = await runCommand(cli, sizeArgs);
+        if (!sizeResult.success) {
+          throw new Error(
+            `Pushed ${args.tag} but failed to inspect its size (exit ${sizeResult.code}): ${sizeResult.stderr}`,
+          );
+        }
         const size = parseInt(sizeResult.stdout.trim(), 10) || null;
 
         const data = {
@@ -409,7 +446,18 @@ export const model = {
         if (!result.stdout.trim()) {
           throw new Error(`Inspect returned empty output for ${args.tag}`);
         }
-        const raw = JSON.parse(result.stdout);
+        // deno-lint-ignore no-explicit-any
+        let raw: any;
+        try {
+          raw = JSON.parse(result.stdout);
+        } catch (error) {
+          throw new Error(
+            `Failed to parse inspect output for ${args.tag} as JSON: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            { cause: error },
+          );
+        }
 
         const data = isBuildah(cli)
           ? {

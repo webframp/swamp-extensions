@@ -249,7 +249,7 @@ Deno.test({
       await assertRejects(
         () => helixApi(creds, "/nonexistent"),
         Error,
-        "404",
+        "GET /nonexistent returned 404",
       );
     } finally {
       uninstall();

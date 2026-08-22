@@ -153,7 +153,7 @@ const UpdateOrgSecretsSettingsSchema = z.object({
 /** Snyk Settings — organization and group setting management */
 export const model = {
   type: "@webframp/snyk/settings",
-  version: "2026.07.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -263,7 +263,7 @@ export const model = {
     get_iac_settings_for_group: {
       description: "Get the Infrastructure as Code Settings for a group",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The id of the group whose Infrastructure as Code settings are requested",
         ),
       }),
@@ -301,7 +301,7 @@ export const model = {
     update_iac_settings_for_group: {
       description: "Update the Infrastructure as Code Settings for a group",
       arguments: z.object({
-        group_id: z.string().describe(
+        group_id: z.string().min(1, "group_id must not be empty").describe(
           "The id of the group whose Infrastructure as Code settings are getting updated",
         ),
         data: z.unknown().optional(),
@@ -347,7 +347,9 @@ export const model = {
     get_opensource_broker_setting_for_group: {
       description: "Get opensource broker setting for group",
       arguments: z.object({
-        group_id: z.string().describe("Group ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Group ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -383,7 +385,9 @@ export const model = {
     enable_opensource_broker_for_group: {
       description: "Enable opensource broker for group",
       arguments: z.object({
-        group_id: z.string().describe("Group ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Group ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -420,7 +424,9 @@ export const model = {
     delete_opensource_broker_setting_for_group: {
       description: "Delete opensource broker setting for group",
       arguments: z.object({
-        group_id: z.string().describe("Group ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Group ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -451,7 +457,9 @@ export const model = {
     get_pull_request_template: {
       description: "Get pull request template for group",
       arguments: z.object({
-        group_id: z.string().describe("Snyk Group ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Snyk Group ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -487,7 +495,9 @@ export const model = {
     create_or_update_pull_request_template: {
       description: "Create or update pull request template for group",
       arguments: z.object({
-        group_id: z.string().describe("Snyk Group ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Snyk Group ID",
+        ),
         data: z.object({
           attributes: z.unknown(),
           type: z.unknown(),
@@ -537,7 +547,9 @@ export const model = {
     delete_pull_request_template: {
       description: "Delete pull request template for group",
       arguments: z.object({
-        group_id: z.string().describe("Snyk Group ID"),
+        group_id: z.string().min(1, "group_id must not be empty").describe(
+          "Snyk Group ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -680,7 +692,7 @@ export const model = {
       description:
         "Update language settings for an organization (Early Access)",
       arguments: z.object({
-        language: z.string().describe(
+        language: z.string().min(1, "language must not be empty").describe(
           "The language for which settings are being updated",
         ),
         data: z.unknown(),
@@ -859,7 +871,9 @@ export const model = {
       description:
         "Get opensource broker settings of ecosystem for organization",
       arguments: z.object({
-        ecosystem: z.string().describe("The ecosystem identifier"),
+        ecosystem: z.string().min(1, "ecosystem must not be empty").describe(
+          "The ecosystem identifier",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -899,7 +913,9 @@ export const model = {
       description:
         "Update opensource broker settings of ecosystem for organization",
       arguments: z.object({
-        ecosystem: z.string().describe("The ecosystem identifier"),
+        ecosystem: z.string().min(1, "ecosystem must not be empty").describe(
+          "The ecosystem identifier",
+        ),
         data: z.unknown(),
       }),
       execute: async (
@@ -947,7 +963,9 @@ export const model = {
       description:
         "Get opensource private registry settings of ecosystem for organization",
       arguments: z.object({
-        ecosystem: z.string().describe("The ecosystem identifier"),
+        ecosystem: z.string().min(1, "ecosystem must not be empty").describe(
+          "The ecosystem identifier",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -987,7 +1005,9 @@ export const model = {
       description:
         "Update opensource private registry settings of ecosystem for organization",
       arguments: z.object({
-        ecosystem: z.string().describe("The ecosystem identifier"),
+        ecosystem: z.string().min(1, "ecosystem must not be empty").describe(
+          "The ecosystem identifier",
+        ),
         data: z.unknown(),
       }),
       execute: async (

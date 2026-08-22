@@ -22,6 +22,7 @@ import { z } from "npm:zod@4.4.3";
 const GlobalArgsSchema = z.object({
   subscriptions: z
     .array(z.string().uuid())
+    .min(1, "subscriptions must contain at least one subscription ID")
     .describe(
       "Azure subscription IDs to scan for OpenAI/AI Services resources",
     ),
@@ -518,7 +519,7 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.08.14.4",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -549,6 +550,13 @@ export const model = {
       toVersion: "2026.08.14.4",
       description:
         "Client-side filter listAiResources to OpenAI/AIServices kinds (ARM $filter is unreliable server-side); log a pre-attempt line and zero-usage outcome per resource so nothing is silently dropped; log raw error detail (name/message/stack) instead of String(err) on scan failures",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Require at least one subscription ID in globalArguments.subscriptions " +
+        "instead of silently scanning nothing when the array is empty",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -87,13 +87,22 @@ const SecurityEventsSchema = z.object({
 /** Cloudflare WAF model definition with methods for firewall rules, WAF packages, and security events. */
 export const model = {
   type: "@webframp/cloudflare/waf",
-  version: "2026.07.18.2",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.07.18.2",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Wrap GraphQL security-events request/HTTP/query failures with the " +
+        "zone ID; guard create_rule/toggle_rule against empty Cloudflare " +
+        "responses with a clear error; shared _lib/api.ts now wraps " +
+        "Cloudflare API failures with the method/path/status",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -228,6 +237,12 @@ export const model = {
           `/zones/${zoneId}/filters`,
           [{ expression: args.expression, paused: args.paused }],
         );
+        if (filterResponse.length === 0) {
+          throw new Error(
+            `Cloudflare returned no filter for expression "${args.expression}" ` +
+              `in zone ${zoneId}; cannot create firewall rule`,
+          );
+        }
         const filterId = filterResponse[0].id;
 
         // Create rule using filter
@@ -245,6 +260,12 @@ export const model = {
           `/zones/${zoneId}/firewall/rules`,
           [ruleBody],
         );
+        if (rules.length === 0) {
+          throw new Error(
+            `Cloudflare returned no rule after creating filter ${filterId} ` +
+              `in zone ${zoneId}`,
+          );
+        }
 
         const rule = rules[0];
         const handle = await context.writeResource("rule", rule.id, rule);
@@ -317,6 +338,12 @@ export const model = {
           `/zones/${zoneId}/firewall/rules/${args.ruleId}`,
           { paused: args.paused },
         );
+        if (rules.length === 0) {
+          throw new Error(
+            `Cloudflare returned no rule after toggling firewall rule ` +
+              `${args.ruleId} in zone ${zoneId}`,
+          );
+        }
 
         const rule = rules[0];
         const handle = await context.writeResource("rule", rule.id, rule);
@@ -426,22 +453,40 @@ export const model = {
           }
         `;
 
-        const response = await fetch(
-          "https://api.cloudflare.com/client/v4/graphql",
-          {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${apiToken}`,
-              "Content-Type": "application/json",
+        let response: Response;
+        try {
+          response = await fetch(
+            "https://api.cloudflare.com/client/v4/graphql",
+            {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${apiToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                query,
+                variables: { zoneTag: zoneId, limit: args.limit },
+              }),
             },
-            body: JSON.stringify({
-              query,
-              variables: { zoneTag: zoneId, limit: args.limit },
-            }),
-          },
-        );
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `Cloudflare GraphQL security-events request failed for zone ${zoneId}: ${message}`,
+            { cause: err },
+          );
+        }
+
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(
+            `Cloudflare GraphQL security-events request failed for zone ` +
+              `${zoneId} (HTTP ${response.status}): ${body}`,
+          );
+        }
 
         const data = await response.json() as {
+          errors?: Array<{ message: string }>;
           data?: {
             viewer?: {
               zones?: Array<{
@@ -462,6 +507,13 @@ export const model = {
             };
           };
         };
+
+        if (data.errors && data.errors.length > 0) {
+          const errorMsg = data.errors.map((e) => e.message).join("; ");
+          throw new Error(
+            `Cloudflare GraphQL security-events query failed for zone ${zoneId}: ${errorMsg}`,
+          );
+        }
 
         const rawEvents =
           data.data?.viewer?.zones?.[0]?.firewallEventsAdaptive ?? [];

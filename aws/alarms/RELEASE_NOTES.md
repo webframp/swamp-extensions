@@ -1,31 +1,14 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (2 packages)
+**Changed:** CloudWatch API failures now raise an error that names the failing
+operation and the relevant filters (region, state value, alarm name prefix,
+alarm name) instead of surfacing the raw AWS SDK error with no context. This
+applies to `list_alarms`, `get_active`, `get_history`, and `get_summary`,
+including the paginated `DescribeAlarms`/`DescribeAlarmHistory` calls inside
+`get_summary`.
 
-## 2026.08.15.1
-
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (2 packages)
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (2 packages)
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (2 packages)
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.30.1`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.30.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (2 packages)
-
-## 2026.07.30.1
-
-**Added:** Optional `profile` global argument for multi-account credential resolution.
-When set, credentials resolve via `fromIni` (supports SSO token cache and shared-config
-profiles). When omitted, the default credential chain applies as before. Fully backward
-compatible — no changes required for existing instances.
-
+**Changed:** `limit` arguments on `list_alarms`, `get_active`, and
+`get_history` now require a positive integer (capped at 10000); `historyHours`
+on `get_summary` must be a positive number up to 720 (30 days). Previously
+these accepted any number, including zero or negative values, which could
+produce confusing pagination behavior instead of a clear validation error.

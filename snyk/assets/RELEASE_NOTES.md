@@ -1,10 +1,11 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Schema tightening sweep — no behavioral changes.
+**Changed:** Snyk API request failures now name the HTTP method and path that
+was attempted (e.g. `Snyk API GET /orgs/{orgId}/assets failed with HTTP 403:
+...`) instead of surfacing only the raw status and body. Network-level
+failures (DNS, timeout, connection reset) are also caught and re-raised with
+the same method/path context and the original error preserved as `cause`,
+rather than propagating an unlabeled fetch error.
 
-- Added `.min(1)` to `apiToken` and `groupId` in the global arguments schema.
-- Added `.describe(...)` to the previously undocumented fields in the
-  `asset_projects` resource schema (`name`, `organization_id`,
-  `organization_name`, `project_type`, `target_file`, `target_id`,
-  `target_reference`, `test_surface`, `url`, `last_scan`, and the
-  `issues_counts` breakdown).
+**Upgrade note:** No changes to stored resource schemas. Existing instances
+need no migration.

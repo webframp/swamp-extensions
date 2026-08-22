@@ -166,7 +166,7 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -182,6 +182,13 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Added .describe() to previously undocumented landscape schema fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes — design/import_skill now throw descriptive " +
+        "errors instead of silently falling back to placeholder names",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -327,10 +334,20 @@ Write the extensionDesign resource with the full specification.`,
       ) => {
         const landscape = await context.readResource("current");
 
+        const suggestedFirstExtension = (landscape as
+          | Record<string, unknown>
+          | null)?.suggestedFirstExtension as string | undefined;
+
+        if (!args.system && !suggestedFirstExtension) {
+          throw new Error(
+            "design requires either a 'system' argument or an existing " +
+              "landscape resource with a suggestedFirstExtension. Run " +
+              "'discover' first, or pass 'system' explicitly.",
+          );
+        }
+
         const targetSystem: string = args.system ??
-          (landscape as Record<string, unknown> | null)
-            ?.suggestedFirstExtension as string ??
-          "unknown-system";
+          suggestedFirstExtension as string;
 
         const design = {
           name: `@webframp/${targetSystem}`,
@@ -432,7 +449,15 @@ resource with the full specification.`,
         args: { sourceSkill?: string },
         context: MethodContext,
       ) => {
-        const sourceSkill = args.sourceSkill ?? "unknown-skill";
+        if (!args.sourceSkill) {
+          throw new Error(
+            "import_skill requires a 'sourceSkill' name or path (e.g. " +
+              ".claude/skills/<name>/SKILL.md). The skill's identity must " +
+              "never be guessed silently — locate the file and pass it " +
+              "explicitly.",
+          );
+        }
+        const sourceSkill = args.sourceSkill;
         const segments = sourceSkill.split("/").filter(Boolean);
         const lastSegment = segments[segments.length - 1] ?? sourceSkill;
         // ".../<name>/SKILL.md" names the skill via its parent directory,

@@ -27,6 +27,7 @@ export async function runTfCommand(
   cwd: string,
   env?: Record<string, string>,
 ): Promise<unknown> {
+  const cmdLabel = `${binary} ${args.join(" ")}`;
   const cmd = new Deno.Command(binary, {
     args,
     cwd,
@@ -34,12 +35,40 @@ export async function runTfCommand(
     stderr: "piped",
     env,
   });
-  const output = await cmd.output();
+
+  let output: Deno.CommandOutput;
+  try {
+    output = await cmd.output();
+  } catch (cause) {
+    // The binary itself couldn't be spawned (not installed, not on PATH,
+    // not executable, or workDir doesn't exist) — the raw OS error alone
+    // doesn't say which command or working directory swamp was using.
+    throw new Error(
+      `Failed to run "${cmdLabel}" in ${cwd}: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+      { cause },
+    );
+  }
+
   if (!output.success) {
     const err = new TextDecoder().decode(output.stderr).trim();
-    throw new Error(`${binary} command failed: ${err}`);
+    throw new Error(
+      `"${cmdLabel}" (in ${cwd}) exited with code ${output.code}: ${err}`,
+    );
   }
-  return JSON.parse(new TextDecoder().decode(output.stdout));
+
+  const raw = new TextDecoder().decode(output.stdout);
+  try {
+    return JSON.parse(raw);
+  } catch (cause) {
+    throw new Error(
+      `Failed to parse JSON output from "${cmdLabel}" (in ${cwd}): ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+      { cause },
+    );
+  }
 }
 
 // =============================================================================
@@ -189,7 +218,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
 
   upgrades: [
     {
@@ -206,6 +235,13 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Require a non-empty workDir — no behavioral change for valid configs",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes — CLI spawn/exit/JSON-parse failures now name " +
+        "the command and working directory involved",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -39,6 +39,19 @@ Deno.test("issues model: has expected methods", () => {
   assertExists(model.methods.get_org_issue_by_issue_id);
 });
 
+Deno.test("issues model: list_group_issues rejects empty group_id", () => {
+  const result = model.methods.list_group_issues.arguments.safeParse({
+    group_id: "",
+  });
+  assertEquals(result.success, false);
+  if (!result.success) {
+    assertStringIncludes(
+      JSON.stringify(result.error.issues),
+      "group_id must not be empty",
+    );
+  }
+});
+
 Deno.test("issues model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["list_group_issues"]);

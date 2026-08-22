@@ -183,7 +183,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -308,6 +308,12 @@ export const model = {
       description: "Dependency bump, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message quality pass: no schema changes to stored resources",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -350,6 +356,9 @@ export const model = {
       arguments: z.object({
         days: z
           .number()
+          .int()
+          .min(1)
+          .max(365)
           .default(30)
           .describe("Number of days to look back"),
       }),
@@ -369,7 +378,18 @@ export const model = {
             Metrics: ["UnblendedCost"],
             GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
           });
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `GetCostAndUsage (group by SERVICE) failed for period ` +
+                `${period.Start}..${period.End}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              { cause: err },
+            );
+          }
 
           const items: { service: string; amount: number; unit: string }[] = [];
           for (const result of response.ResultsByTime || []) {
@@ -426,9 +446,14 @@ export const model = {
     get_cost_by_usage_type: {
       description: "Break down a single service's spend by usage type",
       arguments: z.object({
-        service: z.string().describe("AWS service name to drill into"),
+        service: z.string().min(1, "service must not be empty").describe(
+          "AWS service name to drill into",
+        ),
         days: z
           .number()
+          .int()
+          .min(1)
+          .max(365)
           .default(30)
           .describe("Number of days to look back"),
       }),
@@ -451,7 +476,18 @@ export const model = {
             },
             GroupBy: [{ Type: "DIMENSION", Key: "USAGE_TYPE" }],
           });
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `GetCostAndUsage (group by USAGE_TYPE, service=${args.service}) ` +
+                `failed for period ${period.Start}..${period.End}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              { cause: err },
+            );
+          }
 
           const items: { usageType: string; amount: number; unit: string }[] =
             [];
@@ -515,6 +551,9 @@ export const model = {
       arguments: z.object({
         days: z
           .number()
+          .int()
+          .min(1)
+          .max(365)
           .default(30)
           .describe("Number of days to look back"),
       }),
@@ -533,7 +572,18 @@ export const model = {
             Granularity: "DAILY",
             Metrics: ["UnblendedCost"],
           });
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `GetCostAndUsage (DAILY granularity) failed for period ` +
+                `${period.Start}..${period.End}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              { cause: err },
+            );
+          }
 
           const dataPoints: z.infer<typeof CostTrendDataPointSchema>[] = [];
           for (const result of response.ResultsByTime || []) {
@@ -606,10 +656,16 @@ export const model = {
       arguments: z.object({
         days: z
           .number()
+          .int()
+          .min(1)
+          .max(365)
           .default(30)
           .describe("Number of days to look back"),
         limit: z
           .number()
+          .int()
+          .min(1)
+          .max(1000)
           .default(20)
           .describe("Maximum number of cost drivers to return"),
       }),
@@ -632,7 +688,18 @@ export const model = {
               { Type: "DIMENSION", Key: "USAGE_TYPE" },
             ],
           });
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `GetCostAndUsage (group by SERVICE+USAGE_TYPE) failed for ` +
+                `period ${period.Start}..${period.End}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              { cause: err },
+            );
+          }
 
           const items: {
             service: string;
@@ -701,6 +768,9 @@ export const model = {
       arguments: z.object({
         days: z
           .number()
+          .int()
+          .min(1)
+          .max(365)
           .default(30)
           .describe("Period length in days"),
       }),
@@ -730,7 +800,18 @@ export const model = {
               Metrics: ["UnblendedCost"],
               GroupBy: [{ Type: "DIMENSION", Key: "SERVICE" }],
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `GetCostAndUsage (cost comparison) failed for period ` +
+                  `${fmt(start)}..${fmt(end)}: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                { cause: err },
+              );
+            }
 
             const services = new Map<string, number>();
             for (const result of response.ResultsByTime || []) {

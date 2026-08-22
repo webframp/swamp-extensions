@@ -262,8 +262,7 @@ export function createSyncService(
               : { ":fp": partition },
             ExclusiveStartKey: exclusiveStartKey,
           }),
-        )
-      );
+        ), { opLabel: `queryPartitionMeta partition=${partition}` });
       for (const item of result.Items ?? []) {
         const { relPath } = parseGsiFileSortKey(item.gsi1sk as string);
         out.set(relPath, {
@@ -316,8 +315,7 @@ export function createSyncService(
                 [tableName]: { Keys: unprocessed },
               },
             }),
-          )
-        );
+          ), { opLabel: `querySpecificPaths keys=${unprocessed.length}` });
         for (const item of result.Responses?.[tableName] ?? []) {
           // Primary key is FILE#<relPath>, extract relPath from pk
           const relPath = (item.pk as string).slice("FILE#".length);
@@ -363,8 +361,7 @@ export function createSyncService(
           TableName: tableName,
           Key: { pk: "PARTITIONS#registry", sk: "LIST" },
         }),
-      )
-    );
+      ), { opLabel: "queryAllPartitions read partitions registry" });
     const rawPartitions = registryResult.Item?.partitions;
     const knownPartitions: string[] = rawPartitions instanceof Set
       ? [...rawPartitions]
@@ -407,8 +404,7 @@ export function createSyncService(
             ":p": new Set([partition]),
           },
         }),
-      )
-    );
+      ), { opLabel: `registerPartition partition=${partition}` });
     knownRegisteredPartitions.add(partition);
   }
 
@@ -433,8 +429,7 @@ export function createSyncService(
       const result = await retryable(() =>
         doc.send(
           new BatchWriteCommand({ RequestItems: { [tableName]: pending } }),
-        )
-      );
+        ), { opLabel: `sendBatchWrite items=${pending.length}` });
       pending = (result.UnprocessedItems?.[tableName] ?? []) as Array<
         Record<string, unknown>
       >;
@@ -471,8 +466,7 @@ export function createSyncService(
             ExpressionAttributeValues: { ":pk": pk, ":prefix": skPrefix },
             ExclusiveStartKey: exclusiveStartKey,
           }),
-        )
-      );
+        ), { opLabel: `fetchChunks relPath=${relPath}` });
       for (const item of result.Items ?? []) {
         items.push({
           sk: item.sk as string,
@@ -551,8 +545,7 @@ export function createSyncService(
             gsi1sk: gsiFileSortKey(now, entry.relPath),
           },
         }),
-      )
-    );
+      ), { opLabel: `writeFileEntry relPath=${entry.relPath}` });
 
     // Clean up old version's chunks asynchronously. This is best-effort —
     // stale chunks waste storage but never corrupt reads because readers
@@ -607,8 +600,7 @@ export function createSyncService(
             gsi1sk: gsiFileSortKey(now, relPath),
           },
         }),
-      )
-    );
+      ), { opLabel: `tombstonePath relPath=${relPath}` });
   }
 
   async function writeWatermark(): Promise<void> {
@@ -626,8 +618,7 @@ export function createSyncService(
           TableName: tableName,
           Item: { ...SYNC_STATE_KEY, lastPushedAt: new Date().toISOString() },
         }),
-      )
-    );
+      ), { opLabel: "writeWatermark put timestamp" });
 
     // Atomically increment the monotonic commitSeq counter LAST. This is the
     // "commit signal". UpdateItem ADD creates the attribute if it doesn't
@@ -641,8 +632,7 @@ export function createSyncService(
           UpdateExpression: "ADD seq :one",
           ExpressionAttributeValues: { ":one": 1 },
         }),
-      )
-    );
+      ), { opLabel: "writeWatermark increment commitSeq" });
   }
 
   /** Reads the current remote commitSeq. Returns 0 if no pushes have occurred. */
@@ -654,8 +644,7 @@ export function createSyncService(
           Key: { ...COMMIT_SEQ_KEY },
           ProjectionExpression: "seq",
         }),
-      )
-    );
+      ), { opLabel: "getRemoteSeq" });
     return (result.Item?.seq as number) ?? 0;
   }
 

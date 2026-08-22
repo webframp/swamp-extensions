@@ -743,6 +743,33 @@ Deno.test({
 });
 
 Deno.test({
+  name: "compliance: collect_activities rejects a malformed since timestamp",
+  sanitizeResources: false,
+  fn: async () => {
+    const { context } = createModelTestContext({
+      globalArgs: { complianceKey: "sk-ant-api01-test" },
+      definition: {
+        id: "test-id",
+        name: "test-compliance",
+        version: 1,
+        tags: {},
+      },
+    });
+    await assertRejects(
+      () =>
+        model.methods.collect_activities.execute(
+          { since: "not-a-timestamp" },
+          context as unknown as Parameters<
+            typeof model.methods.collect_activities.execute
+          >[1],
+        ),
+      Error,
+      "not a valid ISO-8601 timestamp",
+    );
+  },
+});
+
+Deno.test({
   name: "compliance: sync_effective_settings handles object-style response",
   sanitizeResources: false,
   fn: async () => {

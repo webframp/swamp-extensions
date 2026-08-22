@@ -1,3 +1,19 @@
+## 2026.08.21.2
+
+**Changed:** `design` and `import_skill` no longer silently substitute a
+placeholder name when a required identifier is missing. Previously, running
+`design` with no `system` argument and no prior `discover` landscape wrote an
+extension design named `unknown-system` with no indication anything was
+wrong; running `import_skill` with no `sourceSkill` did the same with
+`unknown-skill`. Both methods now throw a descriptive error telling you what
+to provide (`system`, or run `discover` first; `sourceSkill`, a name or
+path) instead of producing a resource that looks legitimate but points at
+nothing.
+
+**Upgrade note:** No schema changes. If you were relying on the
+`unknown-system`/`unknown-skill` fallback behavior, pass the argument
+explicitly going forward.
+
 ## 2026.08.21.1
 
 **Changed:** Added `.describe()` to previously undocumented fields on the

@@ -173,6 +173,13 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
   try {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
+  } catch (err) {
+    throw new Error(
+      `GetCallerIdentity failed (region=${globalArgs.region}${
+        globalArgs.profile ? `, profile=${globalArgs.profile}` : ""
+      }): ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
   } finally {
     sts.destroy();
   }
@@ -472,7 +479,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -487,6 +494,12 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Error-message quality pass: no schema changes to stored resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -536,9 +549,19 @@ export const model = {
           let pages = 0;
 
           do {
-            const resp = await client.send(
-              new ListHostedZonesCommand({ Marker: marker }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new ListHostedZonesCommand({ Marker: marker }),
+              );
+            } catch (err) {
+              throw new Error(
+                `ListHostedZones failed (page=${pages}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
 
             for (const zone of resp.HostedZones ?? []) {
               if (!zone.Id || !zone.Name) continue;
@@ -561,8 +584,16 @@ export const model = {
                       vpcId: v.VPCId!,
                       vpcRegion: v.VPCRegion!,
                     }));
-                } catch {
-                  // Non-critical — proceed without VPC data
+                } catch (err) {
+                  // Non-critical — proceed without VPC data, but say why.
+                  context.logger.warn(
+                    "GetHostedZone failed for private zone {zoneId}; " +
+                      "proceeding without VPC association data: {error}",
+                    {
+                      zoneId: zone.Id,
+                      error: err instanceof Error ? err.message : String(err),
+                    },
+                  );
                 }
               }
 
@@ -643,7 +674,15 @@ export const model = {
                   ? stripTrailingDot(detail.HostedZone.Name)
                   : id;
                 zoneIds.push({ id, name });
-              } catch {
+              } catch (err) {
+                context.logger.warn(
+                  "GetHostedZone failed for zone {zoneId}; using zone ID " +
+                    "as the name: {error}",
+                  {
+                    zoneId: id,
+                    error: err instanceof Error ? err.message : String(err),
+                  },
+                );
                 zoneIds.push({ id, name: id });
               }
             }
@@ -651,9 +690,20 @@ export const model = {
             let marker: string | undefined;
             let pages = 0;
             do {
-              const resp = await client.send(
-                new ListHostedZonesCommand({ Marker: marker }),
-              );
+              let resp;
+              try {
+                resp = await client.send(
+                  new ListHostedZonesCommand({ Marker: marker }),
+                );
+              } catch (err) {
+                throw new Error(
+                  `ListHostedZones failed while enumerating zones for ` +
+                    `list_records (page=${pages}): ${
+                      err instanceof Error ? err.message : String(err)
+                    }`,
+                  { cause: err },
+                );
+              }
               for (const zone of resp.HostedZones ?? []) {
                 if (!zone.Id || !zone.Name) continue;
                 zoneIds.push({
@@ -732,10 +782,14 @@ export const model = {
                 pages++;
               } while (pages < MAX_PAGES);
               if (pages >= MAX_PAGES) truncated = true;
-            } catch {
-              context.logger.warn("Failed to list records for zone", {
-                zoneId: zone.id,
-              });
+            } catch (err) {
+              context.logger.warn(
+                "ListResourceRecordSets failed for zone {zoneId}: {error}",
+                {
+                  zoneId: zone.id,
+                  error: err instanceof Error ? err.message : String(err),
+                },
+              );
             }
           }
 
@@ -773,11 +827,14 @@ export const model = {
       description:
         "Cross-reference DNS records against inventory to find orphaned records pointing at decommissioned infrastructure.",
       arguments: z.object({
-        inventoryModelName: z.string().optional().default("aws-inventory")
+        inventoryModelName: z.string().min(1).optional().default(
+          "aws-inventory",
+        )
           .describe("Name of the @webframp/aws/inventory model instance"),
-        adoptModelName: z.string().optional().default("aws-adopt").describe(
-          "Name of the @webframp/aws/adopt model instance",
-        ),
+        adoptModelName: z.string().min(1).optional().default("aws-adopt")
+          .describe(
+            "Name of the @webframp/aws/adopt model instance",
+          ),
         skipTypes: z.array(z.string()).optional().default(["TXT", "MX", "SRV"])
           .describe("Record types to skip during orphan detection"),
       }),
@@ -800,8 +857,12 @@ export const model = {
               typeof RecordListSchema
             >;
           }
-        } catch {
-          // No records data yet
+        } catch (err) {
+          context.logger.warn(
+            "Failed to read stored 'record-scan' resource; proceeding as " +
+              "if list_records has not run yet: {error}",
+            { error: err instanceof Error ? err.message : String(err) },
+          );
         }
 
         if (!recordsData || recordsData.records.length === 0) {
@@ -837,9 +898,10 @@ export const model = {
             );
             inventoryAttrs = (sorted[0] ?? data[0]).attributes;
           }
-        } catch {
-          context.logger.warn("Could not read inventory data", {
+        } catch (err) {
+          context.logger.warn("Could not read inventory data: {error}", {
             model: args.inventoryModelName,
+            error: err instanceof Error ? err.message : String(err),
           });
         }
 
@@ -857,9 +919,10 @@ export const model = {
             );
             adoptAttrs = (sorted[0] ?? data[0]).attributes;
           }
-        } catch {
-          context.logger.warn("Could not read adopt data", {
+        } catch (err) {
+          context.logger.warn("Could not read adopt data: {error}", {
             model: args.adoptModelName,
+            error: err instanceof Error ? err.message : String(err),
           });
         }
 

@@ -287,7 +287,7 @@ type MethodContext = {
 /** Team topology and value stream mapping model. */
 export const model = {
   type: "@webframp/team-topology",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -297,6 +297,13 @@ export const model = {
     {
       toVersion: "2026.08.21.1",
       description: "Added .describe() to previously undocumented schema fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes — discover_topology now rejects interactions/system " +
+        "dependencies that reference a team name not present in the same call's teams array",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -389,6 +396,47 @@ Start with a tracer bullet: map ONE value stream's teams first, then expand.`,
         args: z.infer<typeof DiscoverTopologyArgsSchema>,
         context: MethodContext,
       ) => {
+        // Interactions and system dependencies reference teams by name, but
+        // the schema can't enforce that those names exist in the teams
+        // array being written in the same call. An interaction pointing at
+        // a typo'd or removed team name would otherwise be written
+        // silently, producing a topology that looks complete but references
+        // nothing.
+        const teamNames = new Set(args.teams.map((t) => t.name));
+
+        for (const [index, interaction] of args.interactions.entries()) {
+          const unknown = [interaction.source, interaction.target].filter(
+            (name) => !teamNames.has(name),
+          );
+          if (unknown.length > 0) {
+            throw new Error(
+              `interactions[${index}] references unknown team name(s): ${
+                unknown.join(", ")
+              }. Every interaction's source/target must match a name in ` +
+                `'teams' (known teams: ${
+                  [...teamNames].join(", ") || "none"
+                }).`,
+            );
+          }
+        }
+
+        for (
+          const [index, dep] of args.systemDependencies.entries()
+        ) {
+          const unknown = [dep.ownerFrom, dep.ownerTo].filter(
+            (name): name is string =>
+              name !== undefined && !teamNames.has(name),
+          );
+          if (unknown.length > 0) {
+            throw new Error(
+              `systemDependencies[${index}] references unknown team name(s): ${
+                unknown.join(", ")
+              }. ownerFrom/ownerTo must match a name in 'teams' (known ` +
+                `teams: ${[...teamNames].join(", ") || "none"}).`,
+            );
+          }
+        }
+
         const topology = {
           teams: args.teams,
           interactions: args.interactions,

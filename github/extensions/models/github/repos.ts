@@ -16,6 +16,23 @@ import { z } from "npm:zod@4.4.3";
 
 const GlobalArgsSchema = z.object({});
 
+/**
+ * `owner/name` repository slug. `gh` accepts other forms (bare name within a
+ * configured repo, full URLs), but every method here always calls `gh` with
+ * `--repo`, which requires the fully-qualified slug — anything else fails
+ * deep inside the CLI with a cryptic "unknown flag" or "could not resolve"
+ * error instead of naming the actual problem.
+ */
+const REPO_SLUG_RE = /^[\w.-]+\/[\w.-]+$/;
+const repoArg = () =>
+  z
+    .string()
+    .regex(
+      REPO_SLUG_RE,
+      'Must be in "owner/name" format (e.g. octocat/Hello-World)',
+    )
+    .describe("Repository in owner/name format (e.g., octocat/Hello-World)");
+
 const RepoSchema = z.object({
   name: z.string().describe("Repository name"),
   description: z.string().nullable().describe("Repository description"),
@@ -154,6 +171,7 @@ const WorkflowRunListSchema = z.object({
 async function runGh(
   args: string[],
 ): Promise<unknown> {
+  const cmdDesc = `gh ${args.join(" ")}`;
   const cmd = new Deno.Command("gh", {
     args,
     stdout: "piped",
@@ -161,10 +179,21 @@ async function runGh(
   });
   const output = await cmd.output();
   if (!output.success) {
-    const err = new TextDecoder().decode(output.stderr);
-    throw new Error(`gh command failed: ${err}`);
+    const err = new TextDecoder().decode(output.stderr).trim();
+    throw new Error(
+      `${cmdDesc} failed (exit ${output.code}): ${err || "(no output)"}`,
+    );
   }
-  return JSON.parse(new TextDecoder().decode(output.stdout));
+  const stdout = new TextDecoder().decode(output.stdout);
+  try {
+    return JSON.parse(stdout);
+  } catch (parseErr) {
+    const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+    throw new Error(
+      `${cmdDesc} returned output that could not be parsed as JSON: ${msg}`,
+      { cause: parseErr },
+    );
+  }
 }
 
 // =============================================================================
@@ -190,7 +219,7 @@ type ModelContext = {
 /** GitHub model definition exposing repository query methods. */
 export const model = {
   type: "@webframp/github",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -202,6 +231,12 @@ export const model = {
     {
       toVersion: "2026.08.21.1",
       description: "No schema changes (added field descriptions only)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes (repo argument now validated as owner/name; gh errors carry command context)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -282,11 +317,7 @@ export const model = {
       description:
         "Get detailed information about a specific repository including stats and metadata",
       arguments: z.object({
-        repo: z
-          .string()
-          .describe(
-            "Repository in owner/name format (e.g., octocat/Hello-World)",
-          ),
+        repo: repoArg(),
       }),
       execute: async (
         args: { repo: string },
@@ -320,11 +351,7 @@ export const model = {
       description:
         "List pull requests for a repository with optional state filter",
       arguments: z.object({
-        repo: z
-          .string()
-          .describe(
-            "Repository in owner/name format (e.g., octocat/Hello-World)",
-          ),
+        repo: repoArg(),
         state: z
           .enum(["open", "closed", "merged", "all"])
           .default("open")
@@ -376,11 +403,7 @@ export const model = {
     list_issues: {
       description: "List issues for a repository with optional state filter",
       arguments: z.object({
-        repo: z
-          .string()
-          .describe(
-            "Repository in owner/name format (e.g., octocat/Hello-World)",
-          ),
+        repo: repoArg(),
         state: z
           .enum(["open", "closed", "all"])
           .default("open")
@@ -432,11 +455,7 @@ export const model = {
     list_releases: {
       description: "List releases for a repository",
       arguments: z.object({
-        repo: z
-          .string()
-          .describe(
-            "Repository in owner/name format (e.g., octocat/Hello-World)",
-          ),
+        repo: repoArg(),
       }),
       execute: async (
         args: { repo: string },
@@ -477,11 +496,7 @@ export const model = {
     list_workflows: {
       description: "List recent workflow runs for a repository",
       arguments: z.object({
-        repo: z
-          .string()
-          .describe(
-            "Repository in owner/name format (e.g., octocat/Hello-World)",
-          ),
+        repo: repoArg(),
       }),
       execute: async (
         args: { repo: string },

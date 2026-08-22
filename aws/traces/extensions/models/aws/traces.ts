@@ -106,6 +106,7 @@ const ServiceGraphSchema = z.object({
     end: z.string(),
   }),
   containsOldGroupVersions: z.boolean(),
+  truncated: z.boolean().default(false),
   fetchedAt: z.string(),
 });
 
@@ -144,6 +145,7 @@ const TraceSummaryListSchema = z.object({
   traces: z.array(TraceSummarySchema),
   count: z.number(),
   filterExpression: z.string().nullable(),
+  truncated: z.boolean().default(false),
   timeRange: z.object({
     start: z.string(),
     end: z.string(),
@@ -200,6 +202,27 @@ async function shortHash(input: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
     .slice(0, 16);
+}
+
+const MAX_PAGES = 20;
+
+/**
+ * Wrap an error from an external X-Ray API call with the operation and
+ * relevant identifiers, preserving the original error via `cause`.
+ */
+function wrapApiError(
+  operation: string,
+  detail: Record<string, unknown>,
+  err: unknown,
+): never {
+  const detailStr = Object.entries(detail)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join(", ");
+  const message = err instanceof Error ? err.message : String(err);
+  throw new Error(`${operation} failed (${detailStr}): ${message}`, {
+    cause: err,
+  });
 }
 
 function parseRelativeTime(timeStr: string): Date {
@@ -328,7 +351,7 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -345,6 +368,14 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Wrap X-Ray API errors with operation context, bound pagination with " +
+        "a MAX_PAGES cap and honest truncated flags, and constrain get_traces/" +
+        "get_errors limit to 1-1000. Added optional/defaulted truncated fields.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -412,6 +443,7 @@ export const model = {
           const services: z.infer<typeof ServiceNodeSchema>[] = [];
           let nextToken: string | undefined;
           let containsOldVersions = false;
+          let pages = 0;
 
           do {
             const command = new GetServiceGraphCommand({
@@ -420,7 +452,16 @@ export const model = {
               GroupName: args.groupName,
               NextToken: nextToken,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              wrapApiError("GetServiceGraph", {
+                groupName: args.groupName,
+                startTime: args.startTime,
+                page: pages,
+              }, err);
+            }
 
             if (response.ContainsOldGroupVersions) {
               containsOldVersions = true;
@@ -433,8 +474,10 @@ export const model = {
             }
 
             nextToken = response.NextToken;
-          } while (nextToken);
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
 
+          const truncated = !!nextToken;
           const instanceName = args.groupName
             ? `graph-${args.groupName.replace(/[\/\s]/g, "-")}`
             : "graph-default";
@@ -449,13 +492,15 @@ export const model = {
                 end: endTime.toISOString(),
               },
               containsOldGroupVersions: containsOldVersions,
+              truncated,
               fetchedAt: new Date().toISOString(),
             },
           );
 
-          context.logger.info("Found {count} services in graph", {
-            count: services.length,
-          });
+          context.logger.info(
+            "Found {count} services in graph (truncated: {truncated})",
+            { count: services.length, truncated },
+          );
           return { dataHandles: [handle] };
         } finally {
           client.destroy();
@@ -486,8 +531,10 @@ export const model = {
           .describe("Enable sampling for large result sets"),
         limit: z
           .number()
+          .min(1)
+          .max(1000)
           .default(100)
-          .describe("Maximum number of traces to return"),
+          .describe("Maximum number of traces to return (1-1000)"),
       }),
       execute: async (
         args: {
@@ -518,6 +565,7 @@ export const model = {
 
           const traces: z.infer<typeof TraceSummarySchema>[] = [];
           let nextToken: string | undefined;
+          let pages = 0;
 
           do {
             const command = new GetTraceSummariesCommand({
@@ -527,7 +575,16 @@ export const model = {
               Sampling: args.sampling,
               NextToken: nextToken,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              wrapApiError("GetTraceSummaries (get_traces)", {
+                filterExpression: args.filterExpression,
+                startTime: args.startTime,
+                page: pages,
+              }, err);
+            }
 
             if (response.TraceSummaries) {
               for (const trace of response.TraceSummaries) {
@@ -537,11 +594,16 @@ export const model = {
             }
 
             nextToken = response.NextToken;
-          } while (nextToken && traces.length < args.limit);
+            pages++;
+          } while (
+            nextToken && traces.length < args.limit && pages < MAX_PAGES
+          );
 
           const instanceName = args.filterExpression
             ? `traces-filtered-${await shortHash(args.filterExpression)}`
             : "traces-all";
+
+          const truncated = !!nextToken;
 
           const handle = await context.writeResource(
             "trace_summaries",
@@ -550,6 +612,7 @@ export const model = {
               traces,
               count: traces.length,
               filterExpression: args.filterExpression || null,
+              truncated,
               timeRange: {
                 start: startTime.toISOString(),
                 end: endTime.toISOString(),
@@ -558,7 +621,10 @@ export const model = {
             },
           );
 
-          context.logger.info("Found {count} traces", { count: traces.length });
+          context.logger.info(
+            "Found {count} traces (truncated: {truncated})",
+            { count: traces.length, truncated },
+          );
           return { dataHandles: [handle] };
         } finally {
           client.destroy();
@@ -584,8 +650,10 @@ export const model = {
           .describe("Type of error to filter for"),
         limit: z
           .number()
+          .min(1)
+          .max(1000)
           .default(50)
-          .describe("Maximum number of traces to return"),
+          .describe("Maximum number of traces to return (1-1000)"),
       }),
       execute: async (
         args: {
@@ -633,6 +701,7 @@ export const model = {
 
           const traces: z.infer<typeof TraceSummarySchema>[] = [];
           let nextToken: string | undefined;
+          let pages = 0;
 
           do {
             const command = new GetTraceSummariesCommand({
@@ -642,7 +711,16 @@ export const model = {
               Sampling: false, // Don't sample for error investigation
               NextToken: nextToken,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              wrapApiError("GetTraceSummaries (get_errors)", {
+                errorType: args.errorType,
+                startTime: args.startTime,
+                page: pages,
+              }, err);
+            }
 
             if (response.TraceSummaries) {
               for (const trace of response.TraceSummaries) {
@@ -652,9 +730,13 @@ export const model = {
             }
 
             nextToken = response.NextToken;
-          } while (nextToken && traces.length < args.limit);
+            pages++;
+          } while (
+            nextToken && traces.length < args.limit && pages < MAX_PAGES
+          );
 
           const instanceName = `errors-${args.errorType}`;
+          const truncated = !!nextToken;
 
           const handle = await context.writeResource(
             "trace_summaries",
@@ -663,6 +745,7 @@ export const model = {
               traces,
               count: traces.length,
               filterExpression,
+              truncated,
               timeRange: {
                 start: startTime.toISOString(),
                 end: endTime.toISOString(),
@@ -671,9 +754,10 @@ export const model = {
             },
           );
 
-          context.logger.info("Found {count} error traces", {
-            count: traces.length,
-          });
+          context.logger.info(
+            "Found {count} error traces (truncated: {truncated})",
+            { count: traces.length, truncated },
+          );
           return { dataHandles: [handle] };
         } finally {
           client.destroy();
@@ -726,7 +810,15 @@ export const model = {
               Sampling: true,
               NextToken: nextToken,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              wrapApiError("GetTraceSummaries (analyze_errors)", {
+                startTime: args.startTime,
+                tracesSoFar: allTraces.length,
+              }, err);
+            }
 
             if (response.TraceSummaries) {
               allTraces.push(

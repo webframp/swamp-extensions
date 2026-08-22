@@ -189,11 +189,60 @@ Deno.test("runTfCommand: throws on CLI failure", async () => {
     await assertRejects(
       () => runTfCommand("terraform", ["show", "-json"], "/tmp"),
       Error,
-      "terraform command failed",
+      "terraform show -json",
     );
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = restore;
+  }
+});
+
+Deno.test("runTfCommand: spawn failure names the command and working directory", async () => {
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_cmd: string, _opts: Record<string, unknown>) {}
+    output(): Promise<never> {
+      return Promise.reject(
+        new Deno.errors.NotFound("No such file or directory (os error 2)"),
+      );
+    }
+  };
+  try {
+    await assertRejects(
+      () => runTfCommand("terraform", ["show", "-json"], "/tmp/tf-project"),
+      Error,
+      "/tmp/tf-project",
+    );
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
+
+Deno.test("runTfCommand: malformed JSON output is reported with command context", async () => {
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_cmd: string, _opts: Record<string, unknown>) {}
+    async output() {
+      await Promise.resolve();
+      return {
+        success: true,
+        stdout: new TextEncoder().encode("not-json{{{"),
+        stderr: new Uint8Array(),
+      };
+    }
+  };
+  try {
+    await assertRejects(
+      () => runTfCommand("terraform", ["show", "-json"], "/tmp"),
+      Error,
+      "terraform show -json",
+    );
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
   }
 });
 

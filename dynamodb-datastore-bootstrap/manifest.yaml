@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/dynamodb-datastore-bootstrap"
-version: "2026.07.27.1"
+version: "2026.08.21.1"
 description: |
   One-shot bootstrap for @webframp/dynamodb-datastore. Ships a single
   provisioner model that creates a DynamoDB table (with GSI and TTL) and a

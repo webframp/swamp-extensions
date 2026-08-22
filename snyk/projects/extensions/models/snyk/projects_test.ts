@@ -40,6 +40,19 @@ Deno.test("projects model: has expected methods", () => {
   assertExists(model.methods.get_sbom);
 });
 
+Deno.test("projects model: get_org_project rejects empty project_id", () => {
+  const result = model.methods.get_org_project.arguments.safeParse({
+    project_id: "",
+  });
+  assertEquals(result.success, false);
+  if (!result.success) {
+    assertStringIncludes(
+      JSON.stringify(result.error.issues),
+      "project_id must not be empty",
+    );
+  }
+});
+
 Deno.test("projects model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["org_projects"]);

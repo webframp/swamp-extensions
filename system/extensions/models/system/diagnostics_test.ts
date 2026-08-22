@@ -1,7 +1,12 @@
 // System Diagnostics Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+  assertStringIncludes,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./diagnostics.ts";
 
@@ -477,6 +482,57 @@ Deno.test("system model: command failure throws error", async () => {
         );
       }
       assertEquals(threw, true, "Should have thrown an error");
+    },
+  );
+});
+
+Deno.test("system model: spawn failure names the command that could not run", async () => {
+  await withMockedCommand(
+    (_cmd, _args) => {
+      throw new Deno.errors.NotFound("No such file or directory (os error 2)");
+    },
+    async () => {
+      const { context } = createModelTestContext({
+        globalArgs: {},
+        definition: { id: "test-id", name: "sys", version: 1, tags: {} },
+      });
+
+      const err = await assertRejects(
+        () =>
+          model.methods.get_disk_usage.execute(
+            {},
+            context as unknown as Parameters<
+              typeof model.methods.get_disk_usage.execute
+            >[1],
+          ),
+        Error,
+      );
+      assertStringIncludes(err.message, "df");
+      assertStringIncludes(err.message, "No such file or directory");
+    },
+  );
+});
+
+Deno.test("system model: get_network_interfaces surfaces malformed JSON with context", async () => {
+  await withMockedCommand(
+    (_cmd, _args) => ({ stdout: "not-json{{{", success: true }),
+    async () => {
+      const { context } = createModelTestContext({
+        globalArgs: {},
+        definition: { id: "test-id", name: "sys", version: 1, tags: {} },
+      });
+
+      const err = await assertRejects(
+        () =>
+          model.methods.get_network_interfaces.execute(
+            {},
+            context as unknown as Parameters<
+              typeof model.methods.get_network_interfaces.execute
+            >[1],
+          ),
+        Error,
+      );
+      assertStringIncludes(err.message, "ip -j addr show");
     },
   );
 });

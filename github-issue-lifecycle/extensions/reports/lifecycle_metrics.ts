@@ -92,7 +92,16 @@ async function readSpec<T>(
       entry.version,
     );
     if (!bytes) continue;
-    results.push(JSON.parse(new TextDecoder().decode(bytes)) as T);
+    try {
+      results.push(JSON.parse(new TextDecoder().decode(bytes)) as T);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Failed to parse stored "${specName}" data "${entry.name}" ` +
+          `(version ${entry.version}) for model "${modelId}" as JSON: ${msg}`,
+        { cause: err },
+      );
+    }
   }
   return results;
 }

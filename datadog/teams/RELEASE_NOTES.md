@@ -1,3 +1,19 @@
+## 2026.08.21.2
+
+**Changed:** Error messages and input validation are more specific.
+
+- API errors now name the HTTP method and path that was attempted (e.g.
+  `Datadog API HTTP 404: GET /api/v2/team-hierarchy-links/abc-123`) instead
+  of just the raw status code and response body.
+- A network-level failure (DNS error, connection reset, timeout) reaching the
+  Datadog API now raises `Datadog API request failed: <METHOD> <path>: <reason>`
+  instead of an unlabeled fetch error.
+- `link_id` is now rejected up front if empty on `get_team_hierarchy_link`
+  and `remove_team_hierarchy_link`, instead of building a malformed request
+  path.
+
+No changes to request/response shapes or existing successful-path behavior.
+
 ## 2026.08.21.1
 
 **Changed:** Tightened and clarified Zod schemas as part of a repo-wide schema

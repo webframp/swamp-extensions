@@ -689,8 +689,15 @@ Deno.test({
             ) => Promise<{ dataHandles: unknown[] }>;
           }
         >).list_security_monitoring_suppressions.execute({}, context);
-      } catch (_err) {
+      } catch (err) {
         threw = true;
+        // The error must name the HTTP method and path attempted, not just
+        // the raw response body, so failures are identifiable at a glance.
+        assertStringIncludes((err as Error).message, "GET");
+        assertStringIncludes(
+          (err as Error).message,
+          "/configuration/suppressions",
+        );
       }
       assertEquals(threw, true);
     } finally {
@@ -699,3 +706,34 @@ Deno.test({
     }
   },
 });
+
+Deno.test(
+  "security-suppressions model: get_suppressions_affecting_future_rule rejects empty cases array",
+  () => {
+    const schema = (model.methods as Record<
+      string,
+      { arguments: { safeParse: (v: unknown) => { success: boolean } } }
+    >).get_suppressions_affecting_future_rule.arguments;
+    const result = schema.safeParse({
+      isEnabled: true,
+      message: "msg",
+      name: "test",
+      options: {},
+      cases: [],
+      queries: [{}],
+    });
+    assertEquals(result.success, false);
+  },
+);
+
+Deno.test(
+  "security-suppressions model: get_security_monitoring_suppression rejects empty suppression_id",
+  () => {
+    const schema = (model.methods as Record<
+      string,
+      { arguments: { safeParse: (v: unknown) => { success: boolean } } }
+    >).get_security_monitoring_suppression.arguments;
+    const result = schema.safeParse({ suppression_id: "" });
+    assertEquals(result.success, false);
+  },
+);

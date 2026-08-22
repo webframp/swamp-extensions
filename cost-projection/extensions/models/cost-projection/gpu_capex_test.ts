@@ -351,3 +351,21 @@ Deno.test("sensitivity schema: rejects utilizationPctRange with 0", () => {
     false,
   );
 });
+
+Deno.test("sensitivity schema: rejects empty usefulLifeMonthsRange", () => {
+  assertEquals(
+    model.methods.sensitivity.arguments.safeParse(
+      { usefulLifeMonthsRange: [], utilizationPctRange: [50] },
+    ).success,
+    false,
+  );
+});
+
+Deno.test("sensitivity schema: rejects empty utilizationPctRange", () => {
+  assertEquals(
+    model.methods.sensitivity.arguments.safeParse(
+      { usefulLifeMonthsRange: [36], utilizationPctRange: [] },
+    ).success,
+    false,
+  );
+});

@@ -1,3 +1,15 @@
+## 2026.08.21.2
+
+**Changed:** `project` and `iid` method arguments (`get_mr_diff`, `analyze`,
+`edit_draft`, `approve_mr`, `unapprove_mr`, `update_review`, `post_review`,
+`post_line_comment`) are now validated up front — `project` must be non-empty
+and `iid` must be a positive integer. Previously an empty project path or a
+zero/negative/fractional `iid` passed schema validation and only failed deep
+inside a GitLab API call with a confusing 404 or 400. A malformed (non-JSON)
+response body from GitLab's GraphQL endpoint, the MR `changes` endpoint, the
+MR `versions` endpoint, or the discussions endpoint now raises a clear error
+naming the request that failed, instead of a raw `JSON.parse` `SyntaxError`.
+
 ## 2026.08.21.1
 
 **Changed:** Added `.describe()` documentation to every previously undocumented field in the

@@ -137,7 +137,12 @@ export const vault = {
         // value can quote it back. The host publishes thrown messages to the
         // trace backend, so strip the value we know we sent.
         if (stdin) errMsg = redactSecret(errMsg, stdin);
-        throw new Error(errMsg || `gopass command failed with code ${code}`);
+        const commandDesc = `gopass ${args.join(" ")}`;
+        throw new Error(
+          `${commandDesc} exited with code ${code}${
+            errMsg ? `: ${errMsg}` : ""
+          }`,
+        );
       }
 
       return stripTrailingNewline(new TextDecoder().decode(stdout));

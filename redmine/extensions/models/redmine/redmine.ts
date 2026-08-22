@@ -230,7 +230,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.08.21.2",
+  version: "2026.08.21.3",
 
   upgrades: [
     {
@@ -283,6 +283,12 @@ export const model = {
       toVersion: "2026.08.21.2",
       description:
         "Require non-empty host, apiKey, and create_issue subject — no behavioral change for valid configs",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.3",
+      description:
+        "No schema changes other than rejecting an empty search query — API and network error messages now name the request method/path/host instead of only the HTTP status code",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1584,7 +1590,9 @@ export const model = {
     search: {
       description: "Search across issues, projects, and wiki pages",
       arguments: z.object({
-        query: z.string().describe("Search query"),
+        query: z.string().min(1, "query must not be empty").describe(
+          "Search query",
+        ),
         project: z.string().optional().describe(
           "Scope search to project identifier",
         ),
@@ -2001,7 +2009,14 @@ export const model = {
           "attachment";
 
         // Step 1: Upload binary
-        const fileData = await Deno.readFile(args.filePath);
+        const fileData = await Deno.readFile(args.filePath).catch((e) => {
+          throw new Error(
+            `Failed to read attachment file "${args.filePath}" for issue ${args.issueId}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+            { cause: e },
+          );
+        });
         const params = new URLSearchParams();
         params.set("filename", fileName);
         if (args.contentType) params.set("content_type", args.contentType);
@@ -2012,13 +2027,34 @@ export const model = {
         };
         if (username) headers["X-Redmine-Username"] = username;
 
-        const uploadResp = await fetch(
-          `${host}/uploads.json?${params}`,
-          { method: "POST", headers, body: fileData },
-        );
+        let uploadResp: Response;
+        try {
+          uploadResp = await fetch(
+            `${host}/uploads.json?${params}`,
+            { method: "POST", headers, body: fileData },
+          );
+        } catch (e) {
+          throw new Error(
+            `Failed to upload "${fileName}" to ${host} for issue ${args.issueId}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+            { cause: e },
+          );
+        }
 
         if (!uploadResp.ok) {
-          throw new Error(`Upload failed: ${uploadResp.status}`);
+          let detail = "";
+          try {
+            const data = await uploadResp.json();
+            if (data.errors && Array.isArray(data.errors)) {
+              detail = `: ${data.errors.join("; ")}`;
+            }
+          } catch {
+            // Response body may not be JSON
+          }
+          throw new Error(
+            `Failed to upload "${fileName}" to ${host} for issue ${args.issueId} (${uploadResp.status})${detail}`,
+          );
         }
 
         const uploadData = (await uploadResp.json()) as {

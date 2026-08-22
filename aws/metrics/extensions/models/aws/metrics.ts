@@ -280,7 +280,7 @@ function findAnomalies(
  */
 export const model = {
   type: "@webframp/aws/metrics",
-  version: "2026.08.20.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -297,6 +297,17 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description:
+        "Tighten namespace/metricName/instanceId/functionName validation, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description: "Error-message quality improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -366,7 +377,19 @@ export const model = {
               MetricName: args.metricName,
               NextToken: nextToken,
             });
-            const response = await client.send(command);
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `Failed to list CloudWatch metrics${
+                  args.namespace ? ` in namespace "${args.namespace}"` : ""
+                }${
+                  args.metricName ? ` (metricName="${args.metricName}")` : ""
+                }: ${err instanceof Error ? err.message : String(err)}`,
+                { cause: err },
+              );
+            }
 
             if (response.Metrics) {
               for (const m of response.Metrics) {
@@ -490,7 +513,17 @@ export const model = {
             Statistics: [args.statistic],
           });
 
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `Failed to get metric statistics for "${args.namespace}/${args.metricName}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
 
           const datapoints = (response.Datapoints || [])
             .map((dp: Datapoint) => ({
@@ -626,7 +659,17 @@ export const model = {
             Statistics: [args.statistic],
           });
 
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `Failed to get metric statistics for analysis of "${args.namespace}/${args.metricName}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
 
           const datapoints = (response.Datapoints || [])
             .map((dp: Datapoint) => ({
@@ -743,7 +786,17 @@ export const model = {
             Statistics: ["Average", "Maximum"],
           });
 
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `Failed to get CPUUtilization metric for EC2 instance "${args.instanceId}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
 
           const datapoints = (response.Datapoints || [])
             .map((dp: Datapoint) => ({
@@ -897,7 +950,17 @@ export const model = {
             EndTime: endTime,
           });
 
-          const response = await client.send(command);
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `Failed to get Lambda metrics for function "${args.functionName}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
 
           const results: Record<
             string,

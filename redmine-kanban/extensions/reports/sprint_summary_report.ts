@@ -108,19 +108,26 @@ export const report = {
     const now = new Date();
     const timestamp = now.toISOString();
 
-    // Helper to get data from filesystem
+    // Helper to get data from filesystem. Never throws (report degrade
+    // contract) — a genuinely absent resource and a real read/parse failure
+    // both yield `null` to the caller, but the latter is logged with its
+    // path and cause so it isn't silently indistinguishable from "no data".
     async function getData(
       modelType: string,
       modelId: string,
       dataName: string,
       version: number,
     ): Promise<Record<string, unknown> | null> {
+      const dataPath =
+        `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
       try {
-        const dataPath =
-          `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
         const content = await Deno.readTextFile(dataPath);
         return JSON.parse(content);
-      } catch {
+      } catch (e) {
+        context.logger.info(
+          "Could not read or parse data at {path}: {error}",
+          { path: dataPath, error: String(e) },
+        );
         return null;
       }
     }

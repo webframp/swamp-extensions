@@ -1,29 +1,21 @@
-## 2026.07.27.1
+## 2026.08.21.1
 
-**Fixed:** Regenerated from `scripts/cloudflare-codegen` after two generator
-bugs were repaired (webframp/swamp-extensions#284).
+**Changed:** Errors and validation now say what went wrong and where.
 
-1. **Methods referencing an undeclared path parameter did not compile.** The
-   generator derived a method's arguments schema and execute signature from the
-   OpenAPI `parameters` list, but built the request URL from the path template.
-   Where the Cloudflare spec omits a declaration for a `{placeholder}` — which
-   it does in several places — the result was a method with
-   `arguments:
-   z.object({})` and an unused `_args` parameter whose body still
-   interpolated `args.<name>`. Those methods failed type checking and were
-   uncallable even if they had compiled, because the argument was never
-   declared. Path-template placeholders are now unioned into the declared
-   parameters, so the schema, the signature, and the body agree.
+- Cloudflare API failures (HTTP errors and `success: false` API responses) now
+  name the HTTP method and path that was attempted, in addition to the
+  original status/message. Previously the error read only
+  `Cloudflare API error: <message>`, with no indication of which endpoint the
+  method call was hitting — now it reads
+  `Cloudflare API request failed: GET /zones/<zone>/custom_certificates/<id>: <message>`.
+  This applies to every method on this model, since they all share the same
+  request helper.
+- `certificate_id`, `custom_certificate_id`, and `certificate_pack_id` are now
+  validated as non-empty before any request is made. Passing an empty string
+  previously sent a request to a malformed URL (e.g.
+  `/zones/<zone>/ssl/certificate_packs/`) and produced a confusing 404 from
+  Cloudflare; each now fails fast with a `<field> must not be empty` message.
 
-2. **Generated tests could request a URL the mock server did not serve.** Test
-   arguments merged the request-body fixture over the path-parameter values, so
-   a body property sharing a name with a path parameter (commonly `id`)
-   substituted its own example value into the URL. The request then missed the
-   mock and failed with `Cloudflare API error: Not found`. Path parameters now
-   take precedence, matching what the generated model already does by excluding
-   path-parameter names from the request body.
-
-**Upgrade note:** No API surface change and no method was added or removed. If
-this extension type-checked and tested cleanly before, its behavior is unchanged
-and only the version moved. Extensions that previously failed `deno check` or
-`deno task test` now pass.
+**Upgrade note:** No method was added, removed, or renamed. Existing callers
+that always pass non-empty identifiers see no behavioral change beyond
+clearer error text.

@@ -67,6 +67,15 @@ export interface RetryOptions {
   maxAttempts?: number;
   baseDelayMs?: number;
   signal?: AbortSignal;
+  /**
+   * Short description of the operation being retried (e.g.
+   * `getShard partition=foo`), included in the error thrown once retries are
+   * exhausted or a non-retryable SDK error is hit. Without this, a raw AWS
+   * SDK error (ValidationException, AccessDeniedException, a dropped
+   * connection) surfaces with no indication of which DynamoDB call or
+   * file/partition it was operating on.
+   */
+  opLabel?: string;
 }
 
 export async function retryable<T>(
@@ -76,6 +85,7 @@ export async function retryable<T>(
   const maxAttempts = options?.maxAttempts ?? 3;
   const baseDelayMs = options?.baseDelayMs ?? 500;
   const signal = options?.signal;
+  const opLabel = options?.opLabel;
 
   if (maxAttempts < 1) {
     throw new Error(
@@ -95,7 +105,13 @@ export async function retryable<T>(
       return await op();
     } catch (err) {
       const isLastAttempt = attempt === maxAttempts - 1;
-      if (isLastAttempt || !isRetryableDynamoError(err)) throw err;
+      if (isLastAttempt || !isRetryableDynamoError(err)) {
+        if (!opLabel) throw err;
+        const reason = err instanceof Error ? err.message : String(err);
+        throw new Error(`DynamoDB ${opLabel} failed: ${reason}`, {
+          cause: err,
+        });
+      }
       const raw = baseDelayMs * Math.pow(3, attempt);
       const jitter = raw * JITTER_FRACTION * (Math.random() * 2 - 1);
       const delay = Math.max(0, Math.floor(raw + jitter));

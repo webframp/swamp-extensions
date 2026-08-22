@@ -139,7 +139,7 @@ export const model = {
         ddtags: z.string().optional().describe(
           "Log tags can be passed as query parameters with `text/plain` content type.",
         ),
-        entries: z.array(z.record(z.string(), z.unknown())).describe(
+        entries: z.array(z.record(z.string(), z.unknown())).min(1).describe(
           "Array of items to submit",
         ),
       }),

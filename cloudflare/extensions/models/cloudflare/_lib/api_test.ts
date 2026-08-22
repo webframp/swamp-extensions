@@ -175,7 +175,41 @@ Deno.test({
       await assertRejects(
         () => cfApi("test-token", "GET", "/zones/invalid"),
         Error,
-        "Unknown zone",
+        "Cloudflare API error on GET /zones/invalid: Unknown zone",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "cfApi: wraps a non-JSON response with the operation and status",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockCfServer(() =>
+      new Response("<html>gateway timeout</html>", {
+        status: 502,
+        headers: { "content-type": "text/html" },
+      })
+    );
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (input, init) => {
+      const reqUrl = typeof input === "string" ? input : input.toString();
+      const newUrl = reqUrl.replace(
+        "https://api.cloudflare.com/client/v4",
+        url,
+      );
+      return originalFetch(newUrl, init);
+    };
+
+    try {
+      await assertRejects(
+        () => cfApi("test-token", "GET", "/zones/invalid"),
+        Error,
+        "non-JSON response for GET /zones/invalid (HTTP 502)",
       );
     } finally {
       globalThis.fetch = originalFetch;

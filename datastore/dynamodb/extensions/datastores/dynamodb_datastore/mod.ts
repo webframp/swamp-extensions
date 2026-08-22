@@ -231,9 +231,13 @@ export const datastore = {
               },
             };
           } catch (error) {
+            const reason = error instanceof Error
+              ? error.message
+              : String(error);
             return {
               healthy: false,
-              message: String(error),
+              message:
+                `DescribeTable failed for table "${parsed.tableName}": ${reason}`,
               latencyMs: Math.round(performance.now() - start),
               datastoreType: "@webframp/dynamodb-datastore",
             };

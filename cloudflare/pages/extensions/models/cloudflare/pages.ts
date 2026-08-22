@@ -630,8 +630,8 @@ export const model = {
           preview: z.unknown().optional(),
           production: z.unknown().optional(),
         }).optional().describe("Configs for deployments in a project."),
-        name: z.string().describe("Name of the project."),
-        production_branch: z.string().describe(
+        name: z.string().min(1).describe("Name of the project."),
+        production_branch: z.string().min(1).describe(
           "Production branch of the project. Used to identify production deployments.",
         ),
         source: z.object({

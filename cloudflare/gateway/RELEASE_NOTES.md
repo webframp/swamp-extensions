@@ -1,20 +1,18 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Fixed:** Regenerated with three cloudflare-codegen fixes: (1)
-discriminated-union request bodies with a sibling top-level discriminator
-property (e.g. gateway proxy_endpoints kind) now correctly build the body from
-the full oneOf variant instead of silently dropping it to undefined; (2) DELETE
-methods with a request body (e.g. r2 delete_objects bulk-delete-by-list) now
-send that body instead of ignoring it; (3) oneOf/anyOf request body variants
-that are $ref (e.g. r2 sippy config) are now resolved to their real schema
-instead of collapsing to z.unknown(). Same generator fix as workers-scripts in
-#352, now caught up for these 7 services.
+**Changed:** Error messages for API failures and invalid input are now
+specific instead of generic.
 
-**Changed:** `list_from_csv` was removed — it is no longer present in the
-upstream Cloudflare API spec this extension is generated from.
+- Every method that calls the Cloudflare API now wraps failures with the
+  operation attempted and the account/identifier involved (e.g.
+  `certificate_id`, `list_id`, `location_id`, `pacfile_id`,
+  `proxy_endpoint_id`, `rule_id`), instead of surfacing the raw SDK error
+  with no context.
+- Methods that take a `certificate_id`, `list_id`, `location_id`,
+  `operation_id`, `pacfile_id`, `proxy_endpoint_id`, or `rule_id` now reject
+  an empty value up front with a clear validation error, instead of sending
+  a malformed request to the Cloudflare API.
 
-**Upgrade note:** `create_proxy_endpoint`'s arguments changed shape. It
-previously took `{ kind }` directly and silently discarded any `name` you
-passed. It now takes `{ body: { kind, name } }`, with `name` required inside
-`body`. Calls using the old `{ kind }` shape will fail schema validation and
-must be updated to `{ body: { kind, name } }`.
+**Upgrade note:** No behavioral change for valid requests. Callers passing an
+empty identifier will now get an immediate, descriptive validation error
+instead of a Cloudflare API failure.

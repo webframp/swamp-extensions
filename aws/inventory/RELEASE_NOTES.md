@@ -1,31 +1,12 @@
-## 2026.08.20.1
+## 2026.08.21.1
 
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (9 packages)
+**Changed:** Inventory failures now say which service and region were being
+scanned instead of surfacing the raw SDK error. `list_ec2`, `list_rds`,
+`list_dynamodb`, `list_lambda`, `list_s3`, `list_ebs`, and `inventory_all`
+each wrap failures from their underlying AWS API calls with the resource
+type and region (or "S3 buckets" for the global method), preserving the
+original SDK error as the cause. The Resource Groups Tagging API fallback
+used by `inventory_scan`/`inventory_diff` now also names the region in its
+error message.
 
-## 2026.08.15.1
-
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (9 packages)
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (9 packages)
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (9 packages)
-
-## 2026.08.01.1
-
-**Fixed:** Broken model-upgrade chain. The prior version bump (to `2026.07.31.1`) updated `version` but left the `upgrades` array terminating one step short, which blocks `swamp extension push` ("model upgrade chain errors"). That version never actually published — the registry was still serving `2026.07.30.1`. This release closes the chain with a no-op upgrade entry and republishes everything that had accumulated since `2026.07.30.1`.
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (9 packages)
-
-## 2026.07.30.1
-
-**Added:** Optional `profile` global argument for multi-account credential resolution.
-When set, credentials resolve via `fromIni` (supports SSO token cache and shared-config
-profiles). When omitted, the default credential chain applies as before. Fully backward
-compatible — no changes required for existing instances.
-
+No schema changes.

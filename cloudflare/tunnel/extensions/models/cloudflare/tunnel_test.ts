@@ -59,6 +59,13 @@ Deno.test("tunnel model: has expected resources", () => {
   assertExists(model.resources["all_tunnels"]);
 });
 
+Deno.test("tunnel model: rejects empty tunnel_id", () => {
+  const result = model.methods.get_a_cloudflare_tunnel.arguments.safeParse({
+    tunnel_id: "",
+  });
+  assertEquals(result.success, false);
+});
+
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

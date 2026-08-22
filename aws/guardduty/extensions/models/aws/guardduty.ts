@@ -153,7 +153,17 @@ async function getDetectorId(
   logger?: { info: (msg: string, props: Record<string, unknown>) => void },
   region?: string,
 ): Promise<string> {
-  const resp = await client.send(new ListDetectorsCommand({}));
+  let resp;
+  try {
+    resp = await client.send(new ListDetectorsCommand({}));
+  } catch (err) {
+    throw new Error(
+      `Failed to list GuardDuty detectors in ${
+        region ?? "the configured region"
+      }: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
+  }
   const ids = resp.DetectorIds || [];
   if (ids.length === 0) {
     const regionLabel = region ?? "the configured region";
@@ -229,7 +239,7 @@ function mapMember(m: Member): z.infer<typeof MemberSchema> {
  */
 export const model = {
   type: "@webframp/aws/guardduty",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -250,6 +260,11 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "Error-message quality improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -288,6 +303,8 @@ export const model = {
           ),
         severityMin: z
           .number()
+          .min(0)
+          .max(10)
           .optional()
           .describe("Minimum severity threshold (0-10)"),
         accountId: z
@@ -367,14 +384,24 @@ export const model = {
           do {
             const batchSize = Math.min(50, maxIds - allIds.length);
             if (batchSize <= 0) break;
-            const resp = await client.send(
-              new ListFindingsCommand({
-                DetectorId: detectorId,
-                FindingCriteria: { Criterion: criterion },
-                MaxResults: batchSize,
-                NextToken: nextToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new ListFindingsCommand({
+                  DetectorId: detectorId,
+                  FindingCriteria: { Criterion: criterion },
+                  MaxResults: batchSize,
+                  NextToken: nextToken,
+                }),
+              );
+            } catch (err) {
+              throw new Error(
+                `Failed to list GuardDuty findings for detector "${detectorId}": ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
             if (resp.FindingIds) {
               allIds.push(...resp.FindingIds);
             }
@@ -386,12 +413,22 @@ export const model = {
           const findings: z.infer<typeof FindingSummarySchema>[] = [];
           for (let i = 0; i < allIds.length; i += 50) {
             const batch = allIds.slice(i, i + 50);
-            const resp = await client.send(
-              new GetFindingsCommand({
-                DetectorId: detectorId,
-                FindingIds: batch,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new GetFindingsCommand({
+                  DetectorId: detectorId,
+                  FindingIds: batch,
+                }),
+              );
+            } catch (err) {
+              throw new Error(
+                `Failed to get details for ${batch.length} GuardDuty finding(s) (detector "${detectorId}"): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
             if (resp.Findings) {
               findings.push(...resp.Findings.map(mapFindingSummary));
             }
@@ -488,12 +525,24 @@ export const model = {
             ),
           ).map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
 
-          const resp = await client.send(
-            new GetFindingsCommand({
-              DetectorId: detectorId,
-              FindingIds: ids,
-            }),
-          );
+          let resp;
+          try {
+            resp = await client.send(
+              new GetFindingsCommand({
+                DetectorId: detectorId,
+                FindingIds: ids,
+              }),
+            );
+          } catch (err) {
+            throw new Error(
+              `Failed to get GuardDuty finding details for ID(s) [${
+                ids.join(", ")
+              }] (detector "${detectorId}"): ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
 
           const findings = (resp.Findings || []).map(mapFindingDetail);
 
@@ -558,14 +607,24 @@ export const model = {
           const members: z.infer<typeof MemberSchema>[] = [];
           let nextToken: string | undefined;
           do {
-            const resp = await client.send(
-              new ListMembersCommand({
-                DetectorId: detectorId,
-                OnlyAssociated: args.onlyAssociated ? "true" : "false",
-                MaxResults: Math.min(50, args.limit - members.length),
-                NextToken: nextToken,
-              }),
-            );
+            let resp;
+            try {
+              resp = await client.send(
+                new ListMembersCommand({
+                  DetectorId: detectorId,
+                  OnlyAssociated: args.onlyAssociated ? "true" : "false",
+                  MaxResults: Math.min(50, args.limit - members.length),
+                  NextToken: nextToken,
+                }),
+              );
+            } catch (err) {
+              throw new Error(
+                `Failed to list GuardDuty member accounts for detector "${detectorId}": ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
             if (resp.Members) {
               members.push(...resp.Members.map(mapMember));
             }

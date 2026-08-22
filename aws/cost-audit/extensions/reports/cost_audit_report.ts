@@ -83,13 +83,30 @@ export const report = {
       dataName: string,
       version: number,
     ): Promise<Record<string, unknown> | null> {
+      // Data path: .swamp/data/{modelType}/{modelId}/{dataName}/{version}/raw
+      const dataPath =
+        `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
+      let content: string;
       try {
-        // Data path: .swamp/data/{modelType}/{modelId}/{dataName}/{version}/raw
-        const dataPath =
-          `${context.repoDir}/.swamp/data/${modelType}/${modelId}/${dataName}/${version}/raw`;
-        const content = await Deno.readTextFile(dataPath);
+        content = await Deno.readTextFile(dataPath);
+      } catch (err) {
+        if (err instanceof Deno.errors.NotFound) {
+          // Expected when the producing step didn't run or wrote nothing.
+          return null;
+        }
+        context.logger.info(
+          "Failed to read data artifact {dataPath}: {error}",
+          { dataPath, error: err instanceof Error ? err.message : String(err) },
+        );
+        return null;
+      }
+      try {
         return JSON.parse(content);
-      } catch {
+      } catch (err) {
+        context.logger.info(
+          "Failed to parse data artifact {dataPath} as JSON: {error}",
+          { dataPath, error: err instanceof Error ? err.message : String(err) },
+        );
         return null;
       }
     }

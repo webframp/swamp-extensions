@@ -194,7 +194,7 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -207,6 +207,12 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Require non-empty channel, moderatorId, and OAuth2/client credential fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No resource schema changes — tightened method argument validation",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -357,7 +363,7 @@ export const model = {
       description:
         "Look up a Twitch user by login and compute account age in days",
       arguments: z.object({
-        login: z.string().describe("Twitch login name to look up"),
+        login: z.string().min(1).describe("Twitch login name to look up"),
       }),
       execute: async (args: { login: string }, context: MethodContext) => {
         const creds = credsFrom(context.globalArgs);
@@ -454,10 +460,12 @@ export const model = {
       description:
         "Ban or timeout a user in the configured channel. Omit duration for a permanent ban.",
       arguments: z.object({
-        userId: z.string().describe("Twitch user ID to ban"),
-        reason: z.string().optional().describe("Reason for the ban"),
-        duration: z.number().optional().describe(
-          "Timeout duration in seconds (omit for permanent ban)",
+        userId: z.string().min(1).describe("Twitch user ID to ban"),
+        reason: z.string().max(500).optional().describe(
+          "Reason for the ban",
+        ),
+        duration: z.number().int().min(1).max(1_209_600).optional().describe(
+          "Timeout duration in seconds, 1 to 1209600 (2 weeks); omit for a permanent ban",
         ),
       }),
       execute: async (
@@ -503,7 +511,7 @@ export const model = {
       description:
         "Remove a ban or timeout for a user in the configured channel",
       arguments: z.object({
-        userId: z.string().describe("Twitch user ID to unban"),
+        userId: z.string().min(1).describe("Twitch user ID to unban"),
       }),
       execute: async (args: { userId: string }, context: MethodContext) => {
         const { channel, moderatorId } = context.globalArgs;
@@ -537,7 +545,9 @@ export const model = {
       description:
         "Send a chat message in the configured channel (requires user:write:chat scope)",
       arguments: z.object({
-        message: z.string().describe("Message text to send (max 500 chars)"),
+        message: z.string().min(1).max(500).describe(
+          "Message text to send (max 500 chars)",
+        ),
         replyToMessageId: z.string().optional().describe(
           "Message ID to reply to (threads the response)",
         ),

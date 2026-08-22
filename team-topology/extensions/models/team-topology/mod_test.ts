@@ -5,6 +5,7 @@ import {
   assertEquals,
   assertExists,
   assertMatch,
+  assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./mod.ts";
@@ -316,6 +317,11 @@ Deno.test("discover_topology writes topology resource with correct data", async 
         type: "platform" as const,
         domains: ["infra"],
         systems: [],
+      }, {
+        name: "Identity",
+        type: "platform" as const,
+        domains: ["auth"],
+        systems: [],
       }],
       interactions: [SAMPLE_INTERACTION],
       systemDependencies: [SAMPLE_SYSTEM_DEP],
@@ -340,7 +346,7 @@ Deno.test("discover_topology writes topology resource with correct data", async 
     discoveredAt: string;
     notes: string;
   };
-  assertEquals(data.teams.length, 2);
+  assertEquals(data.teams.length, 3);
   assertEquals(data.teams[0].name, "Payments");
   assertEquals(data.interactions.length, 1);
   assertEquals(data.systemDependencies.length, 1);
@@ -353,7 +359,21 @@ Deno.test("discover_topology logs team and interaction counts", async () => {
 
   await model.methods.discover_topology.execute(
     {
-      teams: [SAMPLE_TEAM],
+      teams: [
+        SAMPLE_TEAM,
+        {
+          name: "Platform",
+          type: "platform" as const,
+          domains: [],
+          systems: [],
+        },
+        {
+          name: "DevEx",
+          type: "enabling" as const,
+          domains: [],
+          systems: [],
+        },
+      ],
       interactions: [SAMPLE_INTERACTION, {
         ...SAMPLE_INTERACTION,
         target: "DevEx",
@@ -371,9 +391,47 @@ Deno.test("discover_topology logs team and interaction counts", async () => {
     interactionCount: number;
     depCount: number;
   };
-  assertEquals(meta.teamCount, 1);
+  assertEquals(meta.teamCount, 3);
   assertEquals(meta.interactionCount, 2);
   assertEquals(meta.depCount, 0);
+});
+
+Deno.test("discover_topology rejects an interaction referencing an unknown team", async () => {
+  const { context } = createTopologyContext();
+
+  await assertRejects(
+    () =>
+      model.methods.discover_topology.execute(
+        {
+          teams: [SAMPLE_TEAM],
+          interactions: [SAMPLE_INTERACTION], // target "Platform" doesn't exist
+          systemDependencies: [],
+        },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "Platform",
+  );
+});
+
+Deno.test("discover_topology rejects a system dependency referencing an unknown owner", async () => {
+  const { context } = createTopologyContext();
+
+  await assertRejects(
+    () =>
+      model.methods.discover_topology.execute(
+        {
+          teams: [SAMPLE_TEAM],
+          interactions: [],
+          systemDependencies: [SAMPLE_SYSTEM_DEP], // ownerTo "Identity" doesn't exist
+        },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "Identity",
+  );
 });
 
 // =============================================================================

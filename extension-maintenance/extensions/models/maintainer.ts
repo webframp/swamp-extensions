@@ -194,11 +194,15 @@ const QualityResultSchema = z.object({
 // Helpers
 // =============================================================================
 
-/** Run a command and return stdout, or null on failure. */
+/**
+ * Run a command and return stdout/stderr plus success. Never throws for a
+ * non-zero exit — callers decide whether that's fatal — but stderr is always
+ * captured so failures can be reported with the reason, not just "it failed".
+ */
 async function run(
   cmd: string[],
   cwd?: string,
-): Promise<{ stdout: string; success: boolean }> {
+): Promise<{ stdout: string; stderr: string; success: boolean }> {
   const proc = new Deno.Command(cmd[0]!, {
     args: cmd.slice(1),
     cwd,
@@ -208,8 +212,16 @@ async function run(
   const output = await proc.output();
   return {
     stdout: new TextDecoder().decode(output.stdout),
+    stderr: new TextDecoder().decode(output.stderr),
     success: output.success,
   };
+}
+
+/** Truncate command stderr/stdout for embedding in an error/warning message. */
+function summarize(text: string, maxLen = 300): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "(no output)";
+  return trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
 }
 
 /** Query npm registry for latest version of a package. */
@@ -822,7 +834,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.08.15.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1452,13 +1464,15 @@ export const model = {
                   `  ↳ deno.lock regenerated for ${entry.name}`,
                 );
               } else {
+                const detail = summarize(lockResult.stderr);
                 context.logger.warn(
-                  `  ↳ deno cache failed for ${entry.name}`,
+                  `  ↳ deno cache failed for ${entry.name}: ${detail}`,
                 );
                 errors.push({
                   extension: entry.name,
                   error:
-                    "deno cache failed after writing pin changes; deno.lock may be out of sync",
+                    `deno cache failed after writing pin changes for ${entry.name} ` +
+                    `(deno.lock may be out of sync): ${detail}`,
                 });
               }
             }
@@ -1565,10 +1579,34 @@ export const model = {
           const fmtResult = await run(["deno", "task", "fmt"], dir);
           const testResult = await run(["deno", "task", "test"], dir);
 
-          if (!checkResult.success) errors.push("check failed");
-          if (!lintResult.success) errors.push("lint failed");
-          if (!fmtResult.success) errors.push("fmt failed");
-          if (!testResult.success) errors.push("test failed");
+          if (!checkResult.success) {
+            errors.push(
+              `deno task check failed for ${name}: ${
+                summarize(checkResult.stderr)
+              }`,
+            );
+          }
+          if (!lintResult.success) {
+            errors.push(
+              `deno task lint failed for ${name}: ${
+                summarize(lintResult.stderr)
+              }`,
+            );
+          }
+          if (!fmtResult.success) {
+            errors.push(
+              `deno task fmt failed for ${name}: ${
+                summarize(fmtResult.stderr)
+              }`,
+            );
+          }
+          if (!testResult.success) {
+            errors.push(
+              `deno task test failed for ${name}: ${
+                summarize(testResult.stderr)
+              }`,
+            );
+          }
 
           const quality = await getQualityScore(dir);
 
@@ -1577,7 +1615,13 @@ export const model = {
             ["swamp", "extension", "fmt", "manifest.yaml", "--check", "--json"],
             dir,
           );
-          if (!extFmtResult.success) errors.push("extension fmt failed");
+          if (!extFmtResult.success) {
+            errors.push(
+              `swamp extension fmt --check failed for ${name}: ${
+                summarize(extFmtResult.stderr || extFmtResult.stdout)
+              }`,
+            );
+          }
 
           // Upgrade chain: last toVersion must match model version
           const manifestVer = await readManifestVersion(dir);

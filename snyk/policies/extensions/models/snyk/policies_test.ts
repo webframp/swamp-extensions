@@ -41,6 +41,19 @@ Deno.test("policies model: has expected methods", () => {
   assertExists(model.methods.get_org_policy_events);
 });
 
+Deno.test("policies model: get_org_policy rejects empty policy_id", () => {
+  const result = model.methods.get_org_policy.arguments.safeParse({
+    policy_id: "",
+  });
+  assertEquals(result.success, false);
+  if (!result.success) {
+    assertStringIncludes(
+      JSON.stringify(result.error.issues),
+      "policy_id must not be empty",
+    );
+  }
+});
+
 Deno.test("policies model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["get_org_policies"]);

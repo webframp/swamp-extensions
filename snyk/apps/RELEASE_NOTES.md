@@ -1,11 +1,18 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Schema tightening sweep — no behavioral changes.
+**Changed:**
 
-- Added `.min(1)` to `apiToken`, `orgId`, and the `client_id`/`client_secret`
-  pair on `create_group_app_install`/`create_org_app_install` resource
-  schemas, matching the same fields elsewhere in this model that already
-  required a non-empty string.
-- Added `.describe(...)` to the previously undocumented `org_public_id` field
-  (five occurrences) and the `secret` field used in app-secret rotation
-  payloads.
+- Snyk API request failures now name the HTTP method and path that was
+  attempted (e.g. `Snyk API POST /orgs/{orgId}/apps/creations failed with HTTP
+  403: ...`) instead of just the raw status and body. Network-level failures
+  (DNS, timeout, connection reset) are also caught and re-raised with the same
+  method/path context and the original error preserved as `cause`, rather than
+  propagating an unlabeled fetch error.
+- `update_group_app_install_secret`, `create_manage_app_creation_secret`, and
+  `update_org_app_install_secret` now validate that `secret` is present when
+  `mode` is `"create"` or `"replace"`. Previously an omitted secret in those
+  modes would fail deep inside the Snyk API call with a generic 4xx error
+  instead of a clear local validation message.
+
+**Upgrade note:** No changes to stored resource schemas. Existing instances
+need no migration.

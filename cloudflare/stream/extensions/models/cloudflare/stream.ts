@@ -583,7 +583,7 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -1179,7 +1179,7 @@ export const model = {
     delete_signing_keys: {
       description: "Delete signing keys",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1286,7 +1286,10 @@ export const model = {
     get_stream_live_inputs_retrieve_a_live_input: {
       description: "Retrieve a live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1324,7 +1327,10 @@ export const model = {
     update_a_live_input: {
       description: "Update a live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
         defaultCreator: z.unknown().optional(),
         deleteRecordingAfterDays: z.unknown().optional(),
         enabled: z.unknown().optional(),
@@ -1373,7 +1379,10 @@ export const model = {
     delete_a_live_input: {
       description: "Delete a live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1406,7 +1415,10 @@ export const model = {
     stream_live_inputs_disable_a_live_input: {
       description: "Disable a live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1445,7 +1457,10 @@ export const model = {
     stream_live_inputs_enable_a_live_input: {
       description: "Enable a live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1484,7 +1499,10 @@ export const model = {
     list_all_outputs_associated_with_a_specified_live_input: {
       description: "List all outputs associated with a specified live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1546,7 +1564,10 @@ export const model = {
     create_a_new_output_connected_to_a_live_input: {
       description: "Create a new output, connected to a live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
         enabled: z.unknown().optional(),
         streamKey: z.unknown(),
         url: z.unknown(),
@@ -1596,8 +1617,14 @@ export const model = {
     update_an_output: {
       description: "Update an output",
       arguments: z.object({
-        output_identifier: z.string(),
-        live_input_identifier: z.string(),
+        output_identifier: z.string().min(
+          1,
+          "output_identifier must not be empty",
+        ),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
         enabled: z.unknown(),
       }),
       execute: async (
@@ -1644,8 +1671,14 @@ export const model = {
     delete_an_output: {
       description: "Delete an output",
       arguments: z.object({
-        output_identifier: z.string(),
-        live_input_identifier: z.string(),
+        output_identifier: z.string().min(
+          1,
+          "output_identifier must not be empty",
+        ),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1678,7 +1711,10 @@ export const model = {
     stream_live_inputs_rotate_keys_for_a_live_input: {
       description: "Rotate keys for a live input",
       arguments: z.object({
-        live_input_identifier: z.string(),
+        live_input_identifier: z.string().min(
+          1,
+          "live_input_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1912,7 +1948,7 @@ export const model = {
     get_stream_watermark_profile_watermark_profile_details: {
       description: "Watermark profile details",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1950,7 +1986,7 @@ export const model = {
     delete_watermark_profiles: {
       description: "Delete watermark profiles",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2085,7 +2121,7 @@ export const model = {
     get_stream_videos_retrieve_video_details: {
       description: "Retrieve video details",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2120,7 +2156,7 @@ export const model = {
     update_video_details: {
       description: "Edit video details",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
         allowedOrigins: z.unknown().optional(),
         creator: z.unknown().optional(),
         maxDurationSeconds: z.unknown().optional(),
@@ -2182,7 +2218,7 @@ export const model = {
     delete_video: {
       description: "Delete video",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2213,7 +2249,7 @@ export const model = {
     list_audio_tracks: {
       description: "List additional audio tracks on a video",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2248,7 +2284,7 @@ export const model = {
     create_add_audio_track: {
       description: "Add audio tracks to a video",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
         label: z.unknown(),
         url: z.string().optional().describe(
           "An audio track URL. The server must be publicly routable and support `HTTP HE...",
@@ -2296,8 +2332,11 @@ export const model = {
     update_edit_audio_tracks: {
       description: "Edit additional audio tracks on a video",
       arguments: z.object({
-        identifier: z.string(),
-        audio_identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
+        audio_identifier: z.string().min(
+          1,
+          "audio_identifier must not be empty",
+        ),
         default: z.unknown().optional(),
         label: z.unknown().optional(),
       }),
@@ -2342,8 +2381,11 @@ export const model = {
     delete_audio_tracks: {
       description: "Delete additional audio tracks on a video",
       arguments: z.object({
-        identifier: z.string(),
-        audio_identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
+        audio_identifier: z.string().min(
+          1,
+          "audio_identifier must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2376,7 +2418,7 @@ export const model = {
     list_captions_or_subtitles: {
       description: "List captions or subtitles",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2433,8 +2475,8 @@ export const model = {
     get_caption_or_subtitle_for_language: {
       description: "List captions or subtitles for a provided language",
       arguments: z.object({
-        language: z.string(),
-        identifier: z.string(),
+        language: z.string().min(1, "language must not be empty"),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2469,8 +2511,8 @@ export const model = {
     delete_captions_or_subtitles: {
       description: "Delete captions or subtitles",
       arguments: z.object({
-        language: z.string(),
-        identifier: z.string(),
+        language: z.string().min(1, "language must not be empty"),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2502,8 +2544,8 @@ export const model = {
       description:
         "Generate captions or subtitles for a provided language via AI",
       arguments: z.object({
-        language: z.string(),
-        identifier: z.string(),
+        language: z.string().min(1, "language must not be empty"),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2542,7 +2584,7 @@ export const model = {
     list_downloads: {
       description: "List downloads",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2577,7 +2619,7 @@ export const model = {
     create_downloads: {
       description: "Create downloads",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2613,7 +2655,7 @@ export const model = {
     delete_downloads: {
       description: "Delete downloads",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2644,8 +2686,8 @@ export const model = {
     create_type_specific_downloads: {
       description: "Create download",
       arguments: z.object({
-        identifier: z.string(),
-        download_type: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
+        download_type: z.string().min(1, "download_type must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2681,8 +2723,8 @@ export const model = {
     delete_type_specific_downloads: {
       description: "Delete download",
       arguments: z.object({
-        identifier: z.string(),
-        download_type: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
+        download_type: z.string().min(1, "download_type must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2715,7 +2757,7 @@ export const model = {
     create_signed_url_tokens_for_videos: {
       description: "Create signed URL tokens for videos",
       arguments: z.object({
-        identifier: z.string(),
+        identifier: z.string().min(1, "identifier must not be empty"),
         accessRules: z.array(z.unknown()).optional().describe(
           "The optional list of access rule constraints on the token. Access can be bloc...",
         ),

@@ -137,7 +137,8 @@ export async function helixApi<T>(
 
   if (!response.ok) {
     throw new Error(
-      `Twitch Helix API error ${response.status}: ${await response.text()}`,
+      `Twitch Helix API request failed: ${method} ${path} returned ${response.status}: ${await response
+        .text()}`,
     );
   }
 

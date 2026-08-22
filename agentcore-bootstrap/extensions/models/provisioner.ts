@@ -73,7 +73,11 @@ async function awsCli(
   const output = await command.output();
   if (!output.success) {
     const stderr = new TextDecoder().decode(output.stderr);
-    throw new Error(`AWS CLI failed: ${stderr}`);
+    throw new Error(
+      `AWS CLI failed running "aws ${args.join(" ")} --region ${region}": ${
+        stderr.trim() || "no stderr output"
+      }`,
+    );
   }
   const stdout = new TextDecoder().decode(output.stdout);
   return stdout.trim() ? JSON.parse(stdout) : {};
@@ -417,7 +421,11 @@ export const model = {
         const buildOutput = await buildCmd.output();
         if (!buildOutput.success) {
           const stderr = new TextDecoder().decode(buildOutput.stderr);
-          throw new Error(`Worker image build failed: ${stderr}`);
+          throw new Error(
+            `docker buildx build failed for image ${fullImageTag} (context ${workerDir}, platform ${args.platform}): ${
+              stderr.trim() || "no stderr output"
+            }`,
+          );
         }
 
         // ECR login — get password then pipe to docker login without shell interpolation
@@ -431,7 +439,11 @@ export const model = {
         const passwordOutput = await getPasswordCmd.output();
         if (!passwordOutput.success) {
           const stderr = new TextDecoder().decode(passwordOutput.stderr);
-          throw new Error(`ECR get-login-password failed: ${stderr}`);
+          throw new Error(
+            `aws ecr get-login-password failed for registry ${registry} (region ${region}): ${
+              stderr.trim() || "no stderr output"
+            }`,
+          );
         }
         const password = new TextDecoder().decode(passwordOutput.stdout).trim();
 
@@ -448,7 +460,11 @@ export const model = {
         const loginOutput = await loginProcess.output();
         if (!loginOutput.success) {
           const stderr = new TextDecoder().decode(loginOutput.stderr);
-          throw new Error(`ECR login failed: ${stderr}`);
+          throw new Error(
+            `docker login to registry ${registry} failed: ${
+              stderr.trim() || "no stderr output"
+            }`,
+          );
         }
 
         // Push
@@ -463,7 +479,11 @@ export const model = {
         const pushOutput = await pushCmd.output();
         if (!pushOutput.success) {
           const stderr = new TextDecoder().decode(pushOutput.stderr);
-          throw new Error(`Image push failed: ${stderr}`);
+          throw new Error(
+            `docker push of image ${fullImageTag} failed: ${
+              stderr.trim() || "no stderr output"
+            }`,
+          );
         }
 
         // 5. Create AgentCore runtime

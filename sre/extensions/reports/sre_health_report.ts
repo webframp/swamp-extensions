@@ -127,36 +127,62 @@ export const report = {
       version: number,
     ): Promise<Record<string, unknown> | null> {
       const repo = context.dataRepository;
+      const target = `${modelType}/${modelId}/${dataName}@${version}`;
+
+      let raw: Uint8Array | null;
       // First try string-based getContent (works with mock test context).
       // If the real runtime rejects it (type.toDirectoryPath is not a function),
       // retry with a type-like object that satisfies the internal API.
       try {
-        const raw = await repo.getContent(
-          modelType,
-          modelId,
-          dataName,
-          version,
-        );
-        if (raw) return JSON.parse(new TextDecoder().decode(raw));
-      } catch {
+        raw = await repo.getContent(modelType, modelId, dataName, version);
+      } catch (firstErr) {
         try {
           const typeArg = {
             raw: modelType,
             toDirectoryPath: () => modelType,
             toString: () => modelType,
           };
-          const raw = await repo.getContent(
-            typeArg,
-            modelId,
-            dataName,
-            version,
+          raw = await repo.getContent(typeArg, modelId, dataName, version);
+        } catch (secondErr) {
+          // Both the string-based and type-object-based getContent calls
+          // failed — surface why, so a missing check in the report can be
+          // traced back to a data-access failure rather than looking like
+          // the step simply never ran.
+          context.logger.info(
+            "Failed to fetch report data for {target}: {reason}",
+            {
+              target,
+              reason: secondErr instanceof Error
+                ? secondErr.message
+                : String(secondErr),
+              firstAttemptReason: firstErr instanceof Error
+                ? firstErr.message
+                : String(firstErr),
+            },
           );
-          if (raw) return JSON.parse(new TextDecoder().decode(raw));
-        } catch {
-          // both approaches failed
+          return null;
         }
       }
-      return null;
+
+      if (!raw) return null;
+
+      try {
+        return JSON.parse(new TextDecoder().decode(raw));
+      } catch (parseErr) {
+        // The bytes were fetched but aren't valid JSON — this is a data
+        // corruption/format problem, distinct from a fetch failure, and
+        // must not be swallowed either.
+        context.logger.info(
+          "Failed to parse report data for {target}: {reason}",
+          {
+            target,
+            reason: parseErr instanceof Error
+              ? parseErr.message
+              : String(parseErr),
+          },
+        );
+        return null;
+      }
     }
 
     function findStepData(

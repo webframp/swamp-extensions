@@ -1,23 +1,24 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Added `.describe(...)` documentation to previously undocumented
-fields in `BuildResultSchema`, `PushResultSchema`, and `InspectResultSchema`. No
-behavioral changes.
+**Changed:** Error messages across `build`, `push`, `login`, and `inspect` now
+name the operation and the image tag or registry involved, instead of surfacing
+raw CLI or runtime errors:
 
-## 2026.08.01.1
+- If the container CLI binary itself fails to launch (e.g. it isn't installed or
+  isn't on `PATH`), the error now says which command and arguments were
+  attempted instead of a bare "No such file or directory".
+- `login` failures now include the registry URL being authenticated against.
+- After a successful `build`, the follow-up call that looks up the new image's
+  ID no longer fails silently — if that lookup fails, `build` now throws an
+  error saying the build succeeded but the image ID could not be retrieved,
+  instead of writing a resource with an empty `imageId`.
+- After a successful `push`, the follow-up calls that look up the pushed image's
+  digest and size no longer fail silently — failures now throw with the tag and
+  CLI exit code instead of writing a resource with an empty digest or a `null`
+  size.
+- `inspect` now reports a clear "failed to parse ... as JSON" error (including
+  the tag and the parser's message) if the CLI's output isn't valid JSON,
+  instead of an unqualified `SyntaxError`.
 
-**Fixed:** Broken model-upgrade chain. The prior version bump (to
-`2026.07.27.1`) updated `version` but left the `upgrades` array terminating one
-step short, which blocks `swamp extension push` ("model upgrade chain errors").
-That version never actually published — the registry was still serving
-`2026.07.18.1`. This release closes the chain with a no-op upgrade entry and
-republishes everything that had accumulated since `2026.07.18.1`.
-
-## 2026.07.27.1
-
-**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
-are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
-so `deno task fmt:check` could fail locally on a file CI does not have.
-
-**Upgrade note:** Tooling and formatting only. No model, method, schema, or
-behavior change — nothing to do on upgrade.
+No schema or behavioral changes to successful operations — only error paths are
+affected.

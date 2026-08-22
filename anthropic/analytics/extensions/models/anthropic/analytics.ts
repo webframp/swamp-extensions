@@ -306,9 +306,28 @@ function daysAgoYmd(n: number): string {
   return toYmd(d);
 }
 
+/** Matches a UTC YYYY-MM-DD date string. */
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Throw with the offending value if `s` isn't a well-formed YYYY-MM-DD date. */
+function assertYmd(s: string, argName: string): void {
+  if (!YMD_RE.test(s) || Number.isNaN(new Date(`${s}T00:00:00Z`).getTime())) {
+    throw new Error(
+      `${argName} (${s}) is not a valid YYYY-MM-DD date`,
+    );
+  }
+}
+
 /** Throw if `endingAt` isn't strictly after `startingAt` (both ISO timestamps). */
 function assertRange(startingAt: string, endingAt: string): void {
-  if (new Date(endingAt).getTime() <= new Date(startingAt).getTime()) {
+  const start = new Date(startingAt).getTime();
+  const end = new Date(endingAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    throw new Error(
+      `Cannot compare date range: startingAt (${startingAt}) or endingAt (${endingAt}) is not a valid ISO 8601 timestamp`,
+    );
+  }
+  if (end <= start) {
     throw new Error(
       `endDate (${endingAt}) must be after startDate (${startingAt})`,
     );
@@ -437,8 +456,10 @@ export const model = {
         const key = ctx.globalArgs.analyticsKey;
         const nowIso = new Date().toISOString();
         const startDate = args.startDate ?? daysAgoYmd(7);
+        assertYmd(startDate, "startDate");
         const endDate = args.endDate;
         if (endDate) {
+          assertYmd(endDate, "endDate");
           assertRange(`${startDate}T00:00:00Z`, `${endDate}T00:00:00Z`);
         }
         const handles: { name: string }[] = [];
@@ -648,6 +669,8 @@ export const model = {
         const key = ctx.globalArgs.analyticsKey;
         const nowIso = new Date().toISOString();
         const start = args.startDate ?? daysAgoYmd(args.days ?? 30);
+        assertYmd(start, "startDate");
+        if (args.endDate) assertYmd(args.endDate, "endDate");
         const startingAt = `${start}T00:00:00Z`;
         const endingAt = args.endDate ? `${args.endDate}T00:00:00Z` : nowIso;
         assertRange(startingAt, endingAt);

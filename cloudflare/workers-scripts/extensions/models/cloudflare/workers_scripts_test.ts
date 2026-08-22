@@ -81,6 +81,13 @@ Deno.test("workers-scripts model: has expected resources", () => {
   assertExists(model.resources["version_detail"]);
 });
 
+Deno.test("workers-scripts model: rejects empty script_name", () => {
+  const result = model.methods.delete_worker.arguments.safeParse({
+    script_name: "",
+  });
+  assertEquals(result.success, false);
+});
+
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

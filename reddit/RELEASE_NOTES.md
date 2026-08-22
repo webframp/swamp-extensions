@@ -1,16 +1,15 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Tightened `clientId`, `clientSecret`, `username`, `password`,
-and `userAgent` on the global-args schema to require non-empty strings. All
-five are required OAuth2/account credentials that the Reddit API never
-accepts empty — this catches misconfigured vault references or blank
-`--global-arg` values at model-create time instead of a confusing API
-failure on first method call.
+**Changed:**
 
-## 2026.07.18.1
-
-**Added:** An `upgrades` array entry (no-op) to `moderation.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
-
-## 2026.07.16.1
-
-**Changed:** Internal-only version bump. PR #183 touched `deno.json` (added a `fmt:check` task) and reordered a test-file import, but neither file is part of the published bundle — this release's published content is identical to `2026.06.23.1`.
+- Reddit API errors (auth, GET, POST) now name the request path (and, for
+  the OAuth2 token request, the account username) instead of only the HTTP
+  status code and response body — e.g. "Reddit API GET /r/foo/about/modqueue
+  failed (500): ..." instead of "Reddit API error (500): ...".
+- Moderation action failures (`approve`, `remove`, `ban_user`,
+  `send_modmail`, `flair_post`) now include the target item id, username, or
+  subreddit in the thrown error, instead of only the raw Reddit error
+  payload — so a failed action is traceable back to what it was acting on.
+- A network-level failure (DNS, connection refused, TLS) talking to Reddit
+  now surfaces which request it was attempting instead of a bare, unlabeled
+  fetch exception.

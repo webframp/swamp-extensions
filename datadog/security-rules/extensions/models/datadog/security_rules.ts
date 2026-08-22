@@ -68,7 +68,7 @@ const TestExistingSecurityMonitoringRuleSchema = z.object({
 /** Datadog Security Rules — detection rule CRUD and management */
 export const model = {
   type: "@webframp/datadog/security-rules",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -196,7 +196,12 @@ export const model = {
         calculatedFields: z.array(z.unknown()).optional().describe(
           "Calculated fields. Only allowed for scheduled rules - in other words, when sc...",
         ),
-        cases: z.array(z.unknown()).describe("Cases for generating signals."),
+        cases: z.array(z.unknown()).min(
+          1,
+          "cases must contain at least one case",
+        ).describe(
+          "Cases for generating signals.",
+        ),
         filters: z.array(z.unknown()).optional().describe(
           "Additional queries to filter matched events before they are processed. This f...",
         ),
@@ -212,7 +217,10 @@ export const model = {
         options: z.unknown().describe(
           "Options on the detection rule, such as detection method, evaluation window, and keep-alive duration.",
         ),
-        queries: z.array(z.unknown()).describe(
+        queries: z.array(z.unknown()).min(
+          1,
+          "queries must contain at least one query",
+        ).describe(
           "Queries for selecting logs which are part of the rule.",
         ),
         referenceTables: z.array(z.unknown()).optional().describe(
@@ -274,7 +282,12 @@ export const model = {
     bulk_delete_security_monitoring_rules: {
       description: "Bulk delete security monitoring rules",
       arguments: z.object({
-        ruleIds: z.array(z.string()).describe("List of rule IDs to delete."),
+        ruleIds: z.array(z.string()).min(
+          1,
+          "ruleIds must contain at least one rule ID",
+        ).describe(
+          "List of rule IDs to delete.",
+        ),
       }),
       execute: async (
         _args: Record<string, unknown>,
@@ -309,7 +322,12 @@ export const model = {
         calculatedFields: z.array(z.unknown()).optional().describe(
           "Calculated fields. Only allowed for scheduled rules - in other words, when sc...",
         ),
-        cases: z.array(z.unknown()).describe("Cases for generating signals."),
+        cases: z.array(z.unknown()).min(
+          1,
+          "cases must contain at least one case",
+        ).describe(
+          "Cases for generating signals.",
+        ),
         customMessage: z.string().optional().describe(
           "Custom/Overridden message for generated signals (used in case of Default rule...",
         ),
@@ -331,7 +349,10 @@ export const model = {
         options: z.unknown().describe(
           "Options on the detection rule, such as detection method, evaluation window, and keep-alive duration.",
         ),
-        queries: z.array(z.unknown()).describe(
+        queries: z.array(z.unknown()).min(
+          1,
+          "queries must contain at least one query",
+        ).describe(
           "Queries for selecting logs which are part of the rule.",
         ),
         referenceTables: z.array(z.unknown()).optional().describe(
@@ -451,7 +472,12 @@ export const model = {
         calculatedFields: z.array(z.unknown()).optional().describe(
           "Calculated fields. Only allowed for scheduled rules - in other words, when sc...",
         ),
-        cases: z.array(z.unknown()).describe("Cases for generating signals."),
+        cases: z.array(z.unknown()).min(
+          1,
+          "cases must contain at least one case",
+        ).describe(
+          "Cases for generating signals.",
+        ),
         customMessage: z.string().optional().describe(
           "Custom/Overridden message for generated signals (used in case of Default rule...",
         ),
@@ -473,7 +499,10 @@ export const model = {
         options: z.unknown().describe(
           "Options on the detection rule, such as detection method, evaluation window, and keep-alive duration.",
         ),
-        queries: z.array(z.unknown()).describe(
+        queries: z.array(z.unknown()).min(
+          1,
+          "queries must contain at least one query",
+        ).describe(
           "Queries for selecting logs which are part of the rule.",
         ),
         referenceTables: z.array(z.unknown()).optional().describe(

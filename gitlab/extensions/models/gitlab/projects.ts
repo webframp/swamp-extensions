@@ -650,7 +650,16 @@ async function graphqlRequest(
     const body = await resp.text();
     throw new Error(`GraphQL request failed: ${resp.status} ${body}`);
   }
-  const result = await resp.json();
+  let result: any;
+  try {
+    result = await resp.json();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `GraphQL response from ${host} was not valid JSON: ${msg}`,
+      { cause: err },
+    );
+  }
   if (result.errors?.length) {
     throw new Error(
       `GraphQL errors: ${result.errors.map((e: any) => e.message).join("; ")}`,
@@ -1341,7 +1350,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1369,6 +1378,12 @@ export const model = {
     {
       toVersion: "2026.08.21.1",
       description: "No schema changes (added field descriptions only)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes (GraphQL malformed-JSON responses now raise a clear error)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -186,7 +186,7 @@ const GetSastImpactTestResultSchema = z.object({
 /** Snyk SAST — static application security testing results and management */
 export const model = {
   type: "@webframp/snyk/sast",
-  version: "2026.07.19.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -372,7 +372,9 @@ export const model = {
     get_sast_impact_test_status: {
       description: "Retrieve the SAST rule extension impact test status.",
       arguments: z.object({
-        test_id: z.string().describe("Unique identifier for a test result"),
+        test_id: z.string().min(1, "test_id must not be empty").describe(
+          "Unique identifier for a test result",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -408,7 +410,9 @@ export const model = {
     get_sast_impact_test_result: {
       description: "Retrieve the impact test result for a SAST rule extension.",
       arguments: z.object({
-        test_id: z.string().describe("Unique identifier for a test result"),
+        test_id: z.string().min(1, "test_id must not be empty").describe(
+          "Unique identifier for a test result",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -444,7 +448,10 @@ export const model = {
     get_sast_rule_extension: {
       description: "Get a SAST rule extension by SAST rule extension ID",
       arguments: z.object({
-        rule_extension_id: z.string().describe(
+        rule_extension_id: z.string().min(
+          1,
+          "rule_extension_id must not be empty",
+        ).describe(
           "Unique identifier for SAST rule extension in request path",
         ),
       }),
@@ -482,7 +489,10 @@ export const model = {
     update_sast_rule_extension: {
       description: "Update a SAST rule extension by SAST rule extension ID",
       arguments: z.object({
-        rule_extension_id: z.string().describe(
+        rule_extension_id: z.string().min(
+          1,
+          "rule_extension_id must not be empty",
+        ).describe(
           "Unique identifier for SAST rule extension in request path",
         ),
         data: z.unknown(),
@@ -528,7 +538,10 @@ export const model = {
     delete_sast_rule_extension: {
       description: "Delete a SAST rule extension by SAST rule extension ID",
       arguments: z.object({
-        rule_extension_id: z.string().describe(
+        rule_extension_id: z.string().min(
+          1,
+          "rule_extension_id must not be empty",
+        ).describe(
           "Unique identifier for SAST rule extension in request path",
         ),
       }),

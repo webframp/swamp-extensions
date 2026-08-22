@@ -269,16 +269,19 @@ Deno.test("import_skill writes both landscape and extensionDesign resources", as
   assertEquals(designData.labels.includes("imported-skill"), true);
 });
 
-Deno.test("import_skill falls back to unknown-skill when sourceSkill omitted", async () => {
-  const { context, getWrittenResources } = createAdoptionContext();
+Deno.test("import_skill throws a descriptive error when sourceSkill is omitted", async () => {
+  const { context } = createAdoptionContext();
 
-  // deno-lint-ignore no-explicit-any
-  await model.methods.import_skill.execute({}, context as any);
-
-  const resources = getWrittenResources();
-  const landscapeData = resources.find((r) => r.specName === "landscape")
-    ?.data as { systems: Array<{ name: string }> };
-  assertEquals(landscapeData.systems[0].name, "unknown-skill");
+  await assertRejects(
+    () =>
+      model.methods.import_skill.execute(
+        {},
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "sourceSkill",
+  );
 });
 
 Deno.test("import_skill derives short name from parent dir when file is literally SKILL.md", async () => {
@@ -409,18 +412,36 @@ Deno.test("design uses suggestedFirstExtension when system not provided", async 
   assertEquals(data.name, "@webframp/cloudflare");
 });
 
-Deno.test("design handles gracefully when no landscape exists", async () => {
+Deno.test("design throws a descriptive error when no landscape exists and no system given", async () => {
+  const { context } = createAdoptionContext();
+
+  await assertRejects(
+    () =>
+      model.methods.design.execute(
+        {},
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "discover",
+  );
+});
+
+Deno.test("design proceeds with an explicit system even when no landscape exists", async () => {
   const { context, getWrittenResources } = createAdoptionContext();
 
-  // deno-lint-ignore no-explicit-any
-  const result = await model.methods.design.execute({}, context as any);
+  const result = await model.methods.design.execute(
+    { system: "gitlab" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
 
   assertExists(result.dataHandles);
   assertEquals(result.dataHandles.length, 1);
 
   const resources = getWrittenResources();
   const data = resources[0].data as { name: string };
-  assertEquals(data.name, "@webframp/unknown-system");
+  assertEquals(data.name, "@webframp/gitlab");
 });
 
 Deno.test("scaffold writes scaffold resource with files array", async () => {

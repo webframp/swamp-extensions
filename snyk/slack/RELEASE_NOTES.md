@@ -1,12 +1,9 @@
-## 2026.07.20.2
+## 2026.08.21.1
 
-**Fixed:** The `create_slack_default_notification_settings` and
-`create_slack_project_notification_settings` methods wrote their resources under
-verb-prefixed spec names, but the resource schemas are registered under the
-noun-only keys `slack_default_notification_settings` and
-`slack_project_notification_settings`. The writes therefore targeted undeclared
-resource specs. Both methods now write to their declared specs.
-
-**Upgrade note:** Data from these methods is now written under the noun-only
-resource specs instead of the verb-prefixed names. Queries or stored resources
-keyed on the old spec names should be updated.
+**Changed:** Errors from the Snyk API are now easier to diagnose. Previously,
+a connection failure (DNS outage, timeout, refused connection) surfaced only
+the raw fetch error with no indication of which Snyk endpoint was being
+called. HTTP error responses named the status code but not the request that
+triggered it. Both cases now include the HTTP method and path (e.g.
+`GET /orgs/.../slack_app/.../channels`), so a failure can be traced back to
+the method that caused it without reproducing the call.

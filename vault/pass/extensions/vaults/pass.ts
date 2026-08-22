@@ -212,7 +212,12 @@ export const vault = {
         // value can quote it back. The host publishes thrown messages to the
         // trace backend, so strip the value we know we sent.
         if (stdin) errMsg = redactSecret(errMsg, stdin);
-        throw new Error(errMsg || `pass command failed with code ${code}`);
+        const commandDesc = `pass ${args.join(" ")}`;
+        throw new Error(
+          `${commandDesc} exited with code ${code}${
+            errMsg ? `: ${errMsg}` : ""
+          }`,
+        );
       }
 
       return stripTrailingNewline(new TextDecoder().decode(stdout));
@@ -284,11 +289,20 @@ export const vault = {
             stderr: "piped",
           });
 
-          const { code, stdout } = await cmd.output();
+          const { code, stdout, stderr } = await cmd.output();
 
           if (code !== 0) {
-            recordCount(Attr.VAULT_KEYS_RETURNED, 0);
-            return [];
+            // A nonzero exit here means `find` itself failed — a missing or
+            // unreadable store directory, or `find` not being installed —
+            // not "the store has no secrets" (that's a zero exit with empty
+            // output, handled below). Conflating the two hides real failures
+            // as an empty listing.
+            const errMsg = new TextDecoder().decode(stderr).trim();
+            throw new Error(
+              `pass list failed: find ${storeDir} exited with code ${code}${
+                errMsg ? `: ${errMsg}` : ""
+              }`,
+            );
           }
 
           const output = new TextDecoder().decode(stdout).trim();

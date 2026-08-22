@@ -133,7 +133,18 @@ async function getEC2HourlyRate(
     MaxResults: 1,
   });
 
-  const response = await client.send(command);
+  let response;
+  try {
+    response = await client.send(command);
+  } catch (err) {
+    throw new Error(
+      `GetProducts (AmazonEC2) failed for instanceType=${instanceType} ` +
+        `region=${region} platform=${platform}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      { cause: err },
+    );
+  }
 
   if (response.PriceList && response.PriceList.length > 0) {
     const priceData = JSON.parse(response.PriceList[0]);
@@ -195,7 +206,18 @@ async function getRDSHourlyRate(
     MaxResults: 1,
   });
 
-  const response = await client.send(command);
+  let response;
+  try {
+    response = await client.send(command);
+  } catch (err) {
+    throw new Error(
+      `GetProducts (AmazonRDS) failed for dbInstanceClass=${dbInstanceClass} ` +
+        `engine=${engine} region=${region} multiAz=${multiAz}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      { cause: err },
+    );
+  }
 
   if (response.PriceList && response.PriceList.length > 0) {
     const priceData = JSON.parse(response.PriceList[0]);
@@ -232,7 +254,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 
@@ -256,6 +278,12 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Added descriptions to previously undocumented estimate_from_spec fields, no schema migration needed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Error-message quality pass: no schema changes to stored resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -478,31 +506,45 @@ export const model = {
         ec2Instances: z
           .array(
             z.object({
-              name: z.string().describe("Instance identifier/name"),
-              instanceType: z.string().describe("EC2 instance type"),
+              name: z.string().min(1).describe("Instance identifier/name"),
+              instanceType: z.string().min(1).describe("EC2 instance type"),
               region: z.string().default("us-east-1"),
               platform: z
                 .enum(["linux", "windows"])
                 .default("linux"),
-              count: z.number().default(1).describe("Number of instances"),
+              count: z.number().int().min(1).default(1).describe(
+                "Number of instances",
+              ),
             }),
           )
+          .min(1, "ec2Instances, if provided, must not be empty")
           .optional()
           .describe("Planned EC2 instances"),
         rdsInstances: z
           .array(
             z.object({
-              name: z.string().describe("DB instance identifier"),
-              dbInstanceClass: z.string().describe("RDS instance class"),
-              engine: z.string().describe("Database engine"),
+              name: z.string().min(1).describe("DB instance identifier"),
+              dbInstanceClass: z.string().min(1).describe(
+                "RDS instance class",
+              ),
+              engine: z.string().min(1).describe("Database engine"),
               region: z.string().default("us-east-1"),
               multiAz: z.boolean().default(false),
-              storageGb: z.number().default(20),
+              storageGb: z.number().positive().default(20),
             }),
           )
+          .min(1, "rdsInstances, if provided, must not be empty")
           .optional()
           .describe("Planned RDS instances"),
-      }),
+      }).refine(
+        (args) =>
+          (args.ec2Instances && args.ec2Instances.length > 0) ||
+          (args.rdsInstances && args.rdsInstances.length > 0),
+        {
+          message:
+            "estimate_from_spec requires at least one of ec2Instances or rdsInstances",
+        },
+      ),
       execute: async (
         args: {
           ec2Instances?: Array<{

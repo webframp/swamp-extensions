@@ -71,7 +71,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -107,7 +107,7 @@ export const model = {
         interval: z.unknown().optional().describe(
           "The reporting interval used to bucket the SLO report data (e.g. day, week, or month).",
         ),
-        query: z.string().describe(
+        query: z.string().min(1, "query must not be empty").describe(
           "The query string used to filter SLO results. Some examples of queries include...",
         ),
         timezone: z.string().optional().describe(
@@ -116,6 +116,9 @@ export const model = {
         to_ts: z.number().int().describe(
           "The `to` timestamp for the report in epoch seconds.",
         ),
+      }).refine((v) => v.to_ts > v.from_ts, {
+        message: "to_ts must be greater than from_ts",
+        path: ["to_ts"],
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -161,7 +164,9 @@ export const model = {
     get_slo_report_job_status: {
       description: "Get SLO report status",
       arguments: z.object({
-        report_id: z.string().describe("The ID of the report job."),
+        report_id: z.string().min(1, "report_id must not be empty").describe(
+          "The ID of the report job.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -200,7 +205,9 @@ export const model = {
     get_slo_status: {
       description: "Get SLO status",
       arguments: z.object({
-        slo_id: z.string().describe("The ID of the SLO."),
+        slo_id: z.string().min(1, "slo_id must not be empty").describe(
+          "The ID of the SLO.",
+        ),
         from_ts: z.number().optional().describe(
           "The starting timestamp for the SLO status query in epoch seconds.",
         ),

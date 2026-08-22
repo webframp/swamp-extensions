@@ -1,10 +1,13 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Added `.describe()` documentation to the previously undocumented `KanbanTaskSchema`
-fields (`kanbanId`, `type`, `title`, `assignee`, `status`, `priority`, `tags`, `bodyPreview`,
-`createdAt`). No behavioral change — a no-op `upgrades` entry was added to keep the model's
-`typeVersion` tracking in sync with the version bump.
+**Changed:**
 
-## 2026.07.18.1
-
-**Added:** An `upgrades` array entry (no-op) to `hermes_kanban_orch.ts` for proper `typeVersion` tracking on existing instances. No schema or behavior changes.
+- `new_task` now rejects an empty `title` with a clear validation error
+  before calling `hermes kanban create`, instead of letting hermes reject
+  it (or silently accept it) deep inside the CLI call.
+- Failures from `hermes kanban create` and `hermes kanban list` now name the
+  operation, board, and (for `new_task`) the task type/title in the error or
+  log message, instead of surfacing only the raw CLI output.
+- If the `hermes` binary itself fails to spawn or run (e.g. not found on
+  `PATH`, permission denied), the error now names the binary, board, and
+  arguments involved instead of an unqualified low-level exception.

@@ -513,10 +513,17 @@ const ListAssetTargetsOrgSchema = z.object({
 /** Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources */
 export const model = {
   type: "@webframp/snyk/inventory",
-  version: "2026.07.20.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "Snyk API errors now include the HTTP method and path attempted. update_assets_bulk_group and update_assets_bulk_org now require a non-empty data array. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "assets_group": {
@@ -731,7 +738,10 @@ export const model = {
       description: "Bulk update asset attributes - Group scope (Early Access)",
       arguments: z.object({
         group_id: z.string().describe("The unique identifier of the group"),
-        data: z.array(z.unknown()),
+        data: z.array(z.unknown()).min(
+          1,
+          "At least one asset update is required for a bulk update",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1443,7 +1453,10 @@ export const model = {
     update_assets_bulk_org: {
       description: "Bulk update asset attributes - Org scope (Early Access)",
       arguments: z.object({
-        data: z.array(z.unknown()),
+        data: z.array(z.unknown()).min(
+          1,
+          "At least one asset update is required for a bulk update",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

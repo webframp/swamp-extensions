@@ -111,6 +111,31 @@ function encodeKeyPath(key: string): string {
 }
 
 /**
+ * Wraps `fetch` so a network-level failure (DNS, connection refused, TLS,
+ * timeout) is reported with which Vault operation and key were involved,
+ * instead of a bare, context-free fetch error. HTTP-level errors (non-2xx
+ * responses) are handled separately by `handleResponse`.
+ */
+async function vaultFetch(
+  url: string,
+  init: RequestInit,
+  operation: string,
+  key?: string,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `Vault ${operation} request failed${
+        key ? ` (key: ${key})` : ""
+      }: could not reach ${url}: ${reason}`,
+      { cause },
+    );
+  }
+}
+
+/**
  * Vault provider definition for HashiCorp Vault.
  *
  * Implements the swamp `VaultProvider` contract with `get`, `put`, `list`,
@@ -206,7 +231,12 @@ export const vault = {
           spanAttributes("get", key),
           async () => {
             const url = buildPath(key, "data");
-            const response = await fetch(url, { headers: headers() });
+            const response = await vaultFetch(
+              url,
+              { headers: headers() },
+              "get",
+              key,
+            );
             const data = (await handleResponse(response, "get", key)) as {
               data: { data?: Record<string, unknown>; value?: string };
             };
@@ -263,11 +293,16 @@ export const vault = {
               ),
             ];
 
-            const response = await fetch(url, {
-              method: "POST",
-              headers: headers(),
-              body: JSON.stringify(body),
-            });
+            const response = await vaultFetch(
+              url,
+              {
+                method: "POST",
+                headers: headers(),
+                body: JSON.stringify(body),
+              },
+              "put",
+              key,
+            );
 
             await handleResponse(response, "put", key, submitted);
           },
@@ -304,10 +339,11 @@ export const vault = {
               "Vault LIST",
               { ...spanAttributes("list"), [Attr.VAULT_LIST_DEPTH]: depth },
               async () => {
-                const response = await fetch(`${path}?list=true`, {
-                  method: "LIST",
-                  headers: headers(),
-                });
+                const response = await vaultFetch(
+                  `${path}?list=true`,
+                  { method: "LIST", headers: headers() },
+                  "list",
+                );
 
                 if (response.status === 404) {
                   // A missing path means an empty listing, not a failure. The

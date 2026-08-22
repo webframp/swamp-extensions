@@ -250,7 +250,11 @@ export function createSyncService(
             })
           );
           if (resp.status !== 200) {
-            throw new Error(`List blobs failed (${resp.status})`);
+            throw new Error(
+              `List blobs failed for container "${container}" prefix "${listPrefix}" (${resp.status}): ${
+                new TextDecoder().decode(resp.body)
+              }`,
+            );
           }
           const { names: pageNames, nextMarker } = parseListBlobsResponse(
             new TextDecoder().decode(resp.body),
@@ -272,7 +276,11 @@ export function createSyncService(
     );
     if (resp.status === 404) return { map: {}, etag: null };
     if (resp.status !== 200) {
-      throw new Error(`Get shard ${shard} failed (${resp.status})`);
+      throw new Error(
+        `Get shard ${shard} failed (${resp.status}): ${
+          new TextDecoder().decode(resp.body)
+        }`,
+      );
     }
     const map = JSON.parse(new TextDecoder().decode(resp.body)) as ShardMap;
     return { map, etag: resp.headers.get("etag") };
@@ -311,7 +319,11 @@ export function createSyncService(
           });
           continue;
         }
-        throw new Error(`Update shard ${shard} failed (${resp.status})`);
+        throw new Error(
+          `Update shard ${shard} failed (${resp.status}): ${
+            new TextDecoder().decode(resp.body)
+          }`,
+        );
       }
       throw new Error(
         `Update shard ${shard} exhausted retries on ETag conflict`,
@@ -425,7 +437,11 @@ export function createSyncService(
       client.request({ op: "getBlob", method: "GET", path: blobPath(relPath) })
     );
     if (resp.status !== 200) {
-      throw new Error(`Get blob ${relPath} failed (${resp.status})`);
+      throw new Error(
+        `Get blob ${relPath} failed (${resp.status}): ${
+          new TextDecoder().decode(resp.body)
+        }`,
+      );
     }
     return resp.body;
   }
@@ -470,7 +486,11 @@ export function createSyncService(
     );
     if (resp.status === 404) return { seq: 0, etag: null };
     if (resp.status !== 200) {
-      throw new Error(`Read commit_seq failed (${resp.status})`);
+      throw new Error(
+        `Read commit_seq failed (${resp.status}): ${
+          new TextDecoder().decode(resp.body)
+        }`,
+      );
     }
     const seq = parseInt(new TextDecoder().decode(resp.body), 10);
     return { seq: isNaN(seq) ? 0 : seq, etag: resp.headers.get("etag") };
@@ -505,7 +525,11 @@ export function createSyncService(
         });
         continue;
       }
-      throw new Error(`Increment commit_seq failed (${resp.status})`);
+      throw new Error(
+        `Increment commit_seq failed (${resp.status}): ${
+          new TextDecoder().decode(resp.body)
+        }`,
+      );
     }
     throw new Error("Increment commit_seq exhausted retries on ETag conflict");
   }
@@ -713,7 +737,9 @@ export function createSyncService(
         );
         if (putResp.status !== 201) {
           throw new Error(
-            `Put blob ${entry.relPath} failed (${putResp.status})`,
+            `Put blob ${entry.relPath} failed (${putResp.status}): ${
+              new TextDecoder().decode(putResp.body)
+            }`,
           );
         }
       },

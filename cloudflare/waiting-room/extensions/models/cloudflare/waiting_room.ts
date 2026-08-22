@@ -325,7 +325,7 @@ const GetWaitingRoomStatusSchema = z.object({
 /** Cloudflare Waiting Room — traffic queuing, rules, events, analytics */
 export const model = {
   type: "@webframp/cloudflare/waiting-room",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -699,7 +699,7 @@ export const model = {
     get_waiting_room_waiting_room_details: {
       description: "Waiting room details",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -734,7 +734,7 @@ export const model = {
     update_waiting_room: {
       description: "Update waiting room",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
         additional_routes: z.unknown().optional(),
         cookie_attributes: z.unknown().optional(),
         cookie_suffix: z.unknown().optional(),
@@ -798,7 +798,7 @@ export const model = {
     patch_waiting_room: {
       description: "Patch waiting room",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
         additional_routes: z.unknown().optional(),
         cookie_attributes: z.unknown().optional(),
         cookie_suffix: z.unknown().optional(),
@@ -862,7 +862,7 @@ export const model = {
     delete_waiting_room: {
       description: "Delete waiting room",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -894,7 +894,7 @@ export const model = {
     list_events: {
       description: "List events",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -945,7 +945,7 @@ export const model = {
     create_event: {
       description: "Create event",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
         custom_page_html: z.unknown().optional(),
         description: z.unknown().optional(),
         disable_session_renewal: z.unknown().optional(),
@@ -1000,8 +1000,8 @@ export const model = {
     get_waiting_room_event_details: {
       description: "Event details",
       arguments: z.object({
-        event_id: z.string(),
-        waiting_room_id: z.string(),
+        event_id: z.string().min(1, "event_id must not be empty"),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1036,8 +1036,8 @@ export const model = {
     update_event: {
       description: "Update event",
       arguments: z.object({
-        event_id: z.string(),
-        waiting_room_id: z.string(),
+        event_id: z.string().min(1, "event_id must not be empty"),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
         custom_page_html: z.unknown().optional(),
         description: z.unknown().optional(),
         disable_session_renewal: z.unknown().optional(),
@@ -1095,8 +1095,8 @@ export const model = {
     patch_event: {
       description: "Patch event",
       arguments: z.object({
-        event_id: z.string(),
-        waiting_room_id: z.string(),
+        event_id: z.string().min(1, "event_id must not be empty"),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
         custom_page_html: z.unknown().optional(),
         description: z.unknown().optional(),
         disable_session_renewal: z.unknown().optional(),
@@ -1154,8 +1154,8 @@ export const model = {
     delete_event: {
       description: "Delete event",
       arguments: z.object({
-        event_id: z.string(),
-        waiting_room_id: z.string(),
+        event_id: z.string().min(1, "event_id must not be empty"),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1187,8 +1187,8 @@ export const model = {
     get_waiting_room_preview_active_event_details: {
       description: "Preview active event details",
       arguments: z.object({
-        event_id: z.string(),
-        waiting_room_id: z.string(),
+        event_id: z.string().min(1, "event_id must not be empty"),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1226,7 +1226,7 @@ export const model = {
     list_waiting_room_rules: {
       description: "List Waiting Room Rules",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1283,7 +1283,7 @@ export const model = {
     create_waiting_room_rule: {
       description: "Create Waiting Room Rule",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
         action: z.unknown(),
         description: z.unknown().optional(),
         enabled: z.unknown().optional(),
@@ -1331,7 +1331,7 @@ export const model = {
     update_waiting_room_replace_waiting_room_rules: {
       description: "Replace Waiting Room Rules",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1378,7 +1378,7 @@ export const model = {
       description: "Patch Waiting Room Rule",
       arguments: z.object({
         rule_id: z.string(),
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
         action: z.unknown(),
         description: z.unknown().optional(),
         enabled: z.unknown().optional(),
@@ -1427,7 +1427,7 @@ export const model = {
       description: "Delete Waiting Room Rule",
       arguments: z.object({
         rule_id: z.string(),
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1459,7 +1459,7 @@ export const model = {
     get_waiting_room_status: {
       description: "Get waiting room status",
       arguments: z.object({
-        waiting_room_id: z.string(),
+        waiting_room_id: z.string().min(1, "waiting_room_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,

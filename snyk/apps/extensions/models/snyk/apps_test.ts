@@ -525,8 +525,14 @@ Deno.test({
           { "group_id": "test-id-123" },
           context,
         );
-      } catch (_err) {
+      } catch (err) {
         threw = true;
+        // Error message must name the operation attempted, not just the raw
+        // HTTP status/body — that's the whole point of wrapping it.
+        assertStringIncludes(
+          (err as Error).message,
+          "/groups/test-id-123/apps/installs",
+        );
       }
       assertEquals(threw, true);
     } finally {
@@ -535,3 +541,75 @@ Deno.test({
     }
   },
 });
+
+// ---------------------------------------------------------------------------
+// Secret mode/value validation
+// ---------------------------------------------------------------------------
+
+Deno.test(
+  "update_group_app_install_secret rejects create mode without a secret",
+  () => {
+    const result = model.methods.update_group_app_install_secret.arguments
+      .safeParse({
+        group_id: "test-id-123",
+        install_id: "install-1",
+        data: {
+          attributes: { mode: "create" },
+          type: "app",
+        },
+      });
+    assertEquals(result.success, false);
+    if (!result.success) {
+      assertStringIncludes(
+        JSON.stringify(result.error.issues),
+        "secret is required when mode is",
+      );
+    }
+  },
+);
+
+Deno.test(
+  "update_group_app_install_secret allows delete mode without a secret",
+  () => {
+    const result = model.methods.update_group_app_install_secret.arguments
+      .safeParse({
+        group_id: "test-id-123",
+        install_id: "install-1",
+        data: {
+          attributes: { mode: "delete" },
+          type: "app",
+        },
+      });
+    assertEquals(result.success, true);
+  },
+);
+
+Deno.test(
+  "create_manage_app_creation_secret rejects replace mode without a secret",
+  () => {
+    const result = model.methods.create_manage_app_creation_secret.arguments
+      .safeParse({
+        app_id: "app-1",
+        data: {
+          attributes: { mode: "replace" },
+          type: "app",
+        },
+      });
+    assertEquals(result.success, false);
+  },
+);
+
+Deno.test(
+  "update_org_app_install_secret rejects create mode without a secret",
+  () => {
+    const result = model.methods.update_org_app_install_secret.arguments
+      .safeParse({
+        install_id: "install-1",
+        data: {
+          attributes: { mode: "create" },
+          type: "app",
+        },
+      });
+    assertEquals(result.success, false);
+  },
+);

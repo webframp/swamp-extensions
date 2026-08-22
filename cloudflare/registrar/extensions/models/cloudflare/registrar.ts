@@ -276,8 +276,8 @@ export const model = {
     create_sandbox_registrar_domain_discovery_check: {
       description: "Check domain availability",
       arguments: z.object({
-        domains: z.array(z.string()).describe(
-          "List of fully qualified domain names (FQDNs) to check for availability. Each ...",
+        domains: z.array(z.string()).min(1).describe(
+          "List of fully qualified domain names (FQDNs) to check for availability; must contain at least one domain. Each ...",
         ),
       }),
       execute: async (
@@ -623,8 +623,8 @@ export const model = {
     create_registrar_domain_discovery_check: {
       description: "Check domain availability",
       arguments: z.object({
-        domains: z.array(z.string()).describe(
-          "List of fully qualified domain names (FQDNs) to check for availability. Each ...",
+        domains: z.array(z.string()).min(1).describe(
+          "List of fully qualified domain names (FQDNs) to check for availability; must contain at least one domain. Each ...",
         ),
       }),
       execute: async (

@@ -525,10 +525,12 @@ export const model = {
       arguments: z.object({
         usefulLifeMonthsRange: z
           .array(z.number().int().positive())
+          .min(1)
           .default([24, 36, 48, 60])
           .describe("Useful-life assumptions (months) to sweep across"),
         utilizationPctRange: z
           .array(z.number().min(1).max(100))
+          .min(1)
           .default([60, 75, 85, 95])
           .describe("Utilization assumptions (percent) to sweep across"),
       }),

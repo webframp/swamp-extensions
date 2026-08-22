@@ -159,7 +159,7 @@ const GetOrgPolicyEventsSchema = z.object({
 /** Snyk Policies — security policy management and rule configuration */
 export const model = {
   type: "@webframp/snyk/policies",
-  version: "2026.07.19.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -304,7 +304,9 @@ export const model = {
     get_org_policy: {
       description: "Get an org-level policy",
       arguments: z.object({
-        policy_id: z.string().describe("Policy ID"),
+        policy_id: z.string().min(1, "policy_id must not be empty").describe(
+          "Policy ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -340,7 +342,9 @@ export const model = {
     update_org_policy: {
       description: "Update an org-level policy",
       arguments: z.object({
-        policy_id: z.string().describe("Policy ID"),
+        policy_id: z.string().min(1, "policy_id must not be empty").describe(
+          "Policy ID",
+        ),
         data: z.object({
           attributes: z.unknown(),
           id: z.string().optional(),
@@ -389,7 +393,9 @@ export const model = {
     delete_org_policy: {
       description: "Delete an org-level policy",
       arguments: z.object({
-        policy_id: z.string().describe("Policy ID"),
+        policy_id: z.string().min(1, "policy_id must not be empty").describe(
+          "Policy ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -420,7 +426,9 @@ export const model = {
     get_org_policy_events: {
       description: "List org policy events (Early Access)",
       arguments: z.object({
-        policy_id: z.string().describe("Policy ID"),
+        policy_id: z.string().min(1, "policy_id must not be empty").describe(
+          "Policy ID",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,

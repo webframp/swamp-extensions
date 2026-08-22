@@ -301,7 +301,7 @@ const UpdateSslVerificationEditSslCertificatePackValidationMethodSchema = z
 /** Cloudflare SSL/TLS — certificate packs, custom certificates, certificate authority */
 export const model = {
   type: "@webframp/cloudflare/ssl-certificates",
-  version: "2026.07.27.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -515,7 +515,7 @@ export const model = {
     get_certificate: {
       description: "Get Certificate",
       arguments: z.object({
-        certificate_id: z.string(),
+        certificate_id: z.string().min(1, "certificate_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -550,7 +550,7 @@ export const model = {
     delete_origin_ca_revoke_certificate: {
       description: "Revoke Certificate",
       arguments: z.object({
-        certificate_id: z.string(),
+        certificate_id: z.string().min(1, "certificate_id must not be empty"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -740,7 +740,10 @@ export const model = {
     get_custom_ssl_for_a_zone_ssl_configuration_details: {
       description: "SSL Configuration Details",
       arguments: z.object({
-        custom_certificate_id: z.string(),
+        custom_certificate_id: z.string().min(
+          1,
+          "custom_certificate_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -778,7 +781,10 @@ export const model = {
     update_custom_ssl_for_a_zone_edit_ssl_configuration: {
       description: "Edit SSL Configuration",
       arguments: z.object({
-        custom_certificate_id: z.string(),
+        custom_certificate_id: z.string().min(
+          1,
+          "custom_certificate_id must not be empty",
+        ),
         bundle_method: z.unknown().optional(),
         certificate: z.unknown().optional(),
         custom_csr_id: z.unknown().optional(),
@@ -831,7 +837,10 @@ export const model = {
     delete_ssl_configuration: {
       description: "Delete SSL Configuration",
       arguments: z.object({
-        custom_certificate_id: z.string(),
+        custom_certificate_id: z.string().min(
+          1,
+          "custom_certificate_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1049,7 +1058,10 @@ export const model = {
     get_certificate_pack: {
       description: "Get Certificate Pack",
       arguments: z.object({
-        certificate_pack_id: z.string(),
+        certificate_pack_id: z.string().min(
+          1,
+          "certificate_pack_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1133,7 +1145,10 @@ export const model = {
     delete_advanced_certificate_manager_certificate_pack: {
       description: "Delete Advanced Certificate Manager Certificate Pack",
       arguments: z.object({
-        certificate_pack_id: z.string(),
+        certificate_pack_id: z.string().min(
+          1,
+          "certificate_pack_id must not be empty",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1301,7 +1316,10 @@ export const model = {
     update_ssl_verification_edit_ssl_certificate_pack_validation_method: {
       description: "Edit SSL Certificate Pack Validation Method",
       arguments: z.object({
-        certificate_pack_id: z.string(),
+        certificate_pack_id: z.string().min(
+          1,
+          "certificate_pack_id must not be empty",
+        ),
         validation_method: z.unknown(),
       }),
       execute: async (

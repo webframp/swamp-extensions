@@ -463,6 +463,21 @@ Deno.test("keychain vault: get rejects for missing secret", async () => {
   });
 });
 
+Deno.test("keychain vault: failed get names the security subcommand and exit code", async () => {
+  await withMockedSecurity(async () => {
+    const provider = vault.createProvider("test", {});
+    const err = await assertRejects(
+      () => provider.get("nonexistent-key"),
+      Error,
+    );
+    assertEquals(
+      err.message.startsWith("security find-generic-password"),
+      true,
+    );
+    assertEquals(/exited with code \d+/.test(err.message), true);
+  });
+});
+
 Deno.test("keychain vault: get uses correct service and account", async () => {
   await withMockedSecurity(async () => {
     mockKeychain.set("swamp/test-key", "password123");

@@ -285,6 +285,18 @@ Deno.test("gopass vault: get rejects for missing secret", async () => {
   });
 });
 
+Deno.test("gopass vault: failed command names the gopass subcommand and exit code", async () => {
+  await withMockedGopass(async () => {
+    const provider = vault.createProvider("test", {});
+    const err = await assertRejects(
+      () => provider.get("nonexistent-key"),
+      Error,
+    );
+    assertEquals(err.message.startsWith("gopass show"), true);
+    assertEquals(/exited with code \d+/.test(err.message), true);
+  });
+});
+
 Deno.test("gopass vault: get uses -o flag when passwordOnly is true", async () => {
   await withMockedGopass(async () => {
     mockSecrets.set("test-key", "password123");

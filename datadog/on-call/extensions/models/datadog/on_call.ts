@@ -182,7 +182,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -266,7 +266,10 @@ export const model = {
         retries: z.number().int().min(0).max(10).optional().describe(
           "Specifies how many times the escalation sequence is retried if there is no re...",
         ),
-        steps: z.array(z.unknown()).describe(
+        steps: z.array(z.unknown()).min(
+          1,
+          "steps must contain at least one escalation step",
+        ).describe(
           "A list of escalation steps, each defining assignment, escalation timeout, and...",
         ),
       }),
@@ -391,7 +394,10 @@ export const model = {
         retries: z.number().int().min(0).max(10).optional().describe(
           "Specifies how many times the escalation sequence is retried if there is no re...",
         ),
-        steps: z.array(z.unknown()).describe(
+        steps: z.array(z.unknown()).min(
+          1,
+          "steps must contain at least one escalation step",
+        ).describe(
           "A list of escalation steps, each defining assignment, escalation timeout, and...",
         ),
       }),
@@ -477,7 +483,10 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
-        layers: z.array(z.unknown()).describe(
+        layers: z.array(z.unknown()).min(
+          1,
+          "layers must contain at least one layer",
+        ).describe(
           "The layers of On-Call coverage that define rotation intervals and restrictions.",
         ),
         name: z.string().describe(
@@ -599,7 +608,10 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
-        layers: z.array(z.unknown()).describe(
+        layers: z.array(z.unknown()).min(
+          1,
+          "layers must contain at least one layer",
+        ).describe(
           "The updated list of layers (rotations) for this schedule.",
         ),
         name: z.string().describe("A short name for the schedule."),

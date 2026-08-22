@@ -32,6 +32,30 @@ Deno.test("nix: requires non-empty packages array", () => {
   }
 });
 
+Deno.test("nix: rejects a blank package entry", () => {
+  try {
+    driver.createDriver({ packages: ["dig", "  "] });
+    throw new Error("should have thrown");
+  } catch (e) {
+    assertEquals(
+      (e as Error).message.includes("must be non-empty strings"),
+      true,
+    );
+  }
+});
+
+Deno.test("nix: rejects a non-positive timeout", () => {
+  try {
+    driver.createDriver({ packages: ["dig"], timeout: 0 });
+    throw new Error("should have thrown");
+  } catch (e) {
+    assertEquals(
+      (e as Error).message.includes("'timeout' must be a positive number"),
+      true,
+    );
+  }
+});
+
 Deno.test("nix: creates driver instance with valid config", () => {
   const instance = driver.createDriver({ packages: ["dig"] });
   assertEquals(instance.type, "@webframp/nix");

@@ -1,40 +1,8 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Added descriptions to the previously undocumented `provision`
-resource fields (`region`, `bucketName`, `bucketCreated`, `ecrRepositoryUri`,
-`ecrRepositoryArn`, `roleArn`, `runtimeArn`, `imageTag`, `provisionedAt`,
-`durationMs`) in the provisioner's result schema. No behavioral change.
-
-## 2026.08.20.1
-
-**Changed:** Bump @webframp/agentcore 2026.08.05.1 → 2026.08.20.1
-
-## 2026.08.15.1
-
-**Changed:** Bump @webframp/agentcore 2026.08.02.1 → 2026.08.05.1
-
-## 2026.08.05.1
-
-**Changed:** Bump @webframp/agentcore 2026.07.31.1 → 2026.08.02.1
-
-## 2026.08.02.2
-
-**Fixed:** The workflow's `description` field embedded a live
-`data.latest("agentcore-provisioner", "provision")` CEL expression as
-"documentation." Swamp evaluates every `${{ ... }}` expression found anywhere in
-a workflow definition — including inside `description` text — eagerly and
-strictly, before any job runs. Since the referenced resource does not exist
-until the `provision` job completes, this expression threw
-`Invalid expression: No such key: attributes` on every fresh bootstrap, aborting
-the workflow before job 1 ever started. The `description` field no longer
-contains a live expression; it points to the README for the exact CEL snippet to
-use in a driver config instead.
-
-**Fixed:** The README's "After Bootstrap" example used the same wrong instance
-name (`"provision"` instead of `"main"`, the actual `writeResource()` instance
-name) that issue #330 identified in the sibling datastore-bootstrap extensions.
-A user who copied that snippet into their own `driverConfig` would hit the same
-"No such key: attributes" error.
-
-**Upgrade note:** No schema or model change. Re-pull to get a workflow that
-actually completes a fresh run, and a correct README example.
+**Changed:** AWS CLI, Docker build, ECR login, and image push failures now name
+the exact command and target that failed (repository name, image tag, registry,
+or region) instead of surfacing only the raw stderr text. Previously a failed
+`aws` call or `docker` step raised a bare "AWS CLI failed" / "Image push failed"
+message with no indication of which resource or image was involved, which made
+triage in CI logs slower. The underlying error text is preserved in full.

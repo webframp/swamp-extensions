@@ -219,6 +219,60 @@ Deno.test("inspect execute: success path writes metadata", async () => {
   });
 });
 
+Deno.test("build execute: post-build inspect failure is contextualized", async () => {
+  await assertRejects(
+    () =>
+      withMockedCommand((_cmd, args) => {
+        if (args.includes("buildx")) {
+          return { stdout: "", success: true };
+        }
+        // docker image inspect for imageId fails
+        return { stdout: "", success: false, code: 1 };
+      }, async () => {
+        const context = {
+          globalArgs: { command: "docker" },
+          logger: { info: () => {} },
+          writeResource: () => Promise.resolve({ name: "x" }),
+        };
+        await model.methods.build.execute(
+          { contextPath: "/tmp/app", tag: "myrepo:v1" },
+          context as unknown as Parameters<
+            typeof model.methods.build.execute
+          >[1],
+        );
+      }),
+    Error,
+    "failed to inspect it for image ID",
+  );
+});
+
+Deno.test("push execute: post-push digest inspect failure is contextualized", async () => {
+  await assertRejects(
+    () =>
+      withMockedCommand((_cmd, args) => {
+        if (args[0] === "push") {
+          return { stdout: "", success: true };
+        }
+        // digest/size inspect fails
+        return { stdout: "", success: false, code: 1 };
+      }, async () => {
+        const context = {
+          globalArgs: { command: "docker" },
+          logger: { info: () => {} },
+          writeResource: () => Promise.resolve({ name: "x" }),
+        };
+        await model.methods.push.execute(
+          { tag: "myrepo:v1" },
+          context as unknown as Parameters<
+            typeof model.methods.push.execute
+          >[1],
+        );
+      }),
+    Error,
+    "failed to inspect its digest",
+  );
+});
+
 Deno.test("inspect execute: empty stdout throws", async () => {
   await assertRejects(
     () =>

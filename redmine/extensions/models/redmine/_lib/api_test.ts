@@ -98,9 +98,49 @@ Deno.test({
         Error,
         "404",
       );
+      // The error must name the method and path, not just the status code.
+      await assertRejects(
+        () => redmineApi(url, "key", "GET", "/projects/missing.json"),
+        Error,
+        "GET /projects/missing.json",
+      );
     } finally {
       await server.shutdown();
     }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: a network-level failure names the method, path, and host",
+  fn: async () => {
+    await assertRejects(
+      () =>
+        redmineApi(
+          "http://127.0.0.1:1",
+          "key",
+          "GET",
+          "/issues.json",
+        ),
+      Error,
+      "GET /issues.json",
+    );
+  },
+});
+
+Deno.test({
+  name: "redmineApiPaginated: a network-level failure names the path and host",
+  fn: async () => {
+    await assertRejects(
+      () =>
+        redmineApiPaginated<{ id: number }>(
+          "http://127.0.0.1:1",
+          "key",
+          "/issues.json",
+          "issues",
+        ),
+      Error,
+      "/issues.json",
+    );
   },
 });
 

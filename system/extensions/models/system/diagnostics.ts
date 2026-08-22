@@ -116,10 +116,26 @@ async function runCommand(
     stdout: "piped",
     stderr: "piped",
   });
-  const output = await command.output();
+  let output: Deno.CommandOutput;
+  try {
+    output = await command.output();
+  } catch (cause) {
+    // The binary itself couldn't be spawned (e.g. not installed, not on
+    // PATH, or not executable) — this is distinct from the command running
+    // and exiting non-zero, and the raw OS error alone doesn't say which
+    // command swamp was trying to run.
+    throw new Error(
+      `Failed to execute command "${cmd.join(" ")}": ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+      { cause },
+    );
+  }
   if (!output.success) {
     const stderr = new TextDecoder().decode(output.stderr);
-    throw new Error(`Command failed: ${cmd.join(" ")}: ${stderr}`);
+    throw new Error(
+      `Command "${cmd.join(" ")}" exited with code ${output.code}: ${stderr}`,
+    );
   }
   return new TextDecoder().decode(output.stdout).trim();
 }
@@ -131,7 +147,7 @@ async function runCommand(
 /** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -142,6 +158,12 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Tighten get_processes count to a positive integer — no behavioral change for valid inputs",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.2",
+      description:
+        "No schema changes — command execution failures now name the failing command",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -359,7 +381,17 @@ export const model = {
         context: MethodContext,
       ) => {
         const raw = await runCommand(["ip", "-j", "addr", "show"]);
-        const interfaces = JSON.parse(raw) as Record<string, unknown>[];
+        let interfaces: Record<string, unknown>[];
+        try {
+          interfaces = JSON.parse(raw) as Record<string, unknown>[];
+        } catch (cause) {
+          throw new Error(
+            `Failed to parse "ip -j addr show" output as JSON: ${
+              cause instanceof Error ? cause.message : String(cause)
+            }`,
+            { cause },
+          );
+        }
 
         const handle = await context.writeResource(
           "network_interfaces",
@@ -389,8 +421,17 @@ export const model = {
         let osReleaseText: string;
         try {
           osReleaseText = await Deno.readTextFile("/etc/os-release");
-        } catch {
+        } catch (cause) {
+          // /etc/os-release is absent on some minimal/non-Linux hosts —
+          // that's tolerated, but silently continuing with no record of why
+          // hides genuine problems (e.g. permission denied). Log it.
           osReleaseText = "";
+          context.logger.info(
+            "Could not read /etc/os-release, continuing with empty osRelease: {reason}",
+            {
+              reason: cause instanceof Error ? cause.message : String(cause),
+            },
+          );
         }
 
         const osRelease: Record<string, string> = {};

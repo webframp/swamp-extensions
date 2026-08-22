@@ -163,6 +163,13 @@ async function getAccountId(ctx: ModelContext): Promise<string> {
   try {
     const resp = await sts.send(new GetCallerIdentityCommand({}));
     return resp.Account ?? "unknown";
+  } catch (err) {
+    throw new Error(
+      `Failed to resolve caller account id via STS GetCallerIdentity (region=${
+        ctx.globalArgs.region ?? "us-east-1"
+      }): ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
   } finally {
     sts.destroy();
   }
@@ -242,7 +249,7 @@ function isSnsEndpointInternal(protocol: string, endpoint: string): boolean {
 /** Event topology model — observes the directed graph of AWS event relationships. */
 export const model = {
   type: "@webframp/aws/event-topology",
-  version: "2026.08.20.1",
+  version: "2026.08.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -258,6 +265,11 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.21.1",
+      description: "Error-message quality improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -327,20 +339,40 @@ export const model = {
         // ----- EventBridge -----
         const ebClient = new EventBridgeClient(clientConfig(context));
         try {
-          const busResp = await ebClient.send(new ListEventBusesCommand({}));
+          let busResp;
+          try {
+            busResp = await ebClient.send(new ListEventBusesCommand({}));
+          } catch (err) {
+            throw new Error(
+              `Failed to list EventBridge event buses (region=${region}): ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
           for (const bus of busResp.EventBuses ?? []) {
             const busName = bus.Name ?? "default";
             let nextToken: string | undefined;
             let fetched = 0;
 
             while (fetched < args.maxRulesPerBus) {
-              const rulesResp = await ebClient.send(
-                new ListRulesCommand({
-                  EventBusName: busName,
-                  NextToken: nextToken,
-                  Limit: Math.min(100, args.maxRulesPerBus - fetched),
-                }),
-              );
+              let rulesResp;
+              try {
+                rulesResp = await ebClient.send(
+                  new ListRulesCommand({
+                    EventBusName: busName,
+                    NextToken: nextToken,
+                    Limit: Math.min(100, args.maxRulesPerBus - fetched),
+                  }),
+                );
+              } catch (err) {
+                throw new Error(
+                  `Failed to list EventBridge rules for bus "${busName}" (region=${region}): ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                  { cause: err },
+                );
+              }
 
               for (const rule of rulesResp.Rules ?? []) {
                 const ruleId = `eventbridge:rule:${busName}/${rule.Name}`;
@@ -350,12 +382,22 @@ export const model = {
                   hasEventPattern: !!rule.EventPattern,
                 });
 
-                const targetsResp = await ebClient.send(
-                  new ListTargetsByRuleCommand({
-                    Rule: rule.Name,
-                    EventBusName: busName,
-                  }),
-                );
+                let targetsResp;
+                try {
+                  targetsResp = await ebClient.send(
+                    new ListTargetsByRuleCommand({
+                      Rule: rule.Name,
+                      EventBusName: busName,
+                    }),
+                  );
+                } catch (err) {
+                  throw new Error(
+                    `Failed to list targets for EventBridge rule "${busName}/${rule.Name}" (region=${region}): ${
+                      err instanceof Error ? err.message : String(err)
+                    }`,
+                    { cause: err },
+                  );
+                }
 
                 for (const target of targetsResp.Targets ?? []) {
                   const targetArn = target.Arn ?? "";
@@ -404,9 +446,19 @@ export const model = {
           let nextToken: string | undefined;
 
           while (topicArns.length < args.maxTopics) {
-            const resp = await snsClient.send(
-              new ListTopicsCommand({ NextToken: nextToken }),
-            );
+            let resp;
+            try {
+              resp = await snsClient.send(
+                new ListTopicsCommand({ NextToken: nextToken }),
+              );
+            } catch (err) {
+              throw new Error(
+                `Failed to list SNS topics (region=${region}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
             for (const t of resp.Topics ?? []) {
               if (t.TopicArn) topicArns.push(t.TopicArn);
             }
@@ -421,12 +473,22 @@ export const model = {
             let subPages = 0;
 
             while (true) {
-              const resp = await snsClient.send(
-                new ListSubscriptionsByTopicCommand({
-                  TopicArn: topicArn,
-                  NextToken: subToken,
-                }),
-              );
+              let resp;
+              try {
+                resp = await snsClient.send(
+                  new ListSubscriptionsByTopicCommand({
+                    TopicArn: topicArn,
+                    NextToken: subToken,
+                  }),
+                );
+              } catch (err) {
+                throw new Error(
+                  `Failed to list subscriptions for SNS topic "${topicArn}": ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                  { cause: err },
+                );
+              }
 
               for (const sub of resp.Subscriptions ?? []) {
                 if (sub.SubscriptionArn === "PendingConfirmation") continue;
@@ -490,12 +552,25 @@ export const model = {
           let nextToken: string | undefined;
 
           while (queueUrls.length < args.maxQueues) {
-            const resp = await sqsClient.send(
-              new ListQueuesCommand({
-                NextToken: nextToken,
-                MaxResults: Math.min(1000, args.maxQueues - queueUrls.length),
-              }),
-            );
+            let resp;
+            try {
+              resp = await sqsClient.send(
+                new ListQueuesCommand({
+                  NextToken: nextToken,
+                  MaxResults: Math.min(
+                    1000,
+                    args.maxQueues - queueUrls.length,
+                  ),
+                }),
+              );
+            } catch (err) {
+              throw new Error(
+                `Failed to list SQS queues (region=${region}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
             for (const url of resp.QueueUrls ?? []) queueUrls.push(url);
             nextToken = resp.NextToken;
             if (!nextToken) break;
@@ -553,9 +628,19 @@ export const model = {
           let marker: string | undefined;
           let mappingPages = 0;
           while (true) {
-            const resp = await lambdaClient.send(
-              new ListEventSourceMappingsCommand({ Marker: marker }),
-            );
+            let resp;
+            try {
+              resp = await lambdaClient.send(
+                new ListEventSourceMappingsCommand({ Marker: marker }),
+              );
+            } catch (err) {
+              throw new Error(
+                `Failed to list Lambda event source mappings (region=${region}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
 
             for (const m of resp.EventSourceMappings ?? []) {
               const sourceArn = m.EventSourceArn ?? "";
@@ -702,14 +787,16 @@ export const model = {
         context: ModelContext,
       ) => {
         if (args.query === "path" && !args.nodeId) {
-          context.logger.error("path query requires nodeId argument", {});
-          return { dataHandles: [] };
+          throw new Error(
+            'analyze query="path" requires a "nodeId" argument identifying the node to inspect, but none was provided',
+          );
         }
 
         const graphData = await context.readResource("topology");
         if (!graphData) {
-          context.logger.error("No graph data found. Run discover first.", {});
-          return { dataHandles: [] };
+          throw new Error(
+            'No stored event topology graph found for instance "topology". Run the "discover" method first to populate it before calling "analyze".',
+          );
         }
 
         const graph = graphData as unknown as z.infer<typeof GraphSchema>;
@@ -844,7 +931,12 @@ export const model = {
 
         if (args.query === "path" && args.nodeId) {
           const node = nodeMap.get(args.nodeId);
-          if (node) {
+          if (!node) {
+            throw new Error(
+              `analyze query="path": nodeId "${args.nodeId}" was not found in the stored topology graph (${graph.nodes.length} nodes). Run "analyze query=hubs" or "analyze query=orphans" to list valid node IDs.`,
+            );
+          }
+          {
             const inputs = (inEdges.get(args.nodeId) ?? []).map((e) => ({
               from: e.from,
               fromName: nodeMap.get(e.from)?.name ?? e.from,

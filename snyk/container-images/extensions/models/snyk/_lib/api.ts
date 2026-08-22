@@ -48,11 +48,21 @@ export async function snykApi(
     headers["Content-Type"] = "application/vnd.api+json";
   }
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    throw new Error(
+      `Snyk API request failed: ${method} ${path} — ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
+    );
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -63,7 +73,9 @@ export async function snykApi(
         detail = err.errors.map((e) => e.detail).join("; ");
       }
     } catch { /* use raw text */ }
-    throw new Error(`Snyk API HTTP ${response.status}: ${detail}`);
+    throw new Error(
+      `Snyk API ${method} ${path} failed with HTTP ${response.status}: ${detail}`,
+    );
   }
 
   // DELETE returns 204 No Content
@@ -114,11 +126,22 @@ export async function snykApiPaginated(
   }`;
 
   while (nextUrl && page < MAX_PAGES) {
-    const response = await fetch(nextUrl, {
-      headers: {
-        "Authorization": `token ${apiToken}`,
-      },
-    });
+    const requestedUrl = nextUrl;
+    let response: Response;
+    try {
+      response = await fetch(requestedUrl, {
+        headers: {
+          "Authorization": `token ${apiToken}`,
+        },
+      });
+    } catch (e) {
+      throw new Error(
+        `Snyk API pagination request failed for ${path} (page ${
+          page + 1
+        }, url ${requestedUrl}): ${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
+      );
+    }
 
     if (!response.ok) {
       const text = await response.text();
@@ -129,7 +152,11 @@ export async function snykApiPaginated(
           detail = err.errors.map((e) => e.detail).join("; ");
         }
       } catch { /* use raw text */ }
-      throw new Error(`Snyk API HTTP ${response.status}: ${detail}`);
+      throw new Error(
+        `Snyk API GET ${path} failed with HTTP ${response.status} (page ${
+          page + 1
+        }): ${detail}`,
+      );
     }
 
     const json = await response.json() as SnykJsonApiResponse<unknown[]>;

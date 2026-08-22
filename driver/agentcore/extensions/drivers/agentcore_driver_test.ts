@@ -59,6 +59,30 @@ Deno.test("createDriver throws without s3Bucket", () => {
   }
 });
 
+Deno.test("createDriver throws on non-positive timeout", () => {
+  try {
+    driver.createDriver({ ...MOCK_CONFIG, timeout: 0 });
+    throw new Error("Should have thrown");
+  } catch (e) {
+    assertStringIncludes(
+      (e as Error).message,
+      "'timeout' must be a positive number",
+    );
+  }
+});
+
+Deno.test("createDriver throws on non-positive pollInterval", () => {
+  try {
+    driver.createDriver({ ...MOCK_CONFIG, pollInterval: -1 });
+    throw new Error("Should have thrown");
+  } catch (e) {
+    assertStringIncludes(
+      (e as Error).message,
+      "'pollInterval' must be a positive number",
+    );
+  }
+});
+
 Deno.test({
   name: "createDriver returns driver instance with correct type",
   sanitizeResources: false,
@@ -276,6 +300,54 @@ Deno.test({
         k.endsWith("/bundle.js")
       );
       assertEquals(bundleKey !== undefined, true);
+
+      await instance.shutdown!();
+    } finally {
+      if (origEndpoint) Deno.env.set("AWS_ENDPOINT_URL", origEndpoint);
+      else Deno.env.delete("AWS_ENDPOINT_URL");
+      if (origKey) Deno.env.set("AWS_ACCESS_KEY_ID", origKey);
+      else Deno.env.delete("AWS_ACCESS_KEY_ID");
+      if (origSecret) Deno.env.set("AWS_SECRET_ACCESS_KEY", origSecret);
+      else Deno.env.delete("AWS_SECRET_ACCESS_KEY");
+      if (origProfile) Deno.env.set("AWS_PROFILE", origProfile);
+      else Deno.env.delete("AWS_PROFILE");
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "execute reports which S3 object failed to stage",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  async fn() {
+    // A server that rejects every request simulates an S3 failure (e.g.
+    // access denied, bucket not found) during the bundle-staging PUT.
+    const server = Deno.serve(
+      { port: 0, onListen() {} },
+      () => new Response("", { status: 403 }),
+    );
+    const addr = server.addr as Deno.NetAddr;
+    const endpoint = `http://127.0.0.1:${addr.port}`;
+
+    const origEndpoint = Deno.env.get("AWS_ENDPOINT_URL");
+    const origKey = Deno.env.get("AWS_ACCESS_KEY_ID");
+    const origSecret = Deno.env.get("AWS_SECRET_ACCESS_KEY");
+    const origProfile = Deno.env.get("AWS_PROFILE");
+
+    Deno.env.set("AWS_ENDPOINT_URL", endpoint);
+    Deno.env.set("AWS_ACCESS_KEY_ID", "test");
+    Deno.env.set("AWS_SECRET_ACCESS_KEY", "test");
+    Deno.env.delete("AWS_PROFILE");
+
+    try {
+      const instance = driver.createDriver(MOCK_CONFIG);
+      const result = await instance.execute(MOCK_REQUEST);
+
+      assertEquals(result.status, "error");
+      assertStringIncludes(result.error!, "failed to stage");
+      assertStringIncludes(result.error!, `s3://${MOCK_CONFIG.s3Bucket}/`);
+      assertStringIncludes(result.error!, "bundle.js");
 
       await instance.shutdown!();
     } finally {

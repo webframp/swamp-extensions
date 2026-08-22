@@ -1,12 +1,12 @@
-## 2026.08.21.1
+## 2026.08.21.2
 
-**Changed:** Schema-only tightening pass, no behavioral change.
-- Added `.min(1)` to `apiKey` and `appKey` in the global arguments, and to
-  `deployment_id`/`failure_id` in the delete, get, and patch method
-  arguments, so empty identifiers are rejected before making an API call.
-- Added `.describe()` to previously undocumented fields: the JSON:API
-  `type` field on the deployment/failure creation resource schemas, the
-  nested `git.commit_sha`/`git.repository_id`/`git.repository_url` fields,
-  and the `custom_tags`/`git`/`remediation` arguments on the
-  `create_dora_deployment`, `create_dora_failure`, and
-  `patch_dora_deployment` methods.
+**Changed:** Every Datadog API call made by this model (via the shared
+`_lib/api.ts` helper) now names the HTTP method and path in its error
+message, instead of a bare "Datadog API HTTP 500: ...". A failure now reads,
+for example, `Datadog API POST /api/v2/dora/deployment failed with HTTP 500:
+...` rather than just the status code and response body. Network-level
+failures (DNS, connection reset, etc.) that previously surfaced as a raw
+`TypeError` now also say which Datadog operation was being attempted.
+
+No changes to method arguments, resource schemas, or successful-call
+behavior — only error paths are affected.

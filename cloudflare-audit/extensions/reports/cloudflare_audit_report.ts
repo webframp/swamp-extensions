@@ -456,7 +456,7 @@ export const report = {
           version,
         );
         if (raw) return JSON.parse(new TextDecoder().decode(raw));
-      } catch {
+      } catch (firstError) {
         try {
           const typeArg = {
             raw: modelType,
@@ -470,8 +470,22 @@ export const report = {
             version,
           );
           if (raw) return JSON.parse(new TextDecoder().decode(raw));
-        } catch {
-          // both approaches failed
+        } catch (secondError) {
+          context.logger.info(
+            "Failed to load data for {modelId}/{dataName}@{version} (modelType={modelType}): {firstError} | {secondError}",
+            {
+              modelId,
+              dataName,
+              version,
+              modelType,
+              firstError: firstError instanceof Error
+                ? firstError.message
+                : String(firstError),
+              secondError: secondError instanceof Error
+                ? secondError.message
+                : String(secondError),
+            },
+          );
         }
       }
       return null;

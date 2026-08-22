@@ -1,3 +1,12 @@
+## 2026.08.21.1
+
+**Changed:** The report's `getData` helper no longer treats every read/parse
+failure as "no data available." A missing data artifact (the producing step
+didn't run) still returns null silently, but a file-permission error or
+malformed JSON now logs a message naming the artifact path and the
+underlying error, instead of swallowing it and silently rendering the report
+as if the data were absent.
+
 ## 2026.08.20.1
 
 **Changed:** Bump @webframp/aws/cost-explorer 2026.08.13.1 → 2026.08.20.1

@@ -152,6 +152,14 @@ Deno.test("model globalArguments rejects invalid UUID subscriptions", () => {
   assertEquals(result.success, false);
 });
 
+Deno.test("model globalArguments rejects empty subscriptions array", () => {
+  const result = model.globalArguments.safeParse({
+    ...DEFAULT_GLOBAL_ARGS,
+    subscriptions: [],
+  });
+  assertEquals(result.success, false);
+});
+
 Deno.test("model globalArguments accepts valid input", () => {
   const parsed = model.globalArguments.parse(DEFAULT_GLOBAL_ARGS);
   assertEquals(parsed.subscriptions, [FAKE_SUB]);

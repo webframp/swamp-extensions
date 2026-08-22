@@ -7,7 +7,7 @@ import { model } from "./harness.ts";
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/bench-datastore/harness");
-  assertEquals(model.version, "2026.07.27.1");
+  assertEquals(model.version, "2026.08.21.1");
 });
 
 Deno.test("model has setup and execute methods", () => {

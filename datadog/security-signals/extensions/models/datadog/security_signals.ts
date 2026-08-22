@@ -375,7 +375,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
 /** Datadog Security Signals — signal search, triage, and archiving */
 export const model = {
   type: "@webframp/datadog/security-signals",
-  version: "2026.08.21.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -747,7 +747,9 @@ export const model = {
     get_security_monitoring_signal: {
       description: "Get a signal's details",
       arguments: z.object({
-        signal_id: z.string().describe("The ID of the signal."),
+        signal_id: z.string().min(1, "signal_id must not be empty").describe(
+          "The ID of the signal.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -786,7 +788,9 @@ export const model = {
     edit_security_monitoring_signal_assignee: {
       description: "Modify the triage assignee of a security signal",
       arguments: z.object({
-        signal_id: z.string().describe("The ID of the signal."),
+        signal_id: z.string().min(1, "signal_id must not be empty").describe(
+          "The ID of the signal.",
+        ),
         assignee: z.unknown().describe(
           "Object representing a given user entity.",
         ),
@@ -842,8 +846,13 @@ export const model = {
     edit_security_monitoring_signal_incidents: {
       description: "Change the related incidents of a security signal",
       arguments: z.object({
-        signal_id: z.string().describe("The ID of the signal."),
-        incident_ids: z.unknown().describe(
+        signal_id: z.string().min(1, "signal_id must not be empty").describe(
+          "The ID of the signal.",
+        ),
+        incident_ids: z.array(z.number().int()).min(
+          1,
+          "incident_ids must contain at least one incident ID",
+        ).describe(
           "Array of incidents that are associated with this signal.",
         ),
         version: z.unknown().optional().describe(
@@ -898,7 +907,9 @@ export const model = {
     get_investigation_log_queries_matching_signal: {
       description: "Get investigation queries for a signal",
       arguments: z.object({
-        signal_id: z.string().describe("The ID of the signal."),
+        signal_id: z.string().min(1, "signal_id must not be empty").describe(
+          "The ID of the signal.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -962,7 +973,9 @@ export const model = {
     edit_security_monitoring_signal_state: {
       description: "Change the triage state of a security signal",
       arguments: z.object({
-        signal_id: z.string().describe("The ID of the signal."),
+        signal_id: z.string().min(1, "signal_id must not be empty").describe(
+          "The ID of the signal.",
+        ),
         archive_comment: z.unknown().optional().describe(
           "Optional comment to display on archived signals.",
         ),
@@ -1022,7 +1035,9 @@ export const model = {
     get_suggested_actions_matching_signal: {
       description: "Get suggested actions for a signal",
       arguments: z.object({
-        signal_id: z.string().describe("The ID of the signal."),
+        signal_id: z.string().min(1, "signal_id must not be empty").describe(
+          "The ID of the signal.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1085,7 +1100,9 @@ export const model = {
     edit_security_monitoring_signal: {
       description: "Update security signal triage state or assignee",
       arguments: z.object({
-        signal_id: z.string().describe("The ID of the signal."),
+        signal_id: z.string().min(1, "signal_id must not be empty").describe(
+          "The ID of the signal.",
+        ),
         archive_comment: z.unknown().optional().describe(
           "Optional comment to display on archived signals.",
         ),

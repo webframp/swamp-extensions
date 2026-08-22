@@ -57,13 +57,37 @@ async function awsCli(
     stdout: "piped",
     stderr: "piped",
   });
-  const output = await command.output();
+  let output: Deno.CommandOutput;
+  try {
+    output = await command.output();
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) {
+      throw new Error(
+        `Could not run "aws ${
+          args.join(" ")
+        }" — the AWS CLI is not installed or not on PATH`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
   if (!output.success) {
     const stderr = new TextDecoder().decode(output.stderr);
     throw new Error(`AWS CLI failed: aws ${args.join(" ")} — ${stderr.trim()}`);
   }
   const stdout = new TextDecoder().decode(output.stdout);
-  return stdout.trim() ? JSON.parse(stdout) : {};
+  if (!stdout.trim()) return {};
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    const cause = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `AWS CLI returned non-JSON output for "aws ${
+        args.join(" ")
+      }": ${cause} (output: ${stdout.slice(0, 200)})`,
+      { cause: error },
+    );
+  }
 }
 
 /** Check if a DynamoDB table exists. Returns the table description or null. */

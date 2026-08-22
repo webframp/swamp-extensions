@@ -194,6 +194,7 @@ function instanceName(spec: string, issueNumber: number, suffix = ""): string {
 
 /** Execute a gh CLI command and return stdout. */
 async function runGh(args: string[]): Promise<string> {
+  const cmdDesc = `gh ${args.join(" ")}`;
   const cmd = new Deno.Command("gh", {
     args,
     stdout: "piped",
@@ -202,7 +203,9 @@ async function runGh(args: string[]): Promise<string> {
   const output = await cmd.output();
   if (!output.success) {
     const err = new TextDecoder().decode(output.stderr).trim();
-    throw new Error(`gh failed: ${err}`);
+    throw new Error(
+      `${cmdDesc} failed (exit ${output.code}): ${err || "(no output)"}`,
+    );
   }
   return new TextDecoder().decode(output.stdout).trim();
 }
@@ -210,7 +213,17 @@ async function runGh(args: string[]): Promise<string> {
 /** Execute gh and parse JSON output. */
 async function runGhJson(args: string[]): Promise<unknown> {
   const stdout = await runGh(args);
-  return JSON.parse(stdout);
+  try {
+    return JSON.parse(stdout);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `gh ${
+        args.join(" ")
+      } returned output that could not be parsed as JSON: ${msg}`,
+      { cause: err },
+    );
+  }
 }
 
 /** Validate a state transition is allowed. */
@@ -1055,7 +1068,7 @@ async function status(
 
 export const model = {
   type: "@webframp/github-issue-lifecycle" as const,
-  version: "2026.08.15.1",
+  version: "2026.08.21.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

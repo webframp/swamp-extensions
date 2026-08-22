@@ -61,6 +61,32 @@ Deno.test("get_mr_diff requires project and iid", () => {
   assertEquals(valid.success, true);
 });
 
+Deno.test("get_mr_diff rejects empty project and non-positive iid", () => {
+  const emptyProject = model.methods.get_mr_diff.arguments.safeParse({
+    project: "",
+    iid: 42,
+  });
+  assertEquals(emptyProject.success, false);
+
+  const zeroIid = model.methods.get_mr_diff.arguments.safeParse({
+    project: "group/repo",
+    iid: 0,
+  });
+  assertEquals(zeroIid.success, false);
+
+  const negativeIid = model.methods.get_mr_diff.arguments.safeParse({
+    project: "group/repo",
+    iid: -1,
+  });
+  assertEquals(negativeIid.success, false);
+
+  const fractionalIid = model.methods.get_mr_diff.arguments.safeParse({
+    project: "group/repo",
+    iid: 1.5,
+  });
+  assertEquals(fractionalIid.success, false);
+});
+
 Deno.test("post_review action defaults to comment", () => {
   const valid = model.methods.post_review.arguments.safeParse({
     project: "group/repo",

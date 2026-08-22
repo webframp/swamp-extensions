@@ -330,6 +330,38 @@ Deno.test("provision throws on AWS CLI failure during table creation", async () 
   });
 });
 
+Deno.test("provision throws a descriptive error on non-JSON AWS CLI output", async () => {
+  const { context } = createMockContext({
+    region: "us-east-1",
+    table_name: "test-table",
+    policy_name: "TestPolicy",
+  });
+
+  const handler: CommandHandler = (_cmd, args) => {
+    const subcommand = args.slice(0, 2).join(" ");
+
+    if (subcommand === "dynamodb describe-table") {
+      // A success exit with output that isn't valid JSON — e.g. a CLI
+      // deprecation warning printed to stdout ahead of the payload.
+      return { success: true, stdout: "Warning: not JSON" };
+    }
+
+    return { success: true, stdout: "{}" };
+  };
+
+  await withMockedCommand(handler, async () => {
+    await assertRejects(
+      () =>
+        model.methods.provision.execute(
+          {} as Record<string, never>,
+          context,
+        ),
+      Error,
+      "AWS CLI returned non-JSON output",
+    );
+  });
+});
+
 Deno.test("provision throws when account ID cannot be determined", async () => {
   const { context } = createMockContext({
     region: "us-east-1",
