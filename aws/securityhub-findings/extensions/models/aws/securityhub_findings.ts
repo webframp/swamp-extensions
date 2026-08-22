@@ -640,6 +640,7 @@ export const model = {
           const data = {
             findings,
             count: findings.length,
+            truncated: !!detailToken,
             notFound: args.findingArns.filter(
               (arn) => !findings.some((f) => f.arn === arn),
             ),
@@ -1237,7 +1238,7 @@ export const model = {
             resolvedFindings,
             newCount: newFindings.length,
             resolvedCount: resolvedFindings.length,
-            truncated: currentTruncated,
+            truncated: eitherTruncated,
             currentSnapshot: currentFindings,
             fetchedAt: new Date().toISOString(),
           };
