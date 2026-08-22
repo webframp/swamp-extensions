@@ -45,3 +45,33 @@ The site at <https://aidailybrief.ai/> publishes a daily written edition at
 "nuggets". Each edition also links to the podcast/video episode; the collector
 **keeps only the written analysis** and discards video/audio embeds, so
 briefings get articles + research analysis rather than video sources.
+
+## Troubleshooting
+
+**A source shows up empty (`stories: []`, `topics: []`, etc.) in the
+`brief` resource.** `gather` fans out to all seven sources in parallel and
+each is independently wrapped so one source's failure never fails the
+whole method — a failed source silently degrades to an empty
+array/object rather than surfacing an error field on the resource. Check
+the model's logs for `Source "<name>" failed to gather; continuing with
+partial data: ...` to tell "the site had nothing new" apart from "the
+fetch or parse failed."
+
+**AI Daily Brief editions are missing or incomplete.** This source is
+HTML-scraped via regex matches against specific CSS classes
+(`ed-h1`, `nug-wrap`, `nug-h`, `nug-b`, `tag`) rather than a structured
+API. If aidailybrief.ai changes its markup, the per-edition parse throws
+and that edition is silently dropped (not retried, not flagged) — check
+logs as above, and expect this source to need a code update if the site
+redesigns.
+
+**arXiv entries are empty or sparse.** arXiv's API is rate-limited and
+occasionally unreliable; `gatherArxiv` catches failures and returns zero
+entries rather than failing the whole `gather` call. Retrying the method
+later usually recovers it.
+
+**Changing a `*Count`/`aiDailyBriefDays` arg has no effect, or errors.**
+These are global args validated at `model edit` time against the ranges
+in the table above (e.g. `hnCount` must be an integer 5–50) — an
+out-of-range value is rejected before any fetch happens, not silently
+clamped.
