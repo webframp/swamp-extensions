@@ -8,6 +8,6 @@
 `## Troubleshooting` section covering the multiple-default-VPC error, the
 `create-failed`/`deleting`/`deleted` terminal-state branches in
 `waitForCacheAvailable`, the self-healing ingress-rule check in
-`ensureSecurityGroup` that silently reopens port 6379 to the VPC CIDR on
-re-run, and divergent `securityGroupId` reporting when reusing a cache
-created with a different security group.
+`ensureSecurityGroup` that silently reopens port 6379 to the VPC CIDR on re-run,
+and divergent `securityGroupId` reporting when reusing a cache created with a
+different security group.

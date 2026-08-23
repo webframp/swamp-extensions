@@ -65,41 +65,42 @@ swamp extension pull @webframp/container-image
 ## Troubleshooting
 
 - **`Failed to run "docker ...": ...` (or a similar error naming the wrong
-  CLI)** — the `command` global argument defaults to `docker`. If the host
-  only has `podman`, `nerdctl`, or `buildah` installed (or `docker` isn't on
-  `PATH`), every method fails at the `Deno.Command` spawn step. Set the
-  binary explicitly: `swamp model create @webframp/container-image my-image
+  CLI)** — the `command` global argument defaults to `docker`. If the host only
+  has `podman`, `nerdctl`, or `buildah` installed (or `docker` isn't on `PATH`),
+  every method fails at the `Deno.Command` spawn step. Set the binary
+  explicitly:
+  `swamp model create @webframp/container-image my-image
   --global-arg command=podman`.
 
-- **Multi-platform `build` fails with something like "docker exporter does
-  not support exporting manifest lists"** — for any CLI other than
-  `buildah`, `build` always appends `--load` to `buildx build`
-  (`container_image.ts`, `build` method). `--load` only supports a single
-  platform; it cannot import a multi-arch manifest list into the local
-  image store. Passing a comma-separated `platform` (e.g.
-  `linux/amd64,linux/arm64`) with `docker`/`nerdctl` will fail at this step.
-  Build one platform at a time, or use `buildah` (which builds without
-  `--load`).
+- **Multi-platform `build` fails with something like "docker exporter does not
+  support exporting manifest lists"** — for any CLI other than `buildah`,
+  `build` always appends `--load` to `buildx build` (`container_image.ts`,
+  `build` method). `--load` only supports a single platform; it cannot import a
+  multi-arch manifest list into the local image store. Passing a comma-separated
+  `platform` (e.g. `linux/amd64,linux/arm64`) with `docker`/`nerdctl` will fail
+  at this step. Build one platform at a time, or use `buildah` (which builds
+  without `--load`).
 
 - **`push` succeeds but then throws "Pushed <tag> but failed to inspect its
-  digest"** — after a successful push, `push` re-runs `image inspect
-  --format {{index .RepoDigests 0}}` to read the registry digest back. If
-  the local image store hasn't synced `RepoDigests` yet (common right after
-  a push from a `buildx --load`'ed image), that index lookup fails against
-  an empty list and the whole method errors even though the push itself
-  succeeded. Re-running `inspect` a few seconds later, or running `push`
-  again, usually picks up the synced digest.
+  digest"** — after a successful push, `push` re-runs
+  `image inspect
+  --format {{index .RepoDigests 0}}` to read the registry
+  digest back. If the local image store hasn't synced `RepoDigests` yet (common
+  right after a push from a `buildx --load`'ed image), that index lookup fails
+  against an empty list and the whole method errors even though the push itself
+  succeeded. Re-running `inspect` a few seconds later, or running `push` again,
+  usually picks up the synced digest.
 
-- **`push` result has `size: null` even though the image clearly isn't
-  empty** — `size` is parsed with `parseInt(sizeResult.stdout.trim(), 10) ||
-  null`. Any non-numeric output from `image inspect --format {{.Size}}`
-  (or, in the edge case of a genuinely 0-byte report) collapses to `null`
-  rather than surfacing the parse failure. Treat a `null` size as "unknown,"
-  not "zero."
+- **`push` result has `size: null` even though the image clearly isn't empty** —
+  `size` is parsed with `parseInt(sizeResult.stdout.trim(), 10) ||
+  null`. Any
+  non-numeric output from `image inspect --format {{.Size}}` (or, in the edge
+  case of a genuinely 0-byte report) collapses to `null` rather than surfacing
+  the parse failure. Treat a `null` size as "unknown," not "zero."
 
 - **`inspect` returns `architecture: "unknown"`, `os: "unknown"`, or
   `digest: null`** — these are the schema's explicit fallbacks
-  (`raw.Architecture ?? "unknown"`, `raw.RepoDigests?.[0] ?? null`, etc.)
-  for whatever the CLI's JSON output didn't populate. `digest: null` in
-  particular is expected for an image that was only built locally and never
-  pushed — `RepoDigests` is empty until a push completes.
+  (`raw.Architecture ?? "unknown"`, `raw.RepoDigests?.[0] ?? null`, etc.) for
+  whatever the CLI's JSON output didn't populate. `digest: null` in particular
+  is expected for an image that was only built locally and never pushed —
+  `RepoDigests` is empty until a push completes.
