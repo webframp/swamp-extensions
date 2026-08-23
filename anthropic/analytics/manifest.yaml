@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/anthropic/analytics"
-version: "2026.08.21.2"
+version: "2026.08.23.1"
 description: |
   Observe Claude Enterprise analytics via the Enterprise Analytics API
   (`/v1/organizations/analytics/*`): seat counts, DAU/WAU/MAU, pending

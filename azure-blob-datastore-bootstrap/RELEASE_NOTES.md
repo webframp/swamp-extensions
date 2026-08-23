@@ -1,18 +1,9 @@
-## 2026.08.02.1
+## 2026.08.23.1
 
-**Fixed:** The `configure` job in `@webframp/bootstrap-azure-blob-datastore`
-failed with `Invalid expression: No such key: attributes`. The workflow queried
-`data.latest("swamp-azure-blob-provisioner", "state")`, but the provisioner
-writes its resource under the instance name `"main"` (via
-`writeResource("state", "main", ...)`) — `data.latest()`'s second argument
-matches the resource's instance name, not its spec name. The `configure` job now
-queries `data.latest("swamp-azure-blob-provisioner", "main")`, which resolves
-correctly.
-
-**Changed:** The `run-setup` step now passes the provisioner's `datastoreConfig`
-through a `DATASTORE_CONFIG` environment variable instead of interpolating it
-directly into a single-quoted shell string. The prior pattern could allow a
-config value containing a single quote to break out of shell quoting.
-
-**Upgrade note:** No action needed beyond `swamp extension pull` — the workflow
-file is re-pulled with the extension.
+**Changed:** Documentation only — no code changes. Added a `## Troubleshooting`
+section covering storage-account name collisions (global uniqueness isn't
+checked against other tenants), `AuthorizationPermissionMismatch` errors from
+mixing `--auth-mode login` (Azure AD RBAC, used only by container operations)
+with ARM permissions used elsewhere, stale/expired `az login` sessions
+masquerading as "not found" because exists-checks match error substrings, and
+the explicit `getConnectionString` failure mode.

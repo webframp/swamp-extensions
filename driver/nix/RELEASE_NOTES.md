@@ -1,7 +1,13 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** `createDriver` now validates config up front instead of letting bad values fail deep inside a nix invocation: a blank or non-string entry in `packages` is rejected immediately (previously it built an invalid flake ref like `nixpkgs#` and only surfaced as an opaque nix error), and a non-positive `timeout` is rejected instead of causing every command to time out immediately. When the `nix` binary itself is missing from `PATH`, the error result now says so explicitly ("Could not run \"nix\" — is it installed and on PATH?") instead of a bare "No such file or directory" that doesn't name what's missing.
+**Fixed:** README's "Environment variable passthrough" bullet claimed to
+apply generally, but it only applies to bundle mode — command mode inherits
+the full parent environment unmodified.
 
-## 2026.07.18.1
-
-**Changed:** Version bump only, no code changes.
+**Changed:** Documentation only — no code changes otherwise. Added a
+`## Troubleshooting` section covering `describeSpawnError`'s special-cased
+message when the `nix` binary is missing from PATH, the
+`DEFAULT_TIMEOUT_MS`/SIGTERM/SIGKILL shutdown sequence, the bare exit-code
+fallback error text used when stderr is empty, the bundle-mode env allowlist
+vs. command mode's unrestricted inheritance, and `parseConfig`'s eager
+validation errors.

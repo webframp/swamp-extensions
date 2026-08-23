@@ -1,11 +1,8 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** `DescribeAlarms` and `DescribeAlarmHistory` failures now name the
-operation, the alarm name (or state filter, for triage), and region instead
-of propagating the raw AWS SDK exception. Previously a throttling or
-permissions error surfaced with no indication of which alarm or call was
-responsible.
-
-`investigate`'s `alarmName` argument now rejects an empty string before any
-API call is made, instead of sending an empty `AlarmNames` filter to
-CloudWatch and reporting a generic "alarm not found".
+**Changed:** Documentation only — no code changes. Documented the previously
+undocumented `profile` global arg for SSO/`fromIni` auth. Added a
+`## Troubleshooting` section covering `enrichAlarm`'s per-alarm degrade to
+`verdict: "unknown"`, the silent empty `sns_topics` catch in `resolveSnsTopics`,
+`getRecentMetricStats`'s silent `null` return for composite/anomaly-detection
+alarms, and the unpaginated 100-record cap on noisy-alarm counts.

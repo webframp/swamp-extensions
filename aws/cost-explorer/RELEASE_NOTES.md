@@ -1,11 +1,13 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** Cost Explorer API failures across all five methods now raise an
-error naming the failing `GetCostAndUsage` call and the query shape (grouping
-dimensions, date range, or service filter) instead of surfacing the raw AWS
-SDK error with no context.
+**Fixed:** README documented a broken CLI flag (`--global` instead of
+`--global-arg`) in every usage example, and described a single `costs`
+resource instead of the five typed resources the code actually writes
+(`costTrend`, `costByService`, etc.).
 
-**Changed:** `days` on all methods must now be a positive integer up to 365;
-`limit` on `get_top_cost_drivers` must be a positive integer up to 1000; and
-`service` on `get_cost_by_usage_type` must be a non-empty string. Previously
-these accepted any number/string, including zero, negative, or empty values.
+**Changed:** Documentation only — no code changes otherwise. Added a
+`## Troubleshooting` section covering `Dimensions` filter mismatches in
+`get_cost_by_usage_type`, the single-region API constraint, the wrapped
+error format from failed `GetCostAndUsage` calls, the `dataPoints.length >= 2`
+guard that forces a `"stable"` trend for single-day windows, and
+`get_cost_comparison`'s two sequential API calls.

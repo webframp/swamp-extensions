@@ -1,10 +1,12 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** When the `gopass` CLI exits non-zero, the thrown error now
-names the subcommand that failed (e.g. `gopass show -o -n <path> exited
-with code 1: entry not found`) instead of just the exit code and bare
-stderr. Previously a failure surfaced only gopass's own message with no
-indication of which operation — `show`, `insert`, or `list` — was in
-progress; that's important context to have when multiple vault calls happen
-back to back. Secret values passed on stdin are still redacted before the
-error is constructed, as before.
+**Fixed:** README's Usage section documented invented CLI flags/subcommands
+(`--vault`, `--key`, `--value`) that don't exist. Corrected to the real
+`swamp vault put/read-secret/list-keys` command forms.
+
+**Changed:** Documentation only — no code changes otherwise. Added a
+`## Troubleshooting` section covering missing-binary errors when `gopass`
+isn't on PATH, the deliberately terse exit-code error message (namespace is
+kept out of it on purpose), `assertSafeKey`'s rejections, `passwordOnly`
+defaulting to `true` and truncating multi-line entries, and store-prefix
+stripping in `list`.

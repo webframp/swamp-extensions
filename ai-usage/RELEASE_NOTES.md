@@ -1,9 +1,9 @@
-## 2026.08.21.2
+## 2026.08.23.1
 
-**Changed:** The unified report's provider-coverage lookup used to swallow lookup
-failures silently — a provider was marked "Not configured" with no indication of
-whether it was truly unconfigured or the underlying `findBySpec` call failed
-(network error, malformed data, etc.). It now logs a warning naming the provider,
-model instance, resource spec, and the underlying error message before falling
-back to "Not configured," so a scan outage is distinguishable from a provider
-that was never set up.
+**Changed:** Documentation only — no code changes. Added the missing Anthropic/Claude
+Enterprise Analytics provider to the README's intro and Quick Start (it was already
+in the `PROVIDERS` registry but undocumented). Expanded the `status` and `generate`
+method descriptions with concrete command examples, and added a `## Troubleshooting`
+section covering the "unconfigured" vs. genuine-failure ambiguity in
+`fetchLatestScanData`, and the silent zero-fallbacks in `numField()` that can mask
+upstream schema drift.

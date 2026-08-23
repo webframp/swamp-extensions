@@ -1,18 +1,13 @@
-## 2026.08.02.1
+## 2026.08.23.1
 
-**Fixed:** The `configure` job in `@webframp/bootstrap-elasticache-datastore`
-failed with `Invalid expression: No such key: attributes`. The workflow queried
-`data.latest("swamp-valkey-provisioner", "state")`, but the provisioner writes
-its resource under the instance name `"main"` (via
-`writeResource("state", "main", ...)`) — `data.latest()`'s second argument
-matches the resource's instance name, not its spec name. The `configure` job now
-queries `data.latest("swamp-valkey-provisioner", "main")`, which resolves
-correctly.
+**Fixed:** README's Development section referenced a nonexistent
+`valkey-datastore-bootstrap` directory; corrected to
+`elasticache-datastore-bootstrap`.
 
-**Changed:** The `run-setup` step now passes the provisioner's `datastoreConfig`
-through a `DATASTORE_CONFIG` environment variable instead of interpolating it
-directly into a single-quoted shell string. The prior pattern could allow a
-config value containing a single quote to break out of shell quoting.
-
-**Upgrade note:** No action needed beyond `swamp extension pull` — the workflow
-file is re-pulled with the extension.
+**Changed:** Documentation only — no code changes otherwise. Added a
+`## Troubleshooting` section covering the multiple-default-VPC error, the
+`create-failed`/`deleting`/`deleted` terminal-state branches in
+`waitForCacheAvailable`, the self-healing ingress-rule check in
+`ensureSecurityGroup` that silently reopens port 6379 to the VPC CIDR on re-run,
+and divergent `securityGroupId` reporting when reusing a cache created with a
+different security group.

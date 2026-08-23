@@ -62,14 +62,14 @@ If your GPG or pinentry setup needs a variable outside that set, name it in
 Store and retrieve secrets using swamp vault expressions or the CLI:
 
 ```bash
-# Store a secret
-swamp vault set my-secrets db/password "s3cret"
+# Store a secret (interactive prompt, value hidden)
+swamp vault put my-secrets db/password
 
 # Retrieve a secret
-swamp vault get my-secrets db/password
+swamp vault read-secret my-secrets db/password --force --json
 
 # List all keys under the configured prefix
-swamp vault list my-secrets
+swamp vault list-keys my-secrets --json
 ```
 
 Reference secrets in model definitions with vault expressions:
@@ -118,6 +118,46 @@ error whose text is the CLI's stderr.
 span without it is close to useless for debugging. Treat key names as visible to
 anyone with access to your trace backend, and do not encode sensitive
 information in them.
+
+## Troubleshooting
+
+**"pass ... exited with code 127" or similar, no `pass`-specific detail.**
+`runPass` spawns `pass` with `clearEnv: true` and only the variables in
+`ENV_ALLOWLIST` (plus `extraEnv`) — if `pass` (or `gpg`) isn't installed, or
+isn't reachable via the narrowed `PATH` that got forwarded, the subprocess
+fails immediately and the wrapped error carries whatever the shell reported,
+not a gopass/pass-specific message. Confirm `pass` and `gpg` resolve inside
+the same `PATH` value your environment forwards, not just your interactive
+shell's.
+
+**GPG/pinentry hangs or fails after upgrading, worked fine before.** The
+subprocess environment used to be the full parent environment; it's now
+narrowed to `ENV_ALLOWLIST` in `pass.ts` — `HOME`, `PATH`, GPG/pinentry
+variables (`GNUPGHOME`, `GPG_TTY`, `DISPLAY`, `DBUS_SESSION_BUS_ADDRESS`,
+etc.), and the `PASSWORD_STORE_*` settings. An unusual pinentry setup that
+needs a variable outside that list (a custom pinentry program's own env var,
+for instance) will silently lose it. Add the variable name to `extraEnv` in
+the vault config rather than waiting for a broader default allowlist.
+
+**"pass list failed: find `<storeDir>` exited with code ...".** `list` shells
+out to `find` separately from `pass`, and a non-zero exit from `find` is
+deliberately not treated as "the store has no secrets" — that case is a zero
+exit with empty output, handled separately. A non-zero `find` exit means the
+store directory is missing, unreadable, or `find` itself isn't installed;
+check `storeDir` (or `PASSWORD_STORE_DIR`) points at a real, readable
+directory.
+
+**A key is rejected before `pass` runs.** `assertSafeKey` throws for keys
+that are empty, start with `/` or `-`, contain a null byte, or contain a `.`
+or `..` path segment — these would otherwise let a caller escape the
+configured `prefix` and read or overwrite a secret elsewhere in the store.
+
+**Secrets from before 2026.04.22.1 return "not found".** Version 2026.04.22.1
+introduced key prefixing with a default of `"swamp"`. Every `get`/`put`/`list`
+call is now scoped under that prefix (`swamp/<key>` in the underlying store),
+so secrets inserted by an earlier version — which had no prefix — won't be
+found under the new default. Set `prefix: ""` in the vault config to read them
+without migrating.
 
 ## License
 

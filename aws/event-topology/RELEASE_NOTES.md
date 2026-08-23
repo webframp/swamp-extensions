@@ -1,20 +1,11 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** Error messages from `discover` now say which AWS call failed and
-with what identifier, instead of surfacing the raw SDK error. Failures listing
-EventBridge buses/rules/targets, SNS topics/subscriptions, SQS queues, or
-Lambda event source mappings now name the operation, the resource (bus name,
-rule name, topic ARN), and the region, with the original SDK error preserved
-as the cause.
-
-Resolving the caller's account ID via STS now raises a clear error naming the
-region if `GetCallerIdentity` fails, instead of an unannotated SDK exception.
-
-`analyze` used to log an error and silently return zero results when called
-with `query=path` and no `nodeId`, or when no graph had been discovered yet,
-or when the given `nodeId` didn't exist in the stored graph — callers had no
-signal that anything went wrong. All three cases now throw a descriptive
-error explaining what was missing and how to fix it (e.g. "run discover
-first" or "nodeId not found in the stored topology graph").
-
-No schema changes.
+**Changed:** Documentation only — no code changes. Expanded the `discover` and
+`analyze` method descriptions with actual argument names/defaults and resource
+instance names. Added a `## Troubleshooting` section covering the `region`
+default (`us-east-1`), the hardcoded `MAX_PAGES = 50` cap on two specific
+loops, and — the most notable finding — that the user-supplied
+`maxTopics`/`maxQueues`/`maxRulesPerBus` caps break enumeration silently
+**without** setting `truncated`, an honesty gap distinct from the hardcoded
+caps. Also documents per-queue attribute-fetch failures that silently drop
+queues (and their DLQ/redrive edges) from the graph.
