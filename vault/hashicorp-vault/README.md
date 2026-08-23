@@ -40,14 +40,14 @@ Once configured, interact with secrets through the standard `swamp vault` CLI
 commands:
 
 ```bash
-# Store a secret
-swamp vault put hashi my-app/db-password "s3cret!"
+# Store a secret (interactive prompt, value hidden)
+swamp vault put hashi my-app/db-password
 
 # Retrieve a secret
-swamp vault get hashi my-app/db-password
+swamp vault read-secret hashi my-app/db-password --force --json
 
 # List all secrets
-swamp vault list hashi
+swamp vault list-keys hashi --json
 ```
 
 ## Vault expressions in model definitions
@@ -118,6 +118,50 @@ release activates it, the token becomes a span attribute that nothing in this
 extension can suppress. See
 [#276](https://github.com/webframp/swamp-extensions/issues/276) for the full
 probe methodology and residual risk inventory.
+
+## Troubleshooting
+
+**"No Vault token found."** `resolveToken` in `hashicorp.ts` checks, in order,
+the config `token` field, the `VAULT_TOKEN` environment variable, and
+`~/.vault-token` (the file `vault login` writes). If none resolve, the
+provider throws before making any HTTP request, with a message that spells
+out all three sources. This is a client-side check, not a Vault server error
+— it fires even if the server is unreachable.
+
+**"Vault get request failed: could not reach `<url>`: ..."** This message
+comes from `vaultFetch`, which wraps DNS, connection-refused, and TLS
+failures with the operation and key involved. It fires before any HTTP status
+exists — a `handleResponse`-shaped "Vault get failed: 4xx/5xx" message means
+the request *reached* Vault; this one means it never did. Check `address` in
+the vault config and that the server is actually listening there.
+
+**"Secret '`<key>`' not found or has no data."** `get` reads the response
+differently depending on `kvVersion`: KV v2 nests the payload under
+`data.data`, KV v1 under `data` directly. If `kvVersion` in the config doesn't
+match how the mount was actually created, the code looks in the wrong place
+and throws this error even though the secret exists — it looks identical to a
+genuinely missing key. Verify the mount's actual KV version with
+`vault secrets list -detailed` on the server.
+
+**A key is rejected before any request is sent.** `assertSafeKey` throws for
+keys that are empty, start with `/`, contain a null byte, or contain a `.` or
+`..` path segment — this stops a key from being interpolated into the request
+path in a way that reaches a different mount or a different Vault API
+entirely (e.g. `secret/data/../../sys`).
+
+**`list` returns fewer keys than expected with no error.** The recursive walk
+in `list` stops at `MAX_DEPTH = 10` or `MAX_KEYS = 10000` and does not throw
+— it silently caps and sets `vault.truncated` on the emitted span instead
+(see Observability below). A deeply nested or very large secret tree can hit
+either cap; check the span attribute rather than assuming the listing is
+complete.
+
+**Vault API errors show the server's own error list.** `handleResponse`
+parses the JSON error body Vault returns on non-2xx responses and surfaces
+`parsed.errors.join(", ")` in the thrown message when present, falling back
+to a generic `<status> <statusText>` line only when the body isn't the
+expected shape (e.g. an upstream proxy error page instead of a Vault JSON
+error).
 
 ## License
 

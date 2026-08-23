@@ -23,12 +23,14 @@ Create a model instance and run cost analysis methods:
 ```bash
 # Create model instance
 swamp model create @webframp/aws/cost-explorer aws-costs \
-  --global region=us-east-1
+  --global-arg region=us-east-1
 
 # Spend breakdown by service (last 30 days)
 swamp model method run aws-costs get_cost_by_service
 
 # Drill into a specific service's usage types
+# `service` must match the exact name Cost Explorer uses (as returned by
+# get_cost_by_service), not the console/marketing name — "EC2" will not match.
 swamp model method run aws-costs get_cost_by_usage_type \
   --input service="Amazon Elastic Compute Cloud - Compute"
 
@@ -54,8 +56,52 @@ swamp model method run aws-costs get_cost_comparison --input days=30
 
 ## Resources
 
-All methods write results to the `costs` resource with a 1-hour lifetime and
-garbage collection retaining the last 10 entries.
+Each method writes to its own typed resource (`costTrend`, `costByService`,
+`costByUsageType`, `costDrivers`, `costComparison`), all with a 1-hour
+lifetime and garbage collection retaining the last 10 entries per spec.
+
+## Troubleshooting
+
+**`get_cost_by_usage_type` returns an empty `usageTypes` array, no error** —
+`service` is passed straight into a Cost Explorer `Dimensions` filter
+(`Filter: { Dimensions: { Key: "SERVICE", Values: [args.service] } }`). A
+name that doesn't match Cost Explorer's exact service string (e.g. `"EC2"`
+instead of `"Amazon Elastic Compute Cloud - Compute"`) matches nothing and
+the API happily returns zero groups — there's no validation against a known
+service list. Run `get_cost_by_service` first and copy the `service` value
+verbatim.
+
+**Changing `region` away from `us-east-1` breaks every method** — the
+`region` global argument defaults to `us-east-1`
+(`extensions/models/aws/cost_explorer.ts`) because AWS Cost Explorer's
+`GetCostAndUsage` API is only served from that region regardless of where
+your resources actually run. Overriding it (`--global-arg region=eu-west-1`)
+produces an SDK-level connection/endpoint failure, not a permissions error —
+if you see that, revert to `us-east-1` rather than debugging IAM.
+
+**Errors always include the underlying AWS message and the query period** —
+every method wraps SDK failures as, e.g., `` GetCostAndUsage (group by
+SERVICE) failed for period 2026-07-01..2026-07-31: <original message> ``. If
+the original message is an `AccessDeniedException`, the model instance's
+credentials are missing the `ce:GetCostAndUsage` IAM permission listed in
+Prerequisites. If it mentions data availability, Cost Explorer has not yet
+finalized billing data for part of the requested window (recent AWS billing
+data typically lags by up to 24 hours) — narrow `days` or retry later rather
+than treating it as an auth problem.
+
+**`get_cost_trend` reports `trend: "stable"` for very short windows** —
+trend direction only gets computed when there are at least two daily data
+points to compare (`dataPoints.length >= 2` in `get_cost_trend`); with
+`days=1` there's only one data point and the method always reports
+`"stable"` regardless of actual spend change. Use `days >= 2` if you need a
+real increasing/decreasing signal.
+
+**`get_cost_comparison` issues two Cost Explorer API calls, not one** —
+unlike the other four methods, it queries the current and previous periods
+as two sequential `GetCostAndUsageCommand` calls on the same client. Each
+Cost Explorer API call is separately billed by AWS and counts against the
+same request-rate limit, so running this method is roughly twice the
+cost/latency of the others per invocation.
 
 ## License
 

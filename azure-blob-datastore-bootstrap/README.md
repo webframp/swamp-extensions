@@ -73,6 +73,44 @@ All resources are checked before creation. Re-running is safe:
 - Existing resource groups, storage accounts, and containers are reused
 - The connection string is re-retrieved on each run
 
+## Troubleshooting
+
+**`Azure CLI failed: az storage account create ... — StorageAccountAlreadyTaken`**
+The `storage_account` global arg has no reserved-name check before creation —
+`storageAccountExists` only looks inside your resource group, but storage
+account names are globally unique across *all* Azure tenants. If someone else
+already owns the name, `az storage account create` fails and the raw `az`
+stderr is surfaced verbatim. Pick a different, more specific
+`storage_account` value (3–24 lowercase alphanumeric characters).
+
+**`AuthorizationPermissionMismatch` on container check/create, but the
+resource group and storage account were created fine**
+`containerExists` and `createContainer` both pass `--auth-mode login`, which
+authorizes container operations via Azure AD RBAC (the `Storage Blob Data
+Contributor` or `Storage Blob Data Reader` role on the storage account),
+separately from the Azure Resource Manager permissions used to create the
+resource group and storage account itself. Being a subscription
+`Contributor` is not enough — grant yourself one of those data-plane roles on
+the storage account (or the resource group) before re-running.
+
+**Bootstrap looks like it's retrying resource creation on every run**
+`resourceGroupExists`, `storageAccountExists`, and `containerExists` decide
+"not found" by matching the substring `"not found"` or a specific Azure error
+code (`ResourceGroupNotFound`, `ResourceNotFound`, `ContainerNotFound`) in the
+`az` CLI's stderr. If `az` isn't actually authenticated (e.g., an expired
+`az login` session), the CLI emits an authentication error that doesn't match
+those substrings, so it propagates as a raw failure instead of the intended
+not-found path — run `az account show` first if resource checks behave
+unexpectedly.
+
+**`Could not retrieve connection string for storage account <name>`**
+`getConnectionString` throws this explicitly when
+`az storage account show-connection-string` returns no
+`connectionString` field — this happens if the storage account was created
+with customer-managed key encryption or has been disabled/locked outside of
+this bootstrap. Re-run after confirming the account's state with
+`az storage account show`.
+
 ## Development
 
 ```bash

@@ -77,25 +77,36 @@ Branch: `docs/extension-readme-improvements`
 | `aws/cost-report` | Fixed a broken CLI command in the README (`swamp model report` → `swamp report get`); documented that the resource table only exists for `estimate_from_spec` and always shows `$0.00` |
 | `research-collector` | Documented the silent per-source degrade behavior in `gatherAll` (all 7 scraped sources fail independently to an empty array with only an info-level log); flagged the regex-based AI Daily Brief HTML scraping as the most fragile source |
 | `aws/config-compliance` | Documented the `region` default (`us-east-1`) as the most likely cause of empty results for AWS Config, since Config is regional; documented the unflagged `MAX_PAGES = 20` pagination cap |
+| `aws/bedrock-usage` | Troubleshooting for the silent zero-usage skip in `scan_accounts`, the `regions` default, overloaded `truncated` semantics, and `accountId` always being `null` by design |
+| `aws/event-topology` | Troubleshooting for the `region` default, hardcoded `MAX_PAGES` caps vs. user-supplied `maxTopics`/`maxQueues` caps that break enumeration *without* setting `truncated` (an honesty gap), and per-queue attribute-fetch failures that silently drop queues from the graph |
+| `aws/networking` | Troubleshooting for the `region` default, the `MAX_PAGES = 10` cap, an unflagged truncation gap in `get_data_transfer_metrics`, and CloudWatch's `Sum \|\| 0` fallback masking metrics-lagging resources |
+| `aws/cost-explorer` | Fixed a broken CLI flag (`--global` → `--global-arg`); corrected the Resources section (five typed resources, not one `costs` resource); Troubleshooting for `Dimensions` filter mismatches, the single-region API constraint, and the `dataPoints.length >= 2` guard forcing `"stable"` trend |
+| `aws/iam` | Fixed a broken CLI command form (method/instance order); Troubleshooting for per-profile silent degrade in `discover_all`, the `discover_trust_map` dependency error, the `MAX_PAGES = 200` cap, and silent trust-policy parse failures |
+| `aws/alarm-investigation` | Documented the undocumented `profile` global arg; Troubleshooting for `enrichAlarm`'s per-alarm degrade to `verdict: "unknown"`, the silent empty `sns_topics` catch, and the unpaginated 100-record cap on noisy-alarm counts |
+| `container-image` | Troubleshooting for wrong CLI binary defaults, `--load` failing on multi-platform builds, post-push digest-inspect failures, and the `parseInt(...) || null` masking pattern |
+| `driver/nix` | Corrected an inaccurate env-passthrough claim (bundle mode only, not command mode); Troubleshooting for missing-binary errors, the timeout/SIGTERM/SIGKILL shutdown sequence, and the bundle-mode env allowlist |
+| `discourse` | Troubleshooting for the `apiUsername` requirement, wrapped API error bodies, unexpected-shape hard-fails, `get_topic`'s `truncated` meaning, and the 1-based vs 0-based pagination inconsistency between `search` and `list_*` methods |
+| `ai-usage` | Added the missing Anthropic/Claude Enterprise Analytics provider to the intro and Quick Start; Troubleshooting for the "unconfigured" vs. genuine-failure ambiguity in `fetchLatestScanData` and silent zero-fallbacks in `numField()` |
+| `azure/openai-usage` | Troubleshooting for the zero-usage silent drop, the independent `deploymentBreakdownFailed` degrade, overloaded `truncated` semantics, and a Reader-role permission gap that isn't retried (403s aren't retried, only 429/5xx) |
+| `gcp/vertex-usage` | Troubleshooting for the silent per-project zero-usage skip vs. `get_token_usage`'s uncaught failures, the `MAX_PAGES = 50` cap, and the four thrown-error cases in `resolveServiceAccount` |
+| `microsoft/teams` | Troubleshooting for device-code expiry, the one recognizable OAuth error code (`invalid_grant`) vs. raw Graph codes, two independent `truncated` sources, and `Authorization_RequestDenied` meaning missing admin consent |
+| `azure-blob-datastore-bootstrap` | Troubleshooting for storage-account name collisions, `AuthorizationPermissionMismatch` from mixed auth modes, and stale `az login` sessions masquerading as "not found" |
+| `gitlab-datastore-bootstrap` | Troubleshooting for 401/403/404 branches in project validation and state access, JSON-parse failures from self-hosted instances, and the Maintainer-role requirement for token creation |
+| `dynamodb-datastore-bootstrap` | Troubleshooting for the `aws` CLI missing-from-PATH rewrite, the 60s table-active timeout, and the TOCTOU race in `ensurePolicy` |
+| `aurora-datastore-bootstrap` | Troubleshooting for missing default VPC, the 2+ subnet requirement, and a genuine gotcha found in the code: the provisioner only waits for the *cluster* to reach `available`, never the writer instance, so connections can fail immediately post-bootstrap |
+| `elasticache-datastore-bootstrap` | Fixed a wrong directory name in the Development section (`valkey-datastore-bootstrap` → `elasticache-datastore-bootstrap`); Troubleshooting for terminal cache states and the self-healing ingress-rule check that silently reopens port 6379 on re-run |
+| `vault/gopass` | Fixed invented CLI flags/subcommands (`--vault`/`--key`/`--value` don't exist) to the real `swamp vault put/read-secret/list-keys` forms; Troubleshooting for missing-binary errors, `assertSafeKey` rejections, and `passwordOnly` truncating multi-line entries |
+| `vault/hashicorp-vault` | Same CLI-form fix as gopass; Troubleshooting for token-resolution errors, the KV v1/v2 nesting mismatch that produces false "not found," and the silent `MAX_DEPTH`/`MAX_KEYS` list truncation |
+| `vault/pass` | Same CLI-form fix; Troubleshooting for the narrowed subprocess environment allowlist and the breaking prefix-migration behavior from `2026.04.22.1` |
+| `vault/macos-keychain` | Same CLI-form fix; Troubleshooting for the unconditional `list()` rejection (no keychain enumeration API), Darwin-only restriction, and the 4096-byte `security -i` line-buffer cap on secret size |
+
+All 27 extensions above are complete. Every remaining candidate from the original survey has now been addressed.
 
 ## Remaining candidates (from the survey, hand-maintained only)
 
-Ranked roughly by README thinness / likely error-prone surface area:
-
-- `aws/bedrock-usage`, `aws/event-topology`, `aws/networking` (~57 lines)
-- `aws/cost-explorer`, `aws/iam` (~62 lines)
-- `aws/alarm-investigation`, `container-image`, `driver/nix` (~63 lines)
-- `discourse`, `ai-usage`, `azure/openai-usage`, `gcp/vertex-usage`,
-  `microsoft/teams` (~65 lines)
-- Datastore bootstrap family: `azure-blob-datastore-bootstrap`,
-  `gitlab-datastore-bootstrap`, `dynamodb-datastore-bootstrap`,
-  `aurora-datastore-bootstrap`, `elasticache-datastore-bootstrap`
-  (82–106 lines) — likely to have genuine first-run setup gotchas
-  (credentials, IAM, connection strings) worth documenting as a themed
-  batch since they share a bootstrap pattern.
-- `vault/*` family (gopass, hashicorp-vault, pass, macos-keychain,
-  107–131 lines) — CLI/keychain-shell-out failure modes are a natural
-  Troubleshooting fit.
+None outstanding from the original ranked list. Any further candidates would
+require a fresh survey pass over the ~78 hand-maintained extensions to find
+ones not already covered here.
 
 ## Non-goals for this sweep
 

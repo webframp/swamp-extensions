@@ -97,10 +97,45 @@ The provisioner is fully idempotent:
 ElastiCache Serverless cache creation takes 2-5 minutes. The provisioner polls
 every 15 seconds with a 10-minute timeout.
 
+## Troubleshooting
+
+**`Multiple default VPCs found (<n>) — provide vpc_id explicitly`**
+Unlike some AWS resources, `getDefaultVpcId` treats more than one VPC tagged
+`is-default` as an error rather than picking the first — this can happen in
+accounts with cross-region default VPCs visible through certain
+organization/IAM setups. Pass `vpc_id` explicitly rather than relying on
+default-VPC resolution.
+
+**`ElastiCache Serverless cache <name> creation failed` /
+`... is in terminal state: deleting` or `deleted`**
+`waitForCacheAvailable` distinguishes these terminal states from a plain
+timeout: `create-failed` means AWS rejected the cache (check the AWS console
+for the underlying reason, often a subnet/security-group mismatch),
+while `deleting`/`deleted` means something else deleted the cache out from
+under a concurrent bootstrap run. Both fail fast instead of polling the full
+10-minute window.
+
+**Re-running the bootstrap silently adds a missing ingress rule**
+`ensureSecurityGroup` doesn't just check whether the security group exists —
+it also inspects `IpPermissions` for a TCP/6379 rule covering the cache port
+and adds one if missing. This is intentional self-healing for a security
+group left in a partial state by an earlier failed run, but it means a
+security group you deliberately locked down to a narrower CIDR will have its
+6379 rule reopened to the full VPC CIDR on the next `provision` call.
+
+**Reported `securityGroupId` doesn't match the one this bootstrap manages**
+When reusing an existing cache, the provisioner reports the security group
+actually attached to the cache (`cache.SecurityGroupIds[0]`) rather than the
+one it resolved from `security_group_name` — if the cache was originally
+created with a different security group (e.g., by hand or by a previous
+bootstrap run with different arguments), the two can diverge. This is
+expected: it reflects the cache's real configuration, not a bug in name
+resolution.
+
 ## Development
 
 ```bash
-cd valkey-datastore-bootstrap
+cd elasticache-datastore-bootstrap
 ~/.swamp/deno/deno task check
 ~/.swamp/deno/deno task test
 ```

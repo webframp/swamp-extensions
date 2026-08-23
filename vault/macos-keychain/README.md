@@ -36,13 +36,13 @@ are stored. If you omit it, the provider defaults to `"swamp"`.
 Store and retrieve secrets with the `swamp vault` CLI:
 
 ```bash
-# Store a secret
-swamp vault put keychain my-api-key "sk-live-abc123"
+# Store a secret (interactive prompt, value hidden)
+swamp vault put keychain my-api-key
 
 # Retrieve a secret
-swamp vault get keychain my-api-key
+swamp vault read-secret keychain my-api-key --force --json
 
-# Note: listing keys is not supported by macOS Keychain
+# Note: listing keys is not supported by macOS Keychain (see Troubleshooting)
 ```
 
 ## Vault Expressions in Models
@@ -125,6 +125,51 @@ redacted.
 span without it is close to useless for debugging. Treat key names as visible to
 anyone with access to your trace backend, and do not encode sensitive
 information in them.
+
+## Troubleshooting
+
+**`swamp vault list-keys` (or a `list()` call) always errors.** This is
+expected, not a bug: `security` has no way to enumerate accounts for a given
+service, so `list` in `keychain.ts` unconditionally rejects with "Listing
+keychain items is not supported by this vault provider" and the span records
+it as a failure. There is no config flag to work around this — track keys in
+your model/workflow config instead of listing them from the vault.
+
+**Runs everywhere except macOS.** The provider shells out to `security`,
+which only exists on Darwin. `manifest.yaml` restricts `platforms` to
+`darwin-x86_64` and `darwin-aarch64`; running on Linux or in most CI
+containers will fail before the provider code even executes.
+
+**"security ... exited with code ... <stderr>" mentioning the keychain being
+locked or denying access.** `runSecurity` in `keychain.ts` wraps any non-zero
+exit from the `security` CLI with its stderr text (with the submitted secret
+value and its hex encoding redacted first). A locked login keychain, a
+keychain-access prompt the CLI can't satisfy non-interactively, or the item
+already existing without `-U` permissions typically surfaces here. Unlock the
+keychain (`security unlock-keychain`) or grant access, then retry.
+
+**"secret is too large for the keychain write path".** `put` hex-encodes the
+value and writes an `add-generic-password ... -X <hex>` line to `security -i`
+over stdin; that interface reads commands through a fixed 4096-byte line
+buffer. The provider checks the encoded line length before spawning anything
+and throws with the computed maximum byte count for your specific service/key
+combination rather than silently truncating or corrupting the write. Shorten
+the service name, the key, or the secret.
+
+**"could not determine keychain password encoding: ...".** On macOS 26,
+`find-generic-password -w` prints hex instead of the literal secret when any
+byte falls outside printable ASCII. `get` disambiguates by re-running with
+`-g` and reading the `password:` line from stderr; this error means that
+probe line was missing or contained malformed hex — for example if a
+non-standard `security` build changed that output format. This is a hard
+failure, not a fallback to raw output, because guessing wrong would return
+corrupted bytes.
+
+**A key or the configured `service` is rejected before `security` runs.**
+Keys and the `service` config value are checked for control characters (a
+newline would split the command line sent to `security -i`) and a leading
+`-` (which `security` would parse as a flag). Both throw synchronously in
+`assertSafeKey` / the config schema's `refine` before any subprocess spawns.
 
 ## License
 
