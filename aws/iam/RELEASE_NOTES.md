@@ -1,12 +1,14 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** Per-profile scan failures in `discover_roles`, `discover_users`,
-and `discover_policies` are now logged at `warn` level instead of `info` —
-they were previously indistinguishable from routine progress messages, so a
-credential failure or throttled account could silently disappear from the
-scan with no visible signal. The log message now also names the discovery
-operation (`discover_roles`/`discover_users`/`discover_policies`) alongside
-the profile, and uses the underlying error's message rather than its full
-string representation.
+**Fixed:** README's five usage examples used a broken CLI command form
+(method before instance, extension name spliced in). Corrected to the
+standard `swamp model method run <instance> <method>` form used elsewhere.
 
-No schema changes.
+**Changed:** Documentation only — no code changes otherwise. Clarified that
+`discover_trust_map` reads previously written `roles-<profile>` resources and
+never calls the IAM API itself. Added a `## Troubleshooting` section covering
+the per-profile silent degrade in `discover_all`, the exact error thrown by
+`discover_trust_map` when no role data exists, `pathPrefix` filtering to an
+empty result set with no error signal, the `MAX_PAGES = 200` pagination cap,
+and the silent catch on malformed `AssumeRolePolicyDocument` that drops a role
+from the trust graph.

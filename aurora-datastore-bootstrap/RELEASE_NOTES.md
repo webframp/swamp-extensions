@@ -1,11 +1,9 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** `subnet_ids` is now validated as a comma-separated list of
-`subnet-[a-f0-9]+` IDs at model-creation time, instead of accepting any string
-and letting a malformed value fail deep inside the AWS CLI call with an opaque
-error.
-
-`max_acu` must now be greater than or equal to `min_acu`. Previously an inverted
-range (e.g. `max_acu=2` with `min_acu=4`) was accepted and passed straight
-through to `create-db-cluster`, which rejects it with a generic RDS validation
-error that doesn't identify which argument was wrong.
+**Changed:** Documentation only — no code changes. Added a `## Troubleshooting`
+section covering the missing-default-VPC error, the "need 2+ subnets" check in
+`getSubnetIds`, the 600s/15s cluster-available timeout, and a real gotcha found
+while reading the code: the provisioner only waits for the *cluster* to reach
+`available`, never the writer instance, so connections can fail immediately
+post-bootstrap. Also documents the `rds-db:connect` policy being scoped only to
+`master_username`.

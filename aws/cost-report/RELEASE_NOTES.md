@@ -1,9 +1,9 @@
-## 2026.07.18.1
+## 2026.08.23.1
 
-**Changed:** Version bump only, no code changes.
+**Fixed:** README documented a `swamp model report cost-est --json` command
+that doesn't exist. The correct form is `swamp report get <report-name>
+--model <model>`.
 
-## 2026.06.26.1
-
-**Added:** Unit test coverage (`cost_report_test.ts`) with 17 tests covering skip
-behavior, EC2/RDS table rendering, data handle filtering, method-specific
-recommendations, header content, and JSON output structure.
+**Changed:** Documentation only — no code changes otherwise. Documented that
+the resource table only exists for `estimate_from_spec` and always shows
+`$0.00`.

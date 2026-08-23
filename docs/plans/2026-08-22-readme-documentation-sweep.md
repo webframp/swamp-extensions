@@ -61,10 +61,13 @@ README).
    bug the same as a Troubleshooting gap.
 4. **Skip codegen-owned READMEs entirely** (see above) rather than
    hand-editing content that will be overwritten.
-5. **No version bump / RELEASE_NOTES** for README-only changes — confirmed
-   against repo precedent (`bd5c5e66`, `a43f06f9`, `c6729416`: README-only
-   commits never touched `manifest.yaml`). `RELEASE_NOTES.md` is required
-   only when a version bumps.
+5. **README changes DO require a version bump.** Corrected after initially
+   assuming otherwise from surface-level repo precedent — the README is
+   bundled and published with the extension (same as `manifest.yaml`,
+   `deno.json`, and the shipped source paths), so a README-only change still
+   changes what a `swamp extension pull` produces. Every extension touched
+   in this sweep gets a CalVer bump and a `RELEASE_NOTES.md` entry
+   describing the doc change, even though no code/schema changed.
 
 ## Progress (this session)
 

@@ -1,15 +1,10 @@
-## 2026.08.21.2
+## 2026.08.23.1
 
-**Changed:**
-
-- `list_channels`, `channel_messages`, and `chat_messages` now reject an
-  empty `teamId`, `channelId`, or `chatId` with a clear validation error
-  before calling the Graph API, instead of sending an empty ID and letting
-  Graph return an opaque 404/400 deep in the call chain.
-- Every Graph API call that lists or fetches teams, channels, chats, and
-  messages (`list_teams`, `list_channels`, `channel_messages`, `list_chats`,
-  `chat_messages`, and `attention`) now reports failures with the operation
-  attempted and the relevant team/channel/chat ID, instead of surfacing only
-  the raw Graph error status/code. The underlying `GraphApiError` is
-  preserved as the error's `cause` for callers that need the original status
-  code.
+**Changed:** Documentation only — no code changes. Added usage examples for
+`attention` with `mode=unread_only`, `list_chats` with `nameFilter`, and
+`chat_messages` with `since`. Added a `## Troubleshooting` section covering
+device-code expiry during `bootstrap`, `invalid_grant` as the one
+recognizable OAuth error code from `refreshAccessToken` (vs. raw Graph codes
+otherwise), the two independent sources of a `truncated: true` flag on
+channel and chat listings, and `Authorization_RequestDenied` meaning missing
+admin consent rather than a stale token.

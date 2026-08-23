@@ -1,14 +1,12 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Fixed:** `list()` no longer reports a missing or unreadable password store
-directory as an empty listing. Previously, if the underlying `find`
-subprocess failed for any reason — a bad `storeDir`, permissions, `find` not
-being installed — the provider silently returned `[]`, indistinguishable
-from a store that legitimately has no secrets yet. It now throws an error
-naming the directory and the `find` exit code/stderr.
+**Fixed:** README's Usage section documented invented CLI flags/subcommands
+(`--vault`, `--key`, `--value`) that don't exist. Corrected to the real
+`swamp vault put/read-secret/list-keys` command forms.
 
-**Changed:** When the `pass` CLI exits non-zero, the thrown error now names
-the subcommand that failed (e.g. `pass show swamp/my-key exited with code
-1: Error: swamp/my-key is not in the password store.`) instead of just the
-exit code and bare stderr. Secret values passed on stdin to `insert` are
-still redacted before the error is constructed, as before.
+**Changed:** Documentation only — no code changes otherwise. Added a
+`## Troubleshooting` section covering the narrowed subprocess environment
+(`ENV_ALLOWLIST` plus `clearEnv: true`, with `extraEnv` as the escape hatch),
+the `find`-exit-code-vs-empty-store distinction in `list`, `assertSafeKey`,
+and the breaking prefix-migration behavior from `2026.04.22.1` (`prefix: ""`
+to read legacy unprefixed secrets).

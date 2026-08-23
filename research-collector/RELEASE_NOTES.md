@@ -1,11 +1,6 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** When a source (HN, Lobste.rs, SRE Weekly, IFIN Discourse, RedMonk,
-arXiv, or The AI Daily Brief) fails to gather, `gather` now logs the source
-name and the underlying error message before falling back to an empty result
-for that source. Previously the failure was discarded silently, so a brief
-with `hnFrontPage.stories: []` gave no clue whether HN genuinely had nothing
-new or the fetch failed. `gather` still returns partial data on a single
-source failure — that behavior is unchanged.
-
-**Upgrade note:** No schema changes. Existing instances need no migration.
+**Changed:** Documentation only — no code changes. Documented the silent
+per-source degrade behavior in `gatherAll` — all 7 scraped sources fail
+independently to an empty array with only an info-level log — and flagged
+the regex-based AI Daily Brief HTML scraping as the most fragile source.

@@ -1,12 +1,10 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** AWS API failures in `list_nat_gateways`, `list_load_balancers`,
-`list_elastic_ips`, and `get_data_transfer_metrics` now say which resource
-type and region were being queried instead of surfacing the raw SDK error,
-with the original error preserved as the cause.
-
-`get_data_transfer_metrics`'s `days` argument now requires an integer between
-1 and 365 — previously a zero, negative, or absurdly large value would only
-surface as a confusing CloudWatch time-range error deep inside the method.
-
-No schema changes.
+**Changed:** Documentation only — no code changes. Documented the previously
+undocumented `profile` global arg and added a `region`-explicit usage
+example. Added a `## Troubleshooting` section covering the `region` default
+(`us-east-1`), the `MAX_PAGES = 10` pagination cap, an unflagged truncation
+gap in `get_data_transfer_metrics` (its own NAT-gateway/LB discovery uses
+capped pagination but never sets `truncated`), CloudWatch's `Sum || 0`
+fallback masking metrics-lagging resources, and unrecognized
+`loadBalancerNames` throwing a wrapped AWS exception.

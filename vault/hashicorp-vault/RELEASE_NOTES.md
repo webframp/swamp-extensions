@@ -1,10 +1,13 @@
-## 2026.08.21.1
+## 2026.08.23.1
 
-**Changed:** Network-level failures (DNS resolution, connection refused, TLS
-errors, timeouts) talking to the Vault server now surface as
-`Vault <get|put|list> request failed (key: <key>): could not reach <url>:
-<reason>` instead of a bare, context-free fetch error. Previously, only
-non-2xx HTTP responses were wrapped with the operation and key that was
-being attempted — an unreachable server produced a raw runtime error with
-no indication of which vault call or key triggered it. HTTP-level failures
-(4xx/5xx responses from Vault itself) are unchanged.
+**Fixed:** README's Usage section documented invented CLI flags/subcommands
+(`--vault`, `--key`, `--value`) that don't exist. Corrected to the real
+`swamp vault put/read-secret/list-keys` command forms.
+
+**Changed:** Documentation only — no code changes otherwise. Added a
+`## Troubleshooting` section covering the three-source token resolution
+error message from `resolveToken`, `vaultFetch`'s network-vs-HTTP error
+distinction, the KV v1/v2 nesting mismatch that produces a false "not
+found," `assertSafeKey`'s path-escape checks, the silent
+`MAX_DEPTH`/`MAX_KEYS` list truncation (only visible via a span attribute),
+and how Vault's own JSON error array surfaces through `handleResponse`.
