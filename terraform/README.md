@@ -66,6 +66,45 @@ its address. Each resource includes the complete attribute map from state.
 Reads Terraform outputs and writes one `tf_output` per output plus an `all`
 summary resource. Sensitive outputs are redacted to `***SENSITIVE***`.
 
+## Troubleshooting
+
+### No timeout on Terraform CLI execution
+
+The extension spawns `terraform show -json` (or other commands) and waits
+indefinitely for completion. If the Terraform backend is unreachable (S3 with
+network issues, Terraform Cloud downtime), the method hangs. Consider setting
+environment-level timeouts externally.
+
+### Empty state is valid, not an error
+
+If `terraform show -json` returns a state with no `root_module`, the methods
+produce zero-resource inventories or empty handle arrays. This is the expected
+case for uninitialized workspaces — not a failure condition.
+
+### `binary` global arg accepts any string
+
+The schema does not validate that `binary` is `"terraform"` or `"tofu"`. Any
+string is passed as the CLI binary name. An incorrect binary name produces a
+"command not found" error at runtime, not at validation.
+
+### `workDir` must exist and contain initialized Terraform
+
+The `workDir` global arg is not validated for existence at schema time. If the
+directory does not exist or lacks a `.terraform` directory, the CLI throws with
+a descriptive error from `terraform` itself.
+
+### Large states write many resources sequentially
+
+`read_state` writes one swamp resource per Terraform resource in a tight loop
+with no batching or concurrency. Very large states (thousands of resources) will
+take proportionally longer. No `truncated` field exists.
+
+### Workspace selection via `TF_WORKSPACE`
+
+The `workspace` global arg (default `"default"`) sets `TF_WORKSPACE` in the CLI
+environment. This does not run `terraform workspace select` — it relies on the
+environment variable override.
+
 ## License
 
 Apache-2.0. See [LICENSE.md](LICENSE.md).

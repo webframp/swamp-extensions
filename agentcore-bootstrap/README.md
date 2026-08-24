@@ -118,6 +118,46 @@ Deno subprocess, and writes outputs back to S3.
 | `@webframp/agentcore-bootstrap` | Infrastructure provisioner (this extension)   |
 | `@webframp/container-image`     | OCI build/push (used by bootstrap internally) |
 
+## Troubleshooting
+
+### Workflow `--input` does not flow to model globalArgs
+
+The workflow accepts inputs like `bucket_name` and `region`, but these are NOT
+passed to the model's global arguments. Those must be set on the model instance
+itself (via `swamp model edit` or at creation time with `--global-arg`). The
+workflow only passes `workerContextPath` and `platform` to the method step.
+
+### No `--profile` support
+
+The extension has no AWS profile configuration. All `aws` CLI calls use whatever
+credentials the default chain provides. Set `AWS_PROFILE` in the environment
+before running if you need a specific profile.
+
+### Idempotent provisioning — re-run is safe
+
+Running `provision` multiple times is safe. Each resource (S3 bucket, ECR repo,
+IAM role, AgentCore runtime) is checked before creation. If it already exists,
+creation is skipped and the existing resource's ARN is used.
+
+### Existing AgentCore runtime is not updated
+
+If the runtime already exists (409/ConflictException), the extension falls back
+to `get-agent-runtime` to retrieve its ARN but does NOT update it with the new
+image. If you rebuilt the worker image, you must manually update or delete the
+runtime before re-provisioning.
+
+### S3 lifecycle expires task objects after 7 days
+
+The provisioner applies a lifecycle rule that expires objects under
+`swamp-agentcore/tasks/` after 7 days. This prevents unbounded storage growth
+from completed task artifacts.
+
+### Docker must be available for image build and push
+
+The `provision` method runs `docker build` and `docker push`. If Docker is not
+installed or the daemon is not running, the method fails with the Docker CLI's
+error message.
+
 ## License
 
 MIT
