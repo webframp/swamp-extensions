@@ -47,13 +47,13 @@ The model auto-refreshes expired access tokens using the refresh token.
 
 ## Scopes
 
-| Scope | Used by | Purpose |
-|-------|---------|---------|
-| moderator:read:chatters | get_chatters | List users in chat |
-| moderation:read | get_banned_users, get_mod_events | Read bans and mod activity |
-| moderator:manage:banned_users | ban_user, unban_user | Issue bans/timeouts and unban |
-| user:write:chat | send_message | Send chat messages as your user |
-| channel:read:editors | get_channel | Read channel metadata + live status |
+| Scope                         | Used by                          | Purpose                             |
+| ----------------------------- | -------------------------------- | ----------------------------------- |
+| moderator:read:chatters       | get_chatters                     | List users in chat                  |
+| moderation:read               | get_banned_users, get_mod_events | Read bans and mod activity          |
+| moderator:manage:banned_users | ban_user, unban_user             | Issue bans/timeouts and unban       |
+| user:write:chat               | send_message                     | Send chat messages as your user     |
+| channel:read:editors          | get_channel                      | Read channel metadata + live status |
 
 ## Methods
 
@@ -74,7 +74,46 @@ The model auto-refreshes expired access tokens using the refresh token.
 ## Report
 
 The `@webframp/twitch/mod-report` runs after the audit workflow and produces:
+
 - Channel overview (chatters, ban counts per channel)
 - Cross-channel ban overlap (same user banned in 2+ channels)
 - Suspicious users (chatting in one channel but banned in another)
 - Mod event timeline
+
+## Troubleshooting
+
+### Token refresh works per-invocation but is not persisted
+
+On a 401 response, the extension refreshes the OAuth2 token using the refresh
+token and retries once. The new access token is cached in-process but NOT
+written back to vault. Each new swamp invocation starts with the original
+(possibly expired) access token and refreshes again. This works as long as the
+refresh token itself remains valid.
+
+### `get_banned_users` and `get_mod_events` require broadcaster auth
+
+These methods throw immediately if `hasBroadcasterAuth` is `false` in global
+args. Set `--global-arg hasBroadcasterAuth=true` and ensure your token has
+broadcaster-level scope for the target channel.
+
+### Results silently capped at 50,000 items
+
+The paginator stops at `MAX_PAGINATED_RESULTS = 50,000` without setting a
+`truncated` field. Very large channels (100k+ chatters, heavily-banned channels)
+may hit this limit without indication.
+
+### Rate-limit self-throttling at 20 remaining
+
+When the Twitch API's `Ratelimit-Remaining` header drops below 20, the extension
+sleeps until the reset window (up to 60 seconds). This prevents 429 errors but
+means methods can pause mid-execution.
+
+### `get_mod_events` uses a deprecated endpoint
+
+The `/moderation/moderators/events` endpoint was removed from the Twitch Helix
+API. This method may return 404 or empty results on current API versions.
+
+### No retry on 5xx errors
+
+Server errors from Twitch throw immediately without backoff or retry. Transient
+Twitch outages will crash the method invocation.

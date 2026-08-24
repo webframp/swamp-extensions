@@ -96,6 +96,31 @@ unacceptable based on unaddressed high/critical threats.
 `scope → identify → evaluate → mitigate → posture`, with `revisit` to re-enter
 the loop when the system changes.
 
+## Troubleshooting
+
+### "No assessment — run scope first" error
+
+All methods except `scope` require a stored assessment resource. The model
+enforces strict method ordering: `scope` → `identify` → `evaluate` → `mitigate`
+→ `posture`. Skipping a step throws.
+
+### Invalid threat ID references in `evaluate` or `mitigate`
+
+Both methods validate that all referenced threat IDs exist in the current
+assessment. Passing an ID that was not produced by `identify` throws with the
+list of unknown IDs.
+
+### Risk matrix is hardcoded
+
+The `computeRiskLevel` function uses a fixed likelihood × impact matrix. The
+`likelihoodScale` and `impactScale` global args are documentation for the
+scoring agent, not programmatic thresholds.
+
+### `revisit` is read-only
+
+The `revisit` method reads the current assessment and returns context for the
+agent to reason about changes. It does not write any resources.
+
 ## License
 
 Apache-2.0

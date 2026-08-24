@@ -23,7 +23,7 @@ instance profile). The IAM principal must hold the permissions listed below.
 ## Installation
 
 ```bash
-swamp extension install @webframp/aws/inventory
+swamp extension pull @webframp/aws/inventory
 ```
 
 ## Usage
@@ -68,6 +68,53 @@ swamp model method run aws-inv inventory_all
 | `list_s3`       | List S3 buckets (global, ignores region setting)  |
 | `list_ebs`      | List EBS volumes with attachment status           |
 | `inventory_all` | Run full inventory across all supported resources |
+
+## Troubleshooting
+
+### Global arg is `regions` (array), not `region` (string)
+
+The model expects `--global-arg regions='["us-east-1"]'` (an array). A bare
+`--global-arg region=us-east-1` will fail Zod validation. This was changed in
+version `2026.06.24.1` — the old `region` (string) schema no longer works.
+
+### `inventory_scan` and `inventory_diff` only use the first region
+
+These methods explicitly use `regions[0]` regardless of how many regions are
+configured. Multi-region scanning requires separate model instances or using
+`inventory_all` which fans out across all configured regions.
+
+### Resource Explorer / Config fallback is silent
+
+The `inventory_scan` method tries Resource Explorer 2 first, then AWS Config,
+then the Tag API. If RE2 or Config fails (not enabled, missing permissions,
+throttled), the method silently falls through to the next source. The
+`sourceNote` field in the output indicates which source was used, but no warning
+is emitted about failed attempts.
+
+### `MAX_PAGES = 10` truncation (per-service methods)
+
+Individual methods (`list_ec2`, `list_rds`, etc.) cap pagination at 10 pages.
+Per-page sizes vary: EC2 returns up to 1,000 per page (~10,000 max), Lambda
+returns 50 (~500 max), RDS returns 100 (~1,000 max). The `truncated` field is
+set when the cap is reached.
+
+### `inventory_diff` shows empty diff on first run
+
+Without a previous baseline resource, the diff method sets `noBaseline: true`
+and produces empty `added`/`removed` arrays. Run `inventory_scan` at least twice
+(with a gap) to produce meaningful diffs. Source mismatches between runs also
+suppress diff output to prevent false positives.
+
+### S3 listing uses only the first region
+
+`list_s3` calls the global `ListBuckets` API using `regions[0]` as the endpoint.
+It returns all buckets regardless of where they were created.
+
+### `list_lambda` reserved concurrency silently null
+
+Per-function `GetFunctionConcurrency` failures are silently caught.
+`reservedConcurrency: null` is indistinguishable from "no reserved concurrency
+configured."
 
 ## License
 

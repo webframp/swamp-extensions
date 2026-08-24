@@ -1,8 +1,8 @@
 # @webframp/azure-blob-datastore
 
 Stores swamp runtime data in Azure Blob Storage using native blob-lease
-distributed locking and ETag-conditional writes on a shard-first path index.
-No Azure SDK dependency — talks to the Blob REST API directly via `fetch`.
+distributed locking and ETag-conditional writes on a shard-first path index. No
+Azure SDK dependency — talks to the Blob REST API directly via `fetch`.
 
 ## Features
 
@@ -15,8 +15,8 @@ No Azure SDK dependency — talks to the Blob REST API directly via `fetch`.
 - **Three explicit auth modes** — connection string, account key, or Azure AD
   service principal. No `DefaultAzureCredential`/managed-identity ambient
   discovery, by design
-- **ETag-conditional shard index** — a `_index/` path index sharded by the
-  first byte of `sha256(relPath)`, updated via optimistic-concurrency
+- **ETag-conditional shard index** — a `_index/` path index sharded by the first
+  byte of `sha256(relPath)`, updated via optimistic-concurrency
   read-modify-write, mirroring the official S3/GCS datastores' `_index/`
   partition-shard pattern
 
@@ -70,10 +70,10 @@ export SWAMP_DATASTORE='@webframp/azure-blob-datastore:{"auth":{"mode":"connecti
 
 ## Required Setup
 
-The container must already exist — this extension does **not** auto-create
-it. Least-privilege Azure RBAC (`Storage Blob Data Contributor` scoped to one
-container) commonly excludes container-create rights, so provision the
-container via IaC or the Azure Portal/CLI before first use:
+The container must already exist — this extension does **not** auto-create it.
+Least-privilege Azure RBAC (`Storage Blob Data Contributor` scoped to one
+container) commonly excludes container-create rights, so provision the container
+via IaC or the Azure Portal/CLI before first use:
 
 ```bash
 az storage container create --name swamp-datastore --account-name myaccount
@@ -91,16 +91,15 @@ extension never uses — an infinite lease would strand the lock forever if the
 holder crashes). A caller's requested `ttlMs` is clamped into that range, and
 the lock is kept alive via heartbeat renewal at roughly a third of the actual
 lease duration — the same renewal cadence convention as the postgres/valkey
-datastores, just keyed to Azure's real lease length instead of the raw
-`ttlMs`.
+datastores, just keyed to Azure's real lease length instead of the raw `ttlMs`.
 
 ## Observability
 
 The extension emits [OpenTelemetry](https://opentelemetry.io/) spans for blob
 operations, lock acquisition/release, and push/pull sync. It depends on
-`@opentelemetry/api` only — the host process owns the `TracerProvider`, so
-every span is a no-op when none is registered. When swamp runs with OTel
-enabled, datastore activity appears in traces nested under swamp's own
+`@opentelemetry/api` only — the host process owns the `TracerProvider`, so every
+span is a no-op when none is registered. When swamp runs with OTel enabled,
+datastore activity appears in traces nested under swamp's own
 `swamp.datastore.*` spans.
 
 Three layers are instrumented:
@@ -115,21 +114,67 @@ Three layers are instrumented:
   `lock.contended`; inspect records `lock.holder`. Heartbeat renewals are
   deliberately not given their own span — a lock held for minutes would
   otherwise bury the trace in periodic noise.
-- **Sync** — `azure-blob-datastore pullChanged` / `pushChanged` /
-  `hydrateFile` / `preparePush` / `commitPush`, with `datastore.files_pulled`,
+- **Sync** — `azure-blob-datastore pullChanged` / `pushChanged` / `hydrateFile`
+  / `preparePush` / `commitPush`, with `datastore.files_pulled`,
   `datastore.files_pushed`, `datastore.files_deleted`, and
-  `datastore.fast_path_hit`. The multi-round-trip internals
-  (`listIndexShards`, `queryAllFileMeta`, `updateShard`) get their own spans so
-  a slow index scan is distinguishable from slow content transfer.
+  `datastore.fast_path_hit`. The multi-round-trip internals (`listIndexShards`,
+  `queryAllFileMeta`, `updateShard`) get their own spans so a slow index scan is
+  distinguishable from slow content transfer.
 
-Retries appear as `retry` events on the enclosing span, with
-`retry.attempt`, `retry.delay_ms`, and `retry.reason` — either
-`retryable_status` for 429/5xx backoff or `etag_conflict` for the shard index
-CAS loop.
+Retries appear as `retry` events on the enclosing span, with `retry.attempt`,
+`retry.delay_ms`, and `retry.reason` — either `retryable_status` for 429/5xx
+backoff or `etag_conflict` for the shard index CAS loop.
 
 Credential material is never recorded. Shared Key signatures, AAD client
 secrets, and bearer tokens do not appear in any attribute; the AAD token
 exchange span carries only its response status.
+
+## Troubleshooting
+
+### Lock heartbeat failure is silent — lease expires naturally
+
+The background renewal interval catches all errors silently. If the connection
+drops during a long operation, the Azure blob lease expires after its fixed
+duration (15-60s). The holder is not notified. Azure clamps `ttlMs` to the 15-60
+second range rather than rejecting out-of-range values.
+
+### Network-level fetch errors are NOT retried
+
+The retry utility only handles HTTP-status-level errors (408, 429, 500, 502,
+503, 504). DNS failures, TLS handshake errors, and connection resets propagate
+immediately without retry. For flaky networks, ensure your infrastructure
+provides reliable connectivity to Azure Blob Storage.
+
+### Container must pre-exist
+
+The extension does not auto-create the Azure Blob Storage container. Create it
+before configuring the datastore:
+`az storage container create --name <container> --account-name <account>`.
+
+### Sovereign cloud users must set `endpointSuffix`
+
+The default `endpointSuffix` is `core.windows.net` (Azure public cloud). Users
+in Azure Government (`core.usgovcloudapi.net`), Azure China
+(`core.chinacloudapi.cn`), or Azure Germany must set this field explicitly.
+
+### ETag conflict retries (up to 10 attempts)
+
+Shard updates and commit-sequence increments use optimistic concurrency with
+ETags. On conflict (another writer modified the same shard), the extension
+re-reads and retries up to 10 times with no delay. After 10 failures, the error
+propagates.
+
+### Dirty paths cap at 200 before bulk invalidation
+
+When more than 200 files are modified without a push, the sidecar flips to
+`bulkInvalidated` mode, forcing a full rescan on next push. Push frequently to
+maintain incremental performance.
+
+### Lease release is best-effort
+
+The `release()` method swallows all errors. If the lease cannot be released
+(connection lost, lease already expired), it expires naturally after its fixed
+duration.
 
 ## Development
 

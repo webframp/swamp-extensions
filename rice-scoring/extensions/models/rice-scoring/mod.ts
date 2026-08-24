@@ -116,7 +116,7 @@ interface ModelContext {
 /** RICE scoring methodology model. */
 export const model = {
   type: "@webframp/rice-scoring",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",

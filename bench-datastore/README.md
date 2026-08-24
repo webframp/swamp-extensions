@@ -119,10 +119,43 @@ multiple workers never collide.
 - **Composable**: run one or both scenarios, vary worker count at deploy time
 - **Observable**: all timing data stored as swamp resources, queryable via CEL
 
+## Troubleshooting
+
+### Failures are recorded as data, not retried
+
+The harness records every operation result (success or failure) as a resource. A
+failed write produces `success: false` with `errorMessage` — the benchmark loop
+continues without retrying. This is intentional: you want to measure failure
+rates, not mask them.
+
+### `setup` is idempotent
+
+Running `setup` multiple times is safe. If worker models already exist, the
+"already exists" error is silently swallowed. Re-run setup after partial
+failures without worrying about duplicate models.
+
+### No timeout on subprocess execution
+
+`runModelMethod` spawns a `swamp` subprocess and waits indefinitely. A hung
+swamp process blocks the worker forever. Ensure the underlying datastore and
+model methods have their own timeouts configured.
+
+### `--global-arg` (not `--global`)
+
+The correct swamp CLI flag for global arguments is `--global-arg`, not
+`--global`. If model creation fails with an unrecognized flag error, check the
+flag name.
+
+### Datastore backend selection is external
+
+The harness benchmarks whichever datastore is configured at the swamp repository
+level. It does not accept a datastore configuration directly. Switch backends
+using `swamp repo` configuration before running benchmarks.
+
 ## Development
 
 ```bash
 cd bench-datastore
-~/.swamp/deno/deno task check
-~/.swamp/deno/deno task test
+deno task check
+deno task test
 ```

@@ -166,7 +166,7 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",

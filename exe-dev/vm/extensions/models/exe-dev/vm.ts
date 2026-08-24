@@ -653,7 +653,7 @@ export function mapVm(raw: RawVm): z.infer<typeof VmSchema> {
  */
 export const model = {
   type: "@webframp/exe-dev/vm",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

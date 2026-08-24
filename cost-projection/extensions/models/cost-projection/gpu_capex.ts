@@ -320,7 +320,7 @@ function computeSensitivity(
 /** GPU capex inference cost projection model with amortization. */
 export const model = {
   type: "@webframp/cost-projection/gpu-capex",
-  version: "2026.08.01.1",
+  version: "2026.08.24.1",
   globalArguments: z.object({}),
   reports: ["@webframp/cost-projection-comparison"],
 

@@ -82,7 +82,7 @@ swamp model method run adoption next
 
 ## Methods
 
-| Method         | Description                                                        |
+| Method         | Description                                                          |
 | -------------- | -------------------------------------------------------------------- |
 | `discover`     | Structured interview to map systems, interactions, and data flows    |
 | `import_skill` | Convert an existing skill into a landscape stub and extension design |
@@ -97,6 +97,30 @@ swamp model method run adoption next
 | `landscape`       | infinite | Discovered system landscape from domain interviews |
 | `extensionDesign` | infinite | Versioned extension design produced from landscape |
 | `scaffold`        | 24h      | Generated file scaffold (ephemeral)                |
+
+## Troubleshooting
+
+### `design` throws when no system is specified
+
+The `design` method requires either: (1) a prior `discover` run that populated
+`suggestedFirstExtension`, or (2) an explicit `--input system=<name>`. Without
+either, it throws with instructions.
+
+### `scaffold` requires `design` first
+
+The scaffolding method reads the stored design resource. If no design exists, it
+throws with instructions to run `design` first.
+
+### `import_skill` partial-write handling
+
+If the landscape resource write succeeds but the design resource write fails,
+the method logs a warning about inconsistency and re-throws. The landscape
+update is committed but the design is not — re-running the method retries both.
+
+### Global args accept JSON arrays via CLI
+
+The `currentTools` and `painPoints` global args are arrays. Pass them as JSON
+strings: `--global-arg 'currentTools=["terraform","ansible"]'`.
 
 ## License
 

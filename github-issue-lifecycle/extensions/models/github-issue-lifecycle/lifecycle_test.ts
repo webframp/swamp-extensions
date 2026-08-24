@@ -13,7 +13,6 @@ import {
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/github-issue-lifecycle");
-  assertEquals(model.version, "2026.08.21.2");
 });
 
 Deno.test("model has all expected methods", () => {

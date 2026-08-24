@@ -67,6 +67,45 @@ swamp model method run cost-est estimate_from_spec \
   $0.115/GB-month.
 - Monthly estimates assume 730 hours per month.
 
+## Troubleshooting
+
+### Instance type shows $0/month estimate
+
+The pricing helpers return `0` when the AWS Pricing API has no matching product.
+Common causes:
+
+- **Unmapped region:** The internal `regionToLocation` mapping covers 17
+  regions. Newer regions (Milan, Cape Town, Hong Kong, Jakarta, Tel Aviv, etc.)
+  fall back to the raw region code, which does not match any Pricing API
+  location string. The estimate silently returns zero.
+- **Platform mismatch:** Only `"linux"` and `"windows"` are recognized. RHEL,
+  SUSE, and other licensed platforms are priced as Linux (incorrect but
+  non-failing).
+- **Typo in instance type:** The Pricing API filter uses the exact instance type
+  string. A typo like `"t3.mirco"` produces zero matches and a $0 rate.
+
+No warning is logged when a price lookup returns zero. The `totalMonthly` field
+will be understated if any items were unpriced.
+
+### `estimate_rds` uses us-east-1 pricing when availability zone is null
+
+If the inventory data for an RDS instance lacks an `availabilityZone` (common
+for Multi-AZ deployments where the primary AZ is not exposed), the pricing
+lookup defaults to `us-east-1` regardless of the instance's actual region.
+Cross-region pricing differences are not reflected.
+
+### `pricingRegion` global arg
+
+The Pricing API exists only in `us-east-1` and `ap-south-1`. The `pricingRegion`
+global arg controls which endpoint is used. The default (`us-east-1`) is correct
+for most users. Pass `--global-arg pricingRegion=ap-south-1` for lower latency
+from the Asia-Pacific region.
+
+### `estimate_from_spec` rejects empty input
+
+At least one of `ec2Instances` or `rdsInstances` must be non-empty. Passing both
+as empty arrays fails Zod validation.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md).

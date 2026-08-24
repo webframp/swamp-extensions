@@ -79,16 +79,14 @@ Three layers are instrumented:
   trip emits exactly one span (`GitLab getState`, `GitLab putState`,
   `GitLab readStateSerial`, `GitLab listStates`, `GitLab getProject`,
   `GitLab lock`, `GitLab unlock`, `GitLab getLockInfo`, `GitLab deleteState`,
-  `GitLab healthCheck`) with `http.request.method`,
-  `http.response.status_code`, `gitlab.project_id`, `gitlab.state_name`, and
-  `server.address`.
+  `GitLab healthCheck`) with `http.request.method`, `http.response.status_code`,
+  `gitlab.project_id`, `gitlab.state_name`, and `server.address`.
 - **Lock** — `gitlab-datastore lock acquire` / `release` / `withLock` /
   `inspect` / `forceRelease`. Acquire records `lock.wait_duration_ms`,
   `lock.contended`, and `lock.holder`.
 - **Sync** — `gitlab-datastore pullChanged` / `pushChanged` / `hydrateFile` /
   `preparePush` / `commitPush`, with `datastore.files_pulled`,
-  `datastore.files_pushed`, `datastore.states`, and
-  `datastore.fast_path_hit`.
+  `datastore.files_pushed`, `datastore.states`, and `datastore.fast_path_hit`.
 
 Non-2xx responses mark their span as an error, except where the status is normal
 control flow: a 404 from `getState` means the state does not exist, a 409 or 423
@@ -102,6 +100,46 @@ off exponentially, before the call is allowed to fail.
 The access token is never recorded. Every request carries a PRIVATE-TOKEN header
 and bodies carry file content; span attributes hold only the operation name,
 HTTP method, status, project ID, state name, and host.
+
+## Troubleshooting
+
+### Lock stolen after ~60 seconds
+
+Locks older than `staleLockThresholdMs` (60s default) are considered stale and
+force-released by competing processes. If your model method takes longer than 60
+seconds, the lock may be stolen without notification. The heartbeat updates
+local metadata only — it does not refresh the lock in GitLab.
+
+### Files larger than 4MB silently skipped during push
+
+GitLab's state API has a per-state size limit. Files exceeding 4MB are silently
+omitted from push operations. No warning is logged. If model outputs routinely
+exceed this, consider a different datastore backend.
+
+### 429 rate limit retry (up to 5 attempts)
+
+All API calls retry on 429 responses with exponential backoff (1s base,
+doubling, max 30s). The `Retry-After` header is honored when present. After 5
+attempts, the error propagates. High-frequency push/pull operations on busy
+GitLab instances may still exhaust the budget.
+
+### First push is slow (no commit sequence yet)
+
+Until the first successful push writes the `_meta--commit_seq` state, every pull
+performs a full state listing. After the first push, subsequent pulls use the
+sequence counter for fast-path detection of changes.
+
+### State path encoding
+
+File paths are encoded with `--` replacing `/` separators. A file at
+`data/models/foo.json` becomes GitLab state `swamp--data--models--foo.json`.
+When inspecting states in the GitLab UI, use this mapping to locate files.
+
+### `projectId` accepts both numeric IDs and URL-encoded paths
+
+Pass either the numeric project ID (e.g., `12345`) or the URL-encoded path
+(e.g., `mygroup%2Fmyproject`). URL-encoded paths with special characters must be
+properly escaped.
 
 ## License
 

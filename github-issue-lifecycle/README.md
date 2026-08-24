@@ -93,6 +93,40 @@ swamp model method run tracker start --input issue_number=42
 - `gh` CLI installed and authenticated (`gh auth login`)
 - swamp initialized (`swamp init`)
 
+## Troubleshooting
+
+### Label sync fails silently
+
+All label operations (`syncLabel`) catch errors with an empty catch block. If
+your token lacks write permission on labels, or the label does not exist, the
+operation silently fails. The state machine advances regardless. No diagnostic
+output is produced.
+
+### Comment posting fails hard (unlike label sync)
+
+If `postComments=true` (the default) and the token cannot write comments, the
+entire method invocation fails. This asymmetry with label sync means a read-only
+token with `postComments=true` will hard-fail every transition. Set
+`--global-arg postComments=false` if your token lacks comment-write scope.
+
+### Issue close is best-effort
+
+The `complete`, `close`, and `prMerged` methods attempt to close the GitHub
+issue after transitioning state. If the close fails (permissions, network), the
+local state records "done"/"closed" but the GitHub issue remains open. No error
+is surfaced for this case.
+
+### `start` on an existing issue re-resets to `triaging`
+
+Running `start` again on an issue that already has lifecycle state (and is not
+terminal) resets it to `triaging`. In a race condition, this could overwrite
+progress made by another process.
+
+### `gh` CLI must be installed and authenticated
+
+All GitHub operations delegate to the `gh` CLI. Authentication state is
+inherited from `gh auth login`. There is no in-extension token configuration.
+
 ## Development
 
 ```bash

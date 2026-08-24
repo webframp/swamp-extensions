@@ -82,36 +82,36 @@ fires the `@webframp/review-dashboard` report automatically.
 
 ### Read (REST)
 
-| Method                | Description                         | Inputs                                         |
-| --------------------- | ----------------------------------- | ---------------------------------------------- |
-| `list_projects`       | Projects for the authenticated user | —                                              |
-| `get_project_info`    | Detailed info for a project         | `project`                                      |
-| `list_merge_requests` | MRs for a project                   | `project`, `state?` (opened/closed/merged/all) |
-| `list_issues`         | Issues for a project                | `project`, `state?` (opened/closed/all)        |
-| `list_releases`       | Releases                            | `project`                                      |
-| `list_pipelines`      | Recent CI/CD pipelines              | `project`                                      |
-| `list_issue_notes`    | Comments on an issue                | `project`, `iid`                               |
-| `list_mr_notes`       | Comments on a merge request         | `project`, `iid`                               |
-| `list_mr_discussions` | Resolvable MR threads with resolution state + slim diff position | `project`, `iid`, `first?` |
-| `list_labels`         | Project labels                      | `project`                                      |
-| `list_members`        | Project members                     | `project`                                      |
-| `list_branches`       | Repository branches                 | `project`                                      |
+| Method                | Description                                                      | Inputs                                         |
+| --------------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| `list_projects`       | Projects for the authenticated user                              | —                                              |
+| `get_project_info`    | Detailed info for a project                                      | `project`                                      |
+| `list_merge_requests` | MRs for a project                                                | `project`, `state?` (opened/closed/merged/all) |
+| `list_issues`         | Issues for a project                                             | `project`, `state?` (opened/closed/all)        |
+| `list_releases`       | Releases                                                         | `project`                                      |
+| `list_pipelines`      | Recent CI/CD pipelines                                           | `project`                                      |
+| `list_issue_notes`    | Comments on an issue                                             | `project`, `iid`                               |
+| `list_mr_notes`       | Comments on a merge request                                      | `project`, `iid`                               |
+| `list_mr_discussions` | Resolvable MR threads with resolution state + slim diff position | `project`, `iid`, `first?`                     |
+| `list_labels`         | Project labels                                                   | `project`                                      |
+| `list_members`        | Project members                                                  | `project`                                      |
+| `list_branches`       | Repository branches                                              | `project`                                      |
 
 ### Write (REST)
 
-| Method                 | Description                | Inputs                                                               |
-| ---------------------- | -------------------------- | -------------------------------------------------------------------- |
-| `create_issue`         | Create an issue            | `project`, `title`, `description?`, `labels?`                        |
-| `update_issue`         | Update an issue            | `project`, `iid`, `title?`, `description?`, `labels?`, `stateEvent?` |
-| `add_issue_note`       | Comment on an issue        | `project`, `iid`, `body`                                             |
-| `create_merge_request` | Create a merge request     | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
-| `merge`                | Merge a merge request      | `project`, `iid`, `squash?`                                          |
-| `add_mr_note`          | Comment on a merge request, or reply into a thread | `project`, `iid`, `body`, `discussionId?`           |
-| `resolve_mr_discussion`| Resolve/unresolve an MR discussion thread | `project`, `iid`, `discussionId`, `resolved?`                 |
-| `set_mr_assignees`     | Set (replace) an MR's assignees | `project`, `iid`, `usernames`                                  |
-| `unassign_from_mrs`    | Remove a user (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?`    |
-| `remove_mr_reviewers`  | Remove a reviewer (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?` |
-| `create_label`         | Create a label             | `project`, `name`, `color?`, `description?`                          |
+| Method                  | Description                                                       | Inputs                                                               |
+| ----------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `create_issue`          | Create an issue                                                   | `project`, `title`, `description?`, `labels?`                        |
+| `update_issue`          | Update an issue                                                   | `project`, `iid`, `title?`, `description?`, `labels?`, `stateEvent?` |
+| `add_issue_note`        | Comment on an issue                                               | `project`, `iid`, `body`                                             |
+| `create_merge_request`  | Create a merge request                                            | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
+| `merge`                 | Merge a merge request                                             | `project`, `iid`, `squash?`                                          |
+| `add_mr_note`           | Comment on a merge request, or reply into a thread                | `project`, `iid`, `body`, `discussionId?`                            |
+| `resolve_mr_discussion` | Resolve/unresolve an MR discussion thread                         | `project`, `iid`, `discussionId`, `resolved?`                        |
+| `set_mr_assignees`      | Set (replace) an MR's assignees                                   | `project`, `iid`, `usernames`                                        |
+| `unassign_from_mrs`     | Remove a user (default: you) from multiple MRs in one fan-out     | `project`, `iids`, `username?`                                       |
+| `remove_mr_reviewers`   | Remove a reviewer (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?`                                       |
+| `create_label`          | Create a label                                                    | `project`, `name`, `color?`, `description?`                          |
 
 ## Reports
 
@@ -163,6 +163,48 @@ view:
 - Replaced `glab` CLI with direct REST API (v4) calls
 - Added `token` global argument (required, vault reference)
 - All list schemas include `truncated: boolean`
+
+## Troubleshooting
+
+### Single-page results with fixed limits
+
+Most list methods fetch a single page with hardcoded limits: projects (30), MRs
+(20), issues (20), releases (10), pipelines (10), notes (50), labels (100),
+members (100). The `truncated` field is set from `pageInfo.hasNextPage` so you
+can detect incomplete results. Only `list_todos` performs multi-page pagination
+(up to 2,000 items).
+
+### Token scope requirements
+
+The `token` global arg needs `api` scope for full functionality. Read-only
+operations work with `read_api`, but mutations (create issue, post note, approve
+MR) require `api`. A 401 or 403 from GitLab surfaces as a thrown error with the
+HTTP status.
+
+### Batch methods report partial failures
+
+`mark_todos_done`, `unassign_from_mrs`, and `remove_mr_reviewers` process items
+individually. Per-item failures are recorded in the `failed` array of the output
+resource without aborting the batch. Check this field to identify which items
+could not be processed.
+
+### `set_mr_assignees` verifies the result
+
+This method compares the resulting assignee list against the requested list. If
+GitLab silently dropped a username (e.g. user does not exist or lacks project
+access), the method throws rather than returning a partial assignment.
+
+### No retry or rate-limit handling
+
+All HTTP requests fail immediately on non-2xx responses. GitLab rate limits
+(429) propagate as thrown errors. For bulk operations, add delays between
+invocations.
+
+### Many methods are undocumented in the README
+
+The extension implements ~35 methods but the README documents only a subset. Run
+`swamp model type search gitlab` or check the manifest description for the
+complete method list.
 
 ## License
 

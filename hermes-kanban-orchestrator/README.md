@@ -60,3 +60,40 @@ export const model = {
   methods: { new_task: { ... }, list_recent: { ... } },
 };
 ```
+
+## Troubleshooting
+
+### `list_recent` returns empty results without error
+
+If the `hermes kanban list` CLI command fails (binary not found, board doesn't
+exist, permission error), the method logs a warning and returns zero data
+handles. It does not throw. Check `swamp run history` for the warning message.
+JSON parse failures on the list output also degrade to empty results with a log
+message.
+
+### `new_task` returns `kanbanId: "unresolved-..."`
+
+If the `hermes kanban create --json` output cannot be parsed as JSON, the method
+falls back to regex-based ID extraction from stdout/stderr. If that also fails,
+a synthetic `unresolved-{timestamp}` ID is used. The task was created in the
+kanban board, but the returned ID may not match the actual task. No warning is
+logged for this fallback.
+
+### Idempotency key collision
+
+Tasks are de-duplicated by `idempotencyKey` (auto-generated from date + title
+hash if not provided). If hermes reports "already exists," the method writes a
+resource with `status: "exists"` and extracts the ID via regex. Multiple
+collisions targeting `task-unknown` would overwrite each other's resource data.
+
+### `hermesBin` default is `"hermes"` (not `~/.local/bin/hermes`)
+
+The source default relies on PATH lookup. The README documents a different
+default. Set `--global-arg hermesBin=/path/to/hermes` explicitly if hermes is
+not in your PATH.
+
+### 30-second timeout on CLI commands
+
+All `hermes` CLI invocations time out after 30 seconds. If your kanban board is
+large or the hermes binary is slow, the method throws a timeout error. This
+timeout is not configurable.

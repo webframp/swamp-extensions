@@ -76,6 +76,48 @@ per-resource drift details:
 }
 ```
 
+## Troubleshooting
+
+### Report shows "No Drift Detected" when drift exists
+
+The drift report reads data written by upstream model methods
+(`tf-infra
+read_state`, `aws-inventory`, `aws-networking`). If those methods
+were not run before the report, or if they failed (the workflow marks all AWS
+steps as `allowFailure: true`), the report silently proceeds with empty
+reference data and produces a clean result. Confirm that the workflow's gather
+jobs completed successfully via `swamp workflow history search --json` or
+`swamp run history`.
+
+### False "missing_in_aws" findings
+
+When an AWS gathering step fails (network error, permission issue), its data is
+absent. The report treats every Terraform resource of that type as
+"missing_in_aws" because it has no AWS data to compare against. Check the
+workflow run history for step failures before acting on these findings.
+
+### Workflow `region` input has no effect
+
+The workflow definition accepts a `region` input (default `us-east-1`), but no
+step references it. The actual region comes from the `--global-arg region=...`
+set when creating the `aws-inventory` and `aws-networking` model instances. To
+target a different region, recreate those model instances — do not rely on the
+workflow input.
+
+### Terraform resource skipped without indication
+
+If a Terraform resource lacks an `id`, `arn`, or `allocation_id` in its state
+values, the comparison loop skips it without logging or incrementing a skip
+counter. Resources with custom ID patterns not covered by the report's field
+mapping will silently not appear in the output.
+
+### Data read failures are fully silent
+
+The report's `getData` helper catches all errors (file not found, corrupt JSON,
+permission denied) and returns `null`. There is no log entry distinguishing
+"data not yet collected" from "data file is corrupted." If the report output
+seems incomplete, verify the raw data files exist under `.swamp/data/`.
+
 ## Dependencies
 
 This extension requires the following swamp extensions:

@@ -4,19 +4,18 @@ GPU inference cost projection across cloud, rental, and capex scenarios.
 
 ## Problem
 
-Organizations evaluating self-hosted GPU inference need to compare
-fundamentally different cost structures — committed cloud reservations, hourly
-GPU rentals, and capital hardware purchases — using the same unit. This
-extension normalizes all scenarios to $/GPU-hour for apples-to-apples
-comparison.
+Organizations evaluating self-hosted GPU inference need to compare fundamentally
+different cost structures — committed cloud reservations, hourly GPU rentals,
+and capital hardware purchases — using the same unit. This extension normalizes
+all scenarios to $/GPU-hour for apples-to-apples comparison.
 
 ## Model Types
 
-| Type | Domain | Key Inputs |
-|------|--------|------------|
-| `gpu-cloud` | Hyperscaler instances (AWS, Azure, GCP) | Instance rate, capacity model, utilization, replicas |
-| `gpu-rental` | Third-party providers (CoreWeave, Lambda, RunPod) | Per-GPU-hour rate, commitment discount |
-| `gpu-capex` | On-prem / colo hardware | Hardware cost, useful life, facility, staff, maintenance |
+| Type         | Domain                                            | Key Inputs                                               |
+| ------------ | ------------------------------------------------- | -------------------------------------------------------- |
+| `gpu-cloud`  | Hyperscaler instances (AWS, Azure, GCP)           | Instance rate, capacity model, utilization, replicas     |
+| `gpu-rental` | Third-party providers (CoreWeave, Lambda, RunPod) | Per-GPU-hour rate, commitment discount                   |
+| `gpu-capex`  | On-prem / colo hardware                           | Hardware cost, useful life, facility, staff, maintenance |
 
 ## Quick Start
 
@@ -80,12 +79,38 @@ for capex). The capex model adds `sensitivity` for multi-assumption analysis.
 
 ## Report
 
-`@webframp/cost-projection-comparison` — model-scoped report attached by
-default to `gpu-cloud`, `gpu-rental`, and `gpu-capex`. It runs automatically
-after any method call on any instance of the three types, scans every
-cost-projection instance in the repo, and produces a ranked comparison table
-with crossover analysis. Retrieve it with
+`@webframp/cost-projection-comparison` — model-scoped report attached by default
+to `gpu-cloud`, `gpu-rental`, and `gpu-capex`. It runs automatically after any
+method call on any instance of the three types, scans every cost-projection
+instance in the repo, and produces a ranked comparison table with crossover
+analysis. Retrieve it with
 `swamp report get @webframp/cost-projection-comparison --model <any-instance>`.
+
+## Troubleshooting
+
+### "No scenario recorded — run record first" error
+
+The `project`, `update_rate`, `update_hardware_cost`, and `sensitivity` methods
+all require a stored scenario resource from a prior `record` invocation. Run
+`record` first with your scenario parameters.
+
+### Sensitivity requires array inputs
+
+The `sensitivity` method takes range arrays (e.g., `usefulLifeMonthsRange`,
+`utilizationRange`). These must be passed as JSON arrays via `--input`. If the
+CLI does not parse bracket syntax, use `--input-file` with a JSON payload.
+
+### Break-even fields only computed when comparison rate is provided
+
+The `project` method computes `breakEvenTokensPerMonth` and
+`breakEvenRequestsPerMonth` only when `apiComparisonRatePerMToken` is present in
+the scenario. Without it, these fields are omitted from the projection.
+
+### Three independent models for different acquisition strategies
+
+Each model (`gpu-cloud`, `gpu-rental`, `gpu-capex`) has its own schema and
+scenario resource. They do not share state. The `scenario_comparison` report
+reads from all three to produce a comparative view.
 
 ## License
 

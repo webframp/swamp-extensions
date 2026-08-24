@@ -11,7 +11,7 @@ arguments, and validating pipeline configuration before hitting real APIs.
 Register the extension in your swamp workspace:
 
 ```bash
-swamp extension install @webframp/dry-run
+swamp extension pull @webframp/dry-run
 ```
 
 ## Usage
@@ -64,6 +64,27 @@ No network calls, no file writes, no side effects.
 cd driver/dry-run
 deno task test
 ```
+
+## Troubleshooting
+
+### Driver is unconfigurable
+
+The `_config` parameter on `createDriver` exists for interface compliance but is
+unused. Output format, resource naming (`dry-run-<methodName>`), and JSON
+indentation are all hardcoded. No configuration options exist.
+
+### No I/O — errors come only from JSON serialization
+
+The driver performs no network calls, file operations, or subprocess spawning.
+The only failure path is `JSON.stringify` on the capture object — this throws on
+circular references or BigInt values in global/method args.
+
+### Captured output resource naming
+
+The resource spec is always `dry_run_capture` with instance name
+`dry-run-<methodName>`. Multiple dry-run invocations of the same method
+overwrite each other's resource data (only the latest is retained per the
+garbage collection setting).
 
 ## License
 

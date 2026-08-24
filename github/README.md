@@ -73,6 +73,39 @@ swamp model method run github list_workflows --input repo=octocat/Hello-World
 | `list_releases`  | List releases for a repository                                   |
 | `list_workflows` | List recent workflow runs for a repository                       |
 
+## Troubleshooting
+
+### Results are silently capped (no `truncated` field)
+
+All list methods have hardcoded limits: repos (30), PRs (20), issues (20),
+releases (10), workflows (10). There is no `truncated` indicator and no
+user-configurable `limit` parameter. If you have more items than the cap, the
+output silently omits them.
+
+### `gh` CLI must be installed and authenticated
+
+The extension delegates entirely to the `gh` CLI. If `gh` is not in PATH or not
+authenticated (`gh auth login`), every method throws with the `gh` stderr
+output. No in-extension token configuration exists.
+
+### No retry logic or rate-limit handling
+
+If GitHub returns a rate-limit response, `gh` exits non-zero and the method
+fails immediately. There is no backoff or retry. For bulk operations, add delays
+between invocations.
+
+### JSON shape trust-cast (no runtime validation)
+
+The extension casts `gh` output directly to the expected schema type without Zod
+parsing. If a future `gh` version changes its JSON output shape, the error
+surfaces at resource-write time (schema validation) rather than at parse time.
+
+### No GitHub Enterprise support configuration
+
+The extension uses whatever host `gh` is configured for. To target GitHub
+Enterprise, configure `gh` externally
+(`gh auth login --hostname ghe.example.com`).
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.

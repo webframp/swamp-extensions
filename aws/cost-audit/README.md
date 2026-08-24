@@ -63,6 +63,44 @@ swamp workflow run @webframp/cost-audit \
   `elasticloadbalancing:DescribeTargetHealth`
 - `cloudwatch:GetMetricStatistics`
 
+## Troubleshooting
+
+### Report shows "No data available" for every section
+
+The workflow marks all 13 gather steps as `allowFailure: true`. If every step
+fails (credential issues, missing permissions, wrong region), the workflow still
+"succeeds" and produces a report with placeholder text in every section. Check
+`swamp workflow history search --json` or `swamp run history` to confirm which
+steps actually completed.
+
+### Workflow `--input region=...` has no effect
+
+The workflow's `region` input exists in the schema but is never passed to any
+step. The actual region comes from the `--global-arg region=...` set when
+creating the dependent model instances (`aws-costs`, `aws-networking`,
+`aws-inventory`). To target a different region, recreate those model instances.
+
+### Partial results without indication
+
+When a step fails, its corresponding report section falls through to a
+placeholder message ("No cost-by-service data available," etc.). There is no
+consolidated list of which sections were populated vs degraded. Compare the
+report output against the 13 expected sections to identify gaps.
+
+### `MAX_PAGES = 10` in networking and inventory
+
+The dependent `aws/networking` and `aws/inventory` models each cap pagination at
+10 pages. Large accounts with more than ~1,000 NAT gateways, load balancers, or
+resources per type will have truncated data feeding into the audit. The report
+does not surface the upstream `truncated` flags.
+
+### Inventory model expects `regions` (array), not `region` (string)
+
+The `@webframp/aws/inventory` model requires
+`--global-arg regions='["us-east-1"]'` (an array). A bare
+`--global-arg region=us-east-1` will fail Zod validation. The `cost-explorer`
+and `networking` models use the singular `region` string.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md).

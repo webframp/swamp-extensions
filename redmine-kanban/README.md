@@ -93,6 +93,45 @@ Both reports produce dual output (Markdown for humans, JSON for automation):
 }
 ```
 
+## Troubleshooting
+
+### Report shows "No issue data available"
+
+The reports read pre-collected data from workflow steps (specifically
+`list_issues` and `get_issue` steps targeting the `tracker` model instance). If
+the workflow steps failed or the data files are missing/corrupt, the report
+returns a stub with this message. Check `swamp workflow history search --json`
+to confirm the upstream steps completed.
+
+### Model instance must be named "tracker"
+
+The `scaffold-story.yaml` workflow hardcodes `modelIdOrName: tracker`. The model
+instance created from `@webframp/redmine` must use this exact name:
+`swamp model create @webframp/redmine tracker --global-arg host=... ...`
+
+### Cycle time computation fallback
+
+The flow metrics report computes cycle time from Redmine journal entries. It
+first tries to match status names in journal details
+(`findFirstInProgressDate-
+ByName`). If that fails (journal stores integer IDs,
+not names), it falls back to treating the first status transition as "work
+started." This heuristic may overcount cycle time if early transitions represent
+triage rather than implementation.
+
+### Reports run automatically in workflow context
+
+Both reports have `scope: "workflow"` — they execute as part of a workflow run,
+not via standalone `swamp report run`. View output after a workflow completes
+using `swamp report get`.
+
+### `@webframp/redmine` is a separate extension
+
+This extension provides only reports and a workflow. The actual Redmine API
+interaction lives in `@webframp/redmine`. Both must be pulled:
+`swamp extension pull @webframp/redmine-kanban` and
+`swamp extension pull @webframp/redmine`.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md).

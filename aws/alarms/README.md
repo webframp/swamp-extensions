@@ -19,7 +19,7 @@ file, or IAM role).
 ## Installation
 
 ```bash
-swamp extension install @webframp/aws/alarms
+swamp extension pull @webframp/aws/alarms
 ```
 
 ## Usage
@@ -69,6 +69,44 @@ dates:
 2d     -- 2 days ago
 2026-03-30T12:00:00Z  -- absolute ISO 8601 timestamp
 ```
+
+## Troubleshooting
+
+### `get_summary` undercounts alarms on large accounts
+
+The `get_summary` method paginates with a hard cap of `MAX_PAGES = 10` (100
+alarms per page). Accounts with more than 1,000 alarms get a partial count with
+no truncation indicator. If your `total` count looks suspiciously round or lower
+than expected, use `list_alarms` with a higher `limit` (up to 10,000) for an
+accurate inventory.
+
+### Invalid `startTime` silently defaults to 24 hours ago
+
+The time parser recognizes digits followed by `m`, `h`, or `d` and ISO 8601
+timestamps. Any value that matches neither format falls back to "24 hours ago"
+without error. Strings like `"24hrs"` or `"1w"` will not fail — they quietly
+apply the default window.
+
+### `get_summary` shows fewer state changes than expected
+
+The history fetch in `get_summary` is capped at a single page of 50 entries with
+no pagination. Recent state changes beyond that limit are silently dropped.
+Additionally, malformed `HistoryData` entries (corrupted JSON from AWS) are
+discarded without logging, so the `recentStateChanges` count may undercount
+actual transitions.
+
+### Region scope
+
+CloudWatch Alarms are regional. The default is `us-east-1`. Each model instance
+targets one region; create multiple instances for multi-region visibility. Pass
+`--global-arg profile=<name>` for named-profile or SSO credential resolution.
+
+### `list_alarms` and `get_active` have no page cap
+
+Unlike `get_summary`, these methods paginate until either the `limit` is
+satisfied or the API runs out of results. With high `limit` values (max 10,000),
+they may make many API calls. Use `stateValue` or `alarmNamePrefix` filters to
+narrow the result set.
 
 ## License
 

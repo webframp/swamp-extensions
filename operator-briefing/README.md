@@ -108,6 +108,42 @@ swamp data get report-@webframp/operator-briefing --markdown
 swamp data get report-@webframp/operator-briefing-json --json
 ```
 
+## Troubleshooting
+
+### Report shows "degraded" with skipped sources
+
+The operator briefing degrades per-source: if a normalizer throws (data missing,
+shape unrecognized), it increments `skippedSteps` and continues. The JSON
+output's `degraded` field is `true` when any source produced errors. Check the
+`notes` array in the JSON output for specific failure messages.
+
+### `append_metrics` skips the write and returns empty handles
+
+The method refuses to write if it cannot confidently read the existing series.
+Three conditions trigger this: the stored resource throws on read, `rows` is not
+an array, or `rows` has entries that all fail parsing. This protects history
+from being overwritten by a partial series. Fix the underlying data issue (check
+the resource with `swamp data get`) before re-running.
+
+### Dashboard renders without trend data
+
+If `render_dashboard` cannot read the metrics series (missing resource, parse
+error), it renders a valid HTML dashboard with empty trend columns. Check that
+`append_metrics` has been running successfully to populate the series.
+
+### Sources table in README is incomplete
+
+The extension supports 7 upstream sources (gitlab, anthropic/analytics,
+anthropic/compliance, aws/service-quotas, aws/securityhub-findings,
+aws/cost-explorer, redmine) but the README documents only 4. Check the manifest
+description for the complete list.
+
+### No global args — configuration is implicit
+
+The metrics model defines no global arguments. All configuration happens via
+method inputs (`date`, metric fields) and the workflow context (which model
+instances are referenced in workflow steps).
+
 ## License
 
 Apache-2.0. See [LICENSE.md](LICENSE.md).

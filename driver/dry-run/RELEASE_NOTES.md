@@ -1,3 +1,5 @@
-## 2026.07.18.1
+## 2026.08.24.1
 
-**Changed:** Version bump only, no code changes.
+**Fixed installation command (swamp extension install -> pull). Added
+Troubleshooting section documenting unconfigurable driver, JSON serialization as
+only error path, and resource naming/overwrite behavior.**

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/reddit/moderation"
-version: "2026.08.21.2"
+version: "2026.08.24.1"
 description: |
   Reddit moderation model for subreddit management.
 

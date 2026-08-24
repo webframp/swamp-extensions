@@ -7,17 +7,17 @@ Captures an organization as a topology of **teams**, **repos/modules**,
 **environments** (with a defect/reliability model), and **customer bases**,
 wired together by connectors. Then runs a deterministic, seedable flow
 simulation to estimate feature/bug cycle times, defect detection, find-vs-fix
-balance, and customer sentiment (NPS) — producing versioned, comparable
-scenario snapshots for organization design decisions.
+balance, and customer sentiment (NPS) — producing versioned, comparable scenario
+snapshots for organization design decisions.
 
 ## Why This Extension
 
-Restructuring proposals ("split the platform team," "move to continuous
-deploy," "add a dedicated QA discipline") are usually argued from intuition.
-This extension gives you a lightweight, deterministic simulation to make the
-argument with numbers: model the current org, model the proposed change, run
-both under the same conditions, and compare the deltas before committing to a
-disruptive reorg.
+Restructuring proposals ("split the platform team," "move to continuous deploy,"
+"add a dedicated QA discipline") are usually argued from intuition. This
+extension gives you a lightweight, deterministic simulation to make the argument
+with numbers: model the current org, model the proposed change, run both under
+the same conditions, and compare the deltas before committing to a disruptive
+reorg.
 
 It supports:
 
@@ -40,8 +40,8 @@ The topology and defect model mirror the DuckSim studio's canvas primitives:
 - **Repos**: modules a team owns and writes code into
 - **Environments**: deployment targets with a defect model — a
   `certaintyBaseline` (floor code quality under max recklessness) and
-  `riskSensitivity` (how much careful practice improves quality), plus a
-  deploy policy (continuous/weekly/monthly)
+  `riskSensitivity` (how much careful practice improves quality), plus a deploy
+  policy (continuous/weekly/monthly)
 - **Customer bases**: populations that periodically experience an environment
   and whose satisfaction (and eventual NPS/churn) responds to whether that
   experience was healthy or buggy
@@ -57,19 +57,19 @@ descriptive label like `"split-platform-team"` for a proposed redesign. Every
 scenario is independently addressable and simulatable.
 
 **System-dynamics approximation, not pixel-for-pixel replay.** The simulation
-tracks continuous backlog levels per team/ticket-type and integrates queue
-time (Little's Law) for cycle times, while stepping day-by-day for
-path-dependent state (code certainty, customer satisfaction, churn). It's
-directional, not predictive to the decimal.
+tracks continuous backlog levels per team/ticket-type and integrates queue time
+(Little's Law) for cycle times, while stepping day-by-day for path-dependent
+state (code certainty, customer satisfaction, churn). It's directional, not
+predictive to the decimal.
 
 **Deterministic and seedable.** The same topology + seed always produces the
-same result. Run multiple seeds to gauge variance before trusting a single
-run's numbers.
+same result. Run multiple seeds to gauge variance before trusting a single run's
+numbers.
 
 **Agent-guided, not computed from vibes.** The agent interviews the user to
-build the topology, runs simulations, and records a decision — but the
-decision itself, including risks the simulation can't see, is agent judgment
-persisted as data.
+build the topology, runs simulations, and records a decision — but the decision
+itself, including risks the simulation can't see, is agent judgment persisted as
+data.
 
 ## Usage
 
@@ -128,14 +128,14 @@ type-specific `config` (see `mod.ts` for full schemas).
 Outcomes of one deterministic simulation run. Instance name:
 `results-<slug>-seed<N>`.
 
-| Field | Description |
-|-------|-------------|
-| cycles | Per-ticket-type (bug/incident/feature/request/internal) average cycle time and completed count |
-| flow | Work-in-flight over time, final in-flight count |
-| defects | Cumulative detected/fixed/outstanding, detection series over time |
-| sentiment | Final NPS, customer count, churn, NPS series over time |
-| reliability | Average code certainty, healthy/buggy cell counts, certainty series over time |
-| deployCount | Number of deploys that occurred during the run |
+| Field       | Description                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------- |
+| cycles      | Per-ticket-type (bug/incident/feature/request/internal) average cycle time and completed count |
+| flow        | Work-in-flight over time, final in-flight count                                                |
+| defects     | Cumulative detected/fixed/outstanding, detection series over time                              |
+| sentiment   | Final NPS, customer count, churn, NPS series over time                                         |
+| reliability | Average code certainty, healthy/buggy cell counts, certainty series over time                  |
+| deployCount | Number of deploys that occurred during the run                                                 |
 
 ### design_decision
 
@@ -154,8 +154,8 @@ proposed redesign.
 ### run_simulation
 
 Run the deterministic flow simulation against a previously-designed topology
-scenario. Supports a seed for reproducibility and an optional horizon
-override (`3mo`/`6mo`/`12mo`/`all`).
+scenario. Supports a seed for reproducibility and an optional horizon override
+(`3mo`/`6mo`/`12mo`/`all`).
 
 ### record_design_decision
 
@@ -167,26 +167,55 @@ risks the simulation can't capture.
 
 - **Throughput** scales with team size, average skill (0-100 normalized),
   disposition (urgency ships faster, quality is more careful), collaboration
-  mode (solo is fastest per-person; pairing/ensemble/swarm trade throughput
-  for coordination/quality), and `coordinationEase`/`collaborationEffectiveness`.
-- **Code certainty** for newly-written code is an exponential approach from
-  an environment's `certaintyBaseline` toward the global `ceilingCertainty`,
-  driven by the writing team's quality effort and the environment's
-  `riskSensitivity`.
+  mode (solo is fastest per-person; pairing/ensemble/swarm trade throughput for
+  coordination/quality), and `coordinationEase`/`collaborationEffectiveness`.
+- **Code certainty** for newly-written code is an exponential approach from an
+  environment's `certaintyBaseline` toward the global `ceilingCertainty`, driven
+  by the writing team's quality effort and the environment's `riskSensitivity`.
 - **Bug detection** is driven by the tester fraction of a team and how buggy
-  their connected environments currently are; undetected bugs in
-  tester-light teams surface as customer-facing incidents instead.
+  their connected environments currently are; undetected bugs in tester-light
+  teams surface as customer-facing incidents instead.
 - **Customer sentiment** samples every `experienceFrequency` days: a healthy
-  experience nudges satisfaction up, a buggy one nudges it down and risks
-  churn (probability `1/patience`).
+  experience nudges satisfaction up, a buggy one nudges it down and risks churn
+  (probability `1/patience`).
 - **Deploy policy** (continuous/weekly/monthly + interval) only affects
-  feature/bug cycle time via an average deploy-wait latency — it does not
-  gate whether work completes, only when it's considered "shipped."
+  feature/bug cycle time via an average deploy-wait latency — it does not gate
+  whether work completes, only when it's considered "shipped."
+
+## Troubleshooting
+
+### "No topology found" — run `design_topology` first
+
+The `run_simulation` method reads a stored topology resource keyed by
+`scenarioLabel`. If no topology exists for that label, it throws with
+instructions to run `design_topology` first.
+
+### Duplicate widget IDs rejected
+
+`design_topology` validates that all widget IDs are unique. Duplicate IDs throw
+with a message listing the offending values.
+
+### Connector references must match widget IDs
+
+Every connector's `fromId` and `toId` must reference a widget ID present in the
+same topology. Invalid references throw with the unknown IDs listed.
+
+### `defectModel.ceilingCertainty` controls asymptotic behavior
+
+The default (0.999) means defect certainty approaches but never reaches 1.0.
+Lower values produce more pessimistic simulations. Override at model creation
+with `--global-arg 'defectModel={"ceilingCertainty": 0.95}'`.
+
+### `record_design_decision` requires complex nested input
+
+The `decision` argument is a deeply nested object (hypothesis, tripwires,
+metrics). Pass it via `--input-file decision.json` rather than attempting inline
+`--input` with complex JSON.
 
 ## Complements
 
-| Extension | How it complements org-simulation |
-|-----------|-----------------------------------|
+| Extension                 | How it complements org-simulation                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------- |
 | `@webframp/team-topology` | Discover/assess team structure and Conway's Law fit before simulating changes to it |
-| `@webframp/rice-scoring` | Prioritize which simulated redesigns to pursue first |
-| `@magistr/good-planning` | Track adopted redesigns as commitments with hypotheses and tripwires |
+| `@webframp/rice-scoring`  | Prioritize which simulated redesigns to pursue first                                |
+| `@magistr/good-planning`  | Track adopted redesigns as commitments with hypotheses and tripwires                |

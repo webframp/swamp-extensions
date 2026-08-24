@@ -18,8 +18,8 @@ DynamoDB's 400KB size limit.
 - **Chunked blob storage** — files over `maxChunkBytes` are split across
   multiple items and reassembled on read, working around DynamoDB's per-item
   size ceiling
-- **DynamoDB Local support** — `endpoint` config field for local development
-  and CI without touching live AWS
+- **DynamoDB Local support** — `endpoint` config field for local development and
+  CI without touching live AWS
 
 ## Configuration
 
@@ -41,10 +41,10 @@ Or via environment variable:
 export SWAMP_DATASTORE='@webframp/dynamodb-datastore:{"tableName":"swamp-datastore","region":"us-east-1"}'
 ```
 
-No credentials are accepted in config. This extension uses the AWS SDK's
-default credential provider chain (environment variables, shared config/
-profile, or an attached IAM role) — the same convention as every other
-`@webframp/aws/*` extension in this repo.
+No credentials are accepted in config. This extension uses the AWS SDK's default
+credential provider chain (environment variables, shared config/ profile, or an
+attached IAM role) — the same convention as every other `@webframp/aws/*`
+extension in this repo.
 
 ## Required Schema
 
@@ -57,26 +57,26 @@ provision the table via IaC before first use:
   TTL on this attribute; it is defense-in-depth cleanup only, never relied on
   for lock correctness
 - **Billing mode:** `PAY_PER_REQUEST` recommended
-- **Global secondary index** `gsi1` — partition key `gsi1pk` (String), sort
-  key `gsi1sk` (String), projection `ALL` — used for cheap `Query`-based
-  full-walk diffs and prefix-scoped sync during sync instead of a table
-  `Scan`. Only file-metadata items carry `gsi1pk`/`gsi1sk` attributes; lock
-  items and file chunks are excluded from the index automatically, so `ALL`
-  projection never leaks chunk content into the index.
+- **Global secondary index** `gsi1` — partition key `gsi1pk` (String), sort key
+  `gsi1sk` (String), projection `ALL` — used for cheap `Query`-based full-walk
+  diffs and prefix-scoped sync during sync instead of a table `Scan`. Only
+  file-metadata items carry `gsi1pk`/`gsi1sk` attributes; lock items and file
+  chunks are excluded from the index automatically, so `ALL` projection never
+  leaks chunk content into the index.
 
 Set `autoCreateTable: true` to have the extension create the table (with the
-above schema, TTL, and GSI) on first use — convenient for local development,
-but production tables should be provisioned via IaC so table creation isn't
-gated on IAM permissions the runtime credential may not have.
+above schema, TTL, and GSI) on first use — convenient for local development, but
+production tables should be provisioned via IaC so table creation isn't gated on
+IAM permissions the runtime credential may not have.
 
 ### Item layout (single table)
 
-| Item | `pk` | `sk` | Notes |
-|---|---|---|---|
-| Lock | `LOCK#<key>` | `LOCK` | `nonce`, `acquiredAtMs`, `expiresAtMs`, `ttl` |
-| File metadata | `FILE#<relPath>` | `META` | `hash`, `size`, `chunkCount`, `updatedAt`, `gsi1pk`, `gsi1sk` |
-| File chunk | `FILE#<relPath>` | `CHUNK#0000`... | `content` (Binary) |
-| Sync watermark | `SYNCSTATE#global` | `STATE` | `lastPushedAt` |
+| Item           | `pk`               | `sk`            | Notes                                                         |
+| -------------- | ------------------ | --------------- | ------------------------------------------------------------- |
+| Lock           | `LOCK#<key>`       | `LOCK`          | `nonce`, `acquiredAtMs`, `expiresAtMs`, `ttl`                 |
+| File metadata  | `FILE#<relPath>`   | `META`          | `hash`, `size`, `chunkCount`, `updatedAt`, `gsi1pk`, `gsi1sk` |
+| File chunk     | `FILE#<relPath>`   | `CHUNK#0000`... | `content` (Binary)                                            |
+| Sync watermark | `SYNCSTATE#global` | `STATE`         | `lastPushedAt`                                                |
 
 ## Required IAM Permissions
 
@@ -134,14 +134,67 @@ Three layers are instrumented:
   `datastore.fast_path_hit`.
 
 Retries appear as `retry` events on the enclosing span, with `retry.attempt`,
-`retry.delay_ms`, and `retry.reason` — `retryable_error` for throttling
-backoff, `unprocessed_keys` for `BatchGetItem` partial results, and
-`unprocessed_items` for `BatchWriteItem` partial writes. The last two matter
-because `BatchWriteItem` does not throw on partial throttling; it silently
-returns the items it skipped.
+`retry.delay_ms`, and `retry.reason` — `retryable_error` for throttling backoff,
+`unprocessed_keys` for `BatchGetItem` partial results, and `unprocessed_items`
+for `BatchWriteItem` partial writes. The last two matter because
+`BatchWriteItem` does not throw on partial throttling; it silently returns the
+items it skipped.
 
 Item content is never recorded. Span attributes carry counts, key names, and
 table or index names only.
+
+## Troubleshooting
+
+### Lock heartbeat and release failures are silent
+
+Both the background heartbeat renewal and the `release()` method catch all
+errors silently. If the DynamoDB connection is lost, the lock expires via its
+TTL (30s default). DynamoDB's TTL sweep has up to a 1-hour buffer, but the
+`expiresAtMs` conditional check provides immediate staleness detection.
+
+### No `profile` in datastore config — use `AWS_PROFILE` env var
+
+The extension's config schema does not accept a `profile` field. AWS credential
+selection happens via the SDK's default provider chain. Set `AWS_PROFILE`
+externally before running swamp commands if you need a specific profile.
+
+### `autoCreateTable` requires additional IAM permissions
+
+When `autoCreateTable: true`, the extension needs `dynamodb:CreateTable`,
+`dynamodb:DescribeTable`, and `dynamodb:UpdateTimeToLive` in addition to the
+standard read/write permissions. Table creation waits up to 60 seconds for
+ACTIVE status.
+
+### Chunk cleanup failure leaks storage (non-fatal)
+
+When a file is updated, old version chunks are deleted asynchronously. If
+deletion fails (throttling, permission), stale chunks persist in DynamoDB but
+are invisible to readers (new metadata points to the new version). Storage waste
+accumulates until manual cleanup.
+
+### `BatchWriteItem` unprocessed items retried up to 8 times
+
+DynamoDB can return unprocessed items on throttling without throwing. The
+extension retries with exponential backoff (500ms base, 5s cap). After 8
+attempts, any remaining unprocessed items cause a hard failure.
+
+### Dirty paths cap at 1,000 before bulk invalidation
+
+When more than 1,000 files are modified without a push, the sidecar forces a
+full-walk diff on the next push. Push frequently to avoid hitting this cap.
+
+### `maxChunkBytes` defaults to 256KB (max 300KB)
+
+DynamoDB items are limited to 400KB. The chunk size must account for metadata
+overhead. The default of 256KB provides safe headroom. Increasing beyond 300KB
+is rejected by validation.
+
+### Retryable error codes
+
+The retry utility handles: `ProvisionedThroughputExceededException`,
+`ThrottlingException`, `RequestLimitExceeded`, `InternalServerError`,
+`LimitExceededException`, plus system codes (`ECONNRESET`, `ECONNREFUSED`,
+`ETIMEDOUT`, `EPIPE`). Other errors fail immediately.
 
 ## Development
 

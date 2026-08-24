@@ -150,6 +150,56 @@ swamp model method run sh-findings list_all_findings --input startTime=7d --inpu
   via GetFindings before calling BatchUpdateFindings (not constructed from ARN
   parts)
 
+## Troubleshooting
+
+### Empty findings despite known issues in Security Hub
+
+Security Hub queries target the configured region. If cross-region aggregation
+is not configured, only findings from that single region are visible. The
+default region is `us-east-1`. Confirm your aggregator configuration covers all
+member regions.
+
+### `list_findings` returns at most 100 findings
+
+The method does not paginate — it issues a single API call with `MaxResults`
+capped at 100. Use `list_all_findings` (up to 500, configurable via
+`--input maxPages=5`) for larger result sets. Both set `truncated: true` when
+more findings exist.
+
+### `diff_findings` reports empty diff with `truncated: true`
+
+When either the baseline or current scan is truncated (more findings than one
+page), the diff method deliberately suppresses output and sets
+`truncated: true`. This prevents false positives from pagination shifts. Narrow
+the filter criteria (severity, product, time window) to fit within a single
+page.
+
+### `resolve_accounts` requires Organizations access
+
+This method calls `organizations:ListAccounts` and always targets `us-east-1`
+regardless of the model's configured region. The calling identity needs
+Organizations read access from the management account or a delegated
+administrator.
+
+### `list_findings_by_type` and `diff_findings` hardcode `WorkflowStatus: "NEW"`
+
+These methods only query findings with `WorkflowStatus = NEW`. Resolved,
+suppressed, or notified findings are excluded without a parameter to override
+this filter.
+
+### Mutating methods (`archive`, `resolve`, `reopen`) require write permissions
+
+The read-only IAM permissions listed for query methods are insufficient for
+lifecycle methods. `archive_findings`, `resolve_findings`, and `reopen_findings`
+require `securityhub:BatchUpdateFindings`. The lookup step within these methods
+also requires `securityhub:GetFindings`.
+
+### Profile configuration
+
+Pass `--global-arg profile=<name>` for named-profile or SSO credential
+resolution. Alternatively, set `AWS_PROFILE` as an environment variable — both
+methods work via the standard credential chain.
+
 ## License
 
 Apache-2.0

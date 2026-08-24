@@ -105,6 +105,45 @@ swamp report run @webframp/sprint-summary-report --workflow-run <run-id>
 | Report   | `sprint_summary_report.ts` | Sprint status and assignee breakdowns  |
 | Workflow | `scaffold-story.yaml`      | Create a story with structured fields  |
 
+## Troubleshooting
+
+### Pagination caps at 500 items with no `truncated` field
+
+All paginated methods (list_issues, list_time_entries, list_projects, etc.) are
+capped at 500 items maximum. The output's `totalCount` reflects fetched count,
+not the API's total. There is no `truncated` field — you cannot distinguish
+"exactly 500 items exist" from "more than 500 were truncated."
+
+### All errors throw — no graceful degradation
+
+Every API failure (network error, non-2xx response) throws immediately. There is
+no retry logic, no backoff, and no partial-result path. Transient Redmine
+outages or 429 responses crash the method execution.
+
+### `project` global arg is optional but required by some methods
+
+`list_users`, `create_issue`, `list_versions`, `create_version`, and
+`list_issue_categories` require a project identifier. If `project` is not set in
+global args, you must pass it per-method or the method throws.
+
+### `update_issue` re-fetches after mutation
+
+The method performs a PUT then re-fetches the issue via GET to return the
+updated state. If the re-fetch fails after a successful update, the mutation
+succeeded but the method throws (no resource written).
+
+### `upload_file` reads the local file path
+
+The `filePath` argument must be an absolute path readable by the swamp process.
+If the file cannot be read, the method throws with the path in the error
+message.
+
+### Reports and workflows referenced in README do not exist here
+
+The README documents reports (`flow_metrics_report`, `sprint_summary_report`)
+and a workflow (`scaffold-story`) that live in the separate
+`@webframp/redmine-kanban` extension, not this one.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.
