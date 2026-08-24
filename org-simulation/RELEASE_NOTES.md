@@ -1,9 +1,5 @@
-## 2026.08.21.2
+## 2026.08.24.1
 
-**Changed:**
-
-- `design_topology` now rejects a topology with duplicate widget ids, with
-  an error listing the offending id(s). Previously duplicate ids passed
-  validation and silently collapsed to whichever widget was listed last
-  once the simulation indexed widgets by id, producing a topology that
-  simulated differently from the one you described.
+**Added Troubleshooting section documenting design_topology prerequisite,
+duplicate widget ID validation, connector reference validation, defectModel
+configuration, and complex nested input guidance.**

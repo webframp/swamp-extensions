@@ -86,6 +86,29 @@ understanding deepens over months. Early versions capture initial assumptions;
 later versions capture refined understanding after the team encounters real
 constraints.
 
+## Troubleshooting
+
+### "No bounded contexts discovered yet" error
+
+The `boundaries` and `revisit` methods require a prior `contexts` invocation.
+The context map resource must exist before these methods can operate on it.
+
+### `language` method works without prior state
+
+Unlike `boundaries` and `revisit`, the `language` method initializes an empty
+glossary if none exists. It can be run at any point in the DDD workflow.
+
+### Global args are agent guidance, not programmatic config
+
+`teamSize`, `existingPatterns`, and `projectContext` appear in method
+descriptions for agent context. No branching logic depends on their values.
+
+### Overloaded terms update silently skipped if no context map
+
+The `language` method attempts to update the context map with overloaded terms.
+If no context map exists yet (`contexts` not run), the update is silently
+skipped and the glossary is still written successfully.
+
 ## License
 
 Apache-2.0

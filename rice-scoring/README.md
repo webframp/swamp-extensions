@@ -71,6 +71,26 @@ RICE = (Reach × Impact × Confidence) / Effort
 Higher scores indicate higher priority. Items are stored sorted by score
 descending.
 
+## Troubleshooting
+
+### `rank` throws "No scores found"
+
+The `rank` method reads the stored scorecard from a prior `score` invocation. If
+`score` has not been run yet (or the resource was garbage-collected), `rank`
+throws with instructions to run `score` first.
+
+### Invalid scorecard format after schema changes
+
+If a stored scorecard was written by an older extension version and the schema
+changed, `rank` throws a Zod validation error with details about which fields
+are invalid. Re-run `score` with the current version to regenerate.
+
+### Global args are informational only
+
+The `reachDefinition`, `impactScale`, `effortUnit`, etc. global arguments are
+guidance strings for the agent during the scoring interview. They do not affect
+the computation (which is always `reach * impact * confidence / effort`).
+
 ## License
 
 Apache-2.0
