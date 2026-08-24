@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/guardduty"
-version: "2026.08.24.1"
+version: "2026.08.24.2"
 description: |
   Read-only observability model for GuardDuty findings. Query and inspect
   findings from a delegated administrator account, covering all member accounts

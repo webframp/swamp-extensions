@@ -194,7 +194,7 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -216,7 +216,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

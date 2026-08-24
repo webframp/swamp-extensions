@@ -1144,7 +1144,7 @@ function slugify(label: string): string {
 /** Organization design simulation model. */
 export const model = {
   type: "@webframp/org-simulation",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
@@ -1163,7 +1163,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

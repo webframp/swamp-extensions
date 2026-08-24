@@ -218,7 +218,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
 
   upgrades: [
     {
@@ -245,7 +245,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

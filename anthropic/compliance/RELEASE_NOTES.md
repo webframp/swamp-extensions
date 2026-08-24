@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Fixed source/manifest version mismatch. Added Troubleshooting section
 documenting the 600 req/min shared rate limit with no backoff, paginateAll 20K

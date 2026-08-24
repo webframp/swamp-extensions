@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added Troubleshooting section documenting post_review partial-failure
 scenario, large diff truncation, idempotent unapprove, list_mr_notes

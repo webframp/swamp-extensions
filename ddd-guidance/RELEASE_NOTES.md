@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Fixed source/manifest version mismatch. Added Troubleshooting section
 documenting method ordering requirements, language method independence,

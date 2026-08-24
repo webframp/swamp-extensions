@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added Troubleshooting section documenting the silent list_recent degrade,
 unresolved kanbanId fallback, idempotency key collision behavior, hermesBin

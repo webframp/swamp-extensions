@@ -61,7 +61,7 @@ const ZoneSettingsSchema = z.object({
 /** Cloudflare Zone model definition with methods for listing, inspecting, pausing, and configuring zones. */
 export const model = {
   type: "@webframp/cloudflare/zone",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -78,7 +78,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

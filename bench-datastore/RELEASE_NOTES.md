@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Fixed development section to use standard deno commands. Added Troubleshooting
 section documenting intentional no-retry design, setup idempotency, subprocess
