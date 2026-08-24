@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/events";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -88,6 +90,12 @@ const ListEventsSchema = z.object({
   items: z.array(EventsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateEventSchema = z.object({
@@ -95,6 +103,15 @@ const CreateEventSchema = z.object({
     "Object description of attributes from the created event.",
   ),
   type: z.string().optional().describe("Entity type."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SearchEventsItemSchema = z.object({
@@ -160,6 +177,12 @@ const SearchEventsSchema = z.object({
   items: z.array(SearchEventsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -169,10 +192,17 @@ const SearchEventsSchema = z.object({
 /** Datadog Events — event search and submission */
 export const model = {
   type: "@webframp/datadog/events",
-  version: "2026.07.20.11",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "events": {
@@ -224,6 +254,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -265,6 +296,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} events", { count: results.length });
@@ -316,6 +349,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -334,7 +368,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("event", id, result);
+        const handle = await context.writeResource("event", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created event {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -369,6 +408,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -396,6 +436,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} search_events", {
@@ -423,6 +465,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -435,7 +478,12 @@ export const model = {
         const handle = await context.writeResource(
           "event",
           String(args.event_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched event", {});
         return { dataHandles: [handle] };

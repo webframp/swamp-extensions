@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/projects"
-version: "2026.08.21.1"
+version: "2026.08.24.1"
 description: "Snyk Projects — project listing, attributes, relationships, and target management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

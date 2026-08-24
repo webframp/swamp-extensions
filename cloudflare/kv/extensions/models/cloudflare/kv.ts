@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/kv";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -33,6 +35,12 @@ const ListNamespacesSchema = z.object({
   items: z.array(NamespacesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateANamespaceSchema = z.object({
@@ -41,6 +49,15 @@ const CreateANamespaceSchema = z.object({
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
   title: z.unknown().describe("Human-readable name for the namespace."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateWorkersKvNamespaceRenameANamespaceSchema = z.object({
@@ -49,6 +66,15 @@ const UpdateWorkersKvNamespaceRenameANamespaceSchema = z.object({
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
   title: z.unknown().describe("Human-readable name for the namespace."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateWorkersKvNamespaceWriteMultipleKeyValuePairsSchema = z.object({
@@ -58,6 +84,15 @@ const UpdateWorkersKvNamespaceWriteMultipleKeyValuePairsSchema = z.object({
   unsuccessful_keys: z.array(z.string()).optional().describe(
     "Name of the keys that failed to be fully updated. They should be retried.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DeleteMultipleKeyValuePairsSchema = z.object({
@@ -66,6 +101,15 @@ const DeleteMultipleKeyValuePairsSchema = z.object({
   ),
   unsuccessful_keys: z.array(z.string()).optional().describe(
     "Name of the keys that failed to be fully updated. They should be retried.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -105,9 +149,25 @@ const ListANamespaceSKeysSchema = z.object({
   items: z.array(ANamespaceSKeysItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
-const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({});
+const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 // =============================================================================
 // Model Definition
@@ -116,10 +176,17 @@ const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({});
 /** Cloudflare Workers KV — namespaces, keys, values, bulk operations */
 export const model = {
   type: "@webframp/cloudflare/kv",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "namespaces": {
@@ -203,6 +270,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -229,6 +297,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} namespaces", {
@@ -256,6 +326,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -268,7 +339,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("a_namespace", id, result);
+        const handle = await context.writeResource("a_namespace", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created a_namespace {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -294,6 +370,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -304,7 +381,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_namespace",
           String(args.namespace_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched a_namespace", {});
         return { dataHandles: [handle] };
@@ -334,6 +416,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -352,7 +435,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_kv_namespace_rename_a_namespace",
           String(args.namespace_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated workers_kv_namespace_rename_a_namespace",
@@ -435,6 +523,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
@@ -449,7 +538,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_kv_namespace_write_multiple_key_value_pairs",
           String(args.namespace_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated workers_kv_namespace_write_multiple_key_value_pairs",
@@ -482,6 +576,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
@@ -496,7 +591,12 @@ export const model = {
         const handle = await context.writeResource(
           "delete_multiple_key_value_pairs",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed delete_multiple_key_value_pairs", {});
         return { dataHandles: [handle] };
@@ -532,6 +632,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -551,7 +652,12 @@ export const model = {
         const handle = await context.writeResource(
           "get_multiple_key_value_pairs",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created get_multiple_key_value_pairs {id}", {
           id,
@@ -589,6 +695,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["namespace_id"]);
@@ -615,6 +722,8 @@ export const model = {
             items,
             truncated: false,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -646,6 +755,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -656,7 +766,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_kv_namespace_read_the_metadata_for_a_key",
           String(args.namespace_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_kv_namespace_read_the_metadata_for_a_key",

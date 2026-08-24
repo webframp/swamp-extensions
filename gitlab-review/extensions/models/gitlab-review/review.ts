@@ -9,6 +9,8 @@
 // deno-lint-ignore-file no-explicit-any
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/gitlab-review";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -42,6 +44,12 @@ const MrDiffSchema = z.object({
   author: z.string().describe("Merge request author's username"),
   diffs: z.array(DiffFileSchema).describe("Per-file diff content"),
   fetchedAt: z.string().describe("Timestamp the diff was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   truncated: z.boolean().describe(
     "Whether GitLab's diff overflow limit was hit, dropping some file diffs",
   ),
@@ -54,6 +62,15 @@ const ReviewDraftSchema = z.object({
   createdAt: z.string().describe(
     "Timestamp the draft was created or last edited",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ReviewPostedSchema = z.object({
@@ -61,6 +78,15 @@ const ReviewPostedSchema = z.object({
   iid: z.number().describe("Merge request IID"),
   noteId: z.number().describe("ID of the posted GitLab note"),
   postedAt: z.string().describe("Timestamp the review comment was posted"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const LineCommentSchema = z.object({
@@ -76,6 +102,15 @@ const LineCommentSchema = z.object({
     "Line number on the old side (deleted lines), null if unset",
   ),
   postedAt: z.string().describe("Timestamp the comment was posted"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -288,7 +323,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -316,6 +351,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -359,6 +403,7 @@ export const model = {
         args: { project: string; iid: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = context.globalArgs;
         const pid = encodeProject(args.project);
 
@@ -425,7 +470,12 @@ export const model = {
         const handle = await context.writeResource(
           "mrDiff",
           instanceName("mrDiff", args.project, args.iid),
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched MR diff", {
           project: args.project,
@@ -449,6 +499,7 @@ export const model = {
         args: { project: string; iid: number; body: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = {
           project: args.project,
           iid: args.iid,
@@ -458,7 +509,12 @@ export const model = {
         const handle = await context.writeResource(
           "reviewDraft",
           instanceName("reviewDraft", args.project, args.iid),
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Stored review draft", {
           project: args.project,
@@ -481,6 +537,7 @@ export const model = {
         args: { project: string; iid: number; body: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = {
           project: args.project,
           iid: args.iid,
@@ -490,7 +547,12 @@ export const model = {
         const handle = await context.writeResource(
           "reviewDraft",
           instanceName("reviewDraft", args.project, args.iid),
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated review draft", {
           project: args.project,
@@ -584,6 +646,7 @@ export const model = {
         args: { project: string; iid: number; noteId: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = context.globalArgs;
         const draftName = instanceName("reviewDraft", args.project, args.iid);
         const draft = await context.readResource(draftName);
@@ -626,7 +689,12 @@ export const model = {
         const handle = await context.writeResource(
           "reviewPosted",
           instanceName("reviewPosted", args.project, args.iid),
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated review comment", {
           project: args.project,
@@ -655,6 +723,7 @@ export const model = {
         args: { project: string; iid: number; action: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         await assertMrOpen(context, args.project, args.iid);
         const { host, token } = context.globalArgs;
         const draftName = instanceName("reviewDraft", args.project, args.iid);
@@ -714,7 +783,12 @@ export const model = {
         const handle = await context.writeResource(
           "reviewPosted",
           instanceName("reviewPosted", args.project, args.iid),
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         // Apply approval action via REST (no GraphQL mutations for approve/unapprove)
@@ -793,6 +867,7 @@ export const model = {
         },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         if (args.newLine === undefined && args.oldLine === undefined) {
           throw new Error(
             `post_line_comment ${args.project}!${args.iid}: at least one of newLine or oldLine must be provided`,
@@ -886,7 +961,12 @@ export const model = {
           `${
             instanceName("lineComment", args.project, args.iid)
           }-${positionKey}`,
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Posted line comment", {
           project: args.project,

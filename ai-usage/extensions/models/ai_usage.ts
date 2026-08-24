@@ -15,6 +15,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/ai-usage";
+
 // ---------------------------------------------------------------------------
 // Provider Definition Interface
 // ---------------------------------------------------------------------------
@@ -269,6 +271,15 @@ const StatusSchema = z.object({
   totalProviders: z.number().describe(
     "Total number of registered providers",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Unified report output schema. */
@@ -331,6 +342,15 @@ const ReportSchema = z.object({
   }),
   highlights: z.array(z.string()).describe(
     "Human-readable summary lines calling out notable usage patterns",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -458,7 +478,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.08.20.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -475,6 +495,15 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -504,6 +533,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const providers: z.infer<typeof ProviderStatusSchema>[] = [];
 
         for (const p of PROVIDERS) {
@@ -554,7 +584,12 @@ export const model = {
         const handle = await context.writeResource(
           "status",
           "current",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },
@@ -573,6 +608,7 @@ export const model = {
         args: { days: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const periodMinutes = args.days * 24 * 60;
         const coverage: z.infer<typeof ProviderStatusSchema>[] = [];
         const providerResults: z.infer<typeof ReportSchema>["providers"] = [];
@@ -747,7 +783,12 @@ export const model = {
         const handle = await context.writeResource(
           "report",
           "current",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },

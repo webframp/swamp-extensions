@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/synthetics";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -38,6 +40,12 @@ const GetApiMultistepSubtestsSchema = z.object({
   items: z.array(ApiMultistepSubtestsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ApiMultistepSubtestParentsItemSchema = z.object({
@@ -68,6 +76,12 @@ const GetApiMultistepSubtestParentsSchema = z.object({
   items: z.array(ApiMultistepSubtestParentsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SyntheticsDowntimesItemSchema = z.object({
@@ -111,6 +125,12 @@ const ListSyntheticsDowntimesSchema = z.object({
   items: z.array(SyntheticsDowntimesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSyntheticsDowntimeSchema = z.object({
@@ -147,6 +167,15 @@ const CreateSyntheticsDowntimeSchema = z.object({
   ),
   updatedByName: z.string().describe(
     "The display name of the user who last updated the downtime.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -185,16 +214,43 @@ const AddTestToSyntheticsDowntimeSchema = z.object({
   updatedByName: z.string().describe(
     "The display name of the user who last updated the downtime.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetOnDemandConcurrencyCapSchema = z.object({
   attributes: z.unknown().optional(),
   type: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SetOnDemandConcurrencyCapSchema = z.object({
   attributes: z.unknown().optional(),
   type: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSyntheticsSuiteSchema = z.object({
@@ -217,6 +273,15 @@ const CreateSyntheticsSuiteSchema = z.object({
   tests: z.array(z.unknown()).describe(
     "Array of Synthetic tests included in the suite.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DeleteSyntheticsSuitesSchema = z.object({
@@ -228,6 +293,15 @@ const DeleteSyntheticsSuitesSchema = z.object({
     "Deletion timestamp of the Synthetic suite ID.",
   ),
   public_id: z.string().optional().describe("The Synthetic suite ID deleted."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SearchSuitesSchema = z.object({
@@ -242,6 +316,15 @@ const SearchSuitesSchema = z.object({
   ),
   total: z.number().int().max(2147483647).optional().describe(
     "Total number of Synthetic suites matching the search query.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -265,6 +348,15 @@ const EditSyntheticsSuiteSchema = z.object({
   tests: z.array(z.unknown()).describe(
     "Array of Synthetic tests included in the suite.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchTestSuiteSchema = z.object({
@@ -286,6 +378,15 @@ const PatchTestSuiteSchema = z.object({
   ),
   tests: z.array(z.unknown()).describe(
     "Array of Synthetic tests included in the suite.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -357,6 +458,12 @@ const ListSyntheticsBrowserTestLatestResultsSchema = z.object({
   items: z.array(SyntheticsBrowserTestLatestResultsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSyntheticsBrowserTestResultSchema = z.object({
@@ -454,6 +561,15 @@ const GetSyntheticsBrowserTestResultSchema = z.object({
   test_type: z.enum(["api", "browser", "mobile", "network"]).optional()
     .describe("Type of the Synthetic test that produced this result."),
   test_id: z.string().optional().describe("Related test ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DeleteSyntheticsTestsSchema = z.object({
@@ -465,6 +581,15 @@ const DeleteSyntheticsTestsSchema = z.object({
     "Deletion timestamp of the Synthetic test ID.",
   ),
   public_id: z.string().optional().describe("The Synthetic test ID deleted."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSyntheticsFastTestResultSchema = z.object({
@@ -533,6 +658,15 @@ const GetSyntheticsFastTestResultSchema = z.object({
   test_version: z.number().int().optional().describe(
     "Version of the test at the time the fast test was triggered.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSyntheticsNetworkTestSchema = z.object({
@@ -572,6 +706,15 @@ const CreateSyntheticsNetworkTestSchema = z.object({
   ),
   tags: z.array(z.string()).optional().describe(
     "Array of tags attached to the test.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -676,11 +819,26 @@ const PollSyntheticsTestResultsSchema = z.object({
   items: z.array(PollSyntheticsTestResultsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetTestFileDownloadUrlSchema = z.object({
   url: z.string().optional().describe(
     "A presigned URL to download the file. The URL expires after a short period.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -689,6 +847,15 @@ const GetTestFileMultipartPresignedUrlsSchema = z.object({
     "The bucket key that references the uploaded file after completion.",
   ),
   multipart_presigned_urls_params: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TestParentSuitesItemSchema = z.object({
@@ -721,6 +888,12 @@ const GetTestParentSuitesSchema = z.object({
   items: z.array(TestParentSuitesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SyntheticsTestLatestResultsItemSchema = z.object({
@@ -791,6 +964,12 @@ const ListSyntheticsTestLatestResultsSchema = z.object({
   items: z.array(SyntheticsTestLatestResultsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSyntheticsTestResultSchema = z.object({
@@ -888,6 +1067,15 @@ const GetSyntheticsTestResultSchema = z.object({
   test_type: z.enum(["api", "browser", "mobile", "network"]).optional()
     .describe("Type of the Synthetic test that produced this result."),
   test_id: z.string().optional().describe("Related test ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SyntheticsTestVersionsItemSchema = z.object({
@@ -913,6 +1101,12 @@ const ListSyntheticsTestVersionsSchema = z.object({
   items: z.array(SyntheticsTestVersionsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSyntheticsTestVersionSchema = z.object({
@@ -934,6 +1128,15 @@ const GetSyntheticsTestVersionSchema = z.object({
   ),
   version_payload_created_at: z.string().optional().describe(
     "Timestamp of when this version was created.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -972,6 +1175,15 @@ const PatchGlobalVariableSchema = z.object({
     secure: z.boolean().optional(),
     value: z.string().optional(),
   }).describe("Value of the global variable."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -981,10 +1193,17 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "api_multistep_subtests": {
@@ -1179,6 +1398,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -1214,6 +1434,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1242,6 +1464,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -1277,6 +1500,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1310,6 +1535,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -1347,6 +1573,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1382,6 +1610,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1403,7 +1632,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_downtime",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created synthetics_downtime {id}", { id });
         return { dataHandles: [handle] };
@@ -1430,6 +1664,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1444,7 +1679,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_downtime",
           String(args.downtime_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched synthetics_downtime", {});
         return { dataHandles: [handle] };
@@ -1479,6 +1719,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["downtime_id"]);
@@ -1501,7 +1742,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_downtime",
           String(args.downtime_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated synthetics_downtime", {});
         return { dataHandles: [handle] };
@@ -1565,6 +1811,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["downtime_id", "test_id"]);
@@ -1586,7 +1833,12 @@ export const model = {
         const handle = await context.writeResource(
           "add_test_to_synthetics_downtime",
           String(args.test_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated add_test_to_synthetics_downtime", {});
         return { dataHandles: [handle] };
@@ -1646,6 +1898,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1658,7 +1911,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_demand_concurrency_cap",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched on_demand_concurrency_cap", {});
         return { dataHandles: [handle] };
@@ -1685,6 +1943,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1705,7 +1964,12 @@ export const model = {
         const handle = await context.writeResource(
           "set_on_demand_concurrency_cap",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created set_on_demand_concurrency_cap {id}", {
           id,
@@ -1752,6 +2016,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1773,7 +2038,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_suite",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created synthetics_suite {id}", { id });
         return { dataHandles: [handle] };
@@ -1803,6 +2073,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1823,7 +2094,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_suites",
           id,
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed delete_synthetics_suites", {});
         return { dataHandles: [handle] };
@@ -1860,6 +2136,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>([]);
@@ -1884,7 +2161,12 @@ export const model = {
         const handle = await context.writeResource(
           "search_suites",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched search_suites", {});
         return { dataHandles: [handle] };
@@ -1911,6 +2193,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1925,7 +2208,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_suite",
           String(args.public_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched synthetics_suite", {});
         return { dataHandles: [handle] };
@@ -1970,6 +2258,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -1992,7 +2281,12 @@ export const model = {
         const handle = await context.writeResource(
           "edit_synthetics_suite",
           String(args.public_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated edit_synthetics_suite", {});
         return { dataHandles: [handle] };
@@ -2022,6 +2316,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2044,7 +2339,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_test_suite",
           String(args.public_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_test_suite", {});
         return { dataHandles: [handle] };
@@ -2085,6 +2385,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2120,6 +2421,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2158,6 +2461,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["public_id", "result_id"]);
@@ -2184,7 +2488,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_browser_test_result",
           String(args.result_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched synthetics_browser_test_result", {});
         return { dataHandles: [handle] };
@@ -2214,6 +2523,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -2234,7 +2544,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_tests",
           id,
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed delete_synthetics_tests", {});
         return { dataHandles: [handle] };
@@ -2261,6 +2576,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -2275,7 +2591,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_fast_test_result",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched synthetics_fast_test_result", {});
         return { dataHandles: [handle] };
@@ -2320,6 +2641,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -2341,7 +2663,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_network_test",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created synthetics_network_test {id}", { id });
         return { dataHandles: [handle] };
@@ -2368,6 +2695,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -2382,7 +2710,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_network_test",
           String(args.public_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched synthetics_network_test", {});
         return { dataHandles: [handle] };
@@ -2427,6 +2760,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2449,7 +2783,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_network_test",
           String(args.public_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated synthetics_network_test", {});
         return { dataHandles: [handle] };
@@ -2476,6 +2815,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -2509,6 +2849,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2542,6 +2884,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2564,7 +2907,12 @@ export const model = {
         const handle = await context.writeResource(
           "get_test_file_download_url",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created get_test_file_download_url {id}", { id });
         return { dataHandles: [handle] };
@@ -2598,6 +2946,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2620,7 +2969,12 @@ export const model = {
         const handle = await context.writeResource(
           "get_test_file_multipart_presigned_urls",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created get_test_file_multipart_presigned_urls {id}",
@@ -2656,6 +3010,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2678,7 +3033,12 @@ export const model = {
         const handle = await context.writeResource(
           "abort_test_file_multipart_upload",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created abort_test_file_multipart_upload {id}", {
           id,
@@ -2719,6 +3079,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2741,7 +3102,12 @@ export const model = {
         const handle = await context.writeResource(
           "complete_test_file_multipart_upload",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created complete_test_file_multipart_upload {id}",
@@ -2771,6 +3137,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2806,6 +3173,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2850,6 +3219,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2885,6 +3255,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2922,6 +3294,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["public_id", "result_id"]);
@@ -2948,7 +3321,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_test_result",
           String(args.result_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched synthetics_test_result", {});
         return { dataHandles: [handle] };
@@ -2978,6 +3356,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -3018,6 +3397,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -3055,6 +3436,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["public_id", "version_number"]);
@@ -3083,7 +3465,12 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_test_version",
           String(args.version_number),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched synthetics_test_version", {});
         return { dataHandles: [handle] };
@@ -3111,6 +3498,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["variable_id"]);
@@ -3135,7 +3523,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_global_variable",
           String(args.variable_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_global_variable", {});
         return { dataHandles: [handle] };

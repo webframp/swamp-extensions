@@ -21,6 +21,8 @@ import {
 } from "npm:@aws-sdk/client-pricing@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/pricing";
+
 const MAX_PAGES = 10;
 
 // =============================================================================
@@ -70,6 +72,12 @@ const ServiceSchema = z.object({
 const ServiceListSchema = z.object({
   services: z.array(ServiceSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AttributeValueSchema = z.object({
@@ -77,6 +85,12 @@ const AttributeValueSchema = z.object({
   attributeName: z.string(),
   values: z.array(z.string()),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PriceItemSchema = z.object({
@@ -90,6 +104,12 @@ const PriceResultSchema = z.object({
   filters: z.array(z.object({ field: z.string(), value: z.string() })),
   items: z.array(PriceItemSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -104,7 +124,7 @@ const PriceResultSchema = z.object({
  */
 export const model = {
   type: "@webframp/aws/pricing",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -137,6 +157,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -185,6 +214,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const services: Array<
@@ -228,6 +258,8 @@ export const model = {
             services,
             truncated: nextToken !== undefined,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
 
           context.logger.info("Found {count} AWS services", {
@@ -265,6 +297,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const values: string[] = [];
@@ -310,6 +343,8 @@ export const model = {
               values: values.sort(),
               truncated: nextToken !== undefined,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -369,6 +404,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const apiFilters: Filter[] = (args.filters || []).map((f) => ({
@@ -438,6 +474,8 @@ export const model = {
             items,
             truncated: nextToken !== undefined,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
 
           context.logger.info("Found {count} price items for {service}", {
@@ -489,6 +527,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const command = new GetProductsCommand({
@@ -558,6 +597,8 @@ export const model = {
             ],
             items,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
 
           context.logger.info(

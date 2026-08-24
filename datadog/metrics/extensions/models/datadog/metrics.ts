@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/metrics";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -31,6 +33,12 @@ const ListTagConfigurationsSchema = z.object({
   items: z.array(TagConfigurationsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListActiveMetricConfigurationsSchema = z.object({
@@ -43,6 +51,15 @@ const ListActiveMetricConfigurationsSchema = z.object({
   ),
   active_tags: z.array(z.string()).optional().describe(
     "List of tag keys that have been actively queried.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -59,6 +76,12 @@ const ListTagsByMetricNameSchema = z.object({
   items: z.array(TagsByMetricNameItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListMetricAssetsSchema = z.object({
@@ -67,6 +90,15 @@ const ListMetricAssetsSchema = z.object({
     "Related assets (dashboards, monitors, notebooks, SLOs) for this metric.",
   ),
   type: z.unknown().describe("The metric assets resource type."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const EstimateMetricsOutputSeriesSchema = z.object({
@@ -84,6 +116,15 @@ const EstimateMetricsOutputSeriesSchema = z.object({
   estimated_output_series: z.number().int().optional().describe(
     "Estimated cardinality of the metric based on the queried configuration.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MetricTagCardinalityDetailsItemSchema = z.object({
@@ -98,6 +139,12 @@ const GetMetricTagCardinalityDetailsSchema = z.object({
   items: z.array(MetricTagCardinalityDetailsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListTagConfigurationByNameSchema = z.object({
@@ -127,6 +174,15 @@ const ListTagConfigurationByNameSchema = z.object({
   ),
   metric_volumes_id: z.string().optional().describe(
     "Related metric_volumes ID",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -158,6 +214,15 @@ const CreateTagConfigurationSchema = z.object({
   metric_volumes_id: z.string().optional().describe(
     "Related metric_volumes ID",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListVolumesByMetricNameSchema = z.object({
@@ -168,6 +233,15 @@ const ListVolumesByMetricNameSchema = z.object({
   distinct_volume: z.number().int().optional().describe(
     "Distinct volume for the given metric.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const QueryScalarDataSchema = z.object({
@@ -175,6 +249,15 @@ const QueryScalarDataSchema = z.object({
     "The object containing the scalar response.",
   ),
   type: z.unknown().optional().describe("The scalar response type."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const QueryTimeseriesDataSchema = z.object({
@@ -182,10 +265,28 @@ const QueryTimeseriesDataSchema = z.object({
     "The object containing the timeseries response.",
   ),
   type: z.unknown().optional().describe("The timeseries response type."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SubmitMetricsSchema = z.object({
   errors: z.array(z.string()).optional().describe("A list of errors."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -195,10 +296,17 @@ const SubmitMetricsSchema = z.object({
 /** Datadog Metrics — metric queries, submissions, tag configurations, and metadata */
 export const model = {
   type: "@webframp/datadog/metrics",
-  version: "2026.07.20.11",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "tag_configurations": {
@@ -330,6 +438,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -381,6 +490,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -412,6 +523,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -441,7 +553,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_active_metric_configurations",
           String(args.metric_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_active_metric_configurations", {});
         return { dataHandles: [handle] };
@@ -481,6 +598,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -528,6 +646,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -556,6 +676,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -570,7 +691,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_metric_assets",
           String(args.metric_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_metric_assets", {});
         return { dataHandles: [handle] };
@@ -610,6 +736,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -643,7 +770,12 @@ export const model = {
         const handle = await context.writeResource(
           "estimate_metrics_output_series",
           String(args.metric_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched estimate_metrics_output_series", {});
         return { dataHandles: [handle] };
@@ -668,6 +800,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -703,6 +836,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -731,6 +866,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -745,7 +881,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_tag_configuration_by_name",
           String(args.metric_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_tag_configuration_by_name", {});
         return { dataHandles: [handle] };
@@ -783,6 +924,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -806,7 +948,12 @@ export const model = {
         const handle = await context.writeResource(
           "tag_configuration",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created tag_configuration {id}", { id });
         return { dataHandles: [handle] };
@@ -843,6 +990,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -865,7 +1013,12 @@ export const model = {
         const handle = await context.writeResource(
           "tag_configuration",
           String(args.metric_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated tag_configuration", {});
         return { dataHandles: [handle] };
@@ -927,6 +1080,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -956,7 +1110,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_volumes_by_metric_name",
           String(args.metric_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_volumes_by_metric_name", {});
         return { dataHandles: [handle] };
@@ -992,6 +1151,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1013,7 +1173,12 @@ export const model = {
         const handle = await context.writeResource(
           "query_scalar_data",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created query_scalar_data {id}", { id });
         return { dataHandles: [handle] };
@@ -1052,6 +1217,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1075,7 +1241,12 @@ export const model = {
         const handle = await context.writeResource(
           "query_timeseries_data",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created query_timeseries_data {id}", { id });
         return { dataHandles: [handle] };
@@ -1102,6 +1273,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1122,7 +1294,12 @@ export const model = {
         const handle = await context.writeResource(
           "submit_metrics",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created submit_metrics {id}", { id });
         return { dataHandles: [handle] };

@@ -31,6 +31,7 @@
 
 // A single dated point of the series. Mirror of the model's Row; every metric
 // is optional because a given day may not carry every field.
+
 export interface DashboardRow {
   date: string;
   spendUsd?: number;

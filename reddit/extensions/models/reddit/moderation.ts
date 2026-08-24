@@ -11,6 +11,8 @@
 import { z } from "npm:zod@4.4.3";
 import { createRedditClient, type RedditActionResponse } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/reddit/moderation";
+
 // =============================================================================
 // Global Arguments
 // =============================================================================
@@ -57,6 +59,15 @@ const ModqueueItemSchema = z.object({
 const ModqueueListSchema = z.object({
   items: z.array(ModqueueItemSchema),
   truncated: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ModlogEntrySchema = z.object({
@@ -74,6 +85,15 @@ const ModlogEntrySchema = z.object({
 const ModlogListSchema = z.object({
   items: z.array(ModlogEntrySchema),
   truncated: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CommentSchema = z.object({
@@ -94,6 +114,15 @@ const CommentSchema = z.object({
 const CommentListSchema = z.object({
   items: z.array(CommentSchema),
   truncated: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PostSchema = z.object({
@@ -118,6 +147,15 @@ const PostSchema = z.object({
 const PostListSchema = z.object({
   items: z.array(PostSchema),
   truncated: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UserInfoSchema = z.object({
@@ -130,6 +168,15 @@ const UserInfoSchema = z.object({
   is_mod: z.boolean().optional(),
   has_verified_email: z.boolean(),
   icon_img: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).passthrough();
 
 const ActionResultSchema = z.object({
@@ -138,6 +185,15 @@ const ActionResultSchema = z.object({
   success: z.boolean(),
   response: z.unknown(),
   performedAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -165,7 +221,7 @@ interface MethodContext {
 /** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -187,6 +243,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -253,6 +318,7 @@ export const model = {
         args: { type?: string; limit?: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
         const type = args.type ?? "all";
@@ -274,6 +340,9 @@ export const model = {
         const handle = await context.writeResource("modqueue", instanceName, {
           items,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Fetched {count} modqueue items", {
@@ -294,6 +363,7 @@ export const model = {
         args: { limit?: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
         const limit = args.limit ?? 25;
@@ -311,6 +381,9 @@ export const model = {
           {
             items,
             truncated,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
 
@@ -339,6 +412,7 @@ export const model = {
         args: { action?: string; mod?: string; limit?: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
         const limit = args.limit ?? 25;
@@ -361,6 +435,9 @@ export const model = {
         const handle = await context.writeResource("modlog", instanceName, {
           items,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Fetched {count} modlog entries", {
@@ -383,6 +460,7 @@ export const model = {
         args: { sort?: string; limit?: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
         const sort = args.sort ?? "new";
@@ -402,6 +480,9 @@ export const model = {
         const handle = await context.writeResource("comments", instanceName, {
           items,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Fetched {count} comments", {
@@ -425,6 +506,7 @@ export const model = {
         args: { sort?: string; limit?: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
         const sort = args.sort ?? "new";
@@ -441,6 +523,9 @@ export const model = {
         const handle = await context.writeResource("posts", instanceName, {
           items,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Fetched {count} posts", { count: items.length });
@@ -457,6 +542,7 @@ export const model = {
         args: { username: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit: _, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
@@ -469,7 +555,12 @@ export const model = {
         const handle = await context.writeResource(
           "user_info",
           instanceName,
-          userData,
+          {
+            ...userData,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Fetched user info for {username}", {
@@ -490,6 +581,7 @@ export const model = {
         args: { thingId: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit: _, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
@@ -518,7 +610,12 @@ export const model = {
         const handle = await context.writeResource(
           "action",
           `approve-${args.thingId}`,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Approved {thingId}", { thingId: args.thingId });
         return { dataHandles: [handle] };
@@ -543,6 +640,7 @@ export const model = {
         args: { thingId: string; spam?: boolean; modNote?: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit: _, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
@@ -577,7 +675,12 @@ export const model = {
         const handle = await context.writeResource(
           "action",
           `remove-${args.thingId}`,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Removed {thingId}", { thingId: args.thingId });
         return { dataHandles: [handle] };
@@ -607,6 +710,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
@@ -643,7 +747,12 @@ export const model = {
         const handle = await context.writeResource(
           "action",
           `ban_user-${args.username}`,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Banned user {username} for {duration} days", {
           username: args.username,
@@ -667,6 +776,7 @@ export const model = {
         args: { to: string; subject: string; body: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
@@ -703,7 +813,12 @@ export const model = {
         const handle = await context.writeResource(
           "action",
           `send_modmail-${args.to}`,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Sent modmail to {to}", { to: args.to });
         return { dataHandles: [handle] };
@@ -724,6 +839,7 @@ export const model = {
         args: { thingId: string; flairTemplateId: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { subreddit, ...creds } = context.globalArgs;
         const client = createRedditClient(creds);
 
@@ -755,7 +871,12 @@ export const model = {
         const handle = await context.writeResource(
           "action",
           `flair_post-${args.thingId}`,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Applied flair {flairId} to {thingId}", {
           flairId: args.flairTemplateId,

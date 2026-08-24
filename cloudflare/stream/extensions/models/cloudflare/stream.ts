@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/stream";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -66,6 +68,12 @@ const ListVideosSchema = z.object({
   items: z.array(VideosItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateStreamVideoClippingClipVideosGivenAStartAndEndTimeSchema = z.object(
@@ -150,6 +158,15 @@ const CreateStreamVideosUploadVideosFromAUrlSchema = z.object({
   uploadExpiry: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   watermark: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateStreamVideosUploadVideosViaDirectUploadUrLsSchema = z.object({
@@ -159,6 +176,15 @@ const CreateStreamVideosUploadVideosViaDirectUploadUrLsSchema = z.object({
     "The URL an unauthenticated upload can use for a single `HTTP POST multipart/form-data` request.",
   ),
   watermark: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SigningKeysItemSchema = z.object({
@@ -173,6 +199,12 @@ const ListSigningKeysSchema = z.object({
   items: z.array(SigningKeysItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListLiveInputsSchema = z.object({
@@ -182,6 +214,15 @@ const ListLiveInputsSchema = z.object({
   ),
   total: z.number().int().optional().describe(
     "The total number of live inputs that match the provided filters.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -202,6 +243,15 @@ const CreateALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetStreamLiveInputsRetrieveALiveInputSchema = z.object({
@@ -221,6 +271,15 @@ const GetStreamLiveInputsRetrieveALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const StreamLiveInputsDisableALiveInputSchema = z.object({
@@ -240,6 +299,15 @@ const StreamLiveInputsDisableALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const StreamLiveInputsEnableALiveInputSchema = z.object({
@@ -259,6 +327,15 @@ const StreamLiveInputsEnableALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AllOutputsAssociatedWithASpecifiedLiveInputItemSchema = z.object({
@@ -272,6 +349,12 @@ const ListAllOutputsAssociatedWithASpecifiedLiveInputSchema = z.object({
   items: z.array(AllOutputsAssociatedWithASpecifiedLiveInputItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateANewOutputConnectedToALiveInputSchema = z.object({
@@ -279,6 +362,15 @@ const CreateANewOutputConnectedToALiveInputSchema = z.object({
   streamKey: z.unknown().optional(),
   uid: z.unknown().optional(),
   url: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateAnOutputSchema = z.object({
@@ -286,6 +378,15 @@ const UpdateAnOutputSchema = z.object({
   streamKey: z.unknown().optional(),
   uid: z.unknown().optional(),
   url: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const StreamLiveInputsRotateKeysForALiveInputSchema = z.object({
@@ -305,6 +406,15 @@ const StreamLiveInputsRotateKeysForALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetStreamVideosStorageUsageSchema = z.object({
@@ -317,6 +427,15 @@ const GetStreamVideosStorageUsageSchema = z.object({
   ),
   videoCount: z.number().int().optional().describe(
     "The total count of videos associated with the account.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -333,6 +452,12 @@ const GetAccountStreamUsageSchema = z.object({
   items: z.array(GetAccountStreamUsageItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WatermarkProfilesItemSchema = z.object({
@@ -353,6 +478,12 @@ const ListWatermarkProfilesSchema = z.object({
   items: z.array(WatermarkProfilesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateWatermarkProfilesViaBasicUploadSchema = z.object({
@@ -367,6 +498,15 @@ const CreateWatermarkProfilesViaBasicUploadSchema = z.object({
   size: z.unknown().optional(),
   uid: z.unknown().optional(),
   width: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetStreamWatermarkProfileWatermarkProfileDetailsSchema = z.object({
@@ -381,6 +521,15 @@ const GetStreamWatermarkProfileWatermarkProfileDetailsSchema = z.object({
   size: z.unknown().optional(),
   uid: z.unknown().optional(),
   width: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetStreamWebhookViewWebhooksSchema = z.object({
@@ -396,6 +545,15 @@ const GetStreamWebhookViewWebhooksSchema = z.object({
   secret: z.string().optional().describe(
     "The secret used to verify webhook signatures.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateWebhooksSchema = z.object({
@@ -410,6 +568,15 @@ const CreateWebhooksSchema = z.object({
   ),
   secret: z.string().optional().describe(
     "The secret used to verify webhook signatures.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -452,6 +619,15 @@ const GetStreamVideosRetrieveVideoDetailsSchema = z.object({
   uploadExpiry: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   watermark: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateVideoDetailsSchema = z.object({
@@ -493,11 +669,29 @@ const UpdateVideoDetailsSchema = z.object({
   uploadExpiry: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   watermark: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListAudioTracksSchema = z.object({
   audio: z.array(z.unknown()).optional().describe(
     "Array of audio tracks for the video.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -506,6 +700,15 @@ const CreateAddAudioTrackSchema = z.object({
   label: z.unknown().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateEditAudioTracksSchema = z.object({
@@ -513,6 +716,15 @@ const UpdateEditAudioTracksSchema = z.object({
   label: z.unknown().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CaptionsOrSubtitlesItemSchema = z.object({
@@ -526,6 +738,12 @@ const ListCaptionsOrSubtitlesSchema = z.object({
   items: z.array(CaptionsOrSubtitlesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCaptionOrSubtitleForLanguageSchema = z.object({
@@ -533,6 +751,15 @@ const GetCaptionOrSubtitleForLanguageSchema = z.object({
   label: z.unknown().optional(),
   language: z.unknown().optional(),
   status: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const StreamSubtitlesCaptionsGenerateCaptionOrSubtitleForLanguageSchema = z
@@ -550,6 +777,15 @@ const ListDownloadsSchema = z.object({
   default: z.unknown().optional().describe(
     "The default video download. Only present if this download type has been created.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateDownloadsSchema = z.object({
@@ -558,6 +794,15 @@ const CreateDownloadsSchema = z.object({
   ),
   default: z.unknown().optional().describe(
     "The default video download. Only present if this download type has been created.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -568,11 +813,29 @@ const CreateTypeSpecificDownloadsSchema = z.object({
   default: z.unknown().optional().describe(
     "The default video download. Only present if this download type has been created.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSignedUrlTokensForVideosSchema = z.object({
   token: z.string().optional().describe(
     "The signed token used with the signed URLs feature.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -583,10 +846,17 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "videos": {
@@ -842,6 +1112,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -868,6 +1139,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} videos", { count: results.length });
@@ -893,6 +1166,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const queryParts: string[] = [];
@@ -912,7 +1186,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_initiate_video_uploads_using_tus",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed stream_videos_initiate_video_uploads_using_tus",
@@ -956,6 +1235,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -971,7 +1251,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_video_clipping_clip_videos_given_a_start_and_end_time",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created stream_video_clipping_clip_videos_given_a_start_and_end_time {id}",
@@ -1014,6 +1299,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1029,7 +1315,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_upload_videos_from_a_url",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created stream_videos_upload_videos_from_a_url {id}",
@@ -1067,6 +1358,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1082,7 +1374,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_upload_videos_via_direct_upload_ur_ls",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created stream_videos_upload_videos_via_direct_upload_ur_ls {id}",
@@ -1108,6 +1405,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1134,6 +1432,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} signing_keys", {
@@ -1159,6 +1459,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1170,7 +1471,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_signing_keys",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed create_signing_keys", {});
         return { dataHandles: [handle] };
@@ -1226,6 +1532,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1236,7 +1543,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_live_inputs",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_live_inputs", {});
         return { dataHandles: [handle] };
@@ -1266,6 +1578,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1278,7 +1591,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("a_live_input", id, result);
+        const handle = await context.writeResource("a_live_input", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created a_live_input {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1305,6 +1623,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1315,7 +1634,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_retrieve_a_live_input",
           String(args.live_input_identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched stream_live_inputs_retrieve_a_live_input",
@@ -1352,6 +1676,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1370,7 +1695,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_live_input",
           String(args.live_input_identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated a_live_input", {});
         return { dataHandles: [handle] };
@@ -1434,6 +1764,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1445,7 +1776,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_disable_a_live_input",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed stream_live_inputs_disable_a_live_input",
@@ -1476,6 +1812,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1487,7 +1824,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_enable_a_live_input",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed stream_live_inputs_enable_a_live_input",
@@ -1518,6 +1860,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
@@ -1551,6 +1894,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1586,6 +1931,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1605,7 +1951,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_new_output_connected_to_a_live_input",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created a_new_output_connected_to_a_live_input {id}",
@@ -1641,6 +1992,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1662,7 +2014,12 @@ export const model = {
         const handle = await context.writeResource(
           "an_output",
           String(args.live_input_identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated an_output", {});
         return { dataHandles: [handle] };
@@ -1730,6 +2087,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1741,7 +2099,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_rotate_keys_for_a_live_input",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed stream_live_inputs_rotate_keys_for_a_live_input",
@@ -1769,6 +2132,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1779,7 +2143,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_storage_usage",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched stream_videos_storage_usage", {});
         return { dataHandles: [handle] };
@@ -1802,6 +2171,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1831,6 +2201,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1857,6 +2229,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1886,6 +2259,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1921,6 +2296,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1936,7 +2312,12 @@ export const model = {
         const handle = await context.writeResource(
           "watermark_profiles_via_basic_upload",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created watermark_profiles_via_basic_upload {id}",
@@ -1964,6 +2345,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1974,7 +2356,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_watermark_profile_watermark_profile_details",
           String(args.identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched stream_watermark_profile_watermark_profile_details",
@@ -2031,6 +2418,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2041,7 +2429,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_webhook_view_webhooks",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched stream_webhook_view_webhooks", {});
         return { dataHandles: [handle] };
@@ -2069,6 +2462,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -2083,7 +2477,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_webhooks",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated create_webhooks", {});
         return { dataHandles: [handle] };
@@ -2137,6 +2536,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2147,7 +2547,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_retrieve_video_details",
           String(args.identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched stream_videos_retrieve_video_details", {});
         return { dataHandles: [handle] };
@@ -2191,6 +2596,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2209,7 +2615,12 @@ export const model = {
         const handle = await context.writeResource(
           "update_video_details",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed update_video_details", {});
         return { dataHandles: [handle] };
@@ -2265,6 +2676,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2275,7 +2687,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_audio_tracks",
           String(args.identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_audio_tracks", {});
         return { dataHandles: [handle] };
@@ -2304,6 +2721,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2323,7 +2741,12 @@ export const model = {
         const handle = await context.writeResource(
           "add_audio_track",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created add_audio_track {id}", { id });
         return { dataHandles: [handle] };
@@ -2354,6 +2777,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2372,7 +2796,12 @@ export const model = {
         const handle = await context.writeResource(
           "edit_audio_tracks",
           String(args.audio_identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated edit_audio_tracks", {});
         return { dataHandles: [handle] };
@@ -2434,6 +2863,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["identifier", "page", "per_page"]);
@@ -2463,6 +2893,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2492,6 +2924,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2502,7 +2935,12 @@ export const model = {
         const handle = await context.writeResource(
           "caption_or_subtitle_for_language",
           String(args.identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched caption_or_subtitle_for_language", {});
         return { dataHandles: [handle] };
@@ -2561,6 +2999,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2572,7 +3011,12 @@ export const model = {
         const handle = await context.writeResource(
           "stream_subtitles_captions_generate_caption_or_subtitle_for_language",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed stream_subtitles_captions_generate_caption_or_subtitle_for_language",
@@ -2600,6 +3044,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2610,7 +3055,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_downloads",
           String(args.identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_downloads", {});
         return { dataHandles: [handle] };
@@ -2635,6 +3085,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2646,7 +3097,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_downloads",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed create_downloads", {});
         return { dataHandles: [handle] };
@@ -2703,6 +3159,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2714,7 +3171,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_type_specific_downloads",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed create_type_specific_downloads", {});
         return { dataHandles: [handle] };
@@ -2791,6 +3253,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2810,7 +3273,12 @@ export const model = {
         const handle = await context.writeResource(
           "signed_url_tokens_for_videos",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created signed_url_tokens_for_videos {id}", {
           id,

@@ -17,6 +17,8 @@ import {
 } from "npm:@aws-sdk/client-pricing@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/cost-estimate";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -82,6 +84,15 @@ const CostEstimateResultSchema = z.object({
   totalMonthly: z.number(),
   currency: z.string(),
   estimatedAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -254,7 +265,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 
@@ -288,6 +299,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -339,6 +359,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const items: z.infer<typeof EC2CostItemSchema>[] = [];
@@ -384,6 +405,9 @@ export const model = {
             totalMonthly,
             currency: "USD",
             estimatedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           });
 
           context.logger.info(
@@ -441,6 +465,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const items: z.infer<typeof RDSCostItemSchema>[] = [];
@@ -491,6 +516,9 @@ export const model = {
             totalMonthly,
             currency: "USD",
             estimatedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           });
 
           context.logger.info(
@@ -579,6 +607,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new PricingClient(makeClientConfig(context.globalArgs));
         try {
           const estimates: Array<{
@@ -655,6 +684,9 @@ export const model = {
             totalMonthly: grandTotal,
             currency: "USD",
             estimatedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           });
 
           context.logger.info(

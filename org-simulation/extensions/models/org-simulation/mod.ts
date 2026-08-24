@@ -25,6 +25,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/org-simulation";
+
 // =============================================================================
 // Schemas — Organization Topology (mirrors the DuckSim studio canvas)
 // =============================================================================
@@ -345,6 +347,15 @@ const TopologySchema = z.object({
   notes: z.string().optional().describe(
     "Context about this topology snapshot — e.g. 'current state' or 'proposed redesign'",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -422,6 +433,15 @@ const SimulationResultsSchema = z.object({
     "Number of deploys that occurred during the run",
   ),
   runAt: z.string().describe("ISO timestamp of when the simulation ran"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).describe(
   "Outcomes of one deterministic simulation run over the configured horizon",
 );
@@ -468,6 +488,15 @@ const DesignDecisionSchema = z.object({
     "Risks / second-order effects to watch if this decision is adopted",
   ),
   decidedAt: z.string().describe("ISO timestamp of the decision"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -1144,7 +1173,7 @@ function slugify(label: string): string {
 /** Organization design simulation model. */
 export const model = {
   type: "@webframp/org-simulation",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
@@ -1164,6 +1193,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1260,6 +1298,7 @@ just what changed.`,
         args: z.infer<typeof DesignTopologyArgsSchema>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         // Widget ids must be unique — the simulation looks widgets up by id
         // via a Map built from this array, so a duplicate id would silently
         // collapse to whichever widget was listed last, with no indication
@@ -1303,7 +1342,12 @@ just what changed.`,
         const handle = await context.writeResource(
           "topology",
           `topology-${slugify(args.scenarioLabel)}`,
-          topology as unknown as Record<string, unknown>,
+          {
+            ...topology as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(
@@ -1362,6 +1406,7 @@ issues, not feature velocity).`,
         args: z.infer<typeof RunSimulationArgsSchema>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const slug = slugify(args.scenarioLabel);
         const stored = await context.readResource(`topology-${slug}`);
         if (!stored) {
@@ -1383,7 +1428,12 @@ issues, not feature velocity).`,
         const handle = await context.writeResource(
           "simulation_results",
           `results-${slug}-seed${args.seed}`,
-          results as unknown as Record<string, unknown>,
+          {
+            ...results as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(
@@ -1435,6 +1485,7 @@ decision-maker sees the full picture, not just the model's blind spots.`,
         args: z.infer<typeof RecordDecisionArgsSchema>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const decision = {
           ...args.decision,
           decidedAt: new Date().toISOString(),
@@ -1445,7 +1496,12 @@ decision-maker sees the full picture, not just the model's blind spots.`,
           `decision-${slugify(args.decision.scenarioLabel)}-vs-${
             slugify(args.baselineLabel)
           }`,
-          decision as unknown as Record<string, unknown>,
+          {
+            ...decision as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(

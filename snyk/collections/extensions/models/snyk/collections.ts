@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/collections";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -37,6 +39,12 @@ const GetCollectionsSchema = z.object({
   items: z.array(GetCollectionsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateCollectionSchema = z.object({
@@ -50,6 +58,15 @@ const CreateCollectionSchema = z.object({
     "Related created_by_user ID",
   ),
   org_id: z.string().optional().describe("Related org ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetProjectsOfCollectionItemSchema = z.object({
@@ -62,6 +79,12 @@ const GetProjectsOfCollectionSchema = z.object({
   items: z.array(GetProjectsOfCollectionItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -71,7 +94,7 @@ const GetProjectsOfCollectionSchema = z.object({
 /** Snyk Collections — project collection groupings and management */
 export const model = {
   type: "@webframp/snyk/collections",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -79,6 +102,15 @@ export const model = {
       toVersion: "2026.08.21.2",
       description:
         "Snyk API errors now include the HTTP method and path attempted. update_collection_with_projects and delete_projects_collection now require a non-empty project list. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -141,6 +173,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -166,6 +199,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} get_collections", {
@@ -198,6 +233,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -214,7 +250,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("collection", id, result);
+        const handle = await context.writeResource("collection", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created collection {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -240,6 +281,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -251,7 +293,12 @@ export const model = {
         const handle = await context.writeResource(
           "collection",
           String(args.collection_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched collection", {});
         return { dataHandles: [handle] };
@@ -285,6 +332,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["collection_id"]);
@@ -303,7 +351,12 @@ export const model = {
         const handle = await context.writeResource(
           "collection",
           String(args.collection_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated collection", {});
         return { dataHandles: [handle] };
@@ -379,6 +432,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["collection_id"]);
@@ -407,6 +461,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -442,6 +498,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["collection_id"]);
@@ -461,7 +518,12 @@ export const model = {
         const handle = await context.writeResource(
           "update_collection_with_projects",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created update_collection_with_projects {id}", {
           id,

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/load-balancing"
-version: "2026.08.21.2"
+version: "2026.08.24.1"
 description: "Cloudflare Load Balancing — pools, monitors, load balancers, steering policies"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

@@ -27,6 +27,8 @@ import {
   type ReportLike,
 } from "./dashboard.ts";
 
+const EXTENSION_NAME = "@webframp/operator-briefing";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -195,7 +197,7 @@ type AppendArgs = {
 /** Durable append-only time-series accumulator for operator-briefing trends. */
 export const model = {
   type: "@webframp/operator-briefing/metrics",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -218,6 +220,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -284,6 +295,7 @@ export const model = {
         ),
       }),
       execute: async (args: AppendArgs, ctx: ModelContext) => {
+        const startMs = Date.now();
         try {
           // 1. Read the existing series. The cardinal rule of an append-only
           //    accumulator: NEVER write a shorter series over a longer one. A
@@ -374,6 +386,9 @@ export const model = {
             rows,
             count: rows.length,
             updatedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           });
 
           ctx.logger.info(

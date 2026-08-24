@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/incidents";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -60,6 +62,12 @@ const ListIncidentImpactsSchema = z.object({
   items: z.array(IncidentImpactsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateIncidentImpactSchema = z.object({
@@ -91,6 +99,15 @@ const CreateIncidentImpactSchema = z.object({
   last_modified_by_user_id: z.string().optional().describe(
     "Related last_modified_by_user ID",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -100,10 +117,17 @@ const CreateIncidentImpactSchema = z.object({
 /** Datadog Incidents — incident lifecycle, timelines, teams, and attachments */
 export const model = {
   type: "@webframp/datadog/incidents",
-  version: "2026.07.20.11",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "incident_impacts": {
@@ -143,6 +167,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["incident_id"]);
@@ -175,6 +200,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} incident_impacts", {
@@ -213,6 +240,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -246,7 +274,12 @@ export const model = {
         const handle = await context.writeResource(
           "incident_impact",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created incident_impact {id}", { id });
         return { dataHandles: [handle] };

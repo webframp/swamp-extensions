@@ -1,5 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Added Troubleshooting section documenting referential integrity validation in
-discover_topology, strict method ordering, agent-context-only global args, and
-JSON input requirements.**
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

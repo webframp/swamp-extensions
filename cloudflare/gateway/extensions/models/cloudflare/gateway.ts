@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/gateway";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -25,12 +27,30 @@ const GetZeroTrustAccountInformationSchema = z.object({
   gateway_tag: z.unknown().optional(),
   id: z.unknown().optional(),
   provider_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateZeroTrustAccountSchema = z.object({
   gateway_tag: z.unknown().optional(),
   id: z.unknown().optional(),
   provider_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ApplicationAndApplicationTypeMappingsItemSchema = z.union([
@@ -52,6 +72,12 @@ const ListApplicationAndApplicationTypeMappingsSchema = z.object({
   items: z.array(ApplicationAndApplicationTypeMappingsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListSchema = z.object({
@@ -60,6 +86,15 @@ const ListSchema = z.object({
   in_review_apps: z.unknown().optional(),
   unapproved_apps: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateSchema = z.object({
@@ -68,6 +103,15 @@ const UpdateSchema = z.object({
   in_review_apps: z.unknown().optional(),
   unapproved_apps: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAuditSshSettingsSchema = z.object({
@@ -75,6 +119,15 @@ const GetAuditSshSettingsSchema = z.object({
   public_key: z.unknown().optional(),
   seed_id: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustRotateSshAccountSeedSchema = z.object({
@@ -82,6 +135,15 @@ const ZeroTrustRotateSshAccountSeedSchema = z.object({
   public_key: z.unknown().optional(),
   seed_id: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CategoriesItemSchema = z.object({
@@ -99,6 +161,12 @@ const ListCategoriesSchema = z.object({
   items: z.array(CategoriesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustCertificatesItemSchema = z.object({
@@ -130,6 +198,12 @@ const ListZeroTrustCertificatesSchema = z.object({
   items: z.array(ZeroTrustCertificatesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateZeroTrustCertificateSchema = z.object({
@@ -155,6 +229,15 @@ const CreateZeroTrustCertificateSchema = z.object({
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZeroTrustCertificatesZeroTrustCertificateDetailsSchema = z.object({
@@ -180,6 +263,15 @@ const GetZeroTrustCertificatesZeroTrustCertificateDetailsSchema = z.object({
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustCertificatesDeactivateZeroTrustCertificateSchema = z.object({
@@ -205,6 +297,15 @@ const ZeroTrustCertificatesDeactivateZeroTrustCertificateSchema = z.object({
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZeroTrustAccountConfigurationSchema = z.object({
@@ -227,6 +328,15 @@ const GetZeroTrustAccountConfigurationSchema = z.object({
   }).optional().describe("Specify account settings."),
   created_at: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchZeroTrustAccountConfigurationSchema = z.object({
@@ -249,6 +359,15 @@ const PatchZeroTrustAccountConfigurationSchema = z.object({
   }).optional().describe("Specify account settings."),
   created_at: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DnsDestinationIpsItemSchema = z.object({
@@ -264,6 +383,12 @@ const ListDnsDestinationIpsSchema = z.object({
   items: z.array(DnsDestinationIpsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetEgressCidrPairsItemSchema = z.object({
@@ -286,6 +411,12 @@ const GetEgressCidrPairsSchema = z.object({
   items: z.array(GetEgressCidrPairsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustListsItemSchema = z.object({
@@ -303,6 +434,12 @@ const ListZeroTrustListsSchema = z.object({
   items: z.array(ZeroTrustListsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListDetailsSchema = z.object({
@@ -314,6 +451,15 @@ const ListDetailsSchema = z.object({
   name: z.unknown().optional(),
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ItemsItemSchema = z.object({
@@ -326,6 +472,12 @@ const ListItemsSchema = z.object({
   items: z.array(ItemsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustGatewayLocationsItemSchema = z.object({
@@ -354,6 +506,12 @@ const ListZeroTrustGatewayLocationsSchema = z.object({
   items: z.array(ZeroTrustGatewayLocationsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateZeroTrustGatewayLocationSchema = z.object({
@@ -376,6 +534,15 @@ const CreateZeroTrustGatewayLocationSchema = z.object({
   name: z.unknown().optional(),
   networks: z.unknown().optional(),
   updated_at: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZeroTrustGatewayLocationsZeroTrustGatewayLocationDetailsSchema = z
@@ -410,6 +577,15 @@ const GetLoggingSettingsForTheZeroTrustAccountSchema = z.object({
     http: z.unknown().optional(),
     l4: z.unknown().optional(),
   }).optional().describe("Configure logging settings for each rule type."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustGatewayOperationsItemSchema = z.object({
@@ -434,6 +610,12 @@ const ListZeroTrustGatewayOperationsSchema = z.object({
   items: z.array(ZeroTrustGatewayOperationsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZeroTrustGatewayOperationsZeroTrustGatewayOperationDetailsSchema = z
@@ -464,6 +646,15 @@ const CreatePacfileSchema = z.object({
   slug: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   url: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZeroTrustGatewayPacfilesDetailsSchema = z.object({
@@ -475,6 +666,15 @@ const GetZeroTrustGatewayPacfilesDetailsSchema = z.object({
   slug: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   url: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ProxyEndpointsItemSchema = z.union([
@@ -501,6 +701,12 @@ const ListProxyEndpointsSchema = z.object({
   items: z.array(ProxyEndpointsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateProxyEndpointSchema = z.union([
@@ -571,6 +777,12 @@ const ListZeroTrustGatewayRulesSchema = z.object({
   items: z.array(ZeroTrustGatewayRulesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateZeroTrustGatewayRuleSchema = z.object({
@@ -595,6 +807,15 @@ const CreateZeroTrustGatewayRuleSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchMultipleZeroTrustGatewayRulesSchema = z.object({
@@ -619,6 +840,15 @@ const PatchMultipleZeroTrustGatewayRulesSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustGatewayRulesTenantItemSchema = z.object({
@@ -649,6 +879,12 @@ const ListZeroTrustGatewayRulesTenantSchema = z.object({
   items: z.array(ZeroTrustGatewayRulesTenantItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZeroTrustGatewayRulesZeroTrustGatewayRuleDetailsSchema = z.object({
@@ -673,6 +909,15 @@ const GetZeroTrustGatewayRulesZeroTrustGatewayRuleDetailsSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchZeroTrustGatewayRuleSchema = z.object({
@@ -697,6 +942,15 @@ const PatchZeroTrustGatewayRuleSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
@@ -732,10 +986,17 @@ const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
 /** Cloudflare Gateway — DNS/HTTP policies, locations, proxy endpoints */
 export const model = {
   type: "@webframp/cloudflare/gateway",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "zero_trust_account_information": {
@@ -988,6 +1249,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1008,7 +1270,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_account_information",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched zero_trust_account_information", {});
         return { dataHandles: [handle] };
@@ -1031,6 +1298,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -1052,7 +1320,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_zero_trust_account",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed create_zero_trust_account", {});
         return { dataHandles: [handle] };
@@ -1075,6 +1348,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1115,6 +1389,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1142,6 +1418,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1159,7 +1436,12 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("list", "latest", result);
+        const handle = await context.writeResource("list", "latest", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Fetched list", {});
         return { dataHandles: [handle] };
       },
@@ -1185,6 +1467,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1206,7 +1489,12 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("update", "updated", result);
+        const handle = await context.writeResource("update", "updated", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Updated update", {});
         return { dataHandles: [handle] };
       },
@@ -1228,6 +1516,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1248,7 +1537,12 @@ export const model = {
         const handle = await context.writeResource(
           "audit_ssh_settings",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched audit_ssh_settings", {});
         return { dataHandles: [handle] };
@@ -1273,6 +1567,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1297,7 +1592,12 @@ export const model = {
         const handle = await context.writeResource(
           "audit_ssh_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated audit_ssh_settings", {});
         return { dataHandles: [handle] };
@@ -1320,6 +1620,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -1341,7 +1642,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_rotate_ssh_account_seed",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed zero_trust_rotate_ssh_account_seed", {});
         return { dataHandles: [handle] };
@@ -1364,6 +1670,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1401,6 +1708,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} categories", {
@@ -1426,6 +1735,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1466,6 +1776,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1496,6 +1808,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1521,7 +1834,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_certificate",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created zero_trust_certificate {id}", { id });
         return { dataHandles: [handle] };
@@ -1546,6 +1864,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1566,7 +1885,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_certificates_zero_trust_certificate_details",
           String(args.certificate_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched zero_trust_certificates_zero_trust_certificate_details",
@@ -1636,6 +1960,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -1657,7 +1982,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_certificates_activate_zero_trust_certificate",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed zero_trust_certificates_activate_zero_trust_certificate",
@@ -1685,6 +2015,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -1706,7 +2037,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_certificates_deactivate_zero_trust_certificate",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed zero_trust_certificates_deactivate_zero_trust_certificate",
@@ -1732,6 +2068,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1752,7 +2089,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_account_configuration",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched zero_trust_account_configuration", {});
         return { dataHandles: [handle] };
@@ -1793,6 +2135,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1817,7 +2160,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_account_configuration",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated zero_trust_account_configuration", {});
         return { dataHandles: [handle] };
@@ -1858,6 +2206,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1882,7 +2231,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_zero_trust_account_configuration",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated patch_zero_trust_account_configuration",
@@ -1908,6 +2262,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1948,6 +2303,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1974,6 +2331,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -2014,6 +2372,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2042,6 +2402,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -2079,6 +2440,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} zero_trust_lists", {
@@ -2106,6 +2469,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2126,7 +2490,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_details",
           String(args.list_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_details", {});
         return { dataHandles: [handle] };
@@ -2151,6 +2520,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["list_id", "page", "per_page"]);
@@ -2188,6 +2558,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} items", { count: results.length });
@@ -2211,6 +2583,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -2251,6 +2624,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2285,6 +2660,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -2310,7 +2686,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_location",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created zero_trust_gateway_location {id}", { id });
         return { dataHandles: [handle] };
@@ -2335,6 +2716,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2355,7 +2737,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_locations_zero_trust_gateway_location_details",
           String(args.location_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched zero_trust_gateway_locations_zero_trust_gateway_location_details",
@@ -2390,6 +2777,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2418,7 +2806,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_location",
           String(args.location_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated zero_trust_gateway_location", {});
         return { dataHandles: [handle] };
@@ -2481,6 +2874,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2501,7 +2895,12 @@ export const model = {
         const handle = await context.writeResource(
           "logging_settings_for_the_zero_trust_account",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched logging_settings_for_the_zero_trust_account",
@@ -2538,6 +2937,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -2562,7 +2962,12 @@ export const model = {
         const handle = await context.writeResource(
           "logging_settings_for_the_zero_trust_account",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated logging_settings_for_the_zero_trust_account",
@@ -2588,6 +2993,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -2628,6 +3034,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2656,6 +3064,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2676,7 +3085,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_operations_zero_trust_gateway_operation_details",
           String(args.operation_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched zero_trust_gateway_operations_zero_trust_gateway_operation_details",
@@ -2709,6 +3123,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -2731,7 +3146,12 @@ export const model = {
         }
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("pacfile", id, result);
+        const handle = await context.writeResource("pacfile", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created pacfile {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -2755,6 +3175,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2775,7 +3196,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_pacfiles_details",
           String(args.pacfile_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched zero_trust_gateway_pacfiles_details", {});
         return { dataHandles: [handle] };
@@ -2838,6 +3264,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -2875,6 +3302,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} proxy_endpoints", {
@@ -2911,6 +3340,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -2936,7 +3366,12 @@ export const model = {
         const handle = await context.writeResource(
           "proxy_endpoint",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created proxy_endpoint {id}", { id });
         return { dataHandles: [handle] };
@@ -2964,6 +3399,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2984,7 +3420,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_proxy_endpoints_proxy_endpoint_details",
           String(args.proxy_endpoint_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched zero_trust_gateway_proxy_endpoints_proxy_endpoint_details",
@@ -3017,6 +3458,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3045,7 +3487,12 @@ export const model = {
         const handle = await context.writeResource(
           "proxy_endpoint",
           String(args.proxy_endpoint_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated proxy_endpoint", {});
         return { dataHandles: [handle] };
@@ -3113,6 +3560,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -3153,6 +3601,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -3192,6 +3642,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -3217,7 +3668,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created zero_trust_gateway_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -3248,6 +3704,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
@@ -3272,7 +3729,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_multiple_zero_trust_gateway_rules",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated patch_multiple_zero_trust_gateway_rules",
@@ -3299,6 +3761,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -3339,6 +3802,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -3367,6 +3832,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -3387,7 +3853,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_rules_zero_trust_gateway_rule_details",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched zero_trust_gateway_rules_zero_trust_gateway_rule_details",
@@ -3427,6 +3898,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3455,7 +3927,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated zero_trust_gateway_rule", {});
         return { dataHandles: [handle] };
@@ -3484,6 +3961,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3512,7 +3990,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_zero_trust_gateway_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_zero_trust_gateway_rule", {});
         return { dataHandles: [handle] };
@@ -3577,6 +4060,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -3598,7 +4082,12 @@ export const model = {
         const handle = await context.writeResource(
           "zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule",

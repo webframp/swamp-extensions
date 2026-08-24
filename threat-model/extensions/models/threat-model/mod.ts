@@ -9,6 +9,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/threat-model";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -100,6 +102,15 @@ const AssessmentSchema = z.object({
   updatedAt: z.string().describe(
     "ISO timestamp of the most recent update to this assessment",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PostureSchema = z.object({
@@ -144,6 +155,15 @@ const PostureSchema = z.object({
   ),
   snapshotAt: z.string().describe(
     "ISO timestamp of when this posture snapshot was computed",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -237,7 +257,7 @@ interface ModelContext {
 /** Agile threat modeling concept model. */
 export const model = {
   type: "@webframp/threat-model",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -259,6 +279,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -326,6 +355,7 @@ Subsequent methods (identify, evaluate, mitigate) build on this foundation.`,
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const now = new Date().toISOString();
         const handle = await ctx.writeResource("assessment", "current", {
           subject: args.subject,
@@ -339,6 +369,9 @@ Subsequent methods (identify, evaluate, mitigate) build on this foundation.`,
           recommendation: "",
           openQuestions: [],
           updatedAt: now,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
         ctx.logger.info("Assessment scoped for {subject}", {
           subject: args.subject,
@@ -403,6 +436,7 @@ to add threats as they are discovered.`,
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const existing = await ctx.readResource("current");
         if (!existing) throw new Error("No assessment — run 'scope' first");
 
@@ -428,6 +462,9 @@ to add threats as they are discovered.`,
           ...existing,
           threats: merged,
           updatedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         ctx.logger.info("Identified {count} threats", {
@@ -477,6 +514,7 @@ AGENT GUIDANCE:
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const existing = await ctx.readResource("current");
         if (!existing) throw new Error("No assessment — run 'scope' first");
 
@@ -525,6 +563,9 @@ AGENT GUIDANCE:
           threats,
           openQuestions: mergedQuestions,
           updatedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         ctx.logger.info("Evaluated risk matrix. Open questions: {count}", {
@@ -604,6 +645,7 @@ Call with controls, acceptances, and recommendation.`,
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const existing = await ctx.readResource("current");
         if (!existing) throw new Error("No assessment — run 'scope' first");
 
@@ -700,6 +742,9 @@ Call with controls, acceptances, and recommendation.`,
           acceptances: mergedAcceptances,
           recommendation: args.recommendation,
           updatedAt: now,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         ctx.logger.info(
@@ -724,6 +769,7 @@ Call with controls, acceptances, and recommendation.`,
         _args: Record<string, never>,
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const existing = await ctx.readResource("current");
         if (!existing) throw new Error("No assessment — run 'scope' first");
 
@@ -783,7 +829,12 @@ Call with controls, acceptances, and recommendation.`,
           snapshotAt: new Date().toISOString(),
         };
 
-        const handle = await ctx.writeResource("posture", "current", posture);
+        const handle = await ctx.writeResource("posture", "current", {
+          ...posture,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         ctx.logger.info(
           "Posture: {posture}. Unaddressed above threshold: {count}",
           {

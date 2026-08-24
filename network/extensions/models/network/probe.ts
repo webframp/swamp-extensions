@@ -13,6 +13,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/network";
+
 // =============================================================================
 // Context Type
 // =============================================================================
@@ -52,6 +54,12 @@ const DnsLookupSchema = z.object({
   status: z.string(),
   error: z.string().nullable(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for an HTTP endpoint check result. */
@@ -69,6 +77,12 @@ const HttpCheckSchema = z.object({
   tlsProtocol: z.string().nullable(),
   error: z.string().nullable(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for WHOIS domain registration data. */
@@ -83,6 +97,12 @@ const WhoisInfoSchema = z.object({
   error: z.string().nullable(),
   rawText: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for TLS certificate inspection results. */
@@ -97,6 +117,12 @@ const CertInfoSchema = z.object({
   serialNumber: z.string().nullable(),
   error: z.string().nullable(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for a single traceroute hop entry. */
@@ -115,6 +141,12 @@ const TracerouteSchema = z.object({
   reachedTarget: z.boolean(),
   error: z.string().nullable(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for a single port connectivity check result. */
@@ -131,6 +163,12 @@ const PortScanSchema = z.object({
   openPorts: z.array(z.number()),
   closedPorts: z.array(z.number()),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -489,7 +527,7 @@ function computeDaysUntilExpiry(notAfter: string | null): number | null {
  */
 export const model = {
   type: "@webframp/network",
-  version: "2026.08.24.3",
+  version: "2026.08.24.4",
   globalArguments: z.object({}),
 
   upgrades: [
@@ -514,6 +552,15 @@ export const model = {
     {
       toVersion: "2026.08.24.3",
       description: "No schema changes — add missing upgrade description fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.4",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -573,6 +620,7 @@ export const model = {
         args: { domain: string; recordType: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const label = `dns_lookup ${args.domain} ${args.recordType}`;
         // Try dig +json first; if unsupported, fall back to standard text output
         let result = await runCommand([
@@ -617,7 +665,12 @@ export const model = {
         const handle = await context.writeResource(
           "dns_records",
           instance,
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         if (commandError) {
@@ -811,6 +864,7 @@ export const model = {
         args: { domain: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const result = await runCommand(
           ["whois", args.domain],
           `whois_lookup ${args.domain}`,
@@ -841,7 +895,12 @@ export const model = {
         const handle = await context.writeResource(
           "whois_info",
           `whois-${args.domain}`,
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         if (commandError) {
@@ -873,6 +932,7 @@ export const model = {
         args: { host: string; port: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const result = await runCommand([
           "bash",
           "-c",
@@ -899,7 +959,12 @@ export const model = {
           const handle = await context.writeResource(
             "cert_info",
             instance,
-            data,
+            {
+              ...data,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
 
           context.logger.info("Cert {host}:{port}: error {error}", {
@@ -927,7 +992,12 @@ export const model = {
           fetchedAt: new Date().toISOString(),
         };
 
-        const handle = await context.writeResource("cert_info", instance, data);
+        const handle = await context.writeResource("cert_info", instance, {
+          ...data,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
 
         context.logger.info("Cert {host}:{port}: expires in {days} days", {
           host: args.host,
@@ -954,6 +1024,7 @@ export const model = {
         args: { host: string; maxHops: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const result = await runCommand(
           ["traceroute", "-m", String(args.maxHops), "-w", "2", args.host],
           `traceroute ${args.host}`,
@@ -976,7 +1047,12 @@ export const model = {
         const handle = await context.writeResource(
           "traceroute",
           `trace-${args.host}`,
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         if (commandError) {
@@ -1020,6 +1096,7 @@ export const model = {
         args: { host: string; ports: number[] },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const results: z.infer<typeof PortResultSchema>[] = [];
 
         for (const port of args.ports) {
@@ -1047,7 +1124,12 @@ export const model = {
         const handle = await context.writeResource(
           "port_scan",
           `ports-${args.host}`,
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Port check {host}: {open} open, {closed} closed", {

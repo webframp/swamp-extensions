@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/security-rules";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -31,6 +33,12 @@ const ListSecurityMonitoringRulesSchema = z.object({
   items: z.array(SecurityMonitoringRulesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSecurityMonitoringRuleSchema = z.union([z.unknown(), z.unknown()]);
@@ -40,11 +48,29 @@ const ConvertSecurityMonitoringRuleFromJsonToTerraformSchema = z.object({
   terraformContent: z.string().optional().describe(
     "Terraform string as a result of converting the rule from JSON.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TestSecurityMonitoringRuleSchema = z.object({
   results: z.array(z.boolean()).optional().describe(
     "Assert results are returned in the same order as the rule query payloads. For each payload, it re...",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -53,11 +79,29 @@ const ConvertExistingSecurityMonitoringRuleSchema = z.object({
   terraformContent: z.string().optional().describe(
     "Terraform string as a result of converting the rule from JSON.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TestExistingSecurityMonitoringRuleSchema = z.object({
   results: z.array(z.boolean()).optional().describe(
     "Assert results are returned in the same order as the rule query payloads. For each payload, it re...",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -68,10 +112,17 @@ const TestExistingSecurityMonitoringRuleSchema = z.object({
 /** Datadog Security Rules — detection rule CRUD and management */
 export const model = {
   type: "@webframp/datadog/security-rules",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "security_monitoring_rules": {
@@ -143,6 +194,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -181,6 +233,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -253,6 +307,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -273,7 +328,12 @@ export const model = {
         const handle = await context.writeResource(
           "security_monitoring_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created security_monitoring_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -385,6 +445,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -405,7 +466,12 @@ export const model = {
         const handle = await context.writeResource(
           "convert_security_monitoring_rule_from_json_to_terraform",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created convert_security_monitoring_rule_from_json_to_terraform {id}",
@@ -438,6 +504,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -458,7 +525,12 @@ export const model = {
         const handle = await context.writeResource(
           "test_security_monitoring_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created test_security_monitoring_rule {id}", {
           id,
@@ -535,6 +607,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -555,7 +628,12 @@ export const model = {
         const handle = await context.writeResource(
           "validate_security_monitoring_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created validate_security_monitoring_rule {id}", {
           id,
@@ -582,6 +660,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -596,7 +675,12 @@ export const model = {
         const handle = await context.writeResource(
           "security_monitoring_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched security_monitoring_rule", {});
         return { dataHandles: [handle] };
@@ -673,6 +757,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_id"]);
@@ -694,7 +779,12 @@ export const model = {
         const handle = await context.writeResource(
           "security_monitoring_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated security_monitoring_rule", {});
         return { dataHandles: [handle] };
@@ -753,6 +843,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -767,7 +858,12 @@ export const model = {
         const handle = await context.writeResource(
           "convert_existing_security_monitoring_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched convert_existing_security_monitoring_rule",
@@ -801,6 +897,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_id"]);
@@ -823,7 +920,12 @@ export const model = {
         const handle = await context.writeResource(
           "test_existing_security_monitoring_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created test_existing_security_monitoring_rule {id}",

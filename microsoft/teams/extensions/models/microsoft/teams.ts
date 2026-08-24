@@ -16,6 +16,8 @@ import {
 } from "./_lib/auth.ts";
 import { graphRequest, graphRequestPaginated } from "./_lib/graph.ts";
 
+const EXTENSION_NAME = "@webframp/microsoft/teams";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -45,6 +47,12 @@ const TeamsListSchema = z.object({
     "Teams the signed-in user is a member of",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ChannelSchema = z.object({
@@ -63,6 +71,12 @@ const ChannelsListSchema = z.object({
   teamName: z.string().describe("Display name of the team"),
   channels: z.array(ChannelSchema).describe("Channels in the team"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MessageFromSchema = z.object({
@@ -140,6 +154,12 @@ const ChannelMessagesSchema = z.object({
     "Whether the fetch hit the limit or page cap before exhausting the channel",
   ),
   fetchedAt: z.string().describe("Timestamp the messages were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ChatMemberSchema = z.object({
@@ -187,6 +207,12 @@ const ChatsListSchema = z.object({
     "Whether the fetch hit the limit or page cap before exhausting the list",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ChatMessagesSchema = z.object({
@@ -197,6 +223,12 @@ const ChatMessagesSchema = z.object({
     "Whether the fetch hit the limit before exhausting the chat",
   ),
   fetchedAt: z.string().describe("Timestamp the messages were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AttentionItemSchema = z.object({
@@ -221,6 +253,12 @@ const AttentionSchema = z.object({
   ),
   since: z.string().describe("Timestamp the lookback window started"),
   fetchedAt: z.string().describe("Timestamp the aggregation ran"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const BootstrapResultSchema = z.object({
@@ -228,6 +266,15 @@ const BootstrapResultSchema = z.object({
   message: z.string().describe("Human-readable guidance for the caller"),
   refreshToken: z.string().meta({ sensitive: true }).optional().describe(
     "OAuth2 refresh token to store in the vault",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -342,7 +389,7 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -366,6 +413,15 @@ export const model = {
       description:
         "No schema changes other than rejecting empty teamId/channelId/chatId " +
         "method arguments — existing stored resources are unaffected.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -437,6 +493,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { tenantId, clientId } = context.globalArgs;
 
         const deviceCode = await initiateDeviceCode(tenantId, clientId);
@@ -461,6 +518,9 @@ export const model = {
           message:
             "Store the refreshToken in your vault. It expires after 90 days of inactivity.",
           refreshToken: tokens.refresh_token,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         return { dataHandles: [handle] };
@@ -484,6 +544,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const accessToken = await getAccessToken(context.globalArgs);
 
         const result = await withGraphContext(
@@ -499,6 +560,8 @@ export const model = {
         const handle = await context.writeResource("teams", "main", {
           teams: result.items,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} teams", {
@@ -529,6 +592,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const accessToken = await getAccessToken(context.globalArgs);
 
         const team = await withGraphContext(
@@ -559,6 +623,8 @@ export const model = {
             teamName: team.displayName,
             channels: channelsResult.items,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -608,6 +674,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const accessToken = await getAccessToken(context.globalArgs);
 
         const channel = await withGraphContext(
@@ -687,6 +754,8 @@ export const model = {
             totalRoots: userRoots.length,
             truncated: wasTruncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -724,6 +793,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const accessToken = await getAccessToken(context.globalArgs);
 
         const pageSize = Math.min(args.limit * 5, 50).toString();
@@ -777,6 +847,8 @@ export const model = {
           totalFetched: allChats.length,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Fetched {count} chats", {
@@ -813,6 +885,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const accessToken = await getAccessToken(context.globalArgs);
         const sinceCutoff = args.since ? new Date(args.since) : null;
 
@@ -851,6 +924,8 @@ export const model = {
             totalFetched: messages.length,
             truncated: messages.length >= args.limit,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -889,6 +964,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const accessToken = await getAccessToken(context.globalArgs);
 
         const cutoff = args.since
@@ -1019,6 +1095,8 @@ export const model = {
           truncated: chats.length >= args.chatLimit,
           since: cutoff.toISOString(),
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info(

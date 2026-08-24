@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/on-call";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -43,6 +45,15 @@ const CreateOnCallEscalationPolicySchema = z.object({
   ),
   steps_id: z.string().optional().describe("Related steps ID"),
   teams_id: z.string().optional().describe("Related teams ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateOnCallScheduleSchema = z.object({
@@ -57,6 +68,15 @@ const CreateOnCallScheduleSchema = z.object({
   ),
   layers_id: z.string().optional().describe("Related layers ID"),
   teams_id: z.string().optional().describe("Related teams ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetScheduleOnCallRespondersSchema = z.object({
@@ -71,6 +91,15 @@ const GetScheduleOnCallRespondersSchema = z.object({
   ),
   responders_id: z.string().optional().describe("Related responders ID"),
   schedule_id: z.string().optional().describe("Related schedule ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetTeamOnCallUsersSchema = z.object({
@@ -81,6 +110,15 @@ const GetTeamOnCallUsersSchema = z.object({
     "JSON:API relationships object linking this resource to related entities.",
   ),
   type: z.unknown().describe("JSON:API resource type for this record."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetOnCallTeamRoutingRulesSchema = z.object({
@@ -91,6 +129,15 @@ const GetOnCallTeamRoutingRulesSchema = z.object({
     "JSON:API relationships object linking this resource to related entities.",
   ),
   type: z.unknown().describe("JSON:API resource type for this record."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SetOnCallTeamRoutingRulesSchema = z.object({
@@ -101,6 +148,15 @@ const SetOnCallTeamRoutingRulesSchema = z.object({
     "JSON:API relationships object linking this resource to related entities.",
   ),
   type: z.unknown().describe("JSON:API resource type for this record."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UserNotificationChannelsItemSchema = z.object({
@@ -120,6 +176,12 @@ const ListUserNotificationChannelsSchema = z.object({
   items: z.array(UserNotificationChannelsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateUserNotificationChannelSchema = z.object({
@@ -132,6 +194,15 @@ const CreateUserNotificationChannelSchema = z.object({
   ),
   config: z.union([z.unknown(), z.unknown(), z.unknown()]).optional().describe(
     "Defines the configuration for an On-Call notification channel",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -156,6 +227,12 @@ const ListUserNotificationRulesSchema = z.object({
   items: z.array(UserNotificationRulesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateUserNotificationRuleSchema = z.object({
@@ -173,6 +250,15 @@ const CreateUserNotificationRuleSchema = z.object({
     "The number of minutes that will elapse before this rule is evaluated. 0 indicates immediate evalu...",
   ),
   channel_id: z.string().optional().describe("Related channel ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -182,10 +268,17 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "on_call_escalation_policy": {
@@ -287,6 +380,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -318,7 +412,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_call_escalation_policy",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created on_call_escalation_policy {id}", { id });
         return { dataHandles: [handle] };
@@ -346,6 +445,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["policy_id"]);
@@ -372,7 +472,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_call_escalation_policy",
           String(args.policy_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched on_call_escalation_policy", {});
         return { dataHandles: [handle] };
@@ -415,6 +520,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id", "include"]);
@@ -437,7 +543,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_call_escalation_policy",
           String(args.policy_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated on_call_escalation_policy", {});
         return { dataHandles: [handle] };
@@ -510,6 +621,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -541,7 +653,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_call_schedule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created on_call_schedule {id}", { id });
         return { dataHandles: [handle] };
@@ -569,6 +686,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["schedule_id"]);
@@ -595,7 +713,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_call_schedule",
           String(args.schedule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched on_call_schedule", {});
         return { dataHandles: [handle] };
@@ -633,6 +756,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["schedule_id", "include"]);
@@ -655,7 +779,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_call_schedule",
           String(args.schedule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated on_call_schedule", {});
         return { dataHandles: [handle] };
@@ -723,6 +852,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["schedule_id"]);
@@ -753,7 +883,12 @@ export const model = {
         const handle = await context.writeResource(
           "schedule_on_call_responders",
           String(args.schedule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched schedule_on_call_responders", {});
         return { dataHandles: [handle] };
@@ -781,6 +916,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["team_id"]);
@@ -807,7 +943,12 @@ export const model = {
         const handle = await context.writeResource(
           "team_on_call_users",
           String(args.team_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched team_on_call_users", {});
         return { dataHandles: [handle] };
@@ -835,6 +976,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["team_id"]);
@@ -861,7 +1003,12 @@ export const model = {
         const handle = await context.writeResource(
           "on_call_team_routing_rules",
           String(args.team_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched on_call_team_routing_rules", {});
         return { dataHandles: [handle] };
@@ -892,6 +1039,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "include"]);
@@ -916,7 +1064,12 @@ export const model = {
         const handle = await context.writeResource(
           "set_on_call_team_routing_rules",
           String(args.team_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated set_on_call_team_routing_rules", {});
         return { dataHandles: [handle] };
@@ -941,6 +1094,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_id"]);
@@ -976,6 +1130,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1007,6 +1163,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id"]);
@@ -1032,7 +1189,12 @@ export const model = {
         const handle = await context.writeResource(
           "user_notification_channel",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created user_notification_channel {id}", { id });
         return { dataHandles: [handle] };
@@ -1058,6 +1220,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1074,7 +1237,12 @@ export const model = {
         const handle = await context.writeResource(
           "user_notification_channel",
           String(args.channel_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched user_notification_channel", {});
         return { dataHandles: [handle] };
@@ -1139,6 +1307,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_id"]);
@@ -1174,6 +1343,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1211,6 +1382,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id"]);
@@ -1236,7 +1408,12 @@ export const model = {
         const handle = await context.writeResource(
           "user_notification_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created user_notification_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -1265,6 +1442,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["user_id", "rule_id"]);
@@ -1293,7 +1471,12 @@ export const model = {
         const handle = await context.writeResource(
           "user_notification_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched user_notification_rule", {});
         return { dataHandles: [handle] };
@@ -1331,6 +1514,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id", "rule_id", "include"]);
@@ -1355,7 +1539,12 @@ export const model = {
         const handle = await context.writeResource(
           "user_notification_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated user_notification_rule", {});
         return { dataHandles: [handle] };

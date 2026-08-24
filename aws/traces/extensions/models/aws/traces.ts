@@ -17,6 +17,8 @@ import {
 } from "npm:@aws-sdk/client-xray@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/traces";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -108,6 +110,12 @@ const ServiceGraphSchema = z.object({
   containsOldGroupVersions: z.boolean(),
   truncated: z.boolean().default(false),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TraceSummarySchema = z.object({
@@ -151,6 +159,12 @@ const TraceSummaryListSchema = z.object({
     end: z.string(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ErrorAnalysisSchema = z.object({
@@ -174,6 +188,12 @@ const ErrorAnalysisSchema = z.object({
     end: z.string(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -351,7 +371,7 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -380,6 +400,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -437,6 +466,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
@@ -498,6 +528,8 @@ export const model = {
               containsOldGroupVersions: containsOldVersions,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -560,6 +592,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
@@ -622,6 +655,8 @@ export const model = {
                 end: endTime.toISOString(),
               },
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -678,6 +713,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
@@ -755,6 +791,8 @@ export const model = {
                 end: endTime.toISOString(),
               },
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -796,6 +834,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new XRayClient(makeClientConfig(context.globalArgs));
         try {
           const startTime = parseRelativeTime(args.startTime);
@@ -900,6 +939,8 @@ export const model = {
                 end: endTime.toISOString(),
               },
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 

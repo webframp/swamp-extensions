@@ -13,6 +13,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/cost-projection";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -90,6 +92,15 @@ const ScenarioSchema = z.object({
   quotedAt: z.string().optional().describe(
     "Date the rate was quoted (YYYY-MM-DD)",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ProjectionSchema = z.object({
@@ -124,6 +135,15 @@ const ProjectionSchema = z.object({
 
   effectiveHoursPerMonth: z.number().describe("hoursPerDay * daysPerMonth"),
   totalGpuCount: z.number().describe("Total number of GPUs in this scenario"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -196,7 +216,7 @@ function computeProjection(s: ScenarioInput) {
 /** GPU rental inference cost projection model. */
 export const model = {
   type: "@webframp/cost-projection/gpu-rental",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: z.object({}),
   reports: ["@webframp/cost-projection-comparison"],
 
@@ -240,19 +260,30 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const scenario = ScenarioSchema.parse(args);
 
         const scenarioHandle = await ctx.writeResource(
           "scenario",
           "scenario",
-          scenario,
+          {
+            ...scenario,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         const projection = computeProjection(scenario);
         const projectionHandle = await ctx.writeResource(
           "projection",
           "projection",
-          projection,
+          {
+            ...projection,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         ctx.logger.info(
@@ -292,6 +323,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const raw = await ctx.readResource!("scenario");
         if (!raw) throw new Error("No scenario recorded — run 'record' first");
         const scenario = ScenarioSchema.parse(raw);
@@ -299,7 +331,12 @@ export const model = {
         const handle = await ctx.writeResource(
           "projection",
           "projection",
-          projection,
+          {
+            ...projection,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         ctx.logger.info("Re-projected '{name}': ${costPerGpuHour}/GPU-hr", {
           name: scenario.name,
@@ -337,6 +374,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const raw = await ctx.readResource!("scenario");
         if (!raw) throw new Error("No scenario recorded — run 'record' first");
         const scenario = ScenarioSchema.parse(raw);
@@ -350,14 +388,24 @@ export const model = {
         const scenarioHandle = await ctx.writeResource(
           "scenario",
           "scenario",
-          updated,
+          {
+            ...updated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         const projection = computeProjection(updated);
         const projectionHandle = await ctx.writeResource(
           "projection",
           "projection",
-          projection,
+          {
+            ...projection,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         ctx.logger.info(

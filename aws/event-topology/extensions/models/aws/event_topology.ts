@@ -34,6 +34,8 @@ import {
 } from "npm:@aws-sdk/client-sts@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/event-topology";
+
 // Defensive pagination cap. The per-topic subscription and Lambda event-source
 // mapping listings have no caller-supplied bound (unlike rules/topics/queues),
 // so a pathological account could otherwise page indefinitely. 50 pages at up
@@ -111,6 +113,12 @@ const GraphStatsSchema = z.object({
 
 const GraphSchema = z.object({
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   accountId: z.string(),
   region: z.string(),
   nodes: z.array(NodeSchema),
@@ -123,6 +131,12 @@ const GraphSchema = z.object({
 
 const AnalysisResultSchema = z.object({
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   query: z.string(),
   results: z.array(z.record(z.string(), z.unknown())),
   summary: z.record(z.string(), z.unknown()),
@@ -249,7 +263,7 @@ function isSnsEndpointInternal(protocol: string, endpoint: string): boolean {
 /** Event topology model — observes the directed graph of AWS event relationships. */
 export const model = {
   type: "@webframp/aws/event-topology",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -270,6 +284,15 @@ export const model = {
     {
       toVersion: "2026.08.21.1",
       description: "Error-message quality improvements, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -308,6 +331,7 @@ export const model = {
         args: { maxRulesPerBus: number; maxTopics: number; maxQueues: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const accountId = await getAccountId(context);
         const region = context.globalArgs.region ?? "us-east-1";
 
@@ -755,7 +779,12 @@ export const model = {
           truncated,
         };
 
-        const handle = await context.writeResource("graph", "topology", result);
+        const handle = await context.writeResource("graph", "topology", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
 
         context.logger.info("Event topology discovery complete", {
           nodes: nodes.size,
@@ -786,6 +815,7 @@ export const model = {
         args: { query: string; nodeId?: string; threshold: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         if (args.query === "path" && !args.nodeId) {
           throw new Error(
             'analyze query="path" requires a "nodeId" argument identifying the node to inspect, but none was provided',
@@ -973,7 +1003,12 @@ export const model = {
         const handle = await context.writeResource(
           "analysis",
           "analysis",
-          analysisResult,
+          {
+            ...analysisResult,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(`Analysis complete: ${args.query}`, {

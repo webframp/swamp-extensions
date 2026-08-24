@@ -26,6 +26,8 @@ import {
 } from "npm:@aws-sdk/client-cloudwatch@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/networking";
+
 const MAX_PAGES = 10;
 
 // =============================================================================
@@ -108,6 +110,12 @@ const NetworkingResultSchema = z.object({
   queryType: z.string(),
   data: z.unknown(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -141,7 +149,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/networking",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -165,6 +173,15 @@ export const model = {
         "Error-message quality and validation improvements, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -184,6 +201,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const client = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const gateways: z.infer<typeof NatGatewaySchema>[] = [];
@@ -246,6 +264,8 @@ export const model = {
               data: gateways,
               truncated: nextToken !== undefined,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -274,6 +294,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const client = new ElasticLoadBalancingV2Client(
           makeClientConfig(context.globalArgs),
         );
@@ -367,6 +388,8 @@ export const model = {
               data: loadBalancers,
               truncated: marker !== undefined,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -395,6 +418,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const client = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const command = new DescribeAddressesCommand({});
@@ -433,6 +457,8 @@ export const model = {
               queryType: "elastic_ips",
               data: addresses,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -490,6 +516,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.region;
         const cwClient = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
@@ -647,6 +674,8 @@ export const model = {
               queryType: "data_transfer_metrics",
               data,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 

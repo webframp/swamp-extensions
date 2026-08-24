@@ -1,5 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Added Troubleshooting section documenting hardcoded pagination caps without
-truncated indicator, gh CLI auth delegation, no retry logic, JSON trust-cast,
-and GitHub Enterprise configuration.**
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

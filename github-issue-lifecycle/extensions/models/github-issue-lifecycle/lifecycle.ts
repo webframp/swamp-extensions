@@ -28,6 +28,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/github-issue-lifecycle";
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -92,6 +94,15 @@ const StateSchema = z.object({
   transitionedAt: z.string().describe("ISO 8601 timestamp of last transition"),
   startedAt: z.string().describe("When lifecycle tracking began"),
   iteration: z.number().describe("Plan iteration count"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Parsed state data type. */
@@ -113,6 +124,12 @@ const ContextSchema = z.object({
   repo: z.string().describe("Repository the issue belongs to"),
   url: z.string().describe("Full issue URL"),
   fetchedAt: z.string().describe("Timestamp this context was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for issue classification after triage. */
@@ -127,6 +144,15 @@ const ClassificationSchema = z.object({
   component: z.string().optional().describe("Affected component or area"),
   notes: z.string().optional().describe("Triage notes"),
   classifiedAt: z.string().describe("Timestamp the issue was classified"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for implementation plans (versioned). */
@@ -138,6 +164,15 @@ const PlanSchema = z.object({
   risks: z.array(z.string()).optional().describe("Known risks or concerns"),
   feedback: z.string().optional().describe("Feedback from last iteration"),
   createdAt: z.string().describe("Timestamp the plan was created"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for linked pull request metadata. */
@@ -155,6 +190,15 @@ const PullRequestSchema = z.object({
   ),
   retryCount: z.number().default(0)
     .describe("Number of times this PR has failed CI/review"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Parsed pull request data type. */
@@ -322,6 +366,7 @@ async function start(
   args: { issue_number: number },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
 
   // start is special: it creates the initial state. If state already exists,
@@ -365,6 +410,9 @@ async function start(
       repo,
       url: issueData.url ?? "",
       fetchedAt: now,
+
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -378,6 +426,10 @@ async function start(
       transitionedAt: now,
       startedAt: existing?.startedAt ?? now,
       iteration: existing?.iteration ?? 0,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -412,6 +464,7 @@ async function triage(
   },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -430,6 +483,10 @@ async function triage(
       component: args.component,
       notes: args.notes,
       classifiedAt: now,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -443,6 +500,10 @@ async function triage(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -492,6 +553,7 @@ async function plan(
   },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -512,6 +574,10 @@ async function plan(
       risks: args.risks,
       feedback: args.feedback,
       createdAt: now,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -525,6 +591,10 @@ async function plan(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -562,6 +632,7 @@ async function iterate(
   },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -582,6 +653,10 @@ async function iterate(
       risks: args.risks,
       feedback: args.feedback,
       createdAt: now,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -595,6 +670,10 @@ async function iterate(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -617,6 +696,7 @@ async function approve(
   args: { issue_number: number },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -635,6 +715,10 @@ async function approve(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -663,6 +747,7 @@ async function implement(
   args: { issue_number: number; branch?: string },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -681,6 +766,10 @@ async function implement(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -710,6 +799,7 @@ async function linkPr(
   args: { issue_number: number; pr_url: string; branch?: string },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -737,6 +827,10 @@ async function linkPr(
       linkedAt: now,
       status: "open",
       retryCount: existingPr?.retryCount ?? 0,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -750,6 +844,10 @@ async function linkPr(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -776,6 +874,7 @@ async function prMerged(
   args: { issue_number: number },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -799,6 +898,10 @@ async function prMerged(
       linkedAt: existingPr?.linkedAt ?? now,
       status: "merged",
       retryCount: existingPr?.retryCount ?? 0,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -812,6 +915,10 @@ async function prMerged(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -844,6 +951,7 @@ async function prFailed(
   args: { issue_number: number; reason?: string },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -868,6 +976,10 @@ async function prFailed(
       status: "failed",
       failureReason: args.reason,
       retryCount: (existingPr?.retryCount ?? 0) + 1,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -881,6 +993,10 @@ async function prFailed(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -908,6 +1024,7 @@ async function complete(
   args: { issue_number: number; close_issue?: boolean },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const current = await requireStateAndTransition(
     ctx,
@@ -926,6 +1043,10 @@ async function complete(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -955,6 +1076,7 @@ async function close(
   args: { issue_number: number; reason?: string },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo, postComments, syncLabels } = ctx.globalArgs;
   const now = new Date().toISOString();
 
@@ -982,6 +1104,10 @@ async function close(
       transitionedAt: now,
       startedAt: current.startedAt,
       iteration: current.iteration,
+
+      fetchedAt: new Date().toISOString(),
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -1021,6 +1147,7 @@ async function status(
   args: { issue_number: number },
   ctx: MethodContext,
 ): Promise<{ dataHandles: { name: string }[] }> {
+  const startMs = Date.now();
   const { repo } = ctx.globalArgs;
 
   const issueData = await runGhJson([
@@ -1053,6 +1180,9 @@ async function status(
       repo,
       url: (issueData.url as string) ?? "",
       fetchedAt: new Date().toISOString(),
+
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     },
   );
 
@@ -1068,7 +1198,7 @@ async function status(
 
 export const model = {
   type: "@webframp/github-issue-lifecycle" as const,
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

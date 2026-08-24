@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/email-routing";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -40,6 +42,15 @@ const GetDmarcReportsStatusSchema = z.object({
   status: z.unknown().optional(),
   tag: z.string().optional().describe("Use `zone_id` instead"),
   zone_id: z.string().optional().describe("Zone identifier"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateConfigureDmarcReportsSchema = z.object({
@@ -61,6 +72,15 @@ const UpdateConfigureDmarcReportsSchema = z.object({
   status: z.unknown().optional(),
   tag: z.string().optional().describe("Use `zone_id` instead"),
   zone_id: z.string().optional().describe("Zone identifier"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetInspectSpfSchema = z.object({
@@ -75,6 +95,15 @@ const GetInspectSpfSchema = z.object({
   total_lookups: z.number().int().describe(
     "Total number of DNS lookups performed across all includes",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetEmailRoutingSettingsSchema = z.object({
@@ -87,6 +116,15 @@ const GetEmailRoutingSettingsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema = z.object({
@@ -99,6 +137,15 @@ const UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetEmailRoutingSettingsEmailRoutingDnsSettingsSchema = z.union([
@@ -116,6 +163,15 @@ const CreateEmailRoutingSettingsEnableEmailRoutingDnsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateEmailRoutingSettingsUnlockEmailRoutingDnsSchema = z.object({
@@ -128,6 +184,15 @@ const UpdateEmailRoutingSettingsUnlockEmailRoutingDnsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const RoutingRulesItemSchema = z.object({
@@ -145,6 +210,12 @@ const ListRoutingRulesSchema = z.object({
   items: z.array(RoutingRulesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateRoutingRuleSchema = z.object({
@@ -156,6 +227,15 @@ const CreateRoutingRuleSchema = z.object({
   priority: z.unknown().optional(),
   source: z.unknown().optional(),
   tag: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCatchAllRuleSchema = z.object({
@@ -166,6 +246,15 @@ const GetCatchAllRuleSchema = z.object({
   name: z.unknown().optional(),
   source: z.unknown().optional(),
   tag: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetPubliclistsuppressionzoneroutingItemSchema = z.object({
@@ -181,10 +270,25 @@ const GetPubliclistsuppressionzoneroutingSchema = z.object({
   items: z.array(GetPubliclistsuppressionzoneroutingItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreatePostPublicnewsuppressionzoneroutingSchema = z.object({
   id: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetPublicgetsuppressionzoneroutingSchema = z.object({
@@ -194,6 +298,15 @@ const GetPublicgetsuppressionzoneroutingSchema = z.object({
   id: z.string(),
   reason: z.string(),
   zones: z.array(z.string()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SendingSubdomainsItemSchema = z.object({
@@ -219,6 +332,12 @@ const ListSendingSubdomainsSchema = z.object({
   items: z.array(SendingSubdomainsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSendingSubdomainSchema = z.object({
@@ -238,6 +357,15 @@ const CreateSendingSubdomainSchema = z.object({
     "The return-path domain used for bounce handling.",
   ),
   tag: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateEmailSendingSubdomainsPreviewSendingSubdomainSchema = z.object({
@@ -246,6 +374,15 @@ const CreateEmailSendingSubdomainsPreviewSendingSubdomainSchema = z.object({
   ),
   records: z.array(z.unknown()).optional().describe(
     "DNS records that would be created for the subdomain.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -287,6 +424,12 @@ const GetSendingSubdomainDnsSchema = z.object({
   items: z.array(GetSendingSubdomainDnsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const EmailSendingSubdomainsFixSendingSubdomainDnsSchema = z.object({
@@ -300,6 +443,15 @@ const EmailSendingSubdomainsFixSendingSubdomainDnsSchema = z.object({
     .optional().describe(
       "Aggregated DNS state for the subdomain. `unlocked` means desired records exist with correct conte...",
     ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSendingSubdomainDnsStatusSchema = z.object({
@@ -313,6 +465,15 @@ const GetSendingSubdomainDnsStatusSchema = z.object({
     .optional().describe(
       "Aggregated DNS state for the subdomain. `unlocked` means desired records exist with correct conte...",
     ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetPubliclistsuppressionzonesendingItemSchema = z.object({
@@ -328,10 +489,25 @@ const GetPubliclistsuppressionzonesendingSchema = z.object({
   items: z.array(GetPubliclistsuppressionzonesendingItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreatePostPublicnewsuppressionzonesendingSchema = z.object({
   id: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetPublicgetsuppressionzonesendingSchema = z.object({
@@ -341,6 +517,15 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
   id: z.string(),
   reason: z.string(),
   zones: z.array(z.string()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -350,10 +535,17 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
 /** Cloudflare Email Routing — rules, addresses, catch-all, DNS setup */
 export const model = {
   type: "@webframp/cloudflare/email-routing",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "dmarc_reports_status": {
@@ -514,6 +706,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -534,7 +727,12 @@ export const model = {
         const handle = await context.writeResource(
           "dmarc_reports_status",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched dmarc_reports_status", {});
         return { dataHandles: [handle] };
@@ -564,6 +762,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -588,7 +787,12 @@ export const model = {
         const handle = await context.writeResource(
           "configure_dmarc_reports",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated configure_dmarc_reports", {});
         return { dataHandles: [handle] };
@@ -611,6 +815,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -631,7 +836,12 @@ export const model = {
         const handle = await context.writeResource(
           "inspect_spf",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched inspect_spf", {});
         return { dataHandles: [handle] };
@@ -654,6 +864,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -674,7 +885,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_routing_settings",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched email_routing_settings", {});
         return { dataHandles: [handle] };
@@ -710,6 +926,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -734,7 +951,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_routing_settings_replace_email_routing_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated email_routing_settings_replace_email_routing_settings",
@@ -773,6 +995,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -797,7 +1020,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_routing_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated email_routing_settings", {});
         return { dataHandles: [handle] };
@@ -822,6 +1050,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -842,7 +1071,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_routing_settings_email_routing_dns_settings",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched email_routing_settings_email_routing_dns_settings",
@@ -870,6 +1104,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -895,7 +1130,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_routing_settings_enable_email_routing_dns",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created email_routing_settings_enable_email_routing_dns {id}",
@@ -923,6 +1163,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -947,7 +1188,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_routing_settings_unlock_email_routing_dns",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated email_routing_settings_unlock_email_routing_dns",
@@ -1016,6 +1262,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1053,6 +1300,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} routing_rules", {
@@ -1086,6 +1335,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1108,7 +1358,12 @@ export const model = {
         }
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("routing_rule", id, result);
+        const handle = await context.writeResource("routing_rule", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created routing_rule {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1130,6 +1385,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1150,7 +1406,12 @@ export const model = {
         const handle = await context.writeResource(
           "catch_all_rule",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched catch_all_rule", {});
         return { dataHandles: [handle] };
@@ -1180,6 +1441,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1204,7 +1466,12 @@ export const model = {
         const handle = await context.writeResource(
           "catch_all_rule",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated catch_all_rule", {});
         return { dataHandles: [handle] };
@@ -1229,6 +1496,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1249,7 +1517,12 @@ export const model = {
         const handle = await context.writeResource(
           "routing_rule",
           String(args.rule_identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched routing_rule", {});
         return { dataHandles: [handle] };
@@ -1281,6 +1554,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1309,7 +1583,12 @@ export const model = {
         const handle = await context.writeResource(
           "routing_rule",
           String(args.rule_identifier),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated routing_rule", {});
         return { dataHandles: [handle] };
@@ -1378,6 +1657,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1418,6 +1698,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1450,6 +1732,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1475,7 +1758,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_publicnewsuppressionzonerouting",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_publicnewsuppressionzonerouting {id}",
@@ -1503,6 +1791,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1523,7 +1812,12 @@ export const model = {
         const handle = await context.writeResource(
           "publicgetsuppressionzonerouting",
           String(args.suppression_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched publicgetsuppressionzonerouting", {});
         return { dataHandles: [handle] };
@@ -1587,6 +1881,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1627,6 +1922,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1657,6 +1954,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1682,7 +1980,12 @@ export const model = {
         const handle = await context.writeResource(
           "sending_subdomain",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created sending_subdomain {id}", { id });
         return { dataHandles: [handle] };
@@ -1709,6 +2012,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1734,7 +2038,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_sending_subdomains_preview_sending_subdomain",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created email_sending_subdomains_preview_sending_subdomain {id}",
@@ -1762,6 +2071,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1782,7 +2092,12 @@ export const model = {
         const handle = await context.writeResource(
           "sending_subdomain",
           String(args.subdomain_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sending_subdomain", {});
         return { dataHandles: [handle] };
@@ -1810,6 +2125,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1838,7 +2154,12 @@ export const model = {
         const handle = await context.writeResource(
           "sending_subdomain",
           String(args.subdomain_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated sending_subdomain", {});
         return { dataHandles: [handle] };
@@ -1902,6 +2223,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["subdomain_id", "page", "per_page"]);
@@ -1942,6 +2264,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1970,6 +2294,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -1991,7 +2316,12 @@ export const model = {
         const handle = await context.writeResource(
           "email_sending_subdomains_fix_sending_subdomain_dns",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed email_sending_subdomains_fix_sending_subdomain_dns",
@@ -2019,6 +2349,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2039,7 +2370,12 @@ export const model = {
         const handle = await context.writeResource(
           "sending_subdomain_dns_status",
           String(args.subdomain_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sending_subdomain_dns_status", {});
         return { dataHandles: [handle] };
@@ -2067,6 +2403,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -2107,6 +2444,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -2139,6 +2478,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -2164,7 +2504,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_publicnewsuppressionzonesending",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_publicnewsuppressionzonesending {id}",
@@ -2192,6 +2537,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -2212,7 +2558,12 @@ export const model = {
         const handle = await context.writeResource(
           "publicgetsuppressionzonesending",
           String(args.suppression_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched publicgetsuppressionzonesending", {});
         return { dataHandles: [handle] };

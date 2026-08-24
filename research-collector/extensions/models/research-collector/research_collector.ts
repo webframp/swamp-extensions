@@ -10,6 +10,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/research-collector";
+
 const GlobalArgsSchema = z.object({
   hnCount: z.number().int().min(5).max(50).default(20)
     .describe("Number of Hacker News front-page stories to fetch"),
@@ -133,30 +135,72 @@ const ResearchBriefSchema = z.object({
   hnFrontPage: z.object({
     stories: z.array(HnItemSchema),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   }),
   lobstersHottest: z.object({
     stories: z.array(LobstersItemSchema),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   }),
   sreWeekly: z.object({
     items: z.array(SreWeeklyItemSchema),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   }),
   ifin: z.object({
     topics: z.array(IfinTopicSchema),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   }),
   redmonk: z.object({
     items: z.array(RedmonkItemSchema),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   }),
   arxiv: z.object({
     entries: z.array(ArxivEntrySchema),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   }),
   aiDailyBrief: z.object({
     editions: z.array(AiDailyBriefEditionSchema),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   }),
   config: z.object({
     hnCount: z.number(),
@@ -168,6 +212,12 @@ const ResearchBriefSchema = z.object({
     aiDailyBriefDays: z.number(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** A single scored item in the digest, normalized across sources. */
@@ -214,6 +264,12 @@ const DigestSchema = z.object({
   sourceCount: z.number().int().describe("Number of sources contributing"),
   briefFetchedAt: z.string().describe("fetchedAt of the source brief"),
   digestAt: z.string().describe("When this digest was built"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 async function fetchJson(url: string): Promise<unknown> {
@@ -599,6 +655,7 @@ async function buildDigest(
 ): Promise<
   { dataHandles: { spec: string; instance: string; name: string }[] }
 > {
+  const startMs = Date.now();
   if (!ctx.readResource) {
     throw new Error(
       "digest requires a readResource context (none provided)",
@@ -731,6 +788,9 @@ async function buildDigest(
       .length,
     briefFetchedAt,
     digestAt: new Date().toISOString(),
+
+    durationMs: Date.now() - startMs,
+    collectedBy: EXTENSION_NAME,
   });
   ctx.logger.info(
     `Digest: ${topItems.length} top items, ${topics.length} cross-source topics, ${newCount} new since last digest`,
@@ -745,6 +805,7 @@ async function gatherAll(
 ): Promise<
   { dataHandles: { spec: string; instance: string; name: string }[] }
 > {
+  const startMs = Date.now();
   const cfg = ctx.globalArgs;
   ctx.logger.info("Gathering research data from all sources");
   // Each source is independently wrapped so a single source failure
@@ -805,6 +866,9 @@ async function gatherAll(
       aiDailyBriefDays: cfg.aiDailyBriefDays,
     },
     fetchedAt: new Date().toISOString(),
+
+    durationMs: Date.now() - startMs,
+    collectedBy: EXTENSION_NAME,
   });
   ctx.logger.info(
     `Gathered ${hn.stories.length} HN, ${lobsters.stories.length} Lobste.rs, ` +
@@ -817,7 +881,7 @@ async function gatherAll(
 /** Research data collector model. */
 export const model = {
   type: "@webframp/research-collector" as const,
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -848,6 +912,15 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Logs the underlying error when a source fails to gather instead of silently discarding it. No schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

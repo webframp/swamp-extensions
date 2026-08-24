@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/sbom";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -23,12 +25,30 @@ const GlobalArgsSchema = z.object({
 const CreateSbomTestRunSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSbomTestStatusSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   status: z.enum(["processing", "error", "finished"]).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSbomTestResultSchema = z.object({
@@ -36,6 +56,15 @@ const GetSbomTestResultSchema = z.object({
   type: z.string().optional(),
   affected_packages_id: z.string().optional().describe(
     "Related affected_packages ID",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -46,10 +75,17 @@ const GetSbomTestResultSchema = z.object({
 /** Snyk SBOM — software bill of materials testing and analysis */
 export const model = {
   type: "@webframp/snyk/sbom",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "sbom_test_run": {
@@ -95,6 +131,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -111,7 +148,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("sbom_test_run", id, result);
+        const handle = await context.writeResource("sbom_test_run", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created sbom_test_run {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -137,6 +179,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -148,7 +191,12 @@ export const model = {
         const handle = await context.writeResource(
           "sbom_test_status",
           String(args.job_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sbom_test_status", {});
         return { dataHandles: [handle] };
@@ -175,6 +223,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -186,7 +235,12 @@ export const model = {
         const handle = await context.writeResource(
           "sbom_test_result",
           String(args.job_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sbom_test_result", {});
         return { dataHandles: [handle] };

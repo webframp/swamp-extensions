@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/elasticache-datastore-bootstrap"
-version: "2026.08.23.1"
+version: "2026.08.24.1"
 description: |
   One-shot bootstrap for @webframp/valkey-datastore targeting AWS ElastiCache
   Serverless (Valkey). Creates a serverless cache, a VPC security group for

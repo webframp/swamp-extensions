@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/waiting-room";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -54,6 +56,12 @@ const ListWaitingRoomsSchema = z.object({
   items: z.array(WaitingRoomsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateWaitingRoomSchema = z.object({
@@ -83,18 +91,54 @@ const CreateWaitingRoomSchema = z.object({
   total_active_users: z.unknown().optional(),
   turnstile_action: z.unknown().optional(),
   turnstile_mode: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateACustomWaitingRoomPagePreviewSchema = z.object({
   preview_url: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZoneSettingsSchema = z.object({
   search_engine_crawler_bypass: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchZoneSettingsSchema = z.object({
   search_engine_crawler_bypass: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetWaitingRoomWaitingRoomDetailsSchema = z.object({
@@ -124,6 +168,15 @@ const GetWaitingRoomWaitingRoomDetailsSchema = z.object({
   total_active_users: z.unknown().optional(),
   turnstile_action: z.unknown().optional(),
   turnstile_mode: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchWaitingRoomSchema = z.object({
@@ -153,6 +206,15 @@ const PatchWaitingRoomSchema = z.object({
   total_active_users: z.unknown().optional(),
   turnstile_action: z.unknown().optional(),
   turnstile_mode: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const EventsItemSchema = z.object({
@@ -180,6 +242,12 @@ const ListEventsSchema = z.object({
   items: z.array(EventsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateEventSchema = z.object({
@@ -201,6 +269,15 @@ const CreateEventSchema = z.object({
   total_active_users: z.unknown().optional(),
   turnstile_action: z.unknown().optional(),
   turnstile_mode: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetWaitingRoomEventDetailsSchema = z.object({
@@ -222,6 +299,15 @@ const GetWaitingRoomEventDetailsSchema = z.object({
   total_active_users: z.unknown().optional(),
   turnstile_action: z.unknown().optional(),
   turnstile_mode: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchEventSchema = z.object({
@@ -243,6 +329,15 @@ const PatchEventSchema = z.object({
   total_active_users: z.unknown().optional(),
   turnstile_action: z.unknown().optional(),
   turnstile_mode: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetWaitingRoomPreviewActiveEventDetailsSchema = z.object({
@@ -262,6 +357,15 @@ const GetWaitingRoomPreviewActiveEventDetailsSchema = z.object({
   shuffle_at_event_start: z.unknown().optional(),
   suspended: z.unknown().optional(),
   total_active_users: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WaitingRoomRulesItemSchema = z.object({
@@ -278,6 +382,12 @@ const ListWaitingRoomRulesSchema = z.object({
   items: z.array(WaitingRoomRulesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateWaitingRoomRuleSchema = z.object({
@@ -288,6 +398,15 @@ const CreateWaitingRoomRuleSchema = z.object({
   id: z.unknown().optional(),
   last_updated: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateWaitingRoomReplaceWaitingRoomRulesSchema = z.object({
@@ -298,6 +417,15 @@ const UpdateWaitingRoomReplaceWaitingRoomRulesSchema = z.object({
   id: z.unknown().optional(),
   last_updated: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchWaitingRoomRuleSchema = z.object({
@@ -308,6 +436,15 @@ const PatchWaitingRoomRuleSchema = z.object({
   id: z.unknown().optional(),
   last_updated: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetWaitingRoomStatusSchema = z.object({
@@ -316,6 +453,15 @@ const GetWaitingRoomStatusSchema = z.object({
   event_id: z.unknown().optional(),
   max_estimated_time_minutes: z.unknown().optional(),
   status: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -325,10 +471,17 @@ const GetWaitingRoomStatusSchema = z.object({
 /** Cloudflare Waiting Room — traffic queuing, rules, events, analytics */
 export const model = {
   type: "@webframp/cloudflare/waiting-room",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "waiting_rooms": {
@@ -453,6 +606,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -479,6 +633,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} waiting_rooms", {
@@ -526,6 +682,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -538,7 +695,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("waiting_room", id, result);
+        const handle = await context.writeResource("waiting_room", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created waiting_room {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -562,6 +724,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -577,7 +740,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_custom_waiting_room_page_preview",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created a_custom_waiting_room_page_preview {id}", {
           id,
@@ -602,6 +770,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -612,7 +781,12 @@ export const model = {
         const handle = await context.writeResource(
           "zone_settings",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched zone_settings", {});
         return { dataHandles: [handle] };
@@ -637,6 +811,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -651,7 +826,12 @@ export const model = {
         const handle = await context.writeResource(
           "zone_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated zone_settings", {});
         return { dataHandles: [handle] };
@@ -676,6 +856,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -690,7 +871,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_zone_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_zone_settings", {});
         return { dataHandles: [handle] };
@@ -715,6 +901,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -725,7 +912,12 @@ export const model = {
         const handle = await context.writeResource(
           "waiting_room_waiting_room_details",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched waiting_room_waiting_room_details", {});
         return { dataHandles: [handle] };
@@ -771,6 +963,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -789,7 +982,12 @@ export const model = {
         const handle = await context.writeResource(
           "waiting_room",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated waiting_room", {});
         return { dataHandles: [handle] };
@@ -835,6 +1033,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -853,7 +1052,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_waiting_room",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_waiting_room", {});
         return { dataHandles: [handle] };
@@ -910,6 +1114,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["waiting_room_id", "page", "per_page"]);
@@ -936,6 +1141,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} events", { count: results.length });
@@ -976,6 +1183,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -992,7 +1200,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("event", id, result);
+        const handle = await context.writeResource("event", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created event {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1017,6 +1230,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1027,7 +1241,12 @@ export const model = {
         const handle = await context.writeResource(
           "waiting_room_event_details",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched waiting_room_event_details", {});
         return { dataHandles: [handle] };
@@ -1068,6 +1287,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1086,7 +1306,12 @@ export const model = {
         const handle = await context.writeResource(
           "event",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated event", {});
         return { dataHandles: [handle] };
@@ -1127,6 +1352,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1145,7 +1371,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_event",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_event", {});
         return { dataHandles: [handle] };
@@ -1204,6 +1435,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1214,7 +1446,12 @@ export const model = {
         const handle = await context.writeResource(
           "waiting_room_preview_active_event_details",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched waiting_room_preview_active_event_details",
@@ -1242,6 +1479,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["waiting_room_id", "page", "per_page"]);
@@ -1271,6 +1509,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1303,6 +1543,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1322,7 +1563,12 @@ export const model = {
         const handle = await context.writeResource(
           "waiting_room_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created waiting_room_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -1347,6 +1593,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1365,7 +1612,12 @@ export const model = {
         const handle = await context.writeResource(
           "waiting_room_replace_waiting_room_rules",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated waiting_room_replace_waiting_room_rules",
@@ -1399,6 +1651,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1417,7 +1670,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_waiting_room_rule",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_waiting_room_rule", {});
         return { dataHandles: [handle] };
@@ -1475,6 +1733,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1485,7 +1744,12 @@ export const model = {
         const handle = await context.writeResource(
           "waiting_room_status",
           String(args.waiting_room_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched waiting_room_status", {});
         return { dataHandles: [handle] };

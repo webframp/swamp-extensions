@@ -22,6 +22,8 @@ import {
 } from "npm:@aws-sdk/client-cloudwatch-logs@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/logs";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -56,6 +58,12 @@ const LogGroupListSchema = z.object({
   logGroups: z.array(LogGroupSchema),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const LogEventSchema = z.object({
@@ -74,6 +82,12 @@ const LogQueryResultSchema = z.object({
     bytesScanned: z.number(),
   }).nullable(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ErrorPatternSchema = z.object({
@@ -93,6 +107,12 @@ const ErrorAnalysisSchema = z.object({
   totalErrors: z.number(),
   patterns: z.array(ErrorPatternSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -278,7 +298,7 @@ async function waitForQueryCompletion(
  */
 export const model = {
   type: "@webframp/aws/logs",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -315,6 +335,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -367,6 +396,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = makeClient(context.globalArgs);
         try {
           const logGroups: z.infer<typeof LogGroupSchema>[] = [];
@@ -422,6 +452,8 @@ export const model = {
               logGroups,
               count: logGroups.length,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -489,6 +521,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = makeClient(context.globalArgs);
         try {
           const startTime = parseRelativeTime(args.startTime);
@@ -549,6 +582,8 @@ export const model = {
               results,
               statistics,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -617,6 +652,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = makeClient(context.globalArgs);
         try {
           const startTime = parseRelativeTime(args.startTime);
@@ -745,6 +781,8 @@ export const model = {
               totalErrors: results.length,
               patterns,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -800,6 +838,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = makeClient(context.globalArgs);
         try {
           const startTime = parseRelativeTime(args.startTime);
@@ -864,6 +903,8 @@ export const model = {
                 bytesScanned: 0,
               },
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/kv"
-version: "2026.08.21.3"
+version: "2026.08.24.1"
 description: "Cloudflare Workers KV — namespaces, keys, values, bulk operations"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

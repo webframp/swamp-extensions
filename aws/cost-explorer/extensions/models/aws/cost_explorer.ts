@@ -16,6 +16,8 @@ import {
 } from "npm:@aws-sdk/client-cost-explorer@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/cost-explorer";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -66,6 +68,12 @@ const CostTrendOutputSchema = z.object({
   totalCost: z.number(),
   days: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CostByServiceItemSchema = z.object({
@@ -80,6 +88,12 @@ const CostByServiceOutputSchema = z.object({
   totalCost: z.number(),
   days: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CostByUsageTypeItemSchema = z.object({
@@ -94,6 +108,12 @@ const CostByUsageTypeOutputSchema = z.object({
   totalCost: z.number(),
   days: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CostDriverItemSchema = z.object({
@@ -108,6 +128,12 @@ const CostDriversOutputSchema = z.object({
   totalCost: z.number(),
   days: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CostComparisonServiceSchema = z.object({
@@ -134,6 +160,12 @@ const CostComparisonOutputSchema = z.object({
   services: z.array(CostComparisonServiceSchema),
   days: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -183,7 +215,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -314,6 +346,15 @@ export const model = {
         "Error-message quality pass: no schema changes to stored resources",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -366,6 +407,7 @@ export const model = {
         args: { days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const client = new CostExplorerClient(
           makeClientConfig(context.globalArgs),
         );
@@ -429,6 +471,8 @@ export const model = {
               totalCost: Math.round(totalCost * 100) / 100,
               days: args.days,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -461,6 +505,7 @@ export const model = {
         args: { service: string; days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const client = new CostExplorerClient(
           makeClientConfig(context.globalArgs),
         );
@@ -527,6 +572,8 @@ export const model = {
               totalCost: Math.round(totalCost * 100) / 100,
               days: args.days,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -561,6 +608,7 @@ export const model = {
         args: { days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const client = new CostExplorerClient(
           makeClientConfig(context.globalArgs),
         );
@@ -636,6 +684,8 @@ export const model = {
               totalCost,
               days: args.days,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -673,6 +723,7 @@ export const model = {
         args: { days: number; limit: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const client = new CostExplorerClient(
           makeClientConfig(context.globalArgs),
         );
@@ -748,6 +799,8 @@ export const model = {
               totalCost: Math.round(totalCost * 100) / 100,
               days: args.days,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -778,6 +831,7 @@ export const model = {
         args: { days: number },
         context: MethodContext,
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const client = new CostExplorerClient(
           makeClientConfig(context.globalArgs),
         );
@@ -898,6 +952,8 @@ export const model = {
               services,
               days: args.days,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 

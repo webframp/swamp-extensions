@@ -14,6 +14,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/extension-maintenance";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -95,6 +97,15 @@ const AuditSummarySchema = z.object({
   extensions: z.array(ExtensionStatusSchema).describe(
     "Per-extension dependency and quality status",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for a single extension's planned bump entry. */
@@ -132,6 +143,15 @@ const BumpPlanSchema = z.object({
   })).describe(
     "Extensions that are stale but excluded from the plan (e.g. test-only changes)",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for the apply-bump result resource. */
@@ -161,6 +181,15 @@ const ApplyResultSchema = z.object({
     ),
     error: z.string().describe("Error message describing the failure"),
   })).describe("Per-extension errors encountered while applying the plan"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for the quality-gate result resource. */
@@ -188,6 +217,15 @@ const QualityResultSchema = z.object({
       "Human-readable descriptions of every failing check",
     ),
   })).describe("Per-extension quality gate results"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -834,7 +872,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -888,6 +926,7 @@ export const model = {
           };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const { repo_root } = context.globalArgs;
         const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
 
@@ -1038,6 +1077,9 @@ export const model = {
             directSpecifiers: directSpecCount,
           },
           extensions,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
         return { dataHandles: [handle] };
       },
@@ -1073,6 +1115,7 @@ export const model = {
           };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const audit = await context.readResource("current-audit");
         if (!audit) {
           throw new Error(
@@ -1302,6 +1345,9 @@ export const model = {
           totalEntries: entries.length,
           entries,
           skipped,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
         return { dataHandles: [handle] };
       },
@@ -1335,6 +1381,7 @@ export const model = {
           };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const { repo_root } = context.globalArgs;
         const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
 
@@ -1517,6 +1564,9 @@ export const model = {
           filesModified,
           filesMatched,
           errors,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
         return { dataHandles: [handle] };
       },
@@ -1550,6 +1600,7 @@ export const model = {
           };
         },
       ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
         const { repo_root } = context.globalArgs;
         const resolvedRoot = repo_root === "." ? Deno.cwd() : repo_root;
 
@@ -1674,6 +1725,9 @@ export const model = {
             passed,
             failed,
             results,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
         return { dataHandles: [handle] };

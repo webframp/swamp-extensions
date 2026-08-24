@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/logs";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -25,11 +27,30 @@ const GlobalArgsSchema = z.object({
     .describe("Datadog site"),
 });
 
-const SubmitLogSchema = z.object({});
+const SubmitLogSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const AggregateLogsSchema = z.object({
   buckets: z.array(z.unknown()).optional().describe(
     "The list of matching buckets, one item per bucket",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -61,6 +82,12 @@ const ListLogsGetSchema = z.object({
   items: z.array(LogsGetItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const LogsItemSchema = z.object({
@@ -91,6 +118,12 @@ const ListLogsSchema = z.object({
   items: z.array(LogsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -100,10 +133,17 @@ const ListLogsSchema = z.object({
 /** Datadog Logs — log search, aggregation, and analytics */
 export const model = {
   type: "@webframp/datadog/logs",
-  version: "2026.07.20.11",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "submit_log": {
@@ -157,6 +197,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -178,7 +219,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("submit_log", id, result);
+        const handle = await context.writeResource("submit_log", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created submit_log {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -216,6 +262,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -236,7 +283,12 @@ export const model = {
         const handle = await context.writeResource(
           "aggregate_logs",
           id,
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed aggregate_logs", {});
         return { dataHandles: [handle] };
@@ -276,6 +328,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -319,6 +372,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} logs_get", {
@@ -357,6 +412,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -384,6 +440,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} logs", { count: results.length });

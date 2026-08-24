@@ -19,6 +19,8 @@ import {
 } from "npm:@aws-sdk/client-cloudwatch@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/alarms";
+
 const MAX_PAGES = 10;
 
 // =============================================================================
@@ -83,6 +85,12 @@ const AlarmListSchema = z.object({
   count: z.number(),
   stateFilter: z.string().nullable(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AlarmHistoryEntrySchema = z.object({
@@ -102,6 +110,12 @@ const AlarmHistorySchema = z.object({
     end: z.string(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AlarmSummarySchema = z.object({
@@ -117,6 +131,12 @@ const AlarmSummarySchema = z.object({
     timestamp: z.string(),
   })),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -167,7 +187,7 @@ interface AwsDimension {
  */
 export const model = {
   type: "@webframp/aws/alarms",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -194,6 +214,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -258,6 +287,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -314,6 +344,8 @@ export const model = {
               count: alarms.length,
               stateFilter: args.stateValue || null,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -351,6 +383,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -392,6 +425,8 @@ export const model = {
             count: alarms.length,
             stateFilter: "ALARM",
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
 
           context.logger.info("Found {count} active alarms", {
@@ -454,6 +489,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -513,6 +549,8 @@ export const model = {
                 end: endTime.toISOString(),
               },
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -557,6 +595,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -672,6 +711,8 @@ export const model = {
               byNamespace,
               recentStateChanges: recentChanges,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 

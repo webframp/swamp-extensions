@@ -1,8 +1,8 @@
-## 2026.08.23.1
+## 2026.08.24.1
 
-**Changed:** Documentation only — no code changes. Added a `## Troubleshooting`
-section covering the `Deno.errors.NotFound` rewrite when `aws` isn't on PATH,
-the 60s `waitForTableActive` timeout, the TOCTOU race handling in `ensurePolicy`
-(`EntityAlreadyExists`), and `sts
-get-caller-identity` failures from
-missing/expired credentials.
+**Added:** Output metadata attributes for observability.
+
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that
+  previously lacked it).

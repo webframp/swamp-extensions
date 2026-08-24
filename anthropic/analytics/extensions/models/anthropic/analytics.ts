@@ -15,6 +15,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/anthropic/analytics";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -47,6 +49,12 @@ const AnalyticsSnapshotSchema = z.object({
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when this snapshot was fetched",
   ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SeatCountSchema = z.object({
@@ -62,6 +70,12 @@ const SeatCountSchema = z.object({
   mau: z.number().nullable().describe("Monthly active user count"),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when this seat count was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -87,6 +101,12 @@ const AdoptionMetricsSchema = z.object({
   ),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when adoption metrics were fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -119,6 +139,12 @@ const CostSchema = z.object({
   ),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when cost data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -215,6 +241,12 @@ const UserUsageSchema = z.object({
   ),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when this usage data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -382,7 +414,7 @@ function usedAcrossProducts(user: any, field: string): boolean {
 /** Claude Enterprise Analytics — seat counts, adoption, DAU/WAU/MAU, and cost via the Analytics API. */
 export const model = {
   type: "@webframp/anthropic/analytics",
-  version: "2026.08.14.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -395,6 +427,15 @@ export const model = {
       description:
         "Add discountRate global arg; cost and userUsage resources gain " +
         "a discountRate field, userUsage gains a totals field",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -453,6 +494,7 @@ export const model = {
         args: { startDate?: string; endDate?: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.analyticsKey;
         const nowIso = new Date().toISOString();
         const startDate = args.startDate ?? daysAgoYmd(7);
@@ -482,6 +524,8 @@ export const model = {
             count: summaries.length,
             dataRefreshedAt: summaryData.data_refreshed_at ?? null,
             fetchedAt: nowIso,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           }),
         );
 
@@ -506,6 +550,8 @@ export const model = {
             wau: num(latest?.weekly_active_user_count),
             mau: num(latest?.monthly_active_user_count),
             fetchedAt: nowIso,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           }),
         );
 
@@ -539,6 +585,8 @@ export const model = {
               connectors: has ? connectors : null,
               collected: true,
               fetchedAt: nowIso,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             }),
           );
         } catch (err) {
@@ -553,6 +601,8 @@ export const model = {
               connectors: null,
               collected: false,
               fetchedAt: nowIso,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             }),
           );
         }
@@ -601,6 +651,8 @@ export const model = {
               dataRefreshedAt: dataRefreshedAt ?? null,
               collected: true,
               fetchedAt: nowIso,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             }),
           );
         } catch (err) {
@@ -620,6 +672,8 @@ export const model = {
               dataRefreshedAt: null,
               collected: false,
               fetchedAt: nowIso,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             }),
           );
         }
@@ -666,6 +720,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.analyticsKey;
         const nowIso = new Date().toISOString();
         const start = args.startDate ?? daysAgoYmd(args.days ?? 30);
@@ -895,6 +950,8 @@ export const model = {
           collected,
           error: usageOk && costOk ? null : errorMsg,
           fetchedAt: nowIso,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
         ctx.logger.info(
           "Collected per-user usage: {count} user(s) over {start}..{end}",

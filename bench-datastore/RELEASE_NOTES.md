@@ -1,5 +1,8 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Fixed development section to use standard deno commands. Added Troubleshooting
-section documenting intentional no-retry design, setup idempotency, subprocess
-timeout absence, correct --global-arg flag, and external datastore selection.**
+**Added:** Output metadata attributes for observability.
+
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that
+  previously lacked it).

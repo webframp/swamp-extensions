@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/load-balancing";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -52,6 +54,12 @@ const ListAccountLoadBalancersSchema = z.object({
   items: z.array(AccountLoadBalancersItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAccountLoadBalancerSchema = z.object({
@@ -79,6 +87,15 @@ const CreateAccountLoadBalancerSchema = z.object({
   steering_policy: z.unknown().optional(),
   ttl: z.unknown().optional(),
   zone_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MonitorGroupsItemSchema = z.object({
@@ -97,6 +114,12 @@ const ListMonitorGroupsSchema = z.object({
   items: z.array(MonitorGroupsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateMonitorGroupSchema = z.object({
@@ -108,6 +131,15 @@ const CreateMonitorGroupSchema = z.object({
   members: z.array(z.unknown()).describe("List of monitors in this group"),
   modified_on: z.string().optional().describe(
     "The timestamp of when the monitor group was last updated",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -121,6 +153,15 @@ const GetAccountLoadBalancerMonitorGroupsMonitorGroupDetailsSchema = z.object({
   modified_on: z.string().optional().describe(
     "The timestamp of when the monitor group was last updated",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchMonitorGroupSchema = z.object({
@@ -132,6 +173,15 @@ const PatchMonitorGroupSchema = z.object({
   members: z.array(z.unknown()).describe("List of monitors in this group"),
   modified_on: z.string().optional().describe(
     "The timestamp of when the monitor group was last updated",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -146,6 +196,12 @@ const ListMonitorGroupReferencesSchema = z.object({
   items: z.array(MonitorGroupReferencesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MonitorsItemSchema = z.object({
@@ -174,6 +230,12 @@ const ListMonitorsSchema = z.object({
   items: z.array(MonitorsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateMonitorSchema = z.object({
@@ -196,6 +258,15 @@ const CreateMonitorSchema = z.object({
   created_on: z.unknown().optional(),
   id: z.unknown().optional(),
   modified_on: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAccountLoadBalancerMonitorsMonitorDetailsSchema = z.object({
@@ -218,6 +289,15 @@ const GetAccountLoadBalancerMonitorsMonitorDetailsSchema = z.object({
   created_on: z.unknown().optional(),
   id: z.unknown().optional(),
   modified_on: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchMonitorSchema = z.object({
@@ -240,6 +320,15 @@ const PatchMonitorSchema = z.object({
   created_on: z.unknown().optional(),
   id: z.unknown().optional(),
   modified_on: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAccountLoadBalancerMonitorsPreviewMonitorSchema = z.object({
@@ -247,6 +336,15 @@ const CreateAccountLoadBalancerMonitorsPreviewMonitorSchema = z.object({
     "Monitored pool IDs mapped to their respective names.",
   ),
   preview_id: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MonitorReferencesItemSchema = z.object({
@@ -260,6 +358,12 @@ const ListMonitorReferencesSchema = z.object({
   items: z.array(MonitorReferencesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PoolsItemSchema = z.object({
@@ -288,6 +392,12 @@ const ListPoolsSchema = z.object({
   items: z.array(PoolsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreatePoolSchema = z.object({
@@ -310,6 +420,15 @@ const CreatePoolSchema = z.object({
   notification_filter: z.unknown().optional(),
   origin_steering: z.unknown().optional(),
   origins: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchPoolsSchema = z.object({
@@ -332,6 +451,15 @@ const PatchPoolsSchema = z.object({
   notification_filter: z.unknown().optional(),
   origin_steering: z.unknown().optional(),
   origins: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAccountLoadBalancerPoolsPoolDetailsSchema = z.object({
@@ -354,6 +482,15 @@ const GetAccountLoadBalancerPoolsPoolDetailsSchema = z.object({
   notification_filter: z.unknown().optional(),
   origin_steering: z.unknown().optional(),
   origins: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchPoolSchema = z.object({
@@ -376,6 +513,15 @@ const PatchPoolSchema = z.object({
   notification_filter: z.unknown().optional(),
   origin_steering: z.unknown().optional(),
   origins: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAccountLoadBalancerPoolsPoolHealthDetailsSchema = z.object({
@@ -384,6 +530,15 @@ const GetAccountLoadBalancerPoolsPoolHealthDetailsSchema = z.object({
     healthy: z.boolean().optional(),
     origins: z.array(z.unknown()).optional(),
   }).optional().describe("List of regions and associated health status."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAccountLoadBalancerPoolsPreviewPoolSchema = z.object({
@@ -391,6 +546,15 @@ const CreateAccountLoadBalancerPoolsPreviewPoolSchema = z.object({
     "Monitored pool IDs mapped to their respective names.",
   ),
   preview_id: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PoolReferencesItemSchema = z.object({
@@ -404,6 +568,12 @@ const ListPoolReferencesSchema = z.object({
   items: z.array(PoolReferencesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAccountLoadBalancerMonitorsPreviewResultSchema = z.record(
@@ -414,13 +584,42 @@ const GetAccountLoadBalancerMonitorsPreviewResultSchema = z.record(
   }),
 );
 
-const ListRegionsSchema = z.object({});
+const ListRegionsSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const GetRegionSchema = z.object({});
+const GetRegionSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const GetAccountLoadBalancerSearchSearchResourcesSchema = z.object({
   resources: z.array(z.unknown()).optional().describe(
     "A list of resources matching the search query.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -439,6 +638,15 @@ const ListLoadBalancerUsageSchema = z.object({
     "The number of configured origins across all pools.",
   ),
   pools: z.number().int().describe("The number of configured pools."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAccountLoadBalancersAccountLoadBalancerDetailsSchema = z.object({
@@ -466,6 +674,15 @@ const GetAccountLoadBalancersAccountLoadBalancerDetailsSchema = z.object({
   steering_policy: z.unknown().optional(),
   ttl: z.unknown().optional(),
   zone_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchAccountLoadBalancerSchema = z.object({
@@ -493,6 +710,15 @@ const PatchAccountLoadBalancerSchema = z.object({
   steering_policy: z.unknown().optional(),
   ttl: z.unknown().optional(),
   zone_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const LoadBalancersItemSchema = z.object({
@@ -526,6 +752,12 @@ const ListLoadBalancersSchema = z.object({
   items: z.array(LoadBalancersItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateLoadBalancerSchema = z.object({
@@ -553,6 +785,15 @@ const CreateLoadBalancerSchema = z.object({
   steering_policy: z.unknown().optional(),
   ttl: z.unknown().optional(),
   zone_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetLoadBalancersLoadBalancerDetailsSchema = z.object({
@@ -580,6 +821,15 @@ const GetLoadBalancersLoadBalancerDetailsSchema = z.object({
   steering_policy: z.unknown().optional(),
   ttl: z.unknown().optional(),
   zone_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchLoadBalancerSchema = z.object({
@@ -607,6 +857,15 @@ const PatchLoadBalancerSchema = z.object({
   steering_policy: z.unknown().optional(),
   ttl: z.unknown().optional(),
   zone_name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -616,10 +875,17 @@ const PatchLoadBalancerSchema = z.object({
 /** Cloudflare Load Balancing — pools, monitors, load balancers, steering policies */
 export const model = {
   type: "@webframp/cloudflare/load-balancing",
-  version: "2026.07.27.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "account_load_balancers": {
@@ -834,6 +1100,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -863,6 +1130,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -909,6 +1178,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -924,7 +1194,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created account_load_balancer {id}", { id });
         return { dataHandles: [handle] };
@@ -947,6 +1222,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -973,6 +1249,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} monitor_groups", {
@@ -1011,6 +1289,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1023,7 +1302,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("monitor_group", id, result);
+        const handle = await context.writeResource("monitor_group", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created monitor_group {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1049,6 +1333,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1059,7 +1344,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_monitor_groups_monitor_group_details",
           String(args.monitor_group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched account_load_balancer_monitor_groups_monitor_group_details",
@@ -1101,6 +1391,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1119,7 +1410,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor_group",
           String(args.monitor_group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated monitor_group", {});
         return { dataHandles: [handle] };
@@ -1158,6 +1454,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1176,7 +1473,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_monitor_group",
           String(args.monitor_group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_monitor_group", {});
         return { dataHandles: [handle] };
@@ -1237,6 +1539,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["monitor_group_id", "page", "per_page"]);
@@ -1266,6 +1569,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1292,6 +1597,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1318,6 +1624,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} monitors", {
@@ -1360,6 +1668,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1372,7 +1681,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("monitor", id, result);
+        const handle = await context.writeResource("monitor", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created monitor {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1396,6 +1710,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1406,7 +1721,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_monitors_monitor_details",
           String(args.monitor_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched account_load_balancer_monitors_monitor_details",
@@ -1450,6 +1770,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1468,7 +1789,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor",
           String(args.monitor_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated monitor", {});
         return { dataHandles: [handle] };
@@ -1509,6 +1835,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1527,7 +1854,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_monitor",
           String(args.monitor_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_monitor", {});
         return { dataHandles: [handle] };
@@ -1598,6 +1930,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1617,7 +1950,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_monitors_preview_monitor",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created account_load_balancer_monitors_preview_monitor {id}",
@@ -1645,6 +1983,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["monitor_id", "page", "per_page"]);
@@ -1674,6 +2013,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1702,6 +2043,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1728,6 +2070,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} pools", { count: results.length });
@@ -1765,6 +2109,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1777,7 +2122,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("pool", id, result);
+        const handle = await context.writeResource("pool", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created pool {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1801,6 +2151,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1815,7 +2166,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_pools",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_pools", {});
         return { dataHandles: [handle] };
@@ -1840,6 +2196,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1850,7 +2207,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_pools_pool_details",
           String(args.pool_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched account_load_balancer_pools_pool_details",
@@ -1893,6 +2255,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1911,7 +2274,12 @@ export const model = {
         const handle = await context.writeResource(
           "pool",
           String(args.pool_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated pool", {});
         return { dataHandles: [handle] };
@@ -1951,6 +2319,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1969,7 +2338,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_pool",
           String(args.pool_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_pool", {});
         return { dataHandles: [handle] };
@@ -2024,6 +2398,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2034,7 +2409,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_pools_pool_health_details",
           String(args.pool_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched account_load_balancer_pools_pool_health_details",
@@ -2078,6 +2458,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2097,7 +2478,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_pools_preview_pool",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created account_load_balancer_pools_preview_pool {id}",
@@ -2125,6 +2511,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["pool_id", "page", "per_page"]);
@@ -2151,6 +2538,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} pool_references", {
@@ -2178,6 +2567,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2188,7 +2578,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_monitors_preview_result",
           String(args.preview_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched account_load_balancer_monitors_preview_result",
@@ -2218,6 +2613,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2228,7 +2624,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_regions",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_regions", {});
         return { dataHandles: [handle] };
@@ -2253,6 +2654,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2263,7 +2665,12 @@ export const model = {
         const handle = await context.writeResource(
           "region",
           String(args.region_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched region", {});
         return { dataHandles: [handle] };
@@ -2291,6 +2698,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2301,7 +2709,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer_search_search_resources",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched account_load_balancer_search_search_resources",
@@ -2327,6 +2740,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2337,7 +2751,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_load_balancer_usage",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_load_balancer_usage", {});
         return { dataHandles: [handle] };
@@ -2364,6 +2783,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2374,7 +2794,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancers_account_load_balancer_details",
           String(args.load_balancer_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched account_load_balancers_account_load_balancer_details",
@@ -2423,6 +2848,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2441,7 +2867,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_load_balancer",
           String(args.load_balancer_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated account_load_balancer", {});
         return { dataHandles: [handle] };
@@ -2487,6 +2918,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2505,7 +2937,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_account_load_balancer",
           String(args.load_balancer_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_account_load_balancer", {});
         return { dataHandles: [handle] };
@@ -2564,6 +3001,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["zone_id", "page", "per_page"]);
@@ -2590,6 +3028,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} load_balancers", {
@@ -2635,6 +3075,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2651,7 +3092,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("load_balancer", id, result);
+        const handle = await context.writeResource("load_balancer", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created load_balancer {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -2678,6 +3124,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2688,7 +3135,12 @@ export const model = {
         const handle = await context.writeResource(
           "load_balancers_load_balancer_details",
           String(args.load_balancer_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched load_balancers_load_balancer_details", {});
         return { dataHandles: [handle] };
@@ -2735,6 +3187,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2753,7 +3206,12 @@ export const model = {
         const handle = await context.writeResource(
           "load_balancer",
           String(args.load_balancer_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated load_balancer", {});
         return { dataHandles: [handle] };
@@ -2799,6 +3257,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2817,7 +3276,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_load_balancer",
           String(args.load_balancer_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_load_balancer", {});
         return { dataHandles: [handle] };

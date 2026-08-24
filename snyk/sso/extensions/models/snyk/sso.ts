@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/sso";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -30,6 +32,12 @@ const ListGroupSsoConnectionsSchema = z.object({
   items: z.array(GroupSsoConnectionsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GroupSsoConnectionUsersItemSchema = z.object({
@@ -51,6 +59,12 @@ const ListGroupSsoConnectionUsersSchema = z.object({
   items: z.array(GroupSsoConnectionUsersItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -60,10 +74,17 @@ const ListGroupSsoConnectionUsersSchema = z.object({
 /** Snyk SSO — single sign-on connection management for groups */
 export const model = {
   type: "@webframp/snyk/sso",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "group_sso_connections": {
@@ -98,6 +119,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -126,6 +148,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -154,6 +178,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["sso_id"]);
@@ -182,6 +207,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 

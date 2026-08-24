@@ -26,6 +26,8 @@ import {
 } from "npm:@aws-sdk/client-sts@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/support";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -66,6 +68,12 @@ const CaseResourceSchema = z.object({
   communications: z.array(CommunicationSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CaseListResourceSchema = z.object({
@@ -75,6 +83,12 @@ const CaseListResourceSchema = z.object({
   cases: z.array(CaseDetailSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateCaseResultSchema = z.object({
@@ -86,6 +100,15 @@ const CreateCaseResultSchema = z.object({
   categoryCode: z.string(),
   severityCode: z.string(),
   createdAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CommunicationResultSchema = z.object({
@@ -94,6 +117,15 @@ const CommunicationResultSchema = z.object({
   caseId: z.string(),
   success: z.boolean(),
   addedAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ResolveResultSchema = z.object({
@@ -103,6 +135,15 @@ const ResolveResultSchema = z.object({
   initialStatus: z.string(),
   finalStatus: z.string(),
   resolvedAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const FailedProfileSchema = z.object({
@@ -123,6 +164,12 @@ const ScanAccountsResourceSchema = z.object({
   truncated: z.boolean(),
   failedProfiles: z.array(FailedProfileSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -256,7 +303,7 @@ interface ModelContext {
 /** AWS Support case management model. */
 export const model = {
   type: "@webframp/aws/support",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -278,6 +325,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -353,6 +409,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const includeResolved = args.includeResolved ?? false;
         const limit = args.limit ?? 100;
@@ -403,6 +460,8 @@ export const model = {
               cases,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             } as unknown as Record<string, unknown>,
           );
 
@@ -440,6 +499,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const client = createSupportClient(profile);
         try {
@@ -524,6 +584,8 @@ export const model = {
               communications,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             } as unknown as Record<string, unknown>,
           );
 
@@ -596,6 +658,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const severityCode = args.severityCode ?? "normal";
         const client = createSupportClient(profile);
@@ -642,6 +705,9 @@ export const model = {
               categoryCode: args.categoryCode,
               severityCode,
               createdAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
 
@@ -688,6 +754,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const client = createSupportClient(profile);
         try {
@@ -719,6 +786,9 @@ export const model = {
               caseId: args.caseId,
               success,
               addedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
 
@@ -755,6 +825,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const client = createSupportClient(profile);
         try {
@@ -785,6 +856,9 @@ export const model = {
               initialStatus: resp.initialCaseStatus ?? "unknown",
               finalStatus: resp.finalCaseStatus ?? "resolved",
               resolvedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
 
@@ -827,6 +901,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profiles = args.profiles ?? ctx.globalArgs.profiles;
         const includeResolved = args.includeResolved ?? false;
         const entries: Array<{
@@ -898,6 +973,8 @@ export const model = {
             truncated: anyTruncated,
             failedProfiles,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           } as unknown as Record<string, unknown>,
         );
 

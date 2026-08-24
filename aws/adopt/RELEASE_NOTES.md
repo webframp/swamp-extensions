@@ -1,9 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Fixed:** Updated stale dependency versions in README (ec2, rds, secretsmanager
-now reference current manifest versions).
-
-**Added:** Troubleshooting section documenting the irrelevant `AWS_REGION` env
-var, `MAX_PAGES = 5` truncation behavior, first-run orphan detection limits,
-silent resource omission for missing identifiers, and CloudFormation nested
-stack pagination.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

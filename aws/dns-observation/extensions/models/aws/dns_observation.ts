@@ -24,6 +24,8 @@ import {
 } from "npm:@aws-sdk/client-sts@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/dns-observation";
+
 const MAX_PAGES = 50;
 
 // =============================================================================
@@ -99,6 +101,12 @@ const OrphanedRecordSchema = z.object({
 
 const ZoneListSchema = z.object({
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   accountId: z.string(),
   truncated: z.boolean(),
   zones: z.array(HostedZoneSchema),
@@ -112,6 +120,12 @@ const ZoneListSchema = z.object({
 
 const RecordListSchema = z.object({
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   accountId: z.string(),
   truncated: z.boolean(),
   records: z.array(RecordSetSchema),
@@ -124,6 +138,12 @@ const RecordListSchema = z.object({
 
 const OrphanReportSchema = z.object({
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   accountId: z.string(),
   truncated: z.boolean(),
   orphans: z.array(OrphanedRecordSchema),
@@ -479,7 +499,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -504,6 +524,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -544,6 +573,7 @@ export const model = {
         args: { includePrivate?: boolean },
         context: DnsObservationContext,
       ) => {
+        const startMs = Date.now();
         const accountId = await getAccountId(context.globalArgs);
         const client = new Route53Client(makeClientConfig(context.globalArgs));
 
@@ -630,7 +660,12 @@ export const model = {
             },
           };
 
-          const handle = await context.writeResource("zones", "latest", result);
+          const handle = await context.writeResource("zones", "latest", {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          });
 
           context.logger.info("Listed {count} hosted zones", {
             count: zones.length,
@@ -660,6 +695,7 @@ export const model = {
         args: { zoneFilter?: string[]; typeFilter?: string[] },
         context: DnsObservationContext,
       ) => {
+        const startMs = Date.now();
         const accountId = await getAccountId(context.globalArgs);
         const client = new Route53Client(makeClientConfig(context.globalArgs));
 
@@ -812,7 +848,12 @@ export const model = {
           const handle = await context.writeResource(
             "records",
             "record-scan",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
 
           context.logger.info(
@@ -850,6 +891,7 @@ export const model = {
         },
         context: DnsObservationContext,
       ) => {
+        const startMs = Date.now();
         const accountId = await getAccountId(context.globalArgs);
 
         // Read records from our own stored data
@@ -884,6 +926,8 @@ export const model = {
               zonesScanned: 0,
               recordsAnalyzed: 0,
             },
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
           return { dataHandles: [handle] };
         }
@@ -977,7 +1021,12 @@ export const model = {
           },
         };
 
-        const handle = await context.writeResource("orphans", "latest", result);
+        const handle = await context.writeResource("orphans", "latest", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
 
         context.logger.info("Orphan detection complete", {
           orphans: orphans.length,

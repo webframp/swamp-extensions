@@ -21,6 +21,8 @@ import {
 } from "npm:@aws-sdk/client-cloudwatch@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/metrics";
+
 /** Local type for SDK dimension responses where Name and Value are optional in list responses. */
 interface AwsDimension {
   Name?: string;
@@ -84,6 +86,12 @@ const MetricListSchema = z.object({
   metrics: z.array(MetricSchema),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for a single metric data point. */
@@ -104,6 +112,12 @@ const MetricDataSchema = z.object({
     end: z.string(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for the metric analysis resource including trend and anomalies. */
@@ -128,6 +142,12 @@ const MetricAnalysisSchema = z.object({
     deviation: z.number(),
   })),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -280,7 +300,7 @@ function findAnomalies(
  */
 export const model = {
   type: "@webframp/aws/metrics",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -312,6 +332,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -368,6 +397,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -424,6 +454,8 @@ export const model = {
               metrics,
               count: metrics.length,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -492,6 +524,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -568,6 +601,8 @@ export const model = {
                 end: endTime.toISOString(),
               },
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -638,6 +673,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -732,6 +768,8 @@ export const model = {
               trend,
               anomalies,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -772,6 +810,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -840,6 +879,8 @@ export const model = {
                 end: endTime.toISOString(),
               },
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -877,6 +918,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const client = new CloudWatchClient(
           makeClientConfig(context.globalArgs),
         );
@@ -1008,6 +1050,8 @@ export const model = {
               fetchedAt: new Date().toISOString(),
               // @ts-ignore - extending schema for Lambda-specific data
               lambdaMetrics: results,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 

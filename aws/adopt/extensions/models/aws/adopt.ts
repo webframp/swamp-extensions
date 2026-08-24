@@ -33,6 +33,8 @@ import {
 } from "npm:@aws-sdk/client-secrets-manager@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/adopt";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -171,6 +173,12 @@ const PartialDiscoverySchema = z.object({
   count: z.number(),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for the full discovery result including setup commands. */
@@ -195,6 +203,15 @@ const DiscoveryResultSchema = z.object({
     totalResources: z.number(),
     byType: z.record(z.string(), z.number()),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -1028,6 +1045,12 @@ const StackAdoptionPlanSchema = z.object({
   stackName: z.string(),
   region: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   truncated: z.boolean(),
   nestedStacksProcessed: z.number(),
   mapped: z.array(MappedResourceSchema),
@@ -1228,7 +1251,7 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1268,6 +1291,15 @@ export const model = {
       toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -1298,6 +1330,7 @@ export const model = {
       description: "Discover existing VPCs",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: vpcs, truncated } = await discoverVpcs(
@@ -1320,6 +1353,8 @@ export const model = {
               count: vpcs.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info("Discovered {count} VPCs in {region}", {
@@ -1337,6 +1372,7 @@ export const model = {
       description: "Discover existing subnets",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: subnets, truncated } = await discoverSubnets(
@@ -1359,6 +1395,8 @@ export const model = {
               count: subnets.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info("Discovered {count} subnets in {region}", {
@@ -1376,6 +1414,7 @@ export const model = {
       description: "Discover existing internet gateways",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: igws, truncated } = await discoverInternetGateways(
@@ -1398,6 +1437,8 @@ export const model = {
               count: igws.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info(
@@ -1415,6 +1456,7 @@ export const model = {
       description: "Discover existing route tables",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: tables, truncated } = await discoverRouteTables(
@@ -1437,6 +1479,8 @@ export const model = {
               count: tables.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info("Discovered {count} route tables in {region}", {
@@ -1454,6 +1498,7 @@ export const model = {
       description: "Discover existing security groups",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         try {
           const { results: groups, truncated } = await discoverSecurityGroups(
@@ -1476,6 +1521,8 @@ export const model = {
               count: groups.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info(
@@ -1493,6 +1540,7 @@ export const model = {
       description: "Discover existing RDS clusters",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const rds = new RDSClient(makeClientConfig(context.globalArgs));
         try {
           const { results: clusters, truncated } = await discoverRdsClusters(
@@ -1508,6 +1556,8 @@ export const model = {
               count: clusters.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info("Discovered {count} RDS clusters in {region}", {
@@ -1525,6 +1575,7 @@ export const model = {
       description: "Discover existing RDS instances",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const rds = new RDSClient(makeClientConfig(context.globalArgs));
         try {
           const { results: instances, truncated } = await discoverRdsInstances(
@@ -1540,6 +1591,8 @@ export const model = {
               count: instances.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info("Discovered {count} RDS instances in {region}", {
@@ -1557,6 +1610,7 @@ export const model = {
       description: "Discover existing DB subnet groups",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const rds = new RDSClient(makeClientConfig(context.globalArgs));
         try {
           const { results: groups, truncated } = await discoverDbSubnetGroups(
@@ -1572,6 +1626,8 @@ export const model = {
               count: groups.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info(
@@ -1589,6 +1645,7 @@ export const model = {
       description: "Discover existing Secrets Manager secrets",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const sm = new SecretsManagerClient(
           makeClientConfig(context.globalArgs),
         );
@@ -1604,6 +1661,8 @@ export const model = {
               count: secrets.length,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           context.logger.info("Discovered {count} secrets in {region}", {
@@ -1634,6 +1693,7 @@ export const model = {
         args: { prefix: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.region;
         const ec2 = new EC2Client(makeClientConfig(context.globalArgs));
         const rds = new RDSClient(makeClientConfig(context.globalArgs));
@@ -1819,6 +1879,9 @@ export const model = {
                   secrets: secrets.length,
                 },
               },
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             },
           );
 
@@ -1875,6 +1938,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.region;
         const cfn = new CloudFormationClient(
           makeClientConfig(context.globalArgs),
@@ -2039,6 +2103,8 @@ export const model = {
                 coveragePercent,
                 byCfnType,
               },
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 

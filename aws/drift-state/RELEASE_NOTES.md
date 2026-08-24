@@ -1,5 +1,6 @@
-## 2026.08.23.1
+## 2026.08.24.1
 
-**Changed:** Documentation only — no code changes. Added a full
-`## Troubleshooting` section (this README was the thinnest in the repo at 29
-lines) plus guidance on the upstream-model-name mismatch failure mode.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

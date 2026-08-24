@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/hyperdrive"
-version: "2026.08.21.1"
+version: "2026.08.24.1"
 description: "Cloudflare Hyperdrive — database connection pooling configurations"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

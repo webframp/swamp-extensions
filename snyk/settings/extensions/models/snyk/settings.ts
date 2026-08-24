@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/settings";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -33,11 +35,40 @@ const GetIacSettingsForGroupSchema = z.object({
   updated: z.string().optional().describe(
     "The last time the settings were updated.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
-const GetOpensourceBrokerSettingForGroupSchema = z.object({});
+const GetOpensourceBrokerSettingForGroupSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const EnableOpensourceBrokerForGroupSchema = z.object({});
+const EnableOpensourceBrokerForGroupSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const GetPullRequestTemplateSchema = z.object({
   id: z.string(),
@@ -50,6 +81,15 @@ const GetPullRequestTemplateSchema = z.object({
   ),
   title: z.string().min(1).optional().describe(
     "Specify a title for the pull request",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -64,6 +104,15 @@ const CreateOrUpdatePullRequestTemplateSchema = z.object({
   ),
   title: z.string().min(1).optional().describe(
     "Specify a title for the pull request",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -89,6 +138,15 @@ const GetIacSettingsForOrgSchema = z.object({
   }).optional().describe(
     "The Infrastructure as Code custom rules settings for an org.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetOrgLanguagesSettingsSchema = z.object({
@@ -102,6 +160,15 @@ const GetOrgLanguagesSettingsSchema = z.object({
     php: z.unknown(),
     python: z.unknown(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetOpenSourceSettingsForOrgSchema = z.object({
@@ -110,21 +177,79 @@ const GetOpenSourceSettingsForOrgSchema = z.object({
   reachability: z.object({
     enabled: z.boolean().optional(),
   }).optional().describe("The reachability setting for Org."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
-const GetOpensourceBrokerSettingSchema = z.object({});
+const GetOpensourceBrokerSettingSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const EnableOpensourceBrokerForOrgSchema = z.object({});
+const EnableOpensourceBrokerForOrgSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const GetOpensourceBrokerEcosystemSettingsForOrgSchema = z.object({});
+const GetOpensourceBrokerEcosystemSettingsForOrgSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const GetOpensourcePrivateRegistryEcosystemSettingsForOrgSchema = z.object({});
+const GetOpensourcePrivateRegistryEcosystemSettingsForOrgSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const GetSastSettingsSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   autofix_enabled: z.boolean().optional(),
   sast_enabled: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateOrgSastSettingsSchema = z.object({
@@ -132,18 +257,45 @@ const UpdateOrgSastSettingsSchema = z.object({
   type: z.string().optional(),
   autofix_enabled: z.boolean().optional(),
   sast_enabled: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSecretsSettingsSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   secrets_enabled: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateOrgSecretsSettingsSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   secrets_enabled: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -153,10 +305,17 @@ const UpdateOrgSecretsSettingsSchema = z.object({
 /** Snyk Settings — organization and group setting management */
 export const model = {
   type: "@webframp/snyk/settings",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "iac_settings_for_group": {
@@ -281,6 +440,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -292,7 +452,12 @@ export const model = {
         const handle = await context.writeResource(
           "iac_settings_for_group",
           String(args.group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched iac_settings_for_group", {});
         return { dataHandles: [handle] };
@@ -320,6 +485,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -338,7 +504,12 @@ export const model = {
         const handle = await context.writeResource(
           "iac_settings_for_group",
           String(args.group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated iac_settings_for_group", {});
         return { dataHandles: [handle] };
@@ -365,6 +536,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -376,7 +548,12 @@ export const model = {
         const handle = await context.writeResource(
           "opensource_broker_setting_for_group",
           String(args.group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched opensource_broker_setting_for_group", {});
         return { dataHandles: [handle] };
@@ -403,6 +580,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
 
         const result = await snykApi(
@@ -415,7 +593,12 @@ export const model = {
         const handle = await context.writeResource(
           "enable_opensource_broker_for_group",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed enable_opensource_broker_for_group", {});
         return { dataHandles: [handle] };
@@ -475,6 +658,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -486,7 +670,12 @@ export const model = {
         const handle = await context.writeResource(
           "pull_request_template",
           String(args.group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched pull_request_template", {});
         return { dataHandles: [handle] };
@@ -517,6 +706,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -536,7 +726,12 @@ export const model = {
         const handle = await context.writeResource(
           "or_update_pull_request_template",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created or_update_pull_request_template {id}", {
           id,
@@ -594,6 +789,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -605,7 +801,12 @@ export const model = {
         const handle = await context.writeResource(
           "iac_settings_for_org",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched iac_settings_for_org", {});
         return { dataHandles: [handle] };
@@ -630,6 +831,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -648,7 +850,12 @@ export const model = {
         const handle = await context.writeResource(
           "iac_settings_for_org",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated iac_settings_for_org", {});
         return { dataHandles: [handle] };
@@ -671,6 +878,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -682,7 +890,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_languages_settings",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched org_languages_settings", {});
         return { dataHandles: [handle] };
@@ -711,6 +924,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["language"]);
@@ -729,7 +943,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_languages_settings",
           String(args.language),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated org_languages_settings", {});
         return { dataHandles: [handle] };
@@ -752,6 +971,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -763,7 +983,12 @@ export const model = {
         const handle = await context.writeResource(
           "open_source_settings_for_org",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched open_source_settings_for_org", {});
         return { dataHandles: [handle] };
@@ -786,6 +1011,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -797,7 +1023,12 @@ export const model = {
         const handle = await context.writeResource(
           "opensource_broker_setting",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched opensource_broker_setting", {});
         return { dataHandles: [handle] };
@@ -820,6 +1051,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
 
         const result = await snykApi(
@@ -832,7 +1064,12 @@ export const model = {
         const handle = await context.writeResource(
           "enable_opensource_broker_for_org",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed enable_opensource_broker_for_org", {});
         return { dataHandles: [handle] };
@@ -889,6 +1126,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -900,7 +1138,12 @@ export const model = {
         const handle = await context.writeResource(
           "opensource_broker_ecosystem_settings_for_org",
           String(args.ecosystem),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched opensource_broker_ecosystem_settings_for_org",
@@ -932,6 +1175,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["ecosystem"]);
@@ -950,7 +1194,12 @@ export const model = {
         const handle = await context.writeResource(
           "opensource_broker_ecosystem_settings_for_org",
           String(args.ecosystem),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated opensource_broker_ecosystem_settings_for_org",
@@ -981,6 +1230,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -992,7 +1242,12 @@ export const model = {
         const handle = await context.writeResource(
           "opensource_private_registry_ecosystem_settings_for_org",
           String(args.ecosystem),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched opensource_private_registry_ecosystem_settings_for_org",
@@ -1024,6 +1279,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["ecosystem"]);
@@ -1042,7 +1298,12 @@ export const model = {
         const handle = await context.writeResource(
           "opensource_private_registry_ecosystem_settings_for_org",
           String(args.ecosystem),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated opensource_private_registry_ecosystem_settings_for_org",
@@ -1068,6 +1329,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -1079,7 +1341,12 @@ export const model = {
         const handle = await context.writeResource(
           "sast_settings",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sast_settings", {});
         return { dataHandles: [handle] };
@@ -1110,6 +1377,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1128,7 +1396,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_sast_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated org_sast_settings", {});
         return { dataHandles: [handle] };
@@ -1151,6 +1424,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -1162,7 +1436,12 @@ export const model = {
         const handle = await context.writeResource(
           "secrets_settings",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched secrets_settings", {});
         return { dataHandles: [handle] };
@@ -1193,6 +1472,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1211,7 +1491,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_secrets_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated org_secrets_settings", {});
         return { dataHandles: [handle] };

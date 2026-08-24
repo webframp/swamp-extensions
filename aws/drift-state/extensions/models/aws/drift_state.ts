@@ -11,6 +11,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/aws/drift-state";
+
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -52,6 +54,15 @@ const DriftResultSchema = z.object({
   computedAt: z.string(),
   summary: DriftSummarySchema,
   resources: z.array(DriftResourceSchema),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const BaselineEntrySchema = z.object({
@@ -64,6 +75,15 @@ const BaselineSchema = z.object({
   setAt: z.string(),
   source: z.string(),
   entries: z.array(BaselineEntrySchema),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TimelineEventSchema = z.object({
@@ -75,6 +95,15 @@ const TimelineEventSchema = z.object({
 const TimelineSchema = z.object({
   canonicalId: z.string(),
   events: z.array(TimelineEventSchema),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const VelocitySchema = z.object({
@@ -92,6 +121,15 @@ const VelocitySchema = z.object({
     last7d: z.number(),
     last30d: z.number(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -455,7 +493,7 @@ const NORMALIZERS: Record<
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -477,6 +515,15 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Error-message quality pass: no schema changes to stored resources",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -570,6 +617,7 @@ export const model = {
         },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const now = new Date();
         const activeSources: SourceName[] =
           (args.sources as SourceName[] | undefined) ??
@@ -866,6 +914,9 @@ export const model = {
             await context.writeResource("timeline", instanceName, {
               canonicalId: resource.canonicalId,
               events,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             });
           }
         }
@@ -873,7 +924,12 @@ export const model = {
         const handle = await context.writeResource(
           "driftResult",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Drift computation complete", {
@@ -939,6 +995,7 @@ export const model = {
         },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const now = new Date();
         const sourcesToBaseline: SourceName[] = args.source === "all"
           ? [
@@ -1004,7 +1061,12 @@ export const model = {
             const handle = await context.writeResource(
               "baseline",
               source,
-              baseline,
+              {
+                ...baseline,
+                fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
+              },
             );
             handles.push(handle);
 
@@ -1040,6 +1102,7 @@ export const model = {
         args: { resourceType?: string; source?: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         let driftResult: z.infer<typeof DriftResultSchema> | null = null;
 
         try {
@@ -1062,6 +1125,9 @@ export const model = {
           });
           const handle = await context.writeResource("drifted", "query", {
             resources: [],
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           });
           return { dataHandles: [handle] };
         }
@@ -1079,6 +1145,9 @@ export const model = {
 
         const handle = await context.writeResource("drifted", "query", {
           resources: drifted,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Drifted resources queried", {
@@ -1105,6 +1174,7 @@ export const model = {
         args: { canonicalId: string; limit: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const instanceName = `timeline-${hashId(args.canonicalId)}`;
         let events: z.infer<typeof TimelineEventSchema>[] = [];
 
@@ -1136,7 +1206,12 @@ export const model = {
         const handle = await context.writeResource(
           "timeline",
           `query-${hashId(args.canonicalId)}`,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         return { dataHandles: [handle] };
@@ -1151,6 +1226,7 @@ export const model = {
         _args: Record<string, never>,
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const now = new Date();
 
         // Read latest drift result for current state
@@ -1175,6 +1251,9 @@ export const model = {
             computedAt: now.toISOString(),
             byResourceType: {},
             byTimeWindow: { last24h: 0, last7d: 0, last30d: 0 },
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           });
           return { dataHandles: [handle] };
         }
@@ -1237,7 +1316,12 @@ export const model = {
         const handle = await context.writeResource(
           "velocity",
           "latest",
-          velocity,
+          {
+            ...velocity,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Velocity computed", {

@@ -33,6 +33,8 @@ import {
   SupportClient,
 } from "npm:@aws-sdk/client-support@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/service-quotas";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -69,6 +71,12 @@ const QuotaResourceSchema = z.object({
   region: z.string(),
   quota: QuotaDetailSchema,
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const QuotasResourceSchema = z.object({
@@ -79,6 +87,12 @@ const QuotasResourceSchema = z.object({
   quotas: z.array(QuotaDetailSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ServiceEntrySchema = z.object({
@@ -92,6 +106,12 @@ const ServicesResourceSchema = z.object({
   services: z.array(ServiceEntrySchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UtilizationEntrySchema = z.object({
@@ -125,6 +145,12 @@ const UtilizationResourceSchema = z.object({
   truncated: z.boolean(),
   failedProfiles: z.array(FailedProfileSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const IncreaseRequestSchema = z.object({
@@ -139,6 +165,15 @@ const IncreaseRequestSchema = z.object({
   previousValue: z.number(),
   status: z.string(),
   requestedAt: z.string().nullable(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PendingRequestEntrySchema = z.object({
@@ -163,6 +198,12 @@ const PendingRequestsResourceSchema = z.object({
   truncated: z.boolean(),
   failedProfiles: z.array(FailedProfileSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CommunicationSchema = z.object({
@@ -184,6 +225,12 @@ const CaseCommunicationsSchema = z.object({
   communications: z.array(CommunicationSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -378,7 +425,7 @@ interface ModelContext {
 /** AWS Service Quotas observation and management model. */
 export const model = {
   type: "@webframp/aws/service-quotas",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -405,6 +452,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -485,6 +541,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
@@ -554,6 +611,8 @@ export const model = {
               region,
               quota,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             } as unknown as Record<string, unknown>,
           );
 
@@ -597,6 +656,7 @@ export const model = {
         args: { serviceCode: string; profile?: string; region?: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
@@ -655,6 +715,8 @@ export const model = {
               quotas,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             } as unknown as Record<string, unknown>,
           );
 
@@ -686,6 +748,7 @@ export const model = {
         args: { profile?: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
@@ -733,6 +796,8 @@ export const model = {
               services,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             } as unknown as Record<string, unknown>,
           );
 
@@ -791,6 +856,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const rawCodes = args.serviceCodes ??
           (args.serviceCode ? [args.serviceCode] : []);
         if (rawCodes.length === 0) {
@@ -915,6 +981,8 @@ export const model = {
               truncated: truncatedByService.get(serviceCode)!,
               failedProfiles,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             } as unknown as Record<string, unknown>,
           );
           dataHandles.push(handle);
@@ -965,6 +1033,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
@@ -1028,6 +1097,9 @@ export const model = {
               previousValue,
               status: req.Status ?? "PENDING",
               requestedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
 
@@ -1077,6 +1149,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const client = createQuotasClient(profile, region);
@@ -1119,6 +1192,9 @@ export const model = {
               previousValue: 0,
               status: req.Status ?? "UNKNOWN",
               requestedAt: req.Created ? req.Created.toISOString() : null,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             } as unknown as Record<string, unknown>,
           );
 
@@ -1163,6 +1239,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profiles = args.profiles ?? ctx.globalArgs.profiles;
         const region = args.region ?? ctx.globalArgs.defaultRegion;
         const statuses: ("PENDING" | "CASE_OPENED")[] = [
@@ -1244,6 +1321,8 @@ export const model = {
             truncated: anyTruncated,
             failedProfiles,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           } as unknown as Record<string, unknown>,
         );
 
@@ -1285,6 +1364,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? ctx.globalArgs.profiles[0];
         const support = createSupportClient(profile);
         try {
@@ -1375,6 +1455,8 @@ export const model = {
               communications,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             } as unknown as Record<string, unknown>,
           );
 

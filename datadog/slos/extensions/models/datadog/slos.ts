@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/slos";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -28,6 +30,15 @@ const GlobalArgsSchema = z.object({
 const CreateSloReportJobSchema = z.object({
   id: z.string().optional().describe("The ID of the report job."),
   type: z.string().optional().describe("The type of ID."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSloReportJobStatusSchema = z.object({
@@ -39,6 +50,15 @@ const GetSloReportJobStatusSchema = z.object({
     "completed_with_errors",
     "failed",
   ]).optional().describe("The status of the SLO report job."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSloStatusSchema = z.object({
@@ -62,6 +82,15 @@ const GetSloStatusSchema = z.object({
   state: z.string().describe(
     "The current state of the SLO (for example, `breached`, `warning`, `ok`).",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -71,10 +100,17 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "slo_report_job": {
@@ -134,6 +170,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -155,7 +192,12 @@ export const model = {
         const handle = await context.writeResource(
           "slo_report_job",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created slo_report_job {id}", { id });
         return { dataHandles: [handle] };
@@ -182,6 +224,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -196,7 +239,12 @@ export const model = {
         const handle = await context.writeResource(
           "slo_report_job_status",
           String(args.report_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched slo_report_job_status", {});
         return { dataHandles: [handle] };
@@ -232,6 +280,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["slo_id"]);
@@ -256,7 +305,12 @@ export const model = {
         const handle = await context.writeResource(
           "slo_status",
           String(args.slo_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched slo_status", {});
         return { dataHandles: [handle] };

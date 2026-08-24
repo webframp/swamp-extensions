@@ -16,6 +16,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/anydoc-ingest";
+
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -65,6 +67,15 @@ const ScanResultSchema = z.object({
   truncated: z.boolean().describe(
     "Whether the scan cap was reached before all documents were listed",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for a single ingested document resource. */
@@ -95,6 +106,15 @@ const DocumentSchema = z.object({
   }),
   error: z.string().nullable().describe(
     "Conversion error message, or null if conversion succeeded",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -129,6 +149,15 @@ const StatusSchema = z.object({
     path: z.string().describe("Relative path of the file that errored"),
     error: z.string().describe("Error message"),
   })).describe("Per-file errors encountered during the run"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -446,7 +475,7 @@ interface MethodContext {
 /** Document ingestion model powered by anydoc. */
 export const model = {
   type: "@webframp/anydoc-ingest",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     "scan": {
@@ -480,6 +509,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ): Promise<{ dataHandles: Array<{ name: string }> }> => {
+        const startMs = Date.now();
         const { globalArgs } = context;
         context.logger.info("Scanning {dir}", { dir: globalArgs.documentsDir });
 
@@ -521,6 +551,9 @@ export const model = {
           byFormat,
           files,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         return { dataHandles: [handle] };
@@ -538,6 +571,7 @@ export const model = {
         args: { force?: boolean; _converter?: DocumentConverter },
         context: MethodContext,
       ): Promise<{ dataHandles: Array<{ name: string }> }> => {
+        const startMs = Date.now();
         const { globalArgs } = context;
         const converter = args._converter;
         const handles: Array<{ name: string }> = [];
@@ -637,6 +671,9 @@ export const model = {
                   toolVersion: ANYDOC_VERSION,
                 },
                 error,
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
+                fetchedAt: new Date().toISOString(),
               },
             );
 
@@ -666,6 +703,9 @@ export const model = {
           truncated,
           byFormat,
           errors,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
         handles.push(statusHandle);
 
@@ -691,6 +731,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ): Promise<{ dataHandles: Array<{ name: string }> }> => {
+        const startMs = Date.now();
         const existing = context.readResource
           ? await context.readResource("status")
           : null;
@@ -707,6 +748,9 @@ export const model = {
             truncated: false,
             byFormat: {},
             errors: [],
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           });
           return { dataHandles: [handle] };
         }
@@ -732,6 +776,9 @@ export const model = {
           truncated: existing.truncated ?? false,
           byFormat: existing.byFormat ?? {},
           errors: existing.errors ?? [],
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         return { dataHandles: [handle] };

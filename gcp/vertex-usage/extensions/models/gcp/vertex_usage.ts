@@ -14,6 +14,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/gcp/vertex-usage";
+
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -102,6 +104,15 @@ const ScanResultsSchema = z.object({
       "Total outputTokens divided by periodMinutes",
     ),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -383,7 +394,7 @@ async function queryTokenMetrics(
 /** GCP Vertex AI token usage monitoring model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -397,6 +408,15 @@ export const model = {
       toVersion: "2026.08.21.2",
       description:
         "Add error-message context for credentials/JSON parsing/Monitoring API failures; require at least one configured project",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -441,6 +461,7 @@ export const model = {
           fetchFn?: typeof fetch;
         },
       ) => {
+        const startMs = Date.now();
         const fetchFn = context.fetchFn ?? fetch;
         const endTime = new Date();
         const startTime = new Date(
@@ -551,7 +572,12 @@ export const model = {
         const handle = await context.writeResource(
           "scan_results",
           "current",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },
@@ -581,6 +607,7 @@ export const model = {
           fetchFn?: typeof fetch;
         },
       ) => {
+        const startMs = Date.now();
         const fetchFn = context.fetchFn ?? fetch;
         const endTime = new Date();
         const startTime = new Date(
@@ -655,7 +682,12 @@ export const model = {
         const handle = await context.writeResource(
           "single_scan",
           args.project,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },

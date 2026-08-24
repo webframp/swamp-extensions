@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/cloud";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -49,6 +51,12 @@ const ListEnvironmentsSchema = z.object({
   items: z.array(EnvironmentsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateEnvironmentSchema = z.object({
@@ -74,6 +82,15 @@ const CreateEnvironmentSchema = z.object({
   updated_at: z.string().nullable().optional().describe(
     "When the environment was last updated",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetPermissionsSchema = z.object({
@@ -82,6 +99,15 @@ const GetPermissionsSchema = z.object({
     "Output format for the generated permissions document",
   ),
   data: z.string().describe("Generated cloud provider permissions document"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ResourcesItemSchema = z.object({
@@ -127,6 +153,12 @@ const ListResourcesSchema = z.object({
   items: z.array(ResourcesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ScanItemSchema = z.object({
@@ -169,6 +201,12 @@ const ListScanSchema = z.object({
   items: z.array(ScanItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -178,7 +216,7 @@ const ListScanSchema = z.object({
 /** Snyk Cloud — cloud environments, scans, and resource posture management */
 export const model = {
   type: "@webframp/snyk/cloud",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -186,6 +224,15 @@ export const model = {
       toVersion: "2026.08.21.2",
       description:
         "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -270,6 +317,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -295,6 +343,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} environments", {
@@ -325,6 +375,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -341,7 +392,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("environment", id, result);
+        const handle = await context.writeResource("environment", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created environment {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -372,6 +428,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["environment_id"]);
@@ -390,7 +447,12 @@ export const model = {
         const handle = await context.writeResource(
           "environment",
           String(args.environment_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated environment", {});
         return { dataHandles: [handle] };
@@ -453,6 +515,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -472,7 +535,12 @@ export const model = {
         const handle = await context.writeResource(
           "get_permissions",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created get_permissions {id}", { id });
         return { dataHandles: [handle] };
@@ -526,6 +594,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -551,6 +620,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} resources", {
@@ -576,6 +647,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -601,6 +673,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} scan", { count: results.length });
@@ -630,6 +704,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -646,7 +721,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("scan", id, result);
+        const handle = await context.writeResource("scan", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created scan {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -670,6 +750,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -681,7 +762,12 @@ export const model = {
         const handle = await context.writeResource(
           "scan",
           String(args.scan_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched scan", {});
         return { dataHandles: [handle] };

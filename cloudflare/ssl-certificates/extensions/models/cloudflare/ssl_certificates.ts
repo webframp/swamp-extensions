@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/ssl-certificates";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -35,6 +37,12 @@ const ListCertificatesSchema = z.object({
   items: z.array(CertificatesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateCertificateSchema = z.object({
@@ -45,6 +53,15 @@ const CreateCertificateSchema = z.object({
   id: z.unknown().optional(),
   request_type: z.unknown(),
   requested_validity: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SslConfigurationsItemSchema = z.object({
@@ -69,6 +86,12 @@ const ListSslConfigurationsSchema = z.object({
   items: z.array(SslConfigurationsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSslConfigurationSchema = z.object({
@@ -87,6 +110,15 @@ const CreateSslConfigurationSchema = z.object({
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
   zone_id: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateCustomSslForAZoneRePrioritizeSslCertificatesSchema = z.object({
@@ -105,6 +137,15 @@ const UpdateCustomSslForAZoneRePrioritizeSslCertificatesSchema = z.object({
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
   zone_id: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCustomSslForAZoneSslConfigurationDetailsSchema = z.object({
@@ -123,6 +164,15 @@ const GetCustomSslForAZoneSslConfigurationDetailsSchema = z.object({
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
   zone_id: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateCustomSslForAZoneEditSslConfigurationSchema = z.object({
@@ -141,9 +191,28 @@ const UpdateCustomSslForAZoneEditSslConfigurationSchema = z.object({
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
   zone_id: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
-const CreateAnalyzeCertificateAnalyzeCertificateSchema = z.object({});
+const CreateAnalyzeCertificateAnalyzeCertificateSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const CertificatePacksItemSchema = z.object({
   certificate_authority: z.unknown().optional(),
@@ -175,6 +244,12 @@ const ListCertificatePacksSchema = z.object({
   items: z.array(CertificatePacksItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateCertificatePacksOrderAdvancedCertificateManagerCertificatePackSchema =
@@ -206,6 +281,15 @@ const CreateCertificatePacksOrderAdvancedCertificateManagerCertificatePackSchema
 
 const GetCertificatePackQuotasSchema = z.object({
   advanced: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCertificatePackSchema = z.object({
@@ -232,6 +316,15 @@ const GetCertificatePackSchema = z.object({
     "Certificates' validation records.",
   ),
   validity_days: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateCertificatePacksRestartValidationForAdvancedCertificateManagerCertificatePackSchema =
@@ -286,6 +379,12 @@ const ListSslVerificationSslVerificationDetailsSchema = z.object({
   items: z.array(SslVerificationSslVerificationDetailsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateSslVerificationEditSslCertificatePackValidationMethodSchema = z
@@ -301,10 +400,17 @@ const UpdateSslVerificationEditSslCertificatePackValidationMethodSchema = z
 /** Cloudflare SSL/TLS — certificate packs, custom certificates, certificate authority */
 export const model = {
   type: "@webframp/cloudflare/ssl-certificates",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "certificates": {
@@ -439,6 +545,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -465,6 +572,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} certificates", {
@@ -495,6 +604,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body = args;
@@ -507,7 +617,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("certificate", id, result);
+        const handle = await context.writeResource("certificate", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created certificate {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -531,6 +646,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -541,7 +657,12 @@ export const model = {
         const handle = await context.writeResource(
           "certificate",
           String(args.certificate_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched certificate", {});
         return { dataHandles: [handle] };
@@ -607,6 +728,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -636,6 +758,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -671,6 +795,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -686,7 +811,12 @@ export const model = {
         const handle = await context.writeResource(
           "ssl_configuration",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created ssl_configuration {id}", { id });
         return { dataHandles: [handle] };
@@ -714,6 +844,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -728,7 +859,12 @@ export const model = {
         const handle = await context.writeResource(
           "custom_ssl_for_a_zone_re_prioritize_ssl_certificates",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated custom_ssl_for_a_zone_re_prioritize_ssl_certificates",
@@ -759,6 +895,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -769,7 +906,12 @@ export const model = {
         const handle = await context.writeResource(
           "custom_ssl_for_a_zone_ssl_configuration_details",
           String(args.custom_certificate_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched custom_ssl_for_a_zone_ssl_configuration_details",
@@ -807,6 +949,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -825,7 +968,12 @@ export const model = {
         const handle = await context.writeResource(
           "custom_ssl_for_a_zone_edit_ssl_configuration",
           String(args.custom_certificate_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated custom_ssl_for_a_zone_edit_ssl_configuration",
@@ -889,6 +1037,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -904,7 +1053,12 @@ export const model = {
         const handle = await context.writeResource(
           "analyze_certificate_analyze_certificate",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created analyze_certificate_analyze_certificate {id}",
@@ -935,6 +1089,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -964,6 +1119,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -998,6 +1155,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, zoneId } = context.globalArgs;
 
           const body = args;
@@ -1013,7 +1171,12 @@ export const model = {
           const handle = await context.writeResource(
             "certificate_packs_order_advanced_certificate_manager_certificate_pack",
             id,
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           context.logger.info(
             "Created certificate_packs_order_advanced_certificate_manager_certificate_pack {id}",
@@ -1039,6 +1202,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1049,7 +1213,12 @@ export const model = {
         const handle = await context.writeResource(
           "certificate_pack_quotas",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched certificate_pack_quotas", {});
         return { dataHandles: [handle] };
@@ -1077,6 +1246,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1087,7 +1257,12 @@ export const model = {
         const handle = await context.writeResource(
           "certificate_pack",
           String(args.certificate_pack_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched certificate_pack", {});
         return { dataHandles: [handle] };
@@ -1115,6 +1290,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, zoneId } = context.globalArgs;
 
           const body: Record<string, unknown> = {};
@@ -1133,7 +1309,12 @@ export const model = {
           const handle = await context.writeResource(
             "certificate_packs_restart_validation_for_advanced_certificate_manager_certificate_pack",
             String(args.certificate_pack_id),
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           context.logger.info(
             "Updated certificate_packs_restart_validation_for_advanced_certificate_manager_certificate_pack",
@@ -1194,6 +1375,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1204,7 +1386,12 @@ export const model = {
         const handle = await context.writeResource(
           "universal_ssl_settings_for_a_zone_universal_ssl_settings_details",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched universal_ssl_settings_for_a_zone_universal_ssl_settings_details",
@@ -1232,6 +1419,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1246,7 +1434,12 @@ export const model = {
         const handle = await context.writeResource(
           "universal_ssl_settings_for_a_zone_edit_universal_ssl_settings",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated universal_ssl_settings_for_a_zone_edit_universal_ssl_settings",
@@ -1274,6 +1467,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -1303,6 +1497,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1336,6 +1532,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1354,7 +1551,12 @@ export const model = {
         const handle = await context.writeResource(
           "ssl_verification_edit_ssl_certificate_pack_validation_method",
           String(args.certificate_pack_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated ssl_verification_edit_ssl_certificate_pack_validation_method",

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/durable-objects"
-version: "2026.08.21.1"
+version: "2026.08.24.1"
 description: "Cloudflare Durable Objects — namespaces, object management, alarms"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

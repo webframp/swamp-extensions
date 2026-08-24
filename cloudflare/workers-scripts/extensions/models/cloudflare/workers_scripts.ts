@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/workers-scripts";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -67,6 +69,12 @@ const ListWorkersSchema = z.object({
   items: z.array(WorkersItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WorkerScriptSearchWorkersItemSchema = z.object({
@@ -85,6 +93,12 @@ const ListWorkerScriptSearchWorkersSchema = z.object({
   items: z.array(WorkerScriptSearchWorkersItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAssetsUploadSessionSchema = z.object({
@@ -94,10 +108,28 @@ const CreateAssetsUploadSessionSchema = z.object({
   jwt: z.string().optional().describe(
     "A JWT to use as authentication for uploading assets.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListDeploymentsSchema = z.object({
   deployments: z.array(z.unknown()),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateDeploymentSchema = z.object({
@@ -114,10 +146,28 @@ const CreateDeploymentSchema = z.object({
     percentage: z.number().min(0.01).max(100),
     version_id: z.string(),
   })),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCronTriggersSchema = z.object({
   schedules: z.array(z.unknown()),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSettingsSchema = z.object({
@@ -126,6 +176,15 @@ const GetSettingsSchema = z.object({
   tags: z.unknown().optional(),
   tail_consumers: z.array(z.unknown()).nullable().optional().describe(
     "List of Workers that will consume logs from the attached Worker.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -136,6 +195,15 @@ const PatchSettingsSchema = z.object({
   tail_consumers: z.array(z.unknown()).nullable().optional().describe(
     "List of Workers that will consume logs from the attached Worker.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ScriptSecretsItemSchema = z.union([z.unknown(), z.unknown()]);
@@ -144,6 +212,12 @@ const ListScriptSecretsSchema = z.object({
   items: z.array(ScriptSecretsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PutScriptSecretSchema = z.union([z.unknown(), z.unknown()]);
@@ -159,6 +233,15 @@ const GetSubdomainSchema = z.object({
   previews_enabled: z.boolean().describe(
     "Whether the Worker's Preview URLs are available on the workers.dev subdomain.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateWorkerScriptPostSubdomainSchema = z.object({
@@ -168,32 +251,86 @@ const CreateWorkerScriptPostSubdomainSchema = z.object({
   previews_enabled: z.boolean().describe(
     "Whether the Worker's Preview URLs are available on the workers.dev subdomain.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListTailsSchema = z.object({
   expires_at: z.string(),
   id: z.unknown(),
   url: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WorkerTailLogsStartTailSchema = z.object({
   expires_at: z.string(),
   id: z.unknown(),
   url: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetWorkerScriptFetchUsageModelSchema = z.object({
   usage_model: z.unknown().optional(),
   user_limits: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateUsageModelSchema = z.object({
   usage_model: z.unknown().optional(),
   user_limits: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListVersionsSchema = z.object({
   items: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetVersionDetailSchema = z.object({
@@ -241,6 +378,15 @@ const GetVersionDetailSchema = z.object({
       usage_model: z.enum(["bundled", "unbound", "standard"]).optional(),
     }).optional(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -250,10 +396,17 @@ const GetVersionDetailSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "workers": {
@@ -400,6 +553,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -426,6 +580,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} workers", { count: results.length });
@@ -455,6 +611,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -484,6 +641,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -548,6 +707,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -567,7 +727,12 @@ export const model = {
         const handle = await context.writeResource(
           "assets_upload_session",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created assets_upload_session {id}", { id });
         return { dataHandles: [handle] };
@@ -592,6 +757,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -602,7 +768,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_deployments",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_deployments", {});
         return { dataHandles: [handle] };
@@ -642,6 +813,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -666,7 +838,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("deployment", id, result);
+        const handle = await context.writeResource("deployment", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created deployment {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -691,6 +868,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -701,7 +879,12 @@ export const model = {
         const handle = await context.writeResource(
           "deployment",
           String(args.deployment_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched deployment", {});
         return { dataHandles: [handle] };
@@ -759,6 +942,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -769,7 +953,12 @@ export const model = {
         const handle = await context.writeResource(
           "cron_triggers",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched cron_triggers", {});
         return { dataHandles: [handle] };
@@ -795,6 +984,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
@@ -809,7 +999,12 @@ export const model = {
         const handle = await context.writeResource(
           "cron_triggers",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated cron_triggers", {});
         return { dataHandles: [handle] };
@@ -834,6 +1029,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -844,7 +1040,12 @@ export const model = {
         const handle = await context.writeResource(
           "settings",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched settings", {});
         return { dataHandles: [handle] };
@@ -875,6 +1076,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -893,7 +1095,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_settings",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_settings", {});
         return { dataHandles: [handle] };
@@ -918,6 +1125,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["script_name", "page", "per_page"]);
@@ -944,6 +1152,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} script_secrets", {
@@ -974,6 +1184,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -988,7 +1199,12 @@ export const model = {
         const handle = await context.writeResource(
           "put_script_secret",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated put_script_secret", {});
         return { dataHandles: [handle] };
@@ -1020,6 +1236,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1038,7 +1255,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_script_secrets_bulk",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_script_secrets_bulk", {});
         return { dataHandles: [handle] };
@@ -1065,6 +1287,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1075,7 +1298,12 @@ export const model = {
         const handle = await context.writeResource(
           "script_secret",
           String(args.secret_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched script_secret", {});
         return { dataHandles: [handle] };
@@ -1132,6 +1360,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1142,7 +1371,12 @@ export const model = {
         const handle = await context.writeResource(
           "subdomain",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched subdomain", {});
         return { dataHandles: [handle] };
@@ -1173,6 +1407,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1192,7 +1427,12 @@ export const model = {
         const handle = await context.writeResource(
           "worker_script_post_subdomain",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created worker_script_post_subdomain {id}", {
           id,
@@ -1249,6 +1489,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1259,7 +1500,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_tails",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_tails", {});
         return { dataHandles: [handle] };
@@ -1284,6 +1530,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1295,7 +1542,12 @@ export const model = {
         const handle = await context.writeResource(
           "worker_tail_logs_start_tail",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed worker_tail_logs_start_tail", {});
         return { dataHandles: [handle] };
@@ -1351,6 +1603,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1361,7 +1614,12 @@ export const model = {
         const handle = await context.writeResource(
           "worker_script_fetch_usage_model",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched worker_script_fetch_usage_model", {});
         return { dataHandles: [handle] };
@@ -1388,6 +1646,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1406,7 +1665,12 @@ export const model = {
         const handle = await context.writeResource(
           "usage_model",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated usage_model", {});
         return { dataHandles: [handle] };
@@ -1436,6 +1700,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1446,7 +1711,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_versions",
           String(args.script_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_versions", {});
         return { dataHandles: [handle] };
@@ -1472,6 +1742,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1482,7 +1753,12 @@ export const model = {
         const handle = await context.writeResource(
           "version_detail",
           String(args.version_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched version_detail", {});
         return { dataHandles: [handle] };

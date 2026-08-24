@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/apps";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -36,6 +38,12 @@ const GetAppInstallsForGroupSchema = z.object({
   items: z.array(GetAppInstallsForGroupItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateGroupAppInstallSchema = z.object({
@@ -48,6 +56,15 @@ const CreateGroupAppInstallSchema = z.object({
     "The OAuth2 client secret for the app installation.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateGroupAppInstallSecretSchema = z.object({
@@ -63,6 +80,15 @@ const UpdateGroupAppInstallSecretSchema = z.object({
     "Timestamp at which this app was first installed at.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetOrgAppsItemSchema = z.object({
@@ -102,6 +128,12 @@ const GetOrgAppsSchema = z.object({
   items: z.array(GetOrgAppsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateOrgAppSchema = z.object({
@@ -136,6 +168,15 @@ const CreateOrgAppSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAppByIdSchema = z.object({
@@ -169,6 +210,15 @@ const GetAppByIdSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateAppCreationByIdSchema = z.object({
@@ -201,6 +251,15 @@ const UpdateAppCreationByIdSchema = z.object({
   ),
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -236,6 +295,15 @@ const CreateManageAppCreationSecretSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAppInstallsForOrgItemSchema = z.object({
@@ -254,6 +322,12 @@ const GetAppInstallsForOrgSchema = z.object({
   items: z.array(GetAppInstallsForOrgItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateOrgAppInstallSchema = z.object({
@@ -266,6 +340,15 @@ const CreateOrgAppInstallSchema = z.object({
     "The OAuth2 client secret for the app installation.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateOrgAppInstallSecretSchema = z.object({
@@ -281,6 +364,15 @@ const UpdateOrgAppInstallSecretSchema = z.object({
     "Timestamp at which this app was first installed at.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -290,7 +382,7 @@ const UpdateOrgAppInstallSecretSchema = z.object({
 /** Snyk Apps — OAuth application management, bots, installations */
 export const model = {
   type: "@webframp/snyk/apps",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -298,6 +390,15 @@ export const model = {
       toVersion: "2026.08.21.2",
       description:
         "Snyk API errors now include the HTTP method and path attempted, and the *_secret methods require a secret value when mode is create/replace. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -395,6 +496,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -423,6 +525,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -462,6 +566,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -481,7 +586,12 @@ export const model = {
         const handle = await context.writeResource(
           "group_app_install",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created group_app_install {id}", { id });
         return { dataHandles: [handle] };
@@ -553,6 +663,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id", "install_id"]);
@@ -572,7 +683,12 @@ export const model = {
         const handle = await context.writeResource(
           "update_group_app_install_secret",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created update_group_app_install_secret {id}", {
           id,
@@ -597,6 +713,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -622,6 +739,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} get_org_apps", {
@@ -658,6 +777,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -674,7 +794,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("org_app", id, result);
+        const handle = await context.writeResource("org_app", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created org_app {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -698,6 +823,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -709,7 +835,12 @@ export const model = {
         const handle = await context.writeResource(
           "app_by_id",
           String(args.app_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched app_by_id", {});
         return { dataHandles: [handle] };
@@ -743,6 +874,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["app_id"]);
@@ -761,7 +893,12 @@ export const model = {
         const handle = await context.writeResource(
           "app_creation_by_id",
           String(args.app_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated app_creation_by_id", {});
         return { dataHandles: [handle] };
@@ -830,6 +967,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["app_id"]);
@@ -849,7 +987,12 @@ export const model = {
         const handle = await context.writeResource(
           "manage_app_creation_secret",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created manage_app_creation_secret {id}", { id });
         return { dataHandles: [handle] };
@@ -874,6 +1017,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -902,6 +1046,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -940,6 +1086,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -959,7 +1106,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_app_install",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created org_app_install {id}", { id });
         return { dataHandles: [handle] };
@@ -1030,6 +1182,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["install_id"]);
@@ -1049,7 +1202,12 @@ export const model = {
         const handle = await context.writeResource(
           "update_org_app_install_secret",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created update_org_app_install_secret {id}", {
           id,

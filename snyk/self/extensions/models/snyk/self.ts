@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/self";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -26,6 +28,15 @@ const GetSelfSchema = z.object({
   type: z.enum(["user", "service_account", "app_instance"]).optional().describe(
     "Content type.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAccessRequestsItemSchema = z.object({
@@ -38,6 +49,12 @@ const GetAccessRequestsSchema = z.object({
   items: z.array(GetAccessRequestsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetUserInstalledAppsItemSchema = z.object({
@@ -59,6 +76,12 @@ const GetUserInstalledAppsSchema = z.object({
   items: z.array(GetUserInstalledAppsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAppInstallsForUserItemSchema = z.object({
@@ -77,6 +100,12 @@ const GetAppInstallsForUserSchema = z.object({
   items: z.array(GetAppInstallsForUserItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetUserAppSessionsItemSchema = z.object({
@@ -89,6 +118,12 @@ const GetUserAppSessionsSchema = z.object({
   items: z.array(GetUserAppSessionsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PersonalAccessTokenItemSchema = z.object({
@@ -110,6 +145,12 @@ const ListPersonalAccessTokenSchema = z.object({
   items: z.array(PersonalAccessTokenItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -119,10 +160,17 @@ const ListPersonalAccessTokenSchema = z.object({
 /** Snyk Self — current user context, org listing, and app management */
 export const model = {
   type: "@webframp/snyk/self",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "self": {
@@ -181,6 +229,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -189,7 +238,12 @@ export const model = {
           version,
         );
 
-        const handle = await context.writeResource("self", "latest", result);
+        const handle = await context.writeResource("self", "latest", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Fetched self", {});
         return { dataHandles: [handle] };
       },
@@ -215,6 +269,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -243,6 +298,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -269,6 +326,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -297,6 +355,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -325,6 +385,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -353,6 +414,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -449,6 +512,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["app_id"]);
@@ -477,6 +541,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -539,6 +605,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -567,6 +634,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 

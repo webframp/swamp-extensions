@@ -1,11 +1,6 @@
-## 2026.08.21.2
+## 2026.08.24.1
 
-**Changed:** Snyk API request failures now name the HTTP method and path that
-was attempted (e.g. `Snyk API GET /orgs/{orgId}/cloud/scans failed with HTTP
-403: ...`) instead of surfacing only the raw status and body. Network-level
-failures (DNS, timeout, connection reset) are also caught and re-raised with
-the same method/path context and the original error preserved as `cause`,
-rather than propagating an unlabeled fetch error.
-
-**Upgrade note:** No changes to stored resource schemas. Existing instances
-need no migration.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

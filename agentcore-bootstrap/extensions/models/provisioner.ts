@@ -9,6 +9,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/agentcore-bootstrap";
+
 const GlobalArgsSchema = z.object({
   region: z
     .string()
@@ -57,6 +59,12 @@ const ProvisionResultSchema = z.object({
   ),
   durationMs: z.number().describe(
     "Total provisioning duration in milliseconds",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -127,7 +135,7 @@ async function ecrRepoExists(
 /** Model definition for the AgentCore bootstrap provisioner. */
 export const model = {
   type: "@webframp/agentcore-bootstrap/provisioner",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -147,6 +155,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -571,6 +588,8 @@ export const model = {
           imageTag: fullImageTag,
           provisionedAt: new Date().toISOString(),
           durationMs,
+          fetchedAt: new Date().toISOString(),
+          collectedBy: EXTENSION_NAME,
         });
 
         return { dataHandles: [handle] };

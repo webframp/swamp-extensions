@@ -1,9 +1,8 @@
-## 2026.08.23.1
+## 2026.08.24.1
 
-**Changed:** Documentation only — no code changes. Added a `## Troubleshooting`
-section covering storage-account name collisions (global uniqueness isn't
-checked against other tenants), `AuthorizationPermissionMismatch` errors from
-mixing `--auth-mode login` (Azure AD RBAC, used only by container operations)
-with ARM permissions used elsewhere, stale/expired `az login` sessions
-masquerading as "not found" because exists-checks match error substrings, and
-the explicit `getConnectionString` failure mode.
+**Added:** Output metadata attributes for observability.
+
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that
+  previously lacked it).

@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/sast";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -63,6 +65,12 @@ const ListSastRuleExtensionsByGroupSchema = z.object({
   items: z.array(SastRuleExtensionsByGroupItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSastRuleExtensionSchema = z.object({
@@ -102,6 +110,15 @@ const CreateSastRuleExtensionSchema = z.object({
   updated_by: z.string().nullable().describe(
     "User ID of the user who last updated the SAST rule extension",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSastImpactTestStatusSchema = z.object({
@@ -138,6 +155,15 @@ const GetSastImpactTestStatusSchema = z.object({
   ),
   title: z.string().optional().describe(
     "A short, human-readable summary of the problem that SHOULD NOT change from occurrence to occurren...",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -177,6 +203,15 @@ const GetSastImpactTestResultSchema = z.object({
   total_count: z.number().int().describe(
     "The total number of findings added and removed as a result of the rule extension.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -186,10 +221,17 @@ const GetSastImpactTestResultSchema = z.object({
 /** Snyk SAST — static application security testing results and management */
 export const model = {
   type: "@webframp/snyk/sast",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "sast_rule_extensions_by_group": {
@@ -244,6 +286,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -272,6 +315,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -300,6 +345,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -319,7 +365,12 @@ export const model = {
         const handle = await context.writeResource(
           "sast_rule_extension",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created sast_rule_extension {id}", { id });
         return { dataHandles: [handle] };
@@ -344,6 +395,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -363,7 +415,12 @@ export const model = {
         const handle = await context.writeResource(
           "sast_impact_test",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created sast_impact_test {id}", { id });
         return { dataHandles: [handle] };
@@ -390,6 +447,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -401,7 +459,12 @@ export const model = {
         const handle = await context.writeResource(
           "sast_impact_test_status",
           String(args.test_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sast_impact_test_status", {});
         return { dataHandles: [handle] };
@@ -428,6 +491,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -439,7 +503,12 @@ export const model = {
         const handle = await context.writeResource(
           "sast_impact_test_result",
           String(args.test_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sast_impact_test_result", {});
         return { dataHandles: [handle] };
@@ -469,6 +538,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -480,7 +550,12 @@ export const model = {
         const handle = await context.writeResource(
           "sast_rule_extension",
           String(args.rule_extension_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sast_rule_extension", {});
         return { dataHandles: [handle] };
@@ -511,6 +586,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_extension_id"]);
@@ -529,7 +605,12 @@ export const model = {
         const handle = await context.writeResource(
           "sast_rule_extension",
           String(args.rule_extension_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated sast_rule_extension", {});
         return { dataHandles: [handle] };
