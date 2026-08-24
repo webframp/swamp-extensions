@@ -39,15 +39,15 @@ globalArguments:
 
 ## Methods
 
-| Method          | Description                                  | Inputs                      |
-| --------------- | -------------------------------------------- | --------------------------- |
-| `get_mr_diff`   | Fetch MR metadata and file diffs             | `project`, `iid`            |
-| `analyze`       | Store a review draft                         | `project`, `iid`, `body`    |
-| `edit_draft`    | Revise draft (new version, history retained) | `project`, `iid`, `body`    |
-| `update_review` | Edit an existing MR comment in place         | `project`, `iid`, `noteId`  |
-| `approve_mr`    | Approve MR without commenting                | `project`, `iid`            |
-| `unapprove_mr`  | Remove approval (request changes)            | `project`, `iid`            |
-| `post_review`   | Post draft as comment, optionally approve    | `project`, `iid`, `action?` |
+| Method              | Description                                          | Inputs                                                                  |
+| ------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| `get_mr_diff`       | Fetch MR metadata and file diffs                     | `project`, `iid`                                                        |
+| `analyze`           | Store a review draft                                 | `project`, `iid`, `body`                                                |
+| `edit_draft`        | Revise draft (new version, history retained)         | `project`, `iid`, `body`                                                |
+| `update_review`     | Edit an existing MR comment in place                 | `project`, `iid`, `noteId`                                              |
+| `approve_mr`        | Approve MR without commenting                        | `project`, `iid`                                                        |
+| `unapprove_mr`      | Remove approval (request changes)                    | `project`, `iid`                                                        |
+| `post_review`       | Post draft as comment, optionally approve            | `project`, `iid`, `action?`                                             |
 | `post_line_comment` | Post a comment positioned on a file/line in the diff | `project`, `iid`, `body`, `newPath`, `newLine?`, `oldPath?`, `oldLine?` |
 
 The `action` parameter on `post_review` accepts: `comment` (default), `approve`,
@@ -58,11 +58,11 @@ or `request_changes`.
 
 ## Resources
 
-| Resource       | Description                | Retention       |
-| -------------- | -------------------------- | --------------- |
-| `mrDiff`       | MR metadata and file diffs | 7d, 5 versions  |
-| `reviewDraft`  | Draft comment (editable)   | 7d, 10 versions |
-| `reviewPosted` | Record of posted comments  | 30d, 5 versions |
+| Resource       | Description                        | Retention        |
+| -------------- | ---------------------------------- | ---------------- |
+| `mrDiff`       | MR metadata and file diffs         | 7d, 5 versions   |
+| `reviewDraft`  | Draft comment (editable)           | 7d, 10 versions  |
+| `reviewPosted` | Record of posted comments          | 30d, 5 versions  |
 | `lineComment`  | Record of diff-positioned comments | 30d, 20 versions |
 
 The `reviewDraft` retains 10 versions. Compare drafts before approving:
@@ -265,6 +265,46 @@ Update note 12345 on myorg/myapp MR !2 with the current draft.
 swamp model method run mr-reviewer update_review \
   --input project=myorg/myapp --input iid=2 --input noteId=12345
 ```
+
+## Troubleshooting
+
+### `post_review` with `approve` posts the note even if approval fails
+
+The method posts the review comment first, then attempts to approve. If the
+approve call fails (insufficient permissions, MR already merged), the note
+remains on GitLab. The error propagates to the caller, but the comment cannot be
+automatically retracted.
+
+### Large diffs may be truncated
+
+The `get_mr_diff` method uses `access_raw_diffs=true` to request all changes in
+a single response. If GitLab's internal diff limit is exceeded, the `truncated`
+field in the output is `true`. The extension does not paginate across multiple
+diff pages.
+
+### `unapprove_mr` treats 404 as success
+
+When removing an approval that does not exist (caller never approved), the
+method returns `{ removed: false }` instead of throwing. This is intentional
+idempotency — repeated unapprove calls are safe.
+
+### No `list_mr_notes` method in this extension
+
+The `review-commands` workflow references `mr-reviewer get_mr_diff` (this
+extension) and `gitlab list_mr_notes` (the separate `@webframp/gitlab`
+extension). Both model instances must be configured for the review workflow to
+function.
+
+### Token requires `api` scope
+
+The `PRIVATE-TOKEN` header is used for both REST and GraphQL. Minimum scope is
+`api` for full functionality (read diffs, post notes, approve/unapprove). A bad
+or expired token produces a generic HTTP status error on first API call.
+
+### No retry or rate-limit handling
+
+All HTTP requests fail immediately on non-2xx. GitLab rate limits propagate as
+thrown errors without backoff.
 
 ## License
 
