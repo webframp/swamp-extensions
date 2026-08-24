@@ -96,7 +96,7 @@ export function mapBinding(
 /** Cloudflare Workers model definition with methods for script lifecycle, route management, and subdomain toggling. */
 export const model = {
   type: "@webframp/cloudflare/worker",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -119,7 +119,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added Troubleshooting section documenting single-page fixed-limit pagination,
 token scope requirements, batch method partial-failure reporting,

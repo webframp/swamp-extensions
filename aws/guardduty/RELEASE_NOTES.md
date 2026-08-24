@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added:** Troubleshooting section documenting detector-not-found errors,
 `typePrefix` client-side filtering and its truncation semantics, region-scope

@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Fixed:** Corrected CLI command syntax in README (`swamp model run` →
 `swamp model method run`).

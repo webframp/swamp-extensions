@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added Troubleshooting section documenting rate-limit self-throttle, 401
 auto-reauthentication, MAX_PAGES with method limit caps, no HTTP timeout,

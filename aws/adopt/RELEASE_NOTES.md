@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Fixed:** Updated stale dependency versions in README (ec2, rds, secretsmanager
 now reference current manifest versions).

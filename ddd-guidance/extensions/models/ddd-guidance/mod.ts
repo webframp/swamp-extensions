@@ -299,7 +299,7 @@ type MethodContext = {
 /** DDD guidance model — bounded context discovery, ubiquitous language capture, aggregate boundary design. */
 export const model = {
   type: "@webframp/ddd-guidance",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -309,7 +309,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

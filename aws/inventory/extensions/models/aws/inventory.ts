@@ -604,7 +604,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -643,7 +643,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

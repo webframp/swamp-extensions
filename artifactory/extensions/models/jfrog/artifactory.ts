@@ -228,7 +228,7 @@ type MethodContext = {
 /** JFrog Artifactory model for package management and health monitoring. */
 export const model = {
   type: "@webframp/artifactory",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -237,7 +237,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

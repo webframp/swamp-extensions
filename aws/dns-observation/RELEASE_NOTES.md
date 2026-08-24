@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added:** Troubleshooting section documenting per-zone silent record-fetch
 failures, the `detect_orphans` dependency on upstream data collection,

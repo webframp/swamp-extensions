@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added:** Troubleshooting section documenting the support-plan requirement,
 `scan_accounts` per-profile degrade behavior, mid-pagination data loss, the

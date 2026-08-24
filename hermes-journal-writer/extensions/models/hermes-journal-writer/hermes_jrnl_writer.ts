@@ -603,7 +603,7 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -636,7 +636,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.24.1",
+      toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

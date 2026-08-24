@@ -1,4 +1,4 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
 **Added:** Troubleshooting section documenting the silent CloudWatch metric
 fallback in `check_utilization`, per-profile error handling with
