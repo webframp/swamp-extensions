@@ -180,8 +180,57 @@ and Secrets Manager resources use the full identifier or name.
 - `rds:ListTagsForResource`
 - `secretsmanager:DescribeSecret`
 
+## Troubleshooting
+
+### `AWS_REGION` environment variable has no effect
+
+The model always uses the `region` global arg (default `us-east-1`), passed
+explicitly to every SDK client. The `AWS_REGION` environment variable is not
+read. To target a different region, use `--global-arg region=<your-region>` when
+creating the model instance.
+
+### Discovery returns zero resources in a non-empty VPC
+
+If the `vpcId` global arg is set, all EC2 discovery filters to that VPC. A typo
+in the VPC ID (must match `vpc-[a-f0-9]+`) produces zero results without error.
+If `vpcId` is unset, discovery scans all VPCs in the configured region.
+
+### `MAX_PAGES = 5` truncation
+
+EC2 discovery (VPCs, subnets, IGWs, route tables, security groups) caps at 5
+pages. EC2 returns up to 1,000 items per page, so the cap is ~5,000 resources
+per type. RDS and Secrets Manager return ~100 per page, capping at ~500. The
+`truncated` field in the output is `true` when any discovery function hit its
+cap. Narrow the scope with the `vpcId` global arg if you exceed these limits.
+
+### `plan_stack_adoption` shows no orphans on first run
+
+Orphan detection compares the current plan against a previously stored plan. On
+the first run (or if the previous plan is unreadable), orphan detection silently
+degrades to an empty list. Run `plan_stack_adoption` twice to get meaningful
+orphan data.
+
+### Resources without primary identifiers silently omitted
+
+If the AWS API returns a resource lacking its primary identifier field (e.g. a
+VPC with no `VpcId`), the resource is skipped without warning. The `count` field
+in the output reflects only resources that passed this filter.
+
+### Stale dependency versions in documentation
+
+The README lists dependency versions that may lag behind the manifest. Always
+check `manifest.yaml` for the actual pinned versions required by your installed
+copy.
+
+### CloudFormation stack adoption and nested stacks
+
+`plan_stack_adoption` recurses into nested stacks using
+`MAX_LIST_RESOURCES_PAGES = 10` per stack. Very deeply nested stack trees (10+
+levels or 1,000+ resources per stack) may hit this cap. The method logs a
+warning when truncated.
+
 ## Dependencies
 
-- `@swamp/aws/ec2@2026.04.03.2`
-- `@swamp/aws/rds@2026.04.23.2`
-- `@swamp/aws/secretsmanager@2026.05.18.1`
+- `@swamp/aws/ec2@2026.08.20.1`
+- `@swamp/aws/rds@2026.08.19.1`
+- `@swamp/aws/secretsmanager@2026.08.20.1`
