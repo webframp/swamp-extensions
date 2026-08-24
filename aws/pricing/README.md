@@ -17,7 +17,7 @@ the model's `region` global argument accordingly.
 ## Installation
 
 ```bash
-swamp extension install @webframp/aws/pricing
+swamp extension pull @webframp/aws/pricing
 swamp model create @webframp/aws/pricing aws-pricing
 ```
 
@@ -72,6 +72,49 @@ swamp model method run aws-pricing get_ec2_price \
 - `AmazonDynamoDB` -- DynamoDB
 - `AmazonElastiCache` -- ElastiCache
 - `AmazonEKS` -- Elastic Kubernetes Service
+
+## Troubleshooting
+
+### `get_ec2_price` returns empty items for a valid instance type
+
+The method maps the `region` argument to a Pricing API location string (e.g.
+`"us-east-1"` → `"US East (N. Virginia)"`). The mapping covers 17 regions. For
+unmapped regions (Milan, Cape Town, Hong Kong, Jakarta, etc.), the raw region
+code is used as the location filter, which matches nothing in the API. The
+method returns `items: []` without error.
+
+### Malformed price entries silently dropped
+
+Both `get_price` and `get_ec2_price` parse individual price list entries with
+`JSON.parse()`. Entries that fail to parse are silently skipped. If all entries
+are malformed, the method returns `items: []` successfully. The `truncated`
+field does not account for dropped entries — it reflects pagination status only.
+
+### `MAX_PAGES = 10` truncation in `list_services` and `get_attribute_values`
+
+Both methods cap pagination at 10 pages. Services or attribute values beyond
+that limit are silently omitted. The `truncated` field is set to `true` when the
+cap is reached.
+
+### `get_price` default `maxResults` is 10
+
+The method returns at most 10 items by default. Pass `--input maxResults=100`
+(max 1000) to retrieve more. The method paginates automatically up to
+`maxResults`.
+
+### `get_ec2_price` does not paginate
+
+This method issues a single API call with `MaxResults: 10`. Results beyond 10
+matches are silently truncated with no `truncated` indicator. The tight filter
+set (instance type + location + OS + tenancy) should produce a single match, but
+edge cases (multiple pre-installed software variants) may not all appear.
+
+### Pricing API region
+
+The API exists only in `us-east-1` and `ap-south-1`. The `region` global arg
+defaults to `us-east-1`. This controls the API endpoint, not the pricing target
+region. The method-level `region` argument in `get_ec2_price` controls which
+region's pricing is returned.
 
 ## License
 
