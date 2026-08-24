@@ -378,6 +378,10 @@ export const model = {
         "get_errors limit to 1-1000. Added optional/defaulted truncated fields.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {

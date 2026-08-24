@@ -308,6 +308,10 @@ export const model = {
       description: "Groups endpoint moved to top-level path; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/compliance-config-snapshot"],
 

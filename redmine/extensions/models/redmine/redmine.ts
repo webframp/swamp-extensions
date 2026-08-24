@@ -291,6 +291,10 @@ export const model = {
         "No schema changes other than rejecting an empty search query — API and network error messages now name the request method/path/host instead of only the HTTP status code",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: z.object({

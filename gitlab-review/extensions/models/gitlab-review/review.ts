@@ -314,6 +314,10 @@ export const model = {
         "No schema changes (method arguments now validate project/iid shape; malformed JSON responses raise a clear error)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     mrDiff: {
