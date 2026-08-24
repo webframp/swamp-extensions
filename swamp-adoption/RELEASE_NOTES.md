@@ -1,5 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Added Troubleshooting section documenting design system requirement, scaffold
-prerequisite, import_skill partial-write handling, and array global arg CLI
-syntax.**
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

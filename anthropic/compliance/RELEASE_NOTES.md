@@ -1,6 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Fixed source/manifest version mismatch. Added Troubleshooting section
-documenting the 600 req/min shared rate limit with no backoff, paginateAll 20K
-cap, single-page activities, best-effort group name resolution, orgId
-auto-discovery, and no-retry behavior.**
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

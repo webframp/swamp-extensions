@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/registrar";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -25,11 +27,29 @@ const CreateSandboxRegistrarDomainDiscoveryCheckSchema = z.object({
   domains: z.array(z.unknown()).describe(
     "Array of domain availability results. Domains on unsupported extensions are included with `regist...",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSandboxRegistrarDomainDiscoverySearchSchema = z.object({
   domains: z.array(z.unknown()).describe(
     "Array of domain suggestions sorted by relevance. May be empty if no domains match the search crit...",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -64,6 +84,12 @@ const ListSchema = z.object({
   items: z.array(ListItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSchema = z.object({
@@ -87,6 +113,15 @@ const CreateSchema = z.object({
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
   updated_at: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSchema = z.object({
@@ -114,6 +149,15 @@ const GetSchema = z.object({
   ]).describe(
     "Current registration status. - `active`: Domain is registered and operational - `registration_pen...",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateSchema = z.object({
@@ -137,6 +181,15 @@ const UpdateSchema = z.object({
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
   updated_at: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetStatusSchema = z.object({
@@ -160,6 +213,15 @@ const GetStatusSchema = z.object({
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
   updated_at: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetUpdateStatusSchema = z.object({
@@ -183,17 +245,44 @@ const GetUpdateStatusSchema = z.object({
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
   updated_at: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateRegistrarDomainDiscoveryCheckSchema = z.object({
   domains: z.array(z.unknown()).describe(
     "Array of domain availability results. Domains on unsupported extensions are included with `regist...",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetRegistrarDomainDiscoverySearchSchema = z.object({
   domains: z.array(z.unknown()).describe(
     "Array of domain suggestions sorted by relevance. May be empty if no domains match the search crit...",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -204,10 +293,17 @@ const GetRegistrarDomainDiscoverySearchSchema = z.object({
 /** Cloudflare Registrar — domain registration, transfers, contacts */
 export const model = {
   type: "@webframp/cloudflare/registrar",
-  version: "2026.07.27.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "sandbox_registrar_domain_discovery_check": {
@@ -294,6 +390,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -309,7 +406,12 @@ export const model = {
         const handle = await context.writeResource(
           "sandbox_registrar_domain_discovery_check",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created sandbox_registrar_domain_discovery_check {id}",
@@ -345,6 +447,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -355,7 +458,12 @@ export const model = {
         const handle = await context.writeResource(
           "sandbox_registrar_domain_discovery_search",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched sandbox_registrar_domain_discovery_search",
@@ -386,6 +494,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -412,6 +521,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} list", { count: results.length });
@@ -448,6 +559,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -460,7 +572,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("create", id, result);
+        const handle = await context.writeResource("create", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created create {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -484,6 +601,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -494,7 +612,12 @@ export const model = {
         const handle = await context.writeResource(
           "get",
           String(args.domain_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched get", {});
         return { dataHandles: [handle] };
@@ -522,6 +645,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -540,7 +664,12 @@ export const model = {
         const handle = await context.writeResource(
           "update",
           String(args.domain_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated update", {});
         return { dataHandles: [handle] };
@@ -567,6 +696,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -577,7 +707,12 @@ export const model = {
         const handle = await context.writeResource(
           "status",
           String(args.domain_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched status", {});
         return { dataHandles: [handle] };
@@ -604,6 +739,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -614,7 +750,12 @@ export const model = {
         const handle = await context.writeResource(
           "update_status",
           String(args.domain_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched update_status", {});
         return { dataHandles: [handle] };
@@ -641,6 +782,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -656,7 +798,12 @@ export const model = {
         const handle = await context.writeResource(
           "registrar_domain_discovery_check",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created registrar_domain_discovery_check {id}", {
           id,
@@ -691,6 +838,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -701,7 +849,12 @@ export const model = {
         const handle = await context.writeResource(
           "registrar_domain_discovery_search",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched registrar_domain_discovery_search", {});
         return { dataHandles: [handle] };

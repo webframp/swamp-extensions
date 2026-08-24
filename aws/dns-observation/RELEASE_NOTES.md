@@ -1,6 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Added:** Troubleshooting section documenting per-zone silent record-fetch
-failures, the `detect_orphans` dependency on upstream data collection,
-`MAX_PAGES = 50` truncation behavior, Route 53 region semantics, and
-false-orphan scenarios when reference data is absent.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

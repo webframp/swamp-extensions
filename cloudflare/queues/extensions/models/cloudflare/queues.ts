@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/queues";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -37,6 +39,12 @@ const ListSchema = z.object({
   items: z.array(ListItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSchema = z.object({
@@ -49,6 +57,15 @@ const CreateSchema = z.object({
   queue_id: z.string().optional(),
   queue_name: z.unknown().optional(),
   settings: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSchema = z.object({
@@ -61,6 +78,15 @@ const GetSchema = z.object({
   queue_id: z.string().optional(),
   queue_name: z.unknown().optional(),
   settings: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateSchema = z.object({
@@ -73,6 +99,15 @@ const UpdateSchema = z.object({
   queue_id: z.string().optional(),
   queue_name: z.unknown().optional(),
   settings: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdatePartialSchema = z.object({
@@ -85,6 +120,15 @@ const UpdatePartialSchema = z.object({
   queue_id: z.string().optional(),
   queue_name: z.unknown().optional(),
   settings: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ConsumersItemSchema = z.union([z.unknown(), z.unknown()]);
@@ -93,6 +137,12 @@ const ListConsumersSchema = z.object({
   items: z.array(ConsumersItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateConsumerSchema = z.union([z.unknown(), z.unknown()]);
@@ -101,6 +151,15 @@ const CreateQueuesPushMessageSchema = z.object({
   metadata: z.object({
     metrics: z.unknown().optional(),
   }).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateQueuesAckMessagesSchema = z.object({
@@ -113,21 +172,57 @@ const CreateQueuesAckMessagesSchema = z.object({
   warnings: z.record(z.string(), z.string()).optional().describe(
     "Map of lease IDs to warning messages encountered during acknowledgement.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateQueuesPushMessagesSchema = z.object({
   metadata: z.object({
     metrics: z.unknown().optional(),
   }).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateQueuesPreviewMessagesSchema = z.object({
   messages: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateQueuesAckPreviewMessagesSchema = z.object({
   warnings: z.record(z.string(), z.string()).optional().describe(
     "Map of lease IDs to warning messages encountered during acknowledgement.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -139,6 +234,15 @@ const CreateQueuesPullMessagesSchema = z.object({
   metadata: z.object({
     metrics: z.unknown().optional(),
   }).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetMetricsSchema = z.object({
@@ -150,6 +254,15 @@ const GetMetricsSchema = z.object({
   ),
   oldest_message_timestamp_ms: z.number().describe(
     "Unix timestamp in milliseconds of the oldest unacknowledged message in the queue. Returns 0 if un...",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -163,6 +276,15 @@ const CreateQueuesPurgeSchema = z.object({
   queue_id: z.string().optional(),
   queue_name: z.unknown().optional(),
   settings: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -172,10 +294,17 @@ const CreateQueuesPurgeSchema = z.object({
 /** Cloudflare Queues — queue management, consumers, message operations */
 export const model = {
   type: "@webframp/cloudflare/queues",
-  version: "2026.07.27.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "list": {
@@ -288,6 +417,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -314,6 +444,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} list", { count: results.length });
@@ -339,6 +471,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -351,7 +484,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("create", id, result);
+        const handle = await context.writeResource("create", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created create {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -375,6 +513,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -385,7 +524,12 @@ export const model = {
         const handle = await context.writeResource(
           "get",
           String(args.queue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched get", {});
         return { dataHandles: [handle] };
@@ -418,6 +562,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -436,7 +581,12 @@ export const model = {
         const handle = await context.writeResource(
           "update",
           String(args.queue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated update", {});
         return { dataHandles: [handle] };
@@ -469,6 +619,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -487,7 +638,12 @@ export const model = {
         const handle = await context.writeResource(
           "partial",
           String(args.queue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated partial", {});
         return { dataHandles: [handle] };
@@ -542,6 +698,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["queue_id", "page", "per_page"]);
@@ -568,6 +725,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} consumers", {
@@ -595,6 +754,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -613,7 +773,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_consumer",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed create_consumer", {});
         return { dataHandles: [handle] };
@@ -641,6 +806,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -651,7 +817,12 @@ export const model = {
         const handle = await context.writeResource(
           "consumer",
           String(args.queue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched consumer", {});
         return { dataHandles: [handle] };
@@ -679,6 +850,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -697,7 +869,12 @@ export const model = {
         const handle = await context.writeResource(
           "consumer",
           String(args.queue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated consumer", {});
         return { dataHandles: [handle] };
@@ -758,6 +935,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -777,7 +955,12 @@ export const model = {
         const handle = await context.writeResource(
           "queues_push_message",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created queues_push_message {id}", { id });
         return { dataHandles: [handle] };
@@ -815,6 +998,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -834,7 +1018,12 @@ export const model = {
         const handle = await context.writeResource(
           "queues_ack_messages",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created queues_ack_messages {id}", { id });
         return { dataHandles: [handle] };
@@ -865,6 +1054,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -884,7 +1074,12 @@ export const model = {
         const handle = await context.writeResource(
           "queues_push_messages",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created queues_push_messages {id}", { id });
         return { dataHandles: [handle] };
@@ -910,6 +1105,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -929,7 +1125,12 @@ export const model = {
         const handle = await context.writeResource(
           "queues_preview_messages",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created queues_preview_messages {id}", { id });
         return { dataHandles: [handle] };
@@ -967,6 +1168,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -986,7 +1188,12 @@ export const model = {
         const handle = await context.writeResource(
           "queues_ack_preview_messages",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created queues_ack_preview_messages {id}", { id });
         return { dataHandles: [handle] };
@@ -1013,6 +1220,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1032,7 +1240,12 @@ export const model = {
         const handle = await context.writeResource(
           "queues_pull_messages",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created queues_pull_messages {id}", { id });
         return { dataHandles: [handle] };
@@ -1057,6 +1270,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1067,7 +1281,12 @@ export const model = {
         const handle = await context.writeResource(
           "metrics",
           String(args.queue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched metrics", {});
         return { dataHandles: [handle] };
@@ -1095,6 +1314,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1111,7 +1331,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("queues_purge", id, result);
+        const handle = await context.writeResource("queues_purge", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created queues_purge {id}", { id });
         return { dataHandles: [handle] };
       },

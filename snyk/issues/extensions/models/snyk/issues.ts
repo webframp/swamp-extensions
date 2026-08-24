@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/issues";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -27,10 +29,17 @@ const GlobalArgsSchema = z.object({
 /** Snyk Issues — vulnerability issues across projects and groups */
 export const model = {
   type: "@webframp/snyk/issues",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "list_group_issues": {
@@ -107,6 +116,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["group_id"]);
@@ -129,7 +139,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_group_issues",
           String(args.group_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_group_issues", {});
         return { dataHandles: [handle] };
@@ -159,6 +174,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -170,7 +186,12 @@ export const model = {
         const handle = await context.writeResource(
           "group_issue_by_issue_id",
           String(args.issue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched group_issue_by_issue_id", {});
         return { dataHandles: [handle] };
@@ -220,6 +241,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>([]);
@@ -242,7 +264,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_org_issues",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_org_issues", {});
         return { dataHandles: [handle] };
@@ -269,6 +296,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -280,7 +308,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_issue_by_issue_id",
           String(args.issue_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched org_issue_by_issue_id", {});
         return { dataHandles: [handle] };

@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/hyperdrive";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -40,6 +42,12 @@ const ListHyperdriveSchema = z.object({
   items: z.array(HyperdriveItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchHyperdriveSchema = z.object({
@@ -55,6 +63,15 @@ const PatchHyperdriveSchema = z.object({
   name: z.unknown(),
   origin: z.union([z.unknown(), z.unknown(), z.unknown()]),
   origin_connection_limit: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -64,10 +81,17 @@ const PatchHyperdriveSchema = z.object({
 /** Cloudflare Hyperdrive — database connection pooling configurations */
 export const model = {
   type: "@webframp/cloudflare/hyperdrive",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "hyperdrive": {
@@ -109,6 +133,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -146,6 +171,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} hyperdrive", {
@@ -183,6 +210,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         if (
@@ -218,7 +246,12 @@ export const model = {
         }
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("hyperdrive", id, result);
+        const handle = await context.writeResource("hyperdrive", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created hyperdrive {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -247,6 +280,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -267,7 +301,12 @@ export const model = {
         const handle = await context.writeResource(
           "hyperdrive",
           String(args.hyperdrive_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched hyperdrive", {});
         return { dataHandles: [handle] };
@@ -308,6 +347,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -336,7 +376,12 @@ export const model = {
         const handle = await context.writeResource(
           "hyperdrive",
           String(args.hyperdrive_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated hyperdrive", {});
         return { dataHandles: [handle] };
@@ -374,6 +419,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -402,7 +448,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_hyperdrive",
           String(args.hyperdrive_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_hyperdrive", {});
         return { dataHandles: [handle] };

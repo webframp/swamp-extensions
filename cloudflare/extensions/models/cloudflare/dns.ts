@@ -12,6 +12,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -39,12 +41,27 @@ const DnsRecordSchema = z.object({
   modified_on: z.string(),
   comment: z.string().optional().nullable(),
   tags: z.array(z.string()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DnsRecordListSchema = z.object({
   zoneId: z.string(),
   records: z.array(DnsRecordSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PROXYABLE_RECORD_TYPES = new Set(["A", "AAAA", "CNAME"]);
@@ -87,7 +104,7 @@ function buildDnsRecordPayload(
 /** Cloudflare DNS model definition with full CRUD methods and BIND-format export. */
 export const model = {
   type: "@webframp/cloudflare/dns",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -107,6 +124,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -160,6 +186,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         if (args.type) params.type = args.type;
@@ -185,6 +212,8 @@ export const model = {
           records,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} DNS records", {
@@ -213,6 +242,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const record = await cfApi<z.infer<typeof DnsRecordSchema>>(
@@ -224,7 +254,12 @@ export const model = {
         const handle = await context.writeResource(
           "record",
           args.recordId,
-          record,
+          {
+            ...record,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched DNS record {name} ({type})", {
           name: record.name,
@@ -292,6 +327,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = buildDnsRecordPayload(args);
@@ -303,7 +339,12 @@ export const model = {
           body,
         );
 
-        const handle = await context.writeResource("record", record.id, record);
+        const handle = await context.writeResource("record", record.id, {
+          ...record,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created DNS record {name} ({type}) -> {content}", {
           name: record.name,
           type: record.type,
@@ -369,6 +410,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = buildDnsRecordPayload(args);
@@ -380,7 +422,12 @@ export const model = {
           body,
         );
 
-        const handle = await context.writeResource("record", record.id, record);
+        const handle = await context.writeResource("record", record.id, {
+          ...record,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Updated DNS record {name} ({type})", {
           name: record.name,
           type: record.type,

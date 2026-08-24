@@ -1,8 +1,6 @@
-## 2026.08.23.1
+## 2026.08.24.1
 
-**Changed:** Documentation only — no code changes. Documented the previously
-undocumented `profile` global arg for SSO/`fromIni` auth. Added a
-`## Troubleshooting` section covering `enrichAlarm`'s per-alarm degrade to
-`verdict: "unknown"`, the silent empty `sns_topics` catch in `resolveSnsTopics`,
-`getRecentMetricStats`'s silent `null` return for composite/anomaly-detection
-alarms, and the unpaginated 100-record cap on noisy-alarm counts.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

@@ -1,9 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Fixed:** Corrected installation command (`swamp extension install` →
-`swamp extension pull`).
-
-**Added:** Troubleshooting section documenting query timeout behavior,
-`parseRelativeTime` silent fallback, region-scope guidance, keyword
-configuration for `find_errors`, unbounded pagination risk, and
-`requireComplete=false` partial-result semantics.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

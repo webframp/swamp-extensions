@@ -11,6 +11,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/hermes-kanban-orchestrator";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -65,6 +67,15 @@ const KanbanTaskSchema = z.object({
     "First 200 characters of the task body, if provided",
   ),
   createdAt: z.string().describe("Timestamp the task record was written"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListRecentArgsSchema = z.object({
@@ -175,6 +186,7 @@ async function newTask(
 ): Promise<
   { dataHandles: { spec: string; instance: string; name: string }[] }
 > {
+  const startMs = Date.now();
   const cfg = ctx.globalArgs;
   ctx.logger.info("Creating kanban task", {
     type: args.type,
@@ -227,6 +239,9 @@ async function newTask(
         status: "exists",
         tags: args.tags ?? [],
         createdAt: new Date().toISOString(),
+
+        durationMs: Date.now() - startMs,
+        collectedBy: EXTENSION_NAME,
       });
       return { dataHandles: [handle] };
     }
@@ -262,6 +277,9 @@ async function newTask(
     tags: args.tags ?? [],
     bodyPreview: args.body ? args.body.slice(0, 200) : undefined,
     createdAt: new Date().toISOString(),
+
+    durationMs: Date.now() - startMs,
+    collectedBy: EXTENSION_NAME,
   });
 
   ctx.logger.info(`Kanban task created: ${taskId}`);
@@ -274,6 +292,7 @@ async function listRecent(
 ): Promise<
   { dataHandles: { spec: string; instance: string; name: string }[] }
 > {
+  const startMs = Date.now();
   ctx.logger.info("Listing recent kanban tasks");
 
   const kanbanArgs = ["list", "--json"];
@@ -327,6 +346,9 @@ async function listRecent(
         assignee: task.assignee ?? "",
         type: task.type ?? "unknown",
         createdAt: new Date().toISOString(),
+
+        durationMs: Date.now() - startMs,
+        collectedBy: EXTENSION_NAME,
       });
     }),
   );
@@ -341,7 +363,7 @@ async function listRecent(
 /** Kanban orchestrator model. Creates kanban tasks via `hermes kanban create` and records each as swamp data. */
 export const model = {
   type: "@webframp/hermes-kanban-orchestrator" as const,
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -362,6 +384,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

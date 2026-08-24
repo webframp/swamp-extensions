@@ -13,6 +13,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/gitlab-datastore-bootstrap";
+
 const GlobalArgsSchema = z.object({
   project_id: z
     .string()
@@ -74,6 +76,12 @@ const ProvisionResultSchema = z.object({
     .describe("JSON config for swamp datastore setup command"),
   validatedAt: z.string().describe("ISO 8601 timestamp of validation"),
   durationMs: z.number().describe("Total provisioning duration in ms"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Make a GitLab API request. */
@@ -223,7 +231,7 @@ async function createProjectToken(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/gitlab-datastore-bootstrap/provisioner",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {
@@ -313,6 +321,9 @@ export const model = {
           datastoreConfig,
           validatedAt: new Date().toISOString(),
           durationMs,
+
+          fetchedAt: new Date().toISOString(),
+          collectedBy: EXTENSION_NAME,
         });
 
         return { dataHandles: [handle] };

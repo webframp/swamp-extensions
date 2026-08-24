@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/projects";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -79,6 +81,12 @@ const ListOrgProjectsSchema = z.object({
   items: z.array(OrgProjectsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetOrgProjectSchema = z.object({
@@ -134,11 +142,29 @@ const GetOrgProjectSchema = z.object({
   organization_id: z.string().optional().describe("Related organization ID"),
   owner_id: z.string().optional().describe("Related owner ID"),
   target_id: z.string().optional().describe("Related target ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSbomSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -148,10 +174,17 @@ const GetSbomSchema = z.object({
 /** Snyk Projects — project listing, attributes, relationships, and target management */
 export const model = {
   type: "@webframp/snyk/projects",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "org_projects": {
@@ -251,6 +284,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -276,6 +310,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} org_projects", {
@@ -312,6 +348,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["project_id"]);
@@ -334,7 +371,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_project",
           String(args.project_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched org_project", {});
         return { dataHandles: [handle] };
@@ -399,6 +441,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["project_id", "expand"]);
@@ -417,7 +460,12 @@ export const model = {
         const handle = await context.writeResource(
           "org_project",
           String(args.project_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated org_project", {});
         return { dataHandles: [handle] };
@@ -492,6 +540,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["project_id"]);
@@ -514,7 +563,12 @@ export const model = {
         const handle = await context.writeResource(
           "sbom",
           String(args.project_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched sbom", {});
         return { dataHandles: [handle] };

@@ -12,6 +12,8 @@
 import { z } from "npm:zod@4.4.3";
 import { redmineApi, redmineApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/redmine";
+
 // =============================================================================
 // Types for raw Redmine API responses (snake_case)
 // =============================================================================
@@ -230,7 +232,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
 
   upgrades: [
     {
@@ -295,6 +297,15 @@ export const model = {
       toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: z.object({
@@ -352,6 +363,12 @@ export const model = {
         })),
         totalCount: z.number(),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "30m" as const,
       garbageCollection: 5,
@@ -433,6 +450,12 @@ export const model = {
           updatedOn: z.string(),
         })),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "1h" as const,
       garbageCollection: 3,
@@ -446,6 +469,12 @@ export const model = {
           isClosed: z.boolean(),
         })),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 1,
@@ -460,6 +489,12 @@ export const model = {
           description: z.string(),
         })),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 1,
@@ -475,6 +510,12 @@ export const model = {
         })),
         project: z.string(),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "1h" as const,
       garbageCollection: 3,
@@ -496,6 +537,12 @@ export const model = {
           trackers: z.array(z.object({ id: z.number(), name: z.string() })),
         })),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 1,
@@ -512,6 +559,12 @@ export const model = {
         })),
         issueId: z.number(),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "30m" as const,
       garbageCollection: 5,
@@ -532,6 +585,12 @@ export const model = {
           updatedOn: z.string(),
         })),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "1h" as const,
       garbageCollection: 3,
@@ -553,6 +612,12 @@ export const model = {
         })),
         totalCount: z.number(),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "30m" as const,
       garbageCollection: 5,
@@ -571,6 +636,12 @@ export const model = {
         totalCount: z.number(),
         query: z.string(),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "15m" as const,
       garbageCollection: 3,
@@ -585,6 +656,12 @@ export const model = {
         })),
         project: z.string(),
         fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }),
       lifetime: "1h" as const,
       garbageCollection: 3,
@@ -602,6 +679,7 @@ export const model = {
       description: "List all issue statuses",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ issue_statuses: RawStatus[] }>(
           host,
@@ -621,6 +699,8 @@ export const model = {
         const handle = await context.writeResource("statuses", "all", {
           statuses,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} statuses", {
@@ -634,6 +714,7 @@ export const model = {
       description: "List all trackers",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ trackers: RawTracker[] }>(
           host,
@@ -654,6 +735,8 @@ export const model = {
         const handle = await context.writeResource("trackers", "all", {
           trackers,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} trackers", {
@@ -667,6 +750,7 @@ export const model = {
       description: "List all accessible projects",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const rawProjects = await redmineApiPaginated<RawProject>(
           host,
@@ -692,6 +776,8 @@ export const model = {
         const handle = await context.writeResource("projects", "all", {
           projects,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} projects", {
@@ -713,6 +799,7 @@ export const model = {
         args: { project?: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
         if (!project) {
@@ -752,6 +839,8 @@ export const model = {
           members,
           project,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} members in project {project}", {
@@ -766,6 +855,7 @@ export const model = {
       description: "List all custom field definitions",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ custom_fields: RawCustomField[] }>(
           host,
@@ -792,6 +882,8 @@ export const model = {
         const handle = await context.writeResource("custom_fields", "all", {
           customFields,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} custom fields", {
@@ -839,6 +931,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const params: Record<string, string> = {};
 
@@ -901,6 +994,8 @@ export const model = {
           issues,
           totalCount: issues.length,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} issues", { count: issues.length });
@@ -917,6 +1012,7 @@ export const model = {
         args: { issueId: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{ issue: RawIssue }>(
           host,
@@ -932,7 +1028,12 @@ export const model = {
         const handle = await context.writeResource(
           "issue_detail",
           String(args.issueId),
-          issue,
+          {
+            ...issue,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Fetched issue {id}", { id: args.issueId });
@@ -975,6 +1076,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
 
         // Build payload with only defined fields
@@ -1027,7 +1129,12 @@ export const model = {
         const handle = await context.writeResource(
           "issue_detail",
           String(data.issue.id),
-          issue,
+          {
+            ...issue,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Created issue {id}", { id: data.issue.id });
@@ -1080,6 +1187,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
 
         // Build update payload with only defined fields
@@ -1149,7 +1257,12 @@ export const model = {
         const handle = await context.writeResource(
           "issue_detail",
           String(args.issueId),
-          issue,
+          {
+            ...issue,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Updated issue {id}", { id: args.issueId });
@@ -1189,6 +1302,7 @@ export const model = {
         args: { issueId: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const data = await redmineApi<{
           relations: Array<{
@@ -1222,6 +1336,8 @@ export const model = {
             relations,
             issueId: args.issueId,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1329,6 +1445,7 @@ export const model = {
         args: { project?: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
         if (!project) {
@@ -1375,6 +1492,8 @@ export const model = {
         const handle = await context.writeResource("versions", project, {
           versions,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} versions in project {project}", {
@@ -1408,6 +1527,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const params: Record<string, string> = {};
         if (args.issueId !== undefined) {
@@ -1465,6 +1585,8 @@ export const model = {
             timeEntries,
             totalCount: timeEntries.length,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1606,6 +1728,7 @@ export const model = {
         args: { query: string; project?: string; limit?: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const params = new URLSearchParams({ q: args.query });
         if (args.limit !== undefined) {
@@ -1643,6 +1766,8 @@ export const model = {
             totalCount: data.total_count,
             query: args.query,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1663,6 +1788,7 @@ export const model = {
         args: { versionId: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
 
         interface RawVersion {
@@ -1704,7 +1830,12 @@ export const model = {
         const handle = await context.writeResource(
           "versions",
           String(args.versionId),
-          { versions: [version], fetchedAt: new Date().toISOString() },
+          {
+            versions: [version],
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Fetched version {id}", { id: args.versionId });
@@ -1745,6 +1876,7 @@ export const model = {
         },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
         if (!project) {
@@ -1803,7 +1935,12 @@ export const model = {
         const handle = await context.writeResource(
           "versions",
           String(v.id),
-          { versions: [version], fetchedAt: new Date().toISOString() },
+          {
+            versions: [version],
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Created version {name} ({id})", {
@@ -1939,6 +2076,7 @@ export const model = {
         args: { project?: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
         const project = args.project ?? context.globalArgs.project;
         if (!project) {
@@ -1967,7 +2105,13 @@ export const model = {
         const handle = await context.writeResource(
           "issue_categories",
           project,
-          { categories, project, fetchedAt: new Date().toISOString() },
+          {
+            categories,
+            project,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Found {count} categories in project {project}", {

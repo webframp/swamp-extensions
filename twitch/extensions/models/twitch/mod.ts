@@ -11,6 +11,8 @@ import { z } from "npm:zod@4.4.3";
 import { helixApi, helixApiPaginated } from "./_lib/api.ts";
 import type { TwitchCredentials } from "./_lib/types.ts";
 
+const EXTENSION_NAME = "@webframp/twitch";
+
 // =============================================================================
 // Helpers (internal)
 // =============================================================================
@@ -116,6 +118,12 @@ const ChannelSchema = z.object({
   viewerCount: z.number().nullable().default(null),
   startedAt: z.string().nullable().default(null),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ChatterSchema = z.object({
@@ -129,6 +137,12 @@ const ChattersSchema = z.object({
   chatters: z.array(ChatterSchema),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UserSchema = z.object({
@@ -140,6 +154,12 @@ const UserSchema = z.object({
   profileImageUrl: z.string(),
   broadcasterType: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const BanEntrySchema = z.object({
@@ -156,6 +176,12 @@ const BannedUsersSchema = z.object({
   bans: z.array(BanEntrySchema),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const BanResultSchema = z.object({
@@ -163,6 +189,12 @@ const BanResultSchema = z.object({
   userId: z.string(),
   channel: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ChatMessageSchema = z.object({
@@ -170,6 +202,15 @@ const ChatMessageSchema = z.object({
   message: z.string(),
   replyToMessageId: z.string().nullable(),
   sentAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ModEventSchema = z.object({
@@ -185,6 +226,12 @@ const ModEventsSchema = z.object({
   events: z.array(ModEventSchema),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -194,7 +241,7 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -217,6 +264,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -272,6 +328,7 @@ export const model = {
         "Get channel information (game, title, tags) for the configured channel",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { channel } = context.globalArgs;
         const creds = credsFrom(context.globalArgs);
         const broadcasterId = await getBroadcasterId(creds, channel);
@@ -316,6 +373,8 @@ export const model = {
           viewerCount: isLive ? stream!.viewer_count : null,
           startedAt: isLive ? stream!.started_at : null,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Fetched channel info for {channel}", { channel });
@@ -327,6 +386,7 @@ export const model = {
       description: "Get the list of current chatters in the configured channel",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { channel, moderatorId } = context.globalArgs;
         const creds = credsFrom(context.globalArgs);
         const broadcasterId = await getBroadcasterId(creds, channel);
@@ -353,6 +413,8 @@ export const model = {
           chatters,
           count: chatters.length,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} chatters in {channel}", {
@@ -370,6 +432,7 @@ export const model = {
         login: z.string().min(1).describe("Twitch login name to look up"),
       }),
       execute: async (args: { login: string }, context: MethodContext) => {
+        const startMs = Date.now();
         const creds = credsFrom(context.globalArgs);
 
         const resp = await helixApi<{
@@ -400,6 +463,8 @@ export const model = {
           profileImageUrl: u.profile_image_url,
           broadcasterType: u.broadcaster_type,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Fetched user {login} (account age: {days} days)", {
@@ -415,6 +480,7 @@ export const model = {
         "Get all banned users in the configured channel (requires broadcaster authorization)",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { channel, hasBroadcasterAuth } = context.globalArgs;
 
         if (!hasBroadcasterAuth) {
@@ -450,6 +516,8 @@ export const model = {
           bans,
           count: bans.length,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} bans in {channel}", {
@@ -476,6 +544,7 @@ export const model = {
         args: { userId: string; reason?: string; duration?: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { channel, moderatorId } = context.globalArgs;
         const creds = credsFrom(context.globalArgs);
         const broadcasterId = await getBroadcasterId(creds, channel);
@@ -500,6 +569,8 @@ export const model = {
           userId: args.userId,
           channel,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("{action} user {userId} in {channel}", {
@@ -518,6 +589,7 @@ export const model = {
         userId: z.string().min(1).describe("Twitch user ID to unban"),
       }),
       execute: async (args: { userId: string }, context: MethodContext) => {
+        const startMs = Date.now();
         const { channel, moderatorId } = context.globalArgs;
         const creds = credsFrom(context.globalArgs);
         const broadcasterId = await getBroadcasterId(creds, channel);
@@ -535,6 +607,8 @@ export const model = {
           userId: args.userId,
           channel,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Unbanned user {userId} in {channel}", {
@@ -560,6 +634,7 @@ export const model = {
         args: { message: string; replyToMessageId?: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { channel, moderatorId } = context.globalArgs;
         const creds = credsFrom(context.globalArgs);
         const broadcasterId = await getBroadcasterId(creds, channel);
@@ -584,6 +659,9 @@ export const model = {
             message: args.message,
             replyToMessageId: args.replyToMessageId ?? null,
             sentAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
 
@@ -597,6 +675,7 @@ export const model = {
         "Get moderator add/remove events for the configured channel (requires broadcaster authorization; uses legacy endpoint, may return empty on newer channels)",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { channel, hasBroadcasterAuth } = context.globalArgs;
 
         if (!hasBroadcasterAuth) {
@@ -635,6 +714,8 @@ export const model = {
           events,
           count: events.length,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} mod events in {channel}", {

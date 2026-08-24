@@ -12,6 +12,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -36,12 +38,27 @@ const FirewallRuleSchema = z.object({
   }),
   created_on: z.string(),
   modified_on: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const FirewallRuleListSchema = z.object({
   zoneId: z.string(),
   rules: z.array(FirewallRuleSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WafPackageSchema = z.object({
@@ -58,6 +75,12 @@ const WafPackageListSchema = z.object({
   zoneId: z.string(),
   packages: z.array(WafPackageSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SecurityEventSchema = z.object({
@@ -78,6 +101,12 @@ const SecurityEventsSchema = z.object({
   zoneId: z.string(),
   events: z.array(SecurityEventSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -87,7 +116,7 @@ const SecurityEventsSchema = z.object({
 /** Cloudflare WAF model definition with methods for firewall rules, WAF packages, and security events. */
 export const model = {
   type: "@webframp/cloudflare/waf",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -107,6 +136,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -156,6 +194,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const { results: rules, truncated } = await cfApiPaginated<
@@ -177,6 +216,8 @@ export const model = {
           rules,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} firewall rules", {
@@ -232,6 +273,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         // Create filter first
@@ -272,7 +314,12 @@ export const model = {
         }
 
         const rule = rules[0];
-        const handle = await context.writeResource("rule", rule.id, rule);
+        const handle = await context.writeResource("rule", rule.id, {
+          ...rule,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
 
         context.logger.info(
           "Created firewall rule: {action} when {expression}",
@@ -334,6 +381,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const rules = await cfApi<z.infer<typeof FirewallRuleSchema>[]>(
@@ -350,7 +398,12 @@ export const model = {
         }
 
         const rule = rules[0];
-        const handle = await context.writeResource("rule", rule.id, rule);
+        const handle = await context.writeResource("rule", rule.id, {
+          ...rule,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
 
         const status = args.paused ? "paused" : "enabled";
         context.logger.info("Firewall rule {ruleId} {status}", {
@@ -378,6 +431,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const { results: packages, truncated: pkgTruncated } =
@@ -400,6 +454,8 @@ export const model = {
           packages,
           truncated: pkgTruncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} WAF packages", {
@@ -430,6 +486,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const query = `
@@ -540,6 +597,8 @@ export const model = {
           zoneId,
           events,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Fetched {count} security events", {

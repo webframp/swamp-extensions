@@ -13,6 +13,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/anthropic/compliance";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -73,6 +75,12 @@ const ActivityFeedSchema = z.object({
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when the feed was fetched",
   ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // --- Directory ---
@@ -92,6 +100,12 @@ const OrgListSchema = z.object({
   count: z.number().describe("Number of organizations returned"),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when organizations were fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -113,6 +127,12 @@ const DirectoryUserListSchema = z.object({
   count: z.number().describe("Number of users returned"),
   has_more: z.boolean().describe("Whether more users exist beyond this page"),
   fetchedAt: z.string().describe("ISO 8601 timestamp when users were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const RoleSchema = z.object({
@@ -127,6 +147,12 @@ const RoleListSchema = z.object({
   count: z.number().describe("Number of roles returned"),
   has_more: z.boolean().describe("Whether more roles exist beyond this page"),
   fetchedAt: z.string().describe("ISO 8601 timestamp when roles were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GroupMemberSchema = z.object({
@@ -153,6 +179,12 @@ const GroupListSchema = z.object({
   count: z.number().describe("Number of groups returned"),
   has_more: z.boolean().describe("Whether more groups exist beyond this page"),
   fetchedAt: z.string().describe("ISO 8601 timestamp when groups were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GroupDetailSchema = z.object({
@@ -165,6 +197,12 @@ const GroupDetailSchema = z.object({
   count: z.number().describe("Number of members returned"),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when membership was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -183,6 +221,12 @@ const EffectiveSettingsSchema = z.object({
   count: z.number().describe("Number of settings returned"),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when settings were fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -295,7 +339,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -310,6 +354,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -380,6 +433,7 @@ export const model = {
         args: { activity_types?: string; since?: string; limit?: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const params: Record<string, string> = {};
         if (args.activity_types) {
@@ -417,7 +471,12 @@ export const model = {
         const handle = await ctx.writeResource(
           "activities",
           "recent",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         ctx.logger.info("Collected {count} activities", {
           count: result.count,
@@ -430,6 +489,7 @@ export const model = {
       description: "Discover organizations visible to the compliance key.",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const data = await complianceRequest(
           key,
@@ -448,7 +508,12 @@ export const model = {
         const handle = await ctx.writeResource(
           "organizations",
           "all",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         ctx.logger.info("Found {count} organizations", {
           count: result.count,
@@ -462,6 +527,7 @@ export const model = {
         "Sync all directory users for the organization. Paginates automatically.",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         const { items, hasMore } = await paginateAll(
@@ -484,7 +550,12 @@ export const model = {
           has_more: hasMore,
           fetchedAt: new Date().toISOString(),
         };
-        const handle = await ctx.writeResource("users", "users", result);
+        const handle = await ctx.writeResource("users", "users", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         ctx.logger.info("Synced {count} users for org {orgId}", {
           count: result.count,
           orgId,
@@ -497,6 +568,7 @@ export const model = {
       description: "Sync roles defined for the organization.",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         const data = await complianceRequest(
@@ -515,7 +587,12 @@ export const model = {
           has_more: data.has_more ?? false,
           fetchedAt: new Date().toISOString(),
         };
-        const handle = await ctx.writeResource("roles", "roles", result);
+        const handle = await ctx.writeResource("roles", "roles", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         ctx.logger.info("Synced {count} roles for org {orgId}", {
           count: result.count,
           orgId,
@@ -529,6 +606,7 @@ export const model = {
         "Sync groups for the organization. Use get_group_members for member detail with SCIM source attribution.",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         // Groups endpoint is top-level, not org-scoped — the org-scoped path
@@ -551,7 +629,12 @@ export const model = {
           has_more: data.has_more ?? false,
           fetchedAt: new Date().toISOString(),
         };
-        const handle = await ctx.writeResource("groups", "groups", result);
+        const handle = await ctx.writeResource("groups", "groups", {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         ctx.logger.info("Synced {count} groups for org {orgId}", {
           count: result.count,
           orgId,
@@ -569,6 +652,7 @@ export const model = {
         ),
       }),
       execute: async (args: { groupId: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         // Groups are globally addressable by ID, not org-scoped like /organizations/{orgId}/users
@@ -619,7 +703,12 @@ export const model = {
         const handle = await ctx.writeResource(
           "groupMembers",
           `member:${args.groupId}`,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         ctx.logger.info("Fetched {count} members for group {group}", {
           count: result.count,
@@ -634,6 +723,7 @@ export const model = {
         "Observe effective runtime settings: data retention, content redaction, IP allowlist, SSO mode, code execution egress.",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         const data = await complianceRequest(
@@ -657,7 +747,12 @@ export const model = {
         const handle = await ctx.writeResource(
           "effectiveSettings",
           "effectiveSettings",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         ctx.logger.info(
           "Synced {count} effective settings for org {orgId}",
@@ -672,6 +767,7 @@ export const model = {
         "Fan-out: sync users, roles, and groups for the organization in one method call.",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         const handles: { name: string }[] = [];
@@ -698,6 +794,8 @@ export const model = {
             count: users.length,
             has_more: usersHasMore,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           }),
         );
 
@@ -717,6 +815,8 @@ export const model = {
             count: roles.length,
             has_more: rolesData.has_more ?? false,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           }),
         );
 
@@ -738,6 +838,8 @@ export const model = {
             count: groups.length,
             has_more: groupsData.has_more ?? false,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           }),
         );
 

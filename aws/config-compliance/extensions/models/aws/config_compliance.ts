@@ -22,6 +22,8 @@ import {
 } from "npm:@aws-sdk/client-sts@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/config-compliance";
+
 const MAX_PAGES = 20;
 
 // =============================================================================
@@ -86,6 +88,12 @@ const RuleSummarySchema = z.object({
 
 const ComplianceResultSchema = z.object({
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   accountId: z.string(),
   region: z.string(),
   evaluations: z.array(ComplianceEvaluationSchema),
@@ -100,6 +108,12 @@ const ComplianceResultSchema = z.object({
 
 const RuleListSchema = z.object({
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   region: z.string(),
   rules: z.array(RuleSummarySchema),
 });
@@ -153,7 +167,7 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -174,6 +188,15 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Error-message quality pass: no schema changes to stored resources",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -205,6 +228,7 @@ export const model = {
         args: { includeCompliant?: boolean },
         context: ConfigComplianceContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.region;
         const client = new ConfigServiceClient(
           makeClientConfig(context.globalArgs),
@@ -327,7 +351,12 @@ export const model = {
           const handle = await context.writeResource(
             "compliance",
             "latest",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
 
           context.logger.info(
@@ -349,6 +378,7 @@ export const model = {
         _args: Record<string, never>,
         context: ConfigComplianceContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.region;
         const client = new ConfigServiceClient(
           makeClientConfig(context.globalArgs),
@@ -445,7 +475,12 @@ export const model = {
           const handle = await context.writeResource(
             "summary",
             "latest",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
 
           context.logger.info("Found {count} Config rules in {region}", {
@@ -467,6 +502,7 @@ export const model = {
         _args: Record<string, never>,
         context: ConfigComplianceContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.region;
         const client = new ConfigServiceClient(
           makeClientConfig(context.globalArgs),
@@ -515,7 +551,12 @@ export const model = {
           const handle = await context.writeResource(
             "summary",
             "rules",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
 
           context.logger.info("Listed {count} Config rules in {region}", {

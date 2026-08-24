@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/rulesets";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -28,10 +30,17 @@ const GlobalArgsSchema = z.object({
 /** Cloudflare Rulesets — WAF custom rules, transform rules, managed rulesets */
 export const model = {
   type: "@webframp/cloudflare/rulesets",
-  version: "2026.07.27.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "listaccountrulesets": {
@@ -217,6 +226,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -227,7 +237,12 @@ export const model = {
         const handle = await context.writeResource(
           "listaccountrulesets",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listaccountrulesets", {});
         return { dataHandles: [handle] };
@@ -250,6 +265,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -261,7 +277,12 @@ export const model = {
         const handle = await context.writeResource(
           "createaccountruleset",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed createaccountruleset", {});
         return { dataHandles: [handle] };
@@ -288,6 +309,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -298,7 +320,12 @@ export const model = {
         const handle = await context.writeResource(
           "getaccountentrypointruleset",
           String(args.ruleset_phase),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getaccountentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -325,6 +352,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -343,7 +371,12 @@ export const model = {
         const handle = await context.writeResource(
           "updateaccountentrypointruleset",
           String(args.ruleset_phase),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated updateaccountentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -370,6 +403,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -380,7 +414,12 @@ export const model = {
         const handle = await context.writeResource(
           "listaccountentrypointrulesetversions",
           String(args.ruleset_phase),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listaccountentrypointrulesetversions", {});
         return { dataHandles: [handle] };
@@ -408,6 +447,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -418,7 +458,12 @@ export const model = {
         const handle = await context.writeResource(
           "getaccountentrypointrulesetversion",
           String(args.ruleset_phase),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getaccountentrypointrulesetversion", {});
         return { dataHandles: [handle] };
@@ -443,6 +488,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -453,7 +499,12 @@ export const model = {
         const handle = await context.writeResource(
           "getaccountruleset",
           String(args.ruleset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getaccountruleset", {});
         return { dataHandles: [handle] };
@@ -478,6 +529,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -496,7 +548,12 @@ export const model = {
         const handle = await context.writeResource(
           "updateaccountruleset",
           String(args.ruleset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated updateaccountruleset", {});
         return { dataHandles: [handle] };
@@ -551,6 +608,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -562,7 +620,12 @@ export const model = {
         const handle = await context.writeResource(
           "createaccountrulesetrule",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed createaccountrulesetrule", {});
         return { dataHandles: [handle] };
@@ -590,6 +653,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -608,7 +672,12 @@ export const model = {
         const handle = await context.writeResource(
           "updateaccountrulesetrule",
           String(args.ruleset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated updateaccountrulesetrule", {});
         return { dataHandles: [handle] };
@@ -666,6 +735,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -676,7 +746,12 @@ export const model = {
         const handle = await context.writeResource(
           "listaccountrulesetversions",
           String(args.ruleset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listaccountrulesetversions", {});
         return { dataHandles: [handle] };
@@ -702,6 +777,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -712,7 +788,12 @@ export const model = {
         const handle = await context.writeResource(
           "getaccountrulesetversion",
           String(args.ruleset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getaccountrulesetversion", {});
         return { dataHandles: [handle] };
@@ -772,6 +853,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -782,7 +864,12 @@ export const model = {
         const handle = await context.writeResource(
           "listaccountrulesetversionrulesbytag",
           String(args.ruleset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listaccountrulesetversionrulesbytag", {});
         return { dataHandles: [handle] };
@@ -813,6 +900,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -823,7 +911,12 @@ export const model = {
         const handle = await context.writeResource(
           "listzonerulesets",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listzonerulesets", {});
         return { dataHandles: [handle] };
@@ -848,6 +941,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -859,7 +953,12 @@ export const model = {
         const handle = await context.writeResource(
           "createzoneruleset",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed createzoneruleset", {});
         return { dataHandles: [handle] };
@@ -887,6 +986,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -897,7 +997,12 @@ export const model = {
         const handle = await context.writeResource(
           "getzoneentrypointruleset",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getzoneentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -925,6 +1030,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -943,7 +1049,12 @@ export const model = {
         const handle = await context.writeResource(
           "updatezoneentrypointruleset",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated updatezoneentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -971,6 +1082,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -981,7 +1093,12 @@ export const model = {
         const handle = await context.writeResource(
           "listzoneentrypointrulesetversions",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listzoneentrypointrulesetversions", {});
         return { dataHandles: [handle] };
@@ -1010,6 +1127,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1020,7 +1138,12 @@ export const model = {
         const handle = await context.writeResource(
           "getzoneentrypointrulesetversion",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getzoneentrypointrulesetversion", {});
         return { dataHandles: [handle] };
@@ -1046,6 +1169,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1056,7 +1180,12 @@ export const model = {
         const handle = await context.writeResource(
           "getzoneruleset",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getzoneruleset", {});
         return { dataHandles: [handle] };
@@ -1082,6 +1211,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1100,7 +1230,12 @@ export const model = {
         const handle = await context.writeResource(
           "updatezoneruleset",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated updatezoneruleset", {});
         return { dataHandles: [handle] };
@@ -1157,6 +1292,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1168,7 +1304,12 @@ export const model = {
         const handle = await context.writeResource(
           "createzonerulesetrule",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed createzonerulesetrule", {});
         return { dataHandles: [handle] };
@@ -1197,6 +1338,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1215,7 +1357,12 @@ export const model = {
         const handle = await context.writeResource(
           "updatezonerulesetrule",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated updatezonerulesetrule", {});
         return { dataHandles: [handle] };
@@ -1275,6 +1422,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1285,7 +1433,12 @@ export const model = {
         const handle = await context.writeResource(
           "listzonerulesetversions",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listzonerulesetversions", {});
         return { dataHandles: [handle] };
@@ -1312,6 +1465,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1322,7 +1476,12 @@ export const model = {
         const handle = await context.writeResource(
           "getzonerulesetversion",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched getzonerulesetversion", {});
         return { dataHandles: [handle] };
@@ -1384,6 +1543,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1394,7 +1554,12 @@ export const model = {
         const handle = await context.writeResource(
           "listzonerulesetversionrulesbytag",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched listzonerulesetversionrulesbytag", {});
         return { dataHandles: [handle] };

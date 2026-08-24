@@ -27,6 +27,8 @@ import {
 } from "npm:@aws-sdk/client-organizations@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/securityhub-findings";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -97,6 +99,12 @@ const FindingListSchema = z.object({
     endTime: z.string().nullable(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const FindingDetailSchema = z.object({
@@ -125,6 +133,12 @@ const FindingDetailsSchema = z.object({
   truncated: z.boolean(),
   notFound: z.array(z.string()),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const SeveritySummarySchema = z.object({
@@ -146,6 +160,12 @@ const SeveritySummarySchema = z.object({
     }),
   ),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateResultSchema = z.object({
@@ -161,6 +181,15 @@ const UpdateResultSchema = z.object({
   newStatus: z.string(),
   note: z.string(),
   updatedAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const FindingsByTypeSchema = z.object({
@@ -183,6 +212,12 @@ const FindingsByTypeSchema = z.object({
   totalFindings: z.number(),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DiffFindingsSchema = z.object({
@@ -193,6 +228,12 @@ const DiffFindingsSchema = z.object({
   truncated: z.boolean(),
   currentSnapshot: z.array(FindingSummarySchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AccountMapSchema = z.object({
@@ -207,6 +248,12 @@ const AccountMapSchema = z.object({
   count: z.number(),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const FullExportSchema = z.object({
@@ -221,6 +268,12 @@ const FullExportSchema = z.object({
     startTime: z.string().nullable(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -318,7 +371,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -344,6 +397,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -459,6 +521,7 @@ export const model = {
           ) => Promise<unknown>;
         },
       ): Promise<{ dataHandles: unknown[] }> => {
+        const startMs = Date.now();
         context.logger.info("Listing findings", {
           productName: args.productName ?? "all",
           severityLabel: args.severityLabel ?? "all",
@@ -552,7 +615,12 @@ export const model = {
           const handle = await context.writeResource(
             "finding_list",
             suffix,
-            data,
+            {
+              ...data,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -584,6 +652,7 @@ export const model = {
           ) => Promise<unknown>;
         },
       ): Promise<{ dataHandles: unknown[] }> => {
+        const startMs = Date.now();
         context.logger.info("Getting details for {count} findings", {
           count: args.findingArns.length,
         });
@@ -661,7 +730,12 @@ export const model = {
           const handle = await context.writeResource(
             "finding_details",
             suffix,
-            data,
+            {
+              ...data,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -707,6 +781,7 @@ export const model = {
           ) => Promise<unknown>;
         },
       ): Promise<{ dataHandles: unknown[] }> => {
+        const startMs = Date.now();
         context.logger.info("Generating severity summary", {
           productName: args.productName ?? "all",
           workflowStatus: args.workflowStatus,
@@ -819,7 +894,12 @@ export const model = {
           const handle = await context.writeResource(
             "severity_summary",
             suffix,
-            data,
+            {
+              ...data,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -984,6 +1064,7 @@ export const model = {
           ) => Promise<unknown>;
         },
       ): Promise<{ dataHandles: unknown[] }> => {
+        const startMs = Date.now();
         context.logger.info("Listing findings by type", {
           productName: args.productName ?? "all",
           startTime: args.startTime,
@@ -1098,7 +1179,12 @@ export const model = {
           const handle = await context.writeResource(
             "findings_by_type",
             suffix,
-            data,
+            {
+              ...data,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -1153,6 +1239,7 @@ export const model = {
           ) => Promise<unknown>;
         },
       ): Promise<{ dataHandles: unknown[] }> => {
+        const startMs = Date.now();
         context.logger.info("Computing findings diff", {
           productName: args.productName ?? "all",
           startTime: args.startTime,
@@ -1255,7 +1342,12 @@ export const model = {
           const handle = await context.writeResource(
             "diff_findings",
             suffix,
-            diffData,
+            {
+              ...diffData,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -1282,6 +1374,7 @@ export const model = {
           ) => Promise<unknown>;
         },
       ): Promise<{ dataHandles: unknown[] }> => {
+        const startMs = Date.now();
         context.logger.info("Fetching AWS Organizations account list", {});
 
         // AWS Organizations is a global service — must use us-east-1 regardless of model region
@@ -1337,7 +1430,12 @@ export const model = {
           const handle = await context.writeResource(
             "account_map",
             "org",
-            data,
+            {
+              ...data,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -1393,6 +1491,7 @@ export const model = {
           ) => Promise<unknown>;
         },
       ): Promise<{ dataHandles: unknown[] }> => {
+        const startMs = Date.now();
         context.logger.info("Exporting all findings (paginated)", {
           productName: args.productName ?? "all",
           maxPages: args.maxPages,
@@ -1484,7 +1583,12 @@ export const model = {
           const handle = await context.writeResource(
             "full_export",
             suffix,
-            data,
+            {
+              ...data,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {

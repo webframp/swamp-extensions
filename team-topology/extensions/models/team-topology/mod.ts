@@ -23,6 +23,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/team-topology";
+
 // =============================================================================
 // Schemas — Team Topologies Domain
 // =============================================================================
@@ -124,6 +126,15 @@ const TopologySchema = z.object({
     "ISO timestamp of when this topology was discovered",
   ),
   notes: z.string().optional().describe("Context about this topology snapshot"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // --- Value Stream Flows ---
@@ -168,6 +179,15 @@ const FlowsSchema = z.object({
     "Value streams in this flow map",
   ),
   mappedAt: z.string().describe("ISO timestamp of when flows were mapped"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // --- Assessments (agent-produced findings) ---
@@ -204,6 +224,15 @@ const AssessmentSchema = z.object({
   summary: z.string().describe("Brief narrative summary of the assessment"),
   assessedAt: z.string().describe(
     "ISO timestamp of when this assessment was recorded",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -287,7 +316,7 @@ type MethodContext = {
 /** Team topology and value stream mapping model. */
 export const model = {
   type: "@webframp/team-topology",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -308,6 +337,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -400,6 +438,7 @@ Start with a tracer bullet: map ONE value stream's teams first, then expand.`,
         args: z.infer<typeof DiscoverTopologyArgsSchema>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         // Interactions and system dependencies reference teams by name, but
         // the schema can't enforce that those names exist in the teams
         // array being written in the same call. An interaction pointing at
@@ -452,7 +491,12 @@ Start with a tracer bullet: map ONE value stream's teams first, then expand.`,
         const handle = await context.writeResource(
           "topology",
           "topology-current",
-          topology as unknown as Record<string, unknown>,
+          {
+            ...topology as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(
@@ -516,6 +560,7 @@ Each call replaces the flows resource — include ALL streams, not just new ones
         args: z.infer<typeof MapFlowArgsSchema>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const flows = {
           streams: args.streams,
           mappedAt: new Date().toISOString(),
@@ -524,7 +569,12 @@ Each call replaces the flows resource — include ALL streams, not just new ones
         const handle = await context.writeResource(
           "flows",
           "flows-current",
-          flows as unknown as Record<string, unknown>,
+          {
+            ...flows as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         const totalSteps = args.streams.reduce(
@@ -588,6 +638,7 @@ Write a brief summary narrative tying the findings together.`,
         args: z.infer<typeof RecordAssessmentArgsSchema>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const assessment = {
           findings: args.findings,
           summary: args.summary,
@@ -597,7 +648,12 @@ Write a brief summary narrative tying the findings together.`,
         const handle = await context.writeResource(
           "assessment",
           "assessment-current",
-          assessment as unknown as Record<string, unknown>,
+          {
+            ...assessment as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         const bySeverity = args.findings.reduce(

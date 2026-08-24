@@ -14,6 +14,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/bench-datastore";
+
 const GlobalArgsSchema = z.object({
   scenario: z
     .enum(["throughput", "write-stress"])
@@ -43,6 +45,12 @@ const SetupResultSchema = z.object({
   readProbeName: z.string().describe("Read probe model name for this worker"),
   setupAt: z.string().describe("ISO 8601 timestamp"),
   durationMs: z.number().describe("Setup duration in ms"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ExecuteResultSchema = z.object({
@@ -60,6 +68,12 @@ const ExecuteResultSchema = z.object({
   errorMessage: z
     .string()
     .describe("Error message if failed, empty if success"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Generate a deterministic model name for a worker and index. */
@@ -176,7 +190,7 @@ async function runModelMethod(
 /** Harness model definition. */
 export const model = {
   type: "@webframp/bench-datastore/harness",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -188,6 +202,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -275,6 +298,8 @@ export const model = {
             readProbeName: probeName,
             setupAt: new Date().toISOString(),
             durationMs,
+
+            collectedBy: EXTENSION_NAME,
           },
         );
         return { dataHandles: [handle] };
@@ -386,6 +411,8 @@ export const model = {
             durationMs,
             success,
             errorMessage,
+
+            collectedBy: EXTENSION_NAME,
           },
         );
         return { dataHandles: [handle] };

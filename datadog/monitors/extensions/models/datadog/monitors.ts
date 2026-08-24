@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { ddApi, ddApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/datadog/monitors";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -62,6 +64,12 @@ const GetMonitorNotificationRulesSchema = z.object({
   items: z.array(MonitorNotificationRulesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateMonitorNotificationRuleSchema = z.object({
@@ -95,6 +103,15 @@ const CreateMonitorNotificationRuleSchema = z.object({
     "A list of recipients to notify. Uses the same format as the monitor `message` field. Must not sta...",
   ),
   created_by_id: z.string().optional().describe("Related created_by ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MonitorConfigPoliciesItemSchema = z.object({
@@ -112,6 +129,12 @@ const ListMonitorConfigPoliciesSchema = z.object({
   items: z.array(MonitorConfigPoliciesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateMonitorConfigPolicySchema = z.object({
@@ -123,6 +146,15 @@ const CreateMonitorConfigPolicySchema = z.object({
   policy_type: z.enum(["tag"]).optional().describe(
     "The monitor configuration policy type.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -132,10 +164,17 @@ const CreateMonitorConfigPolicySchema = z.object({
 /** Datadog Monitors — monitor definitions, muting, status, and downtime management */
 export const model = {
   type: "@webframp/datadog/monitors",
-  version: "2026.07.20.11",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "monitor_notification_rules": {
@@ -192,6 +231,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -230,6 +270,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -269,6 +311,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -292,7 +335,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor_notification_rule",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created monitor_notification_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -322,6 +370,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["rule_id"]);
@@ -348,7 +397,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor_notification_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched monitor_notification_rule", {});
         return { dataHandles: [handle] };
@@ -387,6 +441,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_id"]);
@@ -411,7 +466,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor_notification_rule",
           String(args.rule_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated monitor_notification_rule", {});
         return { dataHandles: [handle] };
@@ -470,6 +530,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
@@ -503,6 +564,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -534,6 +597,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -557,7 +621,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor_config_policy",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created monitor_config_policy {id}", { id });
         return { dataHandles: [handle] };
@@ -584,6 +653,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -598,7 +668,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor_config_policy",
           String(args.policy_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched monitor_config_policy", {});
         return { dataHandles: [handle] };
@@ -629,6 +704,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id"]);
@@ -653,7 +729,12 @@ export const model = {
         const handle = await context.writeResource(
           "monitor_config_policy",
           String(args.policy_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated monitor_config_policy", {});
         return { dataHandles: [handle] };

@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/api-shield";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -48,6 +50,12 @@ const ListApiShieldApiDiscoveryRetrieveDiscoveredOperationsOnAZoneSchema = z
     ),
     truncated: z.boolean(),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   });
 
 const PatchDiscoveredOperationsSchema = z.record(z.string(), z.unknown());
@@ -74,16 +82,40 @@ const ListApiShieldApiDiscoveryRetrieveDiscoveredOperationByIdSchema = z.object(
     ),
     truncated: z.boolean(),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   },
 );
 
 const PatchDiscoveredOperationSchema = z.object({
   state: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateApiShieldExpressionTemplatesFallthroughSchema = z.object({
   expression: z.string().describe("WAF Expression for fallthrough"),
   title: z.string().describe("Title for the expression"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetLabelsItemSchema = z.object({
@@ -100,6 +132,12 @@ const GetLabelsSchema = z.object({
   items: z.array(GetLabelsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetManagedLabelSchema = z.object({
@@ -110,6 +148,15 @@ const GetManagedLabelSchema = z.object({
   name: z.unknown(),
   source: z.unknown(),
   mapped_resources: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateApiShieldLabelsReplaceOperationsAttachedToManagedLabelSchema = z
@@ -130,6 +177,15 @@ const CreateUserLabelsSchema = z.object({
   metadata: z.unknown(),
   name: z.unknown(),
   source: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetUserLabelSchema = z.object({
@@ -140,6 +196,15 @@ const GetUserLabelSchema = z.object({
   name: z.unknown(),
   source: z.unknown(),
   mapped_resources: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PutUserLabelSchema = z.object({
@@ -149,6 +214,15 @@ const PutUserLabelSchema = z.object({
   metadata: z.unknown(),
   name: z.unknown(),
   source: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchUserLabelSchema = z.object({
@@ -158,6 +232,15 @@ const PatchUserLabelSchema = z.object({
   metadata: z.unknown(),
   name: z.unknown(),
   source: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateApiShieldLabelsReplaceOperationsAttachedToUserLabelSchema = z
@@ -188,6 +271,12 @@ const ListApiShieldEndpointManagementRetrieveInformationAboutAllOperationsOnAZon
     ),
     truncated: z.boolean(),
     fetchedAt: z.string(),
+    durationMs: z.number().optional().describe(
+      "Method execution duration in milliseconds",
+    ),
+    collectedBy: z.string().optional().describe(
+      "Extension that collected this data",
+    ),
   });
 
 const ApiShieldEndpointManagementAddOperationsToAZoneSchema = z.object({
@@ -197,6 +286,15 @@ const ApiShieldEndpointManagementAddOperationsToAZoneSchema = z.object({
   last_updated: z.unknown(),
   operation_id: z.unknown(),
   features: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateApiShieldEndpointManagementAddOperationToAZoneSchema = z.object({
@@ -207,6 +305,15 @@ const CreateApiShieldEndpointManagementAddOperationToAZoneSchema = z.object({
   operation_id: z.unknown(),
   features: z.unknown().optional(),
   schemas: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateApiShieldOperationsBulkPostLabelsToOperationsSchema = z.object({
@@ -216,6 +323,15 @@ const CreateApiShieldOperationsBulkPostLabelsToOperationsSchema = z.object({
   last_updated: z.unknown(),
   operation_id: z.unknown(),
   labels: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PutLabelsToOperationsSchema = z.object({
@@ -225,6 +341,15 @@ const PutLabelsToOperationsSchema = z.object({
   last_updated: z.unknown(),
   operation_id: z.unknown(),
   labels: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetApiShieldEndpointManagementRetrieveInformationAboutAnOperationSchema =
@@ -245,6 +370,15 @@ const CreateApiShieldOperationsPostLabelsToOperationSchema = z.object({
   last_updated: z.unknown(),
   operation_id: z.unknown(),
   labels: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PutLabelsToOperationSchema = z.object({
@@ -254,6 +388,15 @@ const PutLabelsToOperationSchema = z.object({
   last_updated: z.unknown(),
   operation_id: z.unknown(),
   labels: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetApiShieldEndpointManagementRetrieveOperationsAndFeaturesAsOpenApiSchemasSchema =
@@ -269,10 +412,17 @@ const GetApiShieldEndpointManagementRetrieveOperationsAndFeaturesAsOpenApiSchema
 /** Cloudflare API Shield — schema validation, endpoint discovery, sequence rules */
 export const model = {
   type: "@webframp/cloudflare/api-shield",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "api_shield_settings_retrieve_information_about_specific_configuration_properties":
@@ -466,6 +616,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, zoneId } = context.globalArgs;
           let result: Record<string, unknown>;
           try {
@@ -486,7 +637,12 @@ export const model = {
           const handle = await context.writeResource(
             "api_shield_settings_retrieve_information_about_specific_configuration_properties",
             "latest",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           context.logger.info(
             "Fetched api_shield_settings_retrieve_information_about_specific_configuration_properties",
@@ -516,6 +672,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -552,7 +709,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_settings_set_configuration_properties",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated api_shield_settings_set_configuration_properties",
@@ -580,6 +742,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, zoneId } = context.globalArgs;
           let result: Record<string, unknown>;
           try {
@@ -600,7 +763,12 @@ export const model = {
           const handle = await context.writeResource(
             "api_shield_api_discovery_retrieve_discovered_operations_on_a_zone_as_openapi",
             "latest",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           context.logger.info(
             "Fetched api_shield_api_discovery_retrieve_discovered_operations_on_a_zone_as_openapi",
@@ -626,6 +794,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -666,6 +835,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -693,6 +864,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -717,7 +889,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_discovered_operations",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_discovered_operations", {});
         return { dataHandles: [handle] };
@@ -742,6 +919,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["discovery_id", "page", "per_page"]);
@@ -782,6 +960,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -812,6 +992,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -840,7 +1021,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_discovered_operation",
           String(args.discovery_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_discovered_operation", {});
         return { dataHandles: [handle] };
@@ -868,6 +1054,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -893,7 +1080,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_expression_templates_fallthrough",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created api_shield_expression_templates_fallthrough {id}",
@@ -919,6 +1111,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -956,6 +1149,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} get_labels", {
@@ -983,6 +1178,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1003,7 +1199,12 @@ export const model = {
         const handle = await context.writeResource(
           "managed_label",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched managed_label", {});
         return { dataHandles: [handle] };
@@ -1029,6 +1230,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1057,7 +1259,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_labels_replace_operations_attached_to_managed_label",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated api_shield_labels_replace_operations_attached_to_managed_label",
@@ -1083,6 +1290,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -1105,7 +1313,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_user_labels",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed create_user_labels", {});
         return { dataHandles: [handle] };
@@ -1167,6 +1380,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1187,7 +1401,12 @@ export const model = {
         const handle = await context.writeResource(
           "user_label",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched user_label", {});
         return { dataHandles: [handle] };
@@ -1214,6 +1433,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1242,7 +1462,12 @@ export const model = {
         const handle = await context.writeResource(
           "put_user_label",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated put_user_label", {});
         return { dataHandles: [handle] };
@@ -1269,6 +1494,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1297,7 +1523,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_user_label",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_user_label", {});
         return { dataHandles: [handle] };
@@ -1362,6 +1593,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1390,7 +1622,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_labels_replace_operations_attached_to_user_label",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated api_shield_labels_replace_operations_attached_to_user_label",
@@ -1420,6 +1657,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, zoneId } = context.globalArgs;
           const params: Record<string, string> = {};
           const excludeKeys = new Set(["page", "per_page"]);
@@ -1460,6 +1698,8 @@ export const model = {
               items: results,
               truncated,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -1487,6 +1727,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         let result: Record<string, unknown>;
@@ -1509,7 +1750,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_endpoint_management_add_operations_to_a_zone",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed api_shield_endpoint_management_add_operations_to_a_zone",
@@ -1576,6 +1822,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1601,7 +1848,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_endpoint_management_add_operation_to_a_zone",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created api_shield_endpoint_management_add_operation_to_a_zone {id}",
@@ -1636,6 +1888,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1661,7 +1914,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_operations_bulk_post_labels_to_operations",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created api_shield_operations_bulk_post_labels_to_operations {id}",
@@ -1696,6 +1954,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
@@ -1720,7 +1979,12 @@ export const model = {
         const handle = await context.writeResource(
           "put_labels_to_operations",
           "updated",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated put_labels_to_operations", {});
         return { dataHandles: [handle] };
@@ -1792,6 +2056,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, zoneId } = context.globalArgs;
           let result: Record<string, unknown>;
           try {
@@ -1812,7 +2077,12 @@ export const model = {
           const handle = await context.writeResource(
             "api_shield_endpoint_management_retrieve_information_about_an_operation",
             String(args.operation_id),
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           context.logger.info(
             "Fetched api_shield_endpoint_management_retrieve_information_about_an_operation",
@@ -1885,6 +2155,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1914,7 +2185,12 @@ export const model = {
         const handle = await context.writeResource(
           "api_shield_operations_post_labels_to_operation",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created api_shield_operations_post_labels_to_operation {id}",
@@ -1948,6 +2224,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1976,7 +2253,12 @@ export const model = {
         const handle = await context.writeResource(
           "put_labels_to_operation",
           String(args.operation_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated put_labels_to_operation", {});
         return { dataHandles: [handle] };
@@ -2047,6 +2329,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, zoneId } = context.globalArgs;
           let result: Record<string, unknown>;
           try {
@@ -2067,7 +2350,12 @@ export const model = {
           const handle = await context.writeResource(
             "api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas",
             "latest",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           context.logger.info(
             "Fetched api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas",

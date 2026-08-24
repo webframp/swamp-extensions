@@ -45,6 +45,8 @@ import {
 } from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/inventory";
+
 const MAX_PAGES = 10;
 
 // =============================================================================
@@ -180,6 +182,12 @@ const InventoryResultSchema = z.object({
   ]),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -285,6 +293,12 @@ const ScanResultSchema = z.object({
   coverage: z.enum(["full", "config-tracked", "tagged-only"]),
   region: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   resources: z.array(ScannedResourceSchema),
   summary: z.object({
     total: z.number(),
@@ -312,6 +326,15 @@ const ScanDiffSchema = z.object({
   noBaseline: z.boolean(),
   sourceMismatch: z.boolean(),
   truncated: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MAX_SCAN_PAGES = 20;
@@ -604,7 +627,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -646,6 +669,15 @@ export const model = {
       toVersion: "2026.08.24.2",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   globalArguments: GlobalArgsSchema,
 
@@ -685,6 +717,7 @@ export const model = {
         args: { stateFilter: string[] },
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
           const client = new EC2Client(
@@ -751,6 +784,8 @@ export const model = {
                 count: instances.length,
                 truncated: nextToken !== undefined,
                 fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
               },
             );
 
@@ -781,6 +816,7 @@ export const model = {
         _args: Record<string, never>,
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
           const client = new RDSClient(
@@ -828,6 +864,8 @@ export const model = {
                 count: instances.length,
                 truncated: marker !== undefined,
                 fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
               },
             );
 
@@ -858,6 +896,7 @@ export const model = {
         _args: Record<string, never>,
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
           const client = new DynamoDBClient({
@@ -917,6 +956,8 @@ export const model = {
                 count: tables.length,
                 truncated: lastEvaluatedTableName !== undefined,
                 fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
               },
             );
 
@@ -959,6 +1000,7 @@ export const model = {
         },
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
           const client = new LambdaClient(
@@ -1045,6 +1087,8 @@ export const model = {
                 count: functions.length,
                 truncated: marker !== undefined,
                 fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
               },
             );
 
@@ -1075,6 +1119,7 @@ export const model = {
         _args: Record<string, never>,
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const client = new S3Client(makeClientConfig(context.globalArgs));
         try {
           const buckets: z.infer<typeof S3BucketSchema>[] = [];
@@ -1102,6 +1147,8 @@ export const model = {
               resources: buckets,
               count: buckets.length,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
 
@@ -1134,6 +1181,7 @@ export const model = {
         args: { stateFilter: string[] },
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const handles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
           const client = new EC2Client(
@@ -1203,6 +1251,8 @@ export const model = {
                 count: volumes.length,
                 truncated: nextToken !== undefined,
                 fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
               },
             );
 
@@ -1250,6 +1300,7 @@ export const model = {
         },
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const allHandles: { name: string }[] = [];
         for (const region of context.globalArgs.regions) {
           const ec2Client = new EC2Client(
@@ -1503,6 +1554,8 @@ export const model = {
                 },
                 count: Object.values(summary).reduce((a, b) => a + b, 0),
                 fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
               },
             );
             handles.push(handle);
@@ -1545,6 +1598,7 @@ export const model = {
         args: { source: string },
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.regions[0];
         let resources: z.infer<typeof ScannedResourceSchema>[] = [];
         let source: "resource-explorer" | "config" | "tag-api";
@@ -1669,6 +1723,8 @@ export const model = {
           },
           unmodeledTypes,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info(
@@ -1688,6 +1744,7 @@ export const model = {
         _args: Record<string, never>,
         context: InventoryContext,
       ) => {
+        const startMs = Date.now();
         const region = context.globalArgs.regions[0];
 
         // Read previous scan (from last inventory_scan or last diff baseline)
@@ -1796,6 +1853,9 @@ export const model = {
           noBaseline,
           sourceMismatch,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         // Update baseline for next diff (separate from scan output)
@@ -1821,6 +1881,8 @@ export const model = {
           },
           unmodeledTypes: [],
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info(

@@ -10,6 +10,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/elasticache-datastore-bootstrap";
+
 const GlobalArgsSchema = z.object({
   region: z
     .string()
@@ -86,6 +88,12 @@ const ProvisionResultSchema = z.object({
     .describe("JSON config for swamp datastore setup command"),
   provisionedAt: z.string().describe("ISO 8601 timestamp"),
   durationMs: z.number().describe("Total provisioning duration in ms"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Run an AWS CLI command and return parsed JSON output. */
@@ -477,7 +485,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/elasticache-datastore-bootstrap/provisioner",
-  version: "2026.07.27.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {
@@ -612,6 +620,9 @@ export const model = {
           datastoreConfig,
           provisionedAt: new Date().toISOString(),
           durationMs,
+
+          fetchedAt: new Date().toISOString(),
+          collectedBy: EXTENSION_NAME,
         });
 
         return { dataHandles: [handle] };

@@ -9,6 +9,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/swamp-adoption";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -84,6 +86,15 @@ const LandscapeSchema = z.object({
   discoveredAt: z.string().describe(
     "ISO timestamp of when this landscape was discovered",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ExtensionDesignSchema = z.object({
@@ -120,6 +131,15 @@ const ExtensionDesignSchema = z.object({
   vaultNeeded: z.boolean(),
   labels: z.array(z.string()),
   designedAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ScaffoldFileSchema = z.object({
@@ -131,6 +151,15 @@ const ScaffoldSchema = z.object({
   files: z.array(ScaffoldFileSchema),
   generatedFrom: z.string(),
   generatedAt: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -166,7 +195,7 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -193,6 +222,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -268,6 +306,7 @@ and reasoning for the suggestion.`,
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { userContext, currentTools, painPoints } = context.globalArgs;
 
         const landscape = {
@@ -286,7 +325,12 @@ and reasoning for the suggestion.`,
         const handle = await context.writeResource(
           "landscape",
           "current",
-          landscape as unknown as Record<string, unknown>,
+          {
+            ...landscape as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(
@@ -336,6 +380,7 @@ Write the extensionDesign resource with the full specification.`,
         args: { system?: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const landscape = await context.readResource("current");
 
         const suggestedFirstExtension = (landscape as
@@ -390,7 +435,12 @@ Write the extensionDesign resource with the full specification.`,
         const handle = await context.writeResource(
           "extensionDesign",
           "current-design",
-          design as unknown as Record<string, unknown>,
+          {
+            ...design as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Extension design created for {system}", {
@@ -453,6 +503,7 @@ resource with the full specification.`,
         args: { sourceSkill?: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         if (!args.sourceSkill) {
           throw new Error(
             "import_skill requires a 'sourceSkill' name or path (e.g. " +
@@ -527,7 +578,12 @@ resource with the full specification.`,
         const landscapeHandle = await context.writeResource(
           "landscape",
           "current",
-          landscape as unknown as Record<string, unknown>,
+          {
+            ...landscape as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         let designHandle;
@@ -535,7 +591,12 @@ resource with the full specification.`,
           designHandle = await context.writeResource(
             "extensionDesign",
             "current-design",
-            design as unknown as Record<string, unknown>,
+            {
+              ...design as unknown as Record<string, unknown>,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
         } catch (err) {
           context.logger.info(
@@ -577,6 +638,7 @@ Each generated file includes TODO comments marking where the user adds real logi
         args: { outputFormat?: "resource" | "stdout" },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const design = await context.readResource(
           "current-design",
         ) as Record<string, unknown> | null;
@@ -717,6 +779,9 @@ Each generated file includes TODO comments marking where the user adds real logi
             files,
             generatedFrom: extName,
             generatedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
 

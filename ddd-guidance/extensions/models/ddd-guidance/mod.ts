@@ -12,6 +12,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/ddd-guidance";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -87,6 +89,15 @@ const ContextMapSchema = z.object({
   discoveredAt: z.string().describe(
     "ISO 8601 timestamp when this context map was last written",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // --- Domain Glossary resource schema ---
@@ -110,6 +121,15 @@ const DomainGlossarySchema = z.object({
   entries: z.array(GlossaryEntrySchema).describe("Captured glossary entries"),
   updatedAt: z.string().describe(
     "ISO 8601 timestamp when the glossary was last written",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -163,6 +183,15 @@ const BoundariesSchema = z.object({
   ),
   discoveredAt: z.string().describe(
     "ISO 8601 timestamp when these boundaries were last written",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -299,7 +328,7 @@ type MethodContext = {
 /** DDD guidance model — bounded context discovery, ubiquitous language capture, aggregate boundary design. */
 export const model = {
   type: "@webframp/ddd-guidance",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -310,6 +339,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -394,6 +432,7 @@ deepens.`,
         args: z.infer<typeof ContextsArgsSchema>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const contextMap = {
           contexts: args.contexts,
           relationships: args.relationships,
@@ -404,7 +443,12 @@ deepens.`,
         const handle = await context.writeResource(
           "contextMap",
           "current",
-          contextMap as unknown as Record<string, unknown>,
+          {
+            ...contextMap as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(
@@ -479,6 +523,7 @@ overloadedTerms argument to update the contextMap as well.`,
         args: z.infer<typeof LanguageArgsSchema>,
         ctx: MethodContext,
       ) => {
+        const startMs = Date.now();
         const existing = await ctx.readResource(
           "glossary",
         ) as Record<string, unknown> | null;
@@ -530,7 +575,12 @@ overloadedTerms argument to update the contextMap as well.`,
         const handle = await ctx.writeResource(
           "domainGlossary",
           "glossary",
-          glossary as unknown as Record<string, unknown>,
+          {
+            ...glossary as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         if (args.overloadedTerms && args.overloadedTerms.length > 0) {
@@ -573,7 +623,13 @@ overloadedTerms argument to update the contextMap as well.`,
             await ctx.writeResource(
               "contextMap",
               "current",
-              { ...contextMap, overloadedTerms: merged },
+              {
+                ...contextMap,
+                overloadedTerms: merged,
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
+                fetchedAt: new Date().toISOString(),
+              },
             );
           }
         }
@@ -647,6 +703,7 @@ designs and eventual consistency rules as structured arguments.`,
         args: z.infer<typeof BoundariesArgsSchema>,
         ctx: MethodContext,
       ) => {
+        const startMs = Date.now();
         const contextMap = await ctx.readResource(
           "current",
         ) as Record<string, unknown> | null;
@@ -682,7 +739,12 @@ designs and eventual consistency rules as structured arguments.`,
         const handle = await ctx.writeResource(
           "boundaries",
           args.context,
-          boundariesData as unknown as Record<string, unknown>,
+          {
+            ...boundariesData as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         ctx.logger.info(

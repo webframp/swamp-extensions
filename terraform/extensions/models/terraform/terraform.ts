@@ -13,6 +13,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/terraform";
+
 // =============================================================================
 // CLI Helper
 // =============================================================================
@@ -97,12 +99,30 @@ const TfResourceSchema = z.object({
   providerName: z.string(),
   values: z.record(z.string(), z.unknown()),
   dependsOn: z.array(z.string()),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TfOutputSchema = z.object({
   value: z.unknown(),
   type: z.unknown(),
   sensitive: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TfResourceSummarySchema = z.object({
@@ -117,6 +137,15 @@ const TfInventorySchema = z.object({
   terraformVersion: z.string(),
   resourceCount: z.number(),
   resources: z.array(TfResourceSummarySchema),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -218,7 +247,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
 
   upgrades: [
     {
@@ -246,6 +275,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -282,6 +320,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { workDir, workspace, binary } = context.globalArgs;
 
         const state = await runTfCommand(
@@ -299,6 +338,9 @@ export const model = {
               terraformVersion: state.terraform_version ?? "unknown",
               resourceCount: 0,
               resources: [],
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             },
           );
           context.logger.info("No state found", {});
@@ -322,6 +364,9 @@ export const model = {
             terraformVersion: state.terraform_version ?? "unknown",
             resourceCount: resources.length,
             resources,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
 
@@ -340,6 +385,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { workDir, workspace, binary } = context.globalArgs;
 
         const state = await runTfCommand(
@@ -369,6 +415,9 @@ export const model = {
               providerName: r.provider_name,
               values: r.values,
               dependsOn: r.depends_on ?? [],
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             },
           );
           handles.push(handle);
@@ -389,6 +438,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { workDir, workspace, binary } = context.globalArgs;
 
         const state = await runTfCommand(
@@ -413,7 +463,14 @@ export const model = {
         const summaryHandle = await context.writeResource(
           "tf_output",
           "all",
-          { value: summary, type: "object", sensitive: false },
+          {
+            value: summary,
+            type: "object",
+            sensitive: false,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
+          },
         );
         handles.push(summaryHandle);
 
@@ -426,6 +483,9 @@ export const model = {
               value: out.sensitive ? "***SENSITIVE***" : out.value,
               type: out.type,
               sensitive: out.sensitive,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
             },
           );
           handles.push(handle);

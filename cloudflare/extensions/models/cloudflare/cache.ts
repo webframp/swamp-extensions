@@ -13,6 +13,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -29,6 +31,15 @@ const PurgeResultSchema = z.object({
   purgeType: z.string(),
   purgedAt: z.string(),
   details: z.record(z.string(), z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CacheSettingsSchema = z.object({
@@ -45,6 +56,12 @@ const CacheSettingsSchema = z.object({
   polish: z.string().optional(),
   webp: z.string().optional(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AnalyticsSchema = z.object({
@@ -62,6 +79,12 @@ const AnalyticsSchema = z.object({
     uncached: z.number(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -108,7 +131,7 @@ async function fetchCacheSettings(
 /** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -129,6 +152,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -172,6 +204,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         await cfApi(
@@ -185,6 +218,9 @@ export const model = {
           zoneId,
           purgeType: "everything",
           purgedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Purged all cached content for zone {zoneId}", {
@@ -215,6 +251,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         await cfApi(
@@ -229,6 +266,9 @@ export const model = {
           purgeType: "urls",
           purgedAt: new Date().toISOString(),
           details: { urls: args.urls },
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Purged {count} URLs from cache", {
@@ -259,6 +299,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         await cfApi(
@@ -273,6 +314,9 @@ export const model = {
           purgeType: "tags",
           purgedAt: new Date().toISOString(),
           details: { tags: args.tags },
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Purged cache for {count} tags", {
@@ -303,6 +347,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         await cfApi(
@@ -317,6 +362,9 @@ export const model = {
           purgeType: "prefixes",
           purgedAt: new Date().toISOString(),
           details: { prefixes: args.prefixes },
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
 
         context.logger.info("Purged cache for {count} prefixes", {
@@ -343,13 +391,19 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const settings = await fetchCacheSettings(apiToken, zoneId);
 
         const handle = await context.writeResource(
           "settings",
           "main",
-          settings,
+          {
+            ...settings,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Fetched cache settings for zone {zoneId}", {
@@ -381,6 +435,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         await cfApi(
@@ -394,7 +449,12 @@ export const model = {
         const handle = await context.writeResource(
           "settings",
           "main",
-          settings,
+          {
+            ...settings,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Set cache level to {level}", {
@@ -423,6 +483,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         await cfApi(
@@ -436,7 +497,12 @@ export const model = {
         const handle = await context.writeResource(
           "settings",
           "main",
-          settings,
+          {
+            ...settings,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         const status = args.enabled ? "enabled" : "disabled";
@@ -469,6 +535,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const dateStart = getDateMinutesAgo(parseInt(args.since));
@@ -585,7 +652,12 @@ export const model = {
         const handle = await context.writeResource(
           "analytics",
           "main",
-          analytics,
+          {
+            ...analytics,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info(

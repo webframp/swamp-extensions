@@ -1,5 +1,8 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
-**Added Troubleshooting section documenting silent label sync failures,
-asymmetric comment/label error handling, best-effort issue close, start re-reset
-behavior, and gh CLI auth delegation.**
+**Added:** Output metadata attributes for observability.
+
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that
+  previously lacked it).

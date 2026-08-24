@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/pages";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -57,6 +59,12 @@ const GetProjectsSchema = z.object({
   items: z.array(GetProjectsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateProjectSchema = z.object({
@@ -88,6 +96,15 @@ const CreateProjectSchema = z.object({
   ),
   uses_functions: z.boolean().nullable().describe(
     "Whether the project uses functions.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -135,6 +152,12 @@ const GetDeploymentsSchema = z.object({
   items: z.array(GetDeploymentsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetDeploymentInfoSchema = z.object({
@@ -175,6 +198,15 @@ const GetDeploymentInfoSchema = z.object({
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetDeploymentLogsSchema = z.object({
@@ -184,6 +216,15 @@ const GetDeploymentLogsSchema = z.object({
   })),
   includes_container_logs: z.boolean(),
   total: z.number().int(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PagesDeploymentRetryDeploymentSchema = z.object({
@@ -223,6 +264,15 @@ const PagesDeploymentRetryDeploymentSchema = z.object({
   url: z.string().describe("The live URL to view this deployment."),
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -264,12 +314,30 @@ const PagesDeploymentRollbackDeploymentSchema = z.object({
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateTailSchema = z.object({
   id: z.string().describe("Identifier of the tail session."),
   url: z.string().optional().describe(
     "Optional WebSocket URL to connect to for receiving tail events, when returned by the tail service.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -311,6 +379,12 @@ const GetDomainsSchema = z.object({
   items: z.array(GetDomainsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreatePagesDomainsAddDomainSchema = z.object({
@@ -345,6 +419,15 @@ const CreatePagesDomainsAddDomainSchema = z.object({
     status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
   }),
   zone_tag: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetDomainSchema = z.object({
@@ -379,6 +462,15 @@ const GetDomainSchema = z.object({
     status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
   }),
   zone_tag: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PatchDomainSchema = z.object({
@@ -413,9 +505,28 @@ const PatchDomainSchema = z.object({
     status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
   }),
   zone_tag: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
-const PagesPurgeBuildCacheSchema = z.object({}).nullable();
+const PagesPurgeBuildCacheSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+}).nullable();
 
 const CreatePagesProjectConnectProjectSourceSchema = z.object({
   build_config: z.unknown().optional(),
@@ -447,11 +558,29 @@ const CreatePagesProjectConnectProjectSourceSchema = z.object({
   uses_functions: z.boolean().nullable().describe(
     "Whether the project uses functions.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetUploadTokenSchema = z.object({
   jwt: z.string().describe(
     "Short-lived JWT used to authenticate Pages Direct Upload asset operations.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -462,10 +591,17 @@ const GetUploadTokenSchema = z.object({
 /** Cloudflare Pages — projects, deployments, domains, build configs */
 export const model = {
   type: "@webframp/cloudflare/pages",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "get_projects": {
@@ -581,6 +717,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -607,6 +744,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} get_projects", {
@@ -668,6 +807,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -680,7 +820,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("project", id, result);
+        const handle = await context.writeResource("project", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created project {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -704,6 +849,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -714,7 +860,12 @@ export const model = {
         const handle = await context.writeResource(
           "project",
           String(args.project_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched project", {});
         return { dataHandles: [handle] };
@@ -774,6 +925,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -792,7 +944,12 @@ export const model = {
         const handle = await context.writeResource(
           "project",
           String(args.project_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated project", {});
         return { dataHandles: [handle] };
@@ -851,6 +1008,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["project_name", "page", "per_page"]);
@@ -877,6 +1035,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} get_deployments", {
@@ -907,6 +1067,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -917,7 +1078,12 @@ export const model = {
         const handle = await context.writeResource(
           "deployment_info",
           String(args.project_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched deployment_info", {});
         return { dataHandles: [handle] };
@@ -988,6 +1154,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -998,7 +1165,12 @@ export const model = {
         const handle = await context.writeResource(
           "deployment_logs",
           String(args.project_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched deployment_logs", {});
         return { dataHandles: [handle] };
@@ -1026,6 +1198,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1037,7 +1210,12 @@ export const model = {
         const handle = await context.writeResource(
           "pages_deployment_retry_deployment",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed pages_deployment_retry_deployment", {});
         return { dataHandles: [handle] };
@@ -1065,6 +1243,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1076,7 +1255,12 @@ export const model = {
         const handle = await context.writeResource(
           "pages_deployment_rollback_deployment",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed pages_deployment_rollback_deployment",
@@ -1110,6 +1294,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1126,7 +1311,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("tail", id, result);
+        const handle = await context.writeResource("tail", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created tail {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1187,6 +1377,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["project_name", "page", "per_page"]);
@@ -1213,6 +1404,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} get_domains", {
@@ -1241,6 +1434,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1260,7 +1454,12 @@ export const model = {
         const handle = await context.writeResource(
           "pages_domains_add_domain",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created pages_domains_add_domain {id}", { id });
         return { dataHandles: [handle] };
@@ -1288,6 +1487,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1298,7 +1498,12 @@ export const model = {
         const handle = await context.writeResource(
           "domain",
           String(args.project_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched domain", {});
         return { dataHandles: [handle] };
@@ -1326,6 +1531,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1344,7 +1550,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_domain",
           String(args.project_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_domain", {});
         return { dataHandles: [handle] };
@@ -1403,6 +1614,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1414,7 +1626,12 @@ export const model = {
         const handle = await context.writeResource(
           "pages_purge_build_cache",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed pages_purge_build_cache", {});
         return { dataHandles: [handle] };
@@ -1457,6 +1674,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1476,7 +1694,12 @@ export const model = {
         const handle = await context.writeResource(
           "pages_project_connect_project_source",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created pages_project_connect_project_source {id}",
@@ -1535,6 +1758,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1545,7 +1769,12 @@ export const model = {
         const handle = await context.writeResource(
           "upload_token",
           String(args.project_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched upload_token", {});
         return { dataHandles: [handle] };

@@ -1,5 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Added Troubleshooting section documenting design_topology prerequisite,
-duplicate widget ID validation, connector reference validation, defectModel
-configuration, and complex nested input guidance.**
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

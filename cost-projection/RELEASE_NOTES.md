@@ -1,5 +1,6 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
-**Fixed source/manifest version mismatch and unquoted manifest version. Added
-Troubleshooting section documenting record prerequisite, sensitivity array
-inputs, conditional break-even computation, and independent model state.**
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

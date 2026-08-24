@@ -11,6 +11,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -30,12 +32,27 @@ const WorkerScriptSchema = z.object({
   usage_model: z.string().optional(),
   handlers: z.array(z.string()).optional(),
   last_deployed_from: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WorkerScriptListSchema = z.object({
   accountId: z.string(),
   scripts: z.array(WorkerScriptSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WorkerRouteSchema = z.object({
@@ -48,12 +65,27 @@ const WorkerRouteListSchema = z.object({
   zoneId: z.string(),
   routes: z.array(WorkerRouteSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WorkerDeploymentSchema = z.object({
   scriptName: z.string(),
   deployedAt: z.string(),
   success: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -96,7 +128,7 @@ export function mapBinding(
 /** Cloudflare Workers model definition with methods for script lifecycle, route management, and subdomain toggling. */
 export const model = {
   type: "@webframp/cloudflare/worker",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -120,6 +152,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -178,6 +219,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const { results: scripts, truncated } = await cfApiPaginated<
@@ -199,6 +241,8 @@ export const model = {
           scripts,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} Worker scripts", {
@@ -231,6 +275,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const handles = [];
 
@@ -241,7 +286,12 @@ export const model = {
           `/accounts/${accountId}/workers/scripts/${args.scriptName}`,
         );
         handles.push(
-          await context.writeResource("script", args.scriptName, metadata),
+          await context.writeResource("script", args.scriptName, {
+            ...metadata,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          }),
         );
 
         // Get source code
@@ -309,6 +359,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         // Build multipart form data for ES module upload
@@ -383,6 +434,9 @@ export const model = {
             scriptName: args.scriptName,
             deployedAt: new Date().toISOString(),
             success: true,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
 
@@ -441,6 +495,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const { results: routes, truncated } = await cfApiPaginated<
@@ -462,6 +517,8 @@ export const model = {
           routes,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} Worker routes", {
@@ -492,6 +549,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         await cfApi<z.infer<typeof WorkerRouteSchema>>(
@@ -514,6 +572,8 @@ export const model = {
           routes,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Created Worker route {pattern} -> {script}", {

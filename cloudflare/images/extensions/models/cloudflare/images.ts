@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/images";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -23,32 +25,95 @@ const GlobalArgsSchema = z.object({
 
 const ListSigningKeysSchema = z.object({
   keys: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateCloudflareImagesKeysAddSigningKeySchema = z.object({
   keys: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCloudflareImagesImagesUsageStatisticsSchema = z.object({
   count: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListVariantsSchema = z.object({
   variants: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAVariantSchema = z.object({
   variant: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCloudflareImagesVariantsVariantDetailsSchema = z.object({
   variant: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCloudflareImagesVariantsVariantDetailsFlatSchema = z.object({
   id: z.unknown(),
   neverRequireSignedURLs: z.unknown().optional(),
   options: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCloudflareImagesImageDetailsSchema = z.object({
@@ -59,6 +124,15 @@ const GetCloudflareImagesImageDetailsSchema = z.object({
   requireSignedURLs: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   variants: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateImageSchema = z.object({
@@ -69,19 +143,55 @@ const UpdateImageSchema = z.object({
   requireSignedURLs: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   variants: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListImagesV2Schema = z.object({
   images: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListMigrationsSchema = z.object({
   migrations: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateMigrationSchema = z.object({
   id: z.string().optional().describe(
     "The identifier of the created migration.",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -122,6 +232,15 @@ const GetMigrationProgressSchema = z.object({
   ),
   startedAt: z.string().nullable().optional(),
   status: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateCloudflareImagesSourcingkitAbortMigrationSchema = z.union([
@@ -136,14 +255,41 @@ const UpdateCloudflareImagesSourcingkitStartMigrationSchema = z.union([
 
 const ListMigrationLogsSchema = z.object({
   logs: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListSourcesSchema = z.object({
   sources: z.array(z.unknown()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateSourceSchema = z.object({
   id: z.string().optional().describe("The identifier of the created source."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateCloudflareImagesSourcingkitPrecheckSourceConnectivitySchema = z
@@ -169,6 +315,15 @@ const GetSourceConnectivitySchema = z.object({
   reason: z.string().nullable().optional().describe(
     "Human-readable error description if connectivity failed.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -178,10 +333,17 @@ const GetSourceConnectivitySchema = z.object({
 /** Cloudflare Images — upload, transform, deliver, and manage image pipelines */
 export const model = {
   type: "@webframp/cloudflare/images",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "list_signing_keys": {
@@ -324,6 +486,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -344,7 +507,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_signing_keys",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_signing_keys", {});
         return { dataHandles: [handle] };
@@ -372,6 +540,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -400,7 +569,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_keys_add_signing_key",
           String(args.signing_key_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated cloudflare_images_keys_add_signing_key",
@@ -471,6 +645,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -491,7 +666,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_images_usage_statistics",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched cloudflare_images_images_usage_statistics",
@@ -517,6 +697,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -537,7 +718,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_variants",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_variants", {});
         return { dataHandles: [handle] };
@@ -563,6 +749,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -585,7 +772,12 @@ export const model = {
         }
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("a_variant", id, result);
+        const handle = await context.writeResource("a_variant", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created a_variant {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -609,6 +801,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -629,7 +822,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_variants_variant_details",
           String(args.variant_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched cloudflare_images_variants_variant_details",
@@ -659,6 +857,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -687,7 +886,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_variant",
           String(args.variant_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated a_variant", {});
         return { dataHandles: [handle] };
@@ -752,6 +956,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -772,7 +977,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_variants_variant_details_flat",
           String(args.variant_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched cloudflare_images_variants_variant_details_flat",
@@ -800,6 +1010,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -820,7 +1031,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_image_details",
           String(args.image_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched cloudflare_images_image_details", {});
         return { dataHandles: [handle] };
@@ -854,6 +1070,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -882,7 +1099,12 @@ export const model = {
         const handle = await context.writeResource(
           "image",
           String(args.image_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated image", {});
         return { dataHandles: [handle] };
@@ -953,6 +1175,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -973,7 +1196,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_images_v2",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_images_v2", {});
         return { dataHandles: [handle] };
@@ -999,6 +1227,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1019,7 +1248,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_migrations",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_migrations", {});
         return { dataHandles: [handle] };
@@ -1056,6 +1290,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1078,7 +1313,12 @@ export const model = {
         }
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("migration", id, result);
+        const handle = await context.writeResource("migration", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created migration {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1102,6 +1342,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1122,7 +1363,12 @@ export const model = {
         const handle = await context.writeResource(
           "migration",
           String(args.migration_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched migration", {});
         return { dataHandles: [handle] };
@@ -1187,6 +1433,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1207,7 +1454,12 @@ export const model = {
         const handle = await context.writeResource(
           "migration_progress",
           String(args.migration_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched migration_progress", {});
         return { dataHandles: [handle] };
@@ -1232,6 +1484,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1260,7 +1513,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_sourcingkit_abort_migration",
           String(args.migration_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated cloudflare_images_sourcingkit_abort_migration",
@@ -1288,6 +1546,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1316,7 +1575,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_sourcingkit_start_migration",
           String(args.migration_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated cloudflare_images_sourcingkit_start_migration",
@@ -1346,6 +1610,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1366,7 +1631,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_migration_logs",
           String(args.migration_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_migration_logs", {});
         return { dataHandles: [handle] };
@@ -1393,6 +1663,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1413,7 +1684,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_sources",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_sources", {});
         return { dataHandles: [handle] };
@@ -1450,6 +1726,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1472,7 +1749,12 @@ export const model = {
         }
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("source", id, result);
+        const handle = await context.writeResource("source", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created source {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1508,6 +1790,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1533,7 +1816,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_images_sourcingkit_precheck_source_connectivity",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created cloudflare_images_sourcingkit_precheck_source_connectivity {id}",
@@ -1561,6 +1849,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1581,7 +1870,12 @@ export const model = {
         const handle = await context.writeResource(
           "source",
           String(args.source_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched source", {});
         return { dataHandles: [handle] };
@@ -1609,6 +1903,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1637,7 +1932,12 @@ export const model = {
         const handle = await context.writeResource(
           "source",
           String(args.source_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated source", {});
         return { dataHandles: [handle] };
@@ -1702,6 +2002,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -1722,7 +2023,12 @@ export const model = {
         const handle = await context.writeResource(
           "source_connectivity",
           String(args.source_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched source_connectivity", {});
         return { dataHandles: [handle] };

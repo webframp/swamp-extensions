@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/tunnel";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -41,6 +43,12 @@ const ListCloudflareTunnelsSchema = z.object({
   items: z.array(CloudflareTunnelsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateACloudflareTunnelSchema = z.object({
@@ -57,6 +65,15 @@ const CreateACloudflareTunnelSchema = z.object({
   remote_config: z.unknown().optional(),
   status: z.unknown().optional(),
   tun_type: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetConfigurationSchema = z.object({
@@ -66,6 +83,15 @@ const GetConfigurationSchema = z.object({
   source: z.unknown().optional(),
   tunnel_id: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PutConfigurationSchema = z.object({
@@ -75,6 +101,15 @@ const PutConfigurationSchema = z.object({
   source: z.unknown().optional(),
   tunnel_id: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CloudflareTunnelConnectionsItemSchema = z.object({
@@ -91,6 +126,12 @@ const ListCloudflareTunnelConnectionsSchema = z.object({
   items: z.array(CloudflareTunnelConnectionsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetCloudflareTunnelConnectorSchema = z.object({
@@ -101,6 +142,15 @@ const GetCloudflareTunnelConnectorSchema = z.object({
   id: z.unknown().optional(),
   run_at: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetACloudflareTunnelManagementTokenSchema = z.string();
@@ -113,6 +163,12 @@ const ListAllTunnelsSchema = z.object({
   items: z.array(AllTunnelsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -122,10 +178,17 @@ const ListAllTunnelsSchema = z.object({
 /** Cloudflare Tunnel — tunnel management, configurations, connections */
 export const model = {
   type: "@webframp/cloudflare/tunnel",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "cloudflare_tunnels": {
@@ -214,6 +277,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -243,6 +307,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -273,6 +339,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -288,7 +355,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_cloudflare_tunnel",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created a_cloudflare_tunnel {id}", { id });
         return { dataHandles: [handle] };
@@ -313,6 +385,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -323,7 +396,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_cloudflare_tunnel",
           String(args.tunnel_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched a_cloudflare_tunnel", {});
         return { dataHandles: [handle] };
@@ -350,6 +428,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -368,7 +447,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_cloudflare_tunnel",
           String(args.tunnel_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated a_cloudflare_tunnel", {});
         return { dataHandles: [handle] };
@@ -423,6 +507,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -433,7 +518,12 @@ export const model = {
         const handle = await context.writeResource(
           "configuration",
           String(args.tunnel_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched configuration", {});
         return { dataHandles: [handle] };
@@ -459,6 +549,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -477,7 +568,12 @@ export const model = {
         const handle = await context.writeResource(
           "put_configuration",
           String(args.tunnel_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated put_configuration", {});
         return { dataHandles: [handle] };
@@ -502,6 +598,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["tunnel_id", "page", "per_page"]);
@@ -531,6 +628,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -591,6 +690,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -601,7 +701,12 @@ export const model = {
         const handle = await context.writeResource(
           "cloudflare_tunnel_connector",
           String(args.connector_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched cloudflare_tunnel_connector", {});
         return { dataHandles: [handle] };
@@ -627,6 +732,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -646,7 +752,12 @@ export const model = {
         const handle = await context.writeResource(
           "get_a_cloudflare_tunnel_management_token",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created get_a_cloudflare_tunnel_management_token {id}",
@@ -674,6 +785,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -684,7 +796,12 @@ export const model = {
         const handle = await context.writeResource(
           "a_cloudflare_tunnel_token",
           String(args.tunnel_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched a_cloudflare_tunnel_token", {});
         return { dataHandles: [handle] };
@@ -720,6 +837,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -746,6 +864,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} all_tunnels", {

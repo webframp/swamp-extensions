@@ -11,6 +11,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/hermes-journal-writer";
+
 const ALL_SOURCES = [
   "hn",
   "lobsters",
@@ -467,6 +469,7 @@ async function writeDailyEntry(
 ): Promise<
   { dataHandles: { spec: string; instance: string; name: string }[] }
 > {
+  const startMs = Date.now();
   const cfg = ctx.globalArgs;
   const now = new Date();
   ctx.logger.info("Writing daily journal entry");
@@ -523,6 +526,9 @@ async function writeDailyEntry(
       file: journalFile,
       status: "already-exists",
       createdAt: formatTimestamp(now),
+
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     });
     return { dataHandles: [handle] };
   } catch (e) {
@@ -545,6 +551,9 @@ async function writeDailyEntry(
       file: journalFile,
       status: "skipped-no-data",
       createdAt: formatTimestamp(now),
+
+      durationMs: Date.now() - startMs,
+      collectedBy: EXTENSION_NAME,
     });
     return { dataHandles: [handle] };
   }
@@ -596,6 +605,9 @@ async function writeDailyEntry(
     file: journalFile,
     status,
     createdAt: formatTimestamp(now),
+
+    durationMs: Date.now() - startMs,
+    collectedBy: EXTENSION_NAME,
   });
   return { dataHandles: [handle] };
 }
@@ -603,7 +615,7 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -637,6 +649,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

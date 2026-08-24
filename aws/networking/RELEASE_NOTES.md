@@ -1,10 +1,6 @@
-## 2026.08.23.1
+## 2026.08.24.1
 
-**Changed:** Documentation only — no code changes. Documented the previously
-undocumented `profile` global arg and added a `region`-explicit usage
-example. Added a `## Troubleshooting` section covering the `region` default
-(`us-east-1`), the `MAX_PAGES = 10` pagination cap, an unflagged truncation
-gap in `get_data_transfer_metrics` (its own NAT-gateway/LB discovery uses
-capped pagination but never sets `truncated`), CloudWatch's `Sum || 0`
-fallback masking metrics-lagging resources, and unrecognized
-`loadBalancerNames` throwing a wrapped AWS exception.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

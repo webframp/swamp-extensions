@@ -10,6 +10,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/github";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -51,6 +53,12 @@ const RepoListSchema = z.object({
   ),
   count: z.number().describe("Number of repositories returned"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const RepoInfoSchema = z.object({
@@ -76,6 +84,12 @@ const RepoInfoSchema = z.object({
   createdAt: z.string().describe("Timestamp the repository was created"),
   updatedAt: z.string().describe("Timestamp the repository was last updated"),
   fetchedAt: z.string().describe("Timestamp this info was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PullRequestSchema = z.object({
@@ -102,6 +116,12 @@ const PullRequestListSchema = z.object({
   count: z.number().describe("Number of pull requests returned"),
   state: z.string().describe("State filter used for the query"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const IssueSchema = z.object({
@@ -126,6 +146,12 @@ const IssueListSchema = z.object({
   count: z.number().describe("Number of issues returned"),
   state: z.string().describe("State filter used for the query"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ReleaseSchema = z.object({
@@ -141,6 +167,12 @@ const ReleaseListSchema = z.object({
   releases: z.array(ReleaseSchema).describe("Releases for the repository"),
   count: z.number().describe("Number of releases returned"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WorkflowRunSchema = z.object({
@@ -161,6 +193,12 @@ const WorkflowRunListSchema = z.object({
   ),
   count: z.number().describe("Number of workflow runs returned"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -219,7 +257,7 @@ type ModelContext = {
 /** GitHub model definition exposing repository query methods. */
 export const model = {
   type: "@webframp/github",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -241,6 +279,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -293,6 +340,7 @@ export const model = {
         _args: Record<string, never>,
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = await runGh([
           "repo",
           "list",
@@ -308,6 +356,8 @@ export const model = {
           repos,
           count: repos.length,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} repositories", {
@@ -327,6 +377,7 @@ export const model = {
         args: { repo: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = await runGh([
           "repo",
           "view",
@@ -343,6 +394,8 @@ export const model = {
           {
             ...repoInfo,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -365,6 +418,7 @@ export const model = {
         args: { repo: string; state: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = await runGh([
           "pr",
           "list",
@@ -392,6 +446,8 @@ export const model = {
             count: prs.length,
             state: args.state,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -417,6 +473,7 @@ export const model = {
         args: { repo: string; state: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = await runGh([
           "issue",
           "list",
@@ -444,6 +501,8 @@ export const model = {
             count: issues.length,
             state: args.state,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -465,6 +524,7 @@ export const model = {
         args: { repo: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = await runGh([
           "release",
           "list",
@@ -486,6 +546,8 @@ export const model = {
             releases,
             count: releases.length,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -506,6 +568,7 @@ export const model = {
         args: { repo: string },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const data = await runGh([
           "run",
           "list",
@@ -527,6 +590,8 @@ export const model = {
             workflowRuns: runs,
             count: runs.length,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 

@@ -9,6 +9,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/rice-scoring";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -69,6 +71,15 @@ const ScoredItemSchema = z.object({
 
 const ScoresResourceSchema = z.object({
   items: z.array(ScoredItemSchema),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ScoreArgsSchema = z.object({
@@ -116,7 +127,7 @@ interface ModelContext {
 /** RICE scoring methodology model. */
 export const model = {
   type: "@webframp/rice-scoring",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -131,6 +142,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -186,6 +206,7 @@ AGENT GUIDANCE FOR CONDUCTING THE INTERVIEW:
         args: z.infer<typeof ScoreArgsSchema>,
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         if (args.items.length === 0) {
           throw new Error("At least one item is required for scoring");
         }
@@ -213,7 +234,12 @@ AGENT GUIDANCE FOR CONDUCTING THE INTERVIEW:
         const handle = await context.writeResource(
           "scores",
           "scores-latest",
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
 
         context.logger.info("Scored items using RICE methodology", {

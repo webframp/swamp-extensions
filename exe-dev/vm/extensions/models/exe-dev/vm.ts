@@ -28,6 +28,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/exe-dev/vm";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -113,6 +115,12 @@ const FleetSchema = z.object({
   fetchedAt: z.string().describe(
     "Timestamp the fleet snapshot was fetched",
   ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   vms: z.array(VmSchema).describe("VMs observed in the fleet"),
   count: z.number().describe("Number of VMs in the fleet"),
 });
@@ -122,6 +130,12 @@ const VmDetailSchema = VmSchema;
 const StatSchema = z.object({
   vmName: z.string().describe("VM the metrics were fetched for"),
   fetchedAt: z.string().describe("Timestamp the metrics were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   range: z.string().describe("Time range covered by the metrics"),
   metrics: z.unknown().describe(
     "Raw metrics payload returned by the exe.dev stat API",
@@ -139,6 +153,15 @@ const ExecResultSchema = z.object({
   truncated: z.boolean().describe(
     "Whether output was truncated by the 10MB per-stream cap",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ShelleyVersionSchema = z.object({
@@ -154,6 +177,12 @@ const ShelleyVersionSchema = z.object({
 const ShelleyVersionsSchema = z.object({
   fetchedAt: z.string().describe(
     "Timestamp the version check was performed",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
   vms: z.array(ShelleyVersionSchema).describe(
     "Per-VM Shelley version results",
@@ -653,7 +682,7 @@ export function mapVm(raw: RawVm): z.infer<typeof VmSchema> {
  */
 export const model = {
   type: "@webframp/exe-dev/vm",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -855,6 +884,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const resp = await exeApi(requireToken(ctx.globalArgs), "ls -l --json");
         const raw = parseJsonResponse<{ vms: RawVm[] }>(resp, "ls -l --json");
         const vms = (raw.vms ?? []).map(mapVm);
@@ -867,6 +897,8 @@ export const model = {
           fetchedAt: new Date().toISOString(),
           vms,
           count: vms.length,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
         return { dataHandles: [handle] };
       },
@@ -926,6 +958,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const cmd = buildCreateCmd(args);
         const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
         const raw = parseJsonResponse<RawVm>(resp, "new");
@@ -939,7 +972,12 @@ export const model = {
         const handle = await ctx.writeResource(
           "vm",
           vm.vmName,
-          vm as unknown as Record<string, unknown>,
+          {
+            ...vm as unknown as Record<string, unknown>,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },
@@ -991,6 +1029,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         assertVmName(args.name);
         const resp = await exeApi(
           requireToken(ctx.globalArgs),
@@ -1011,7 +1050,12 @@ export const model = {
           const handle = await ctx.writeResource(
             "vm",
             vm.vmName,
-            vm as unknown as Record<string, unknown>,
+            {
+              ...vm as unknown as Record<string, unknown>,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         }
@@ -1043,6 +1087,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const cmd = buildResizeCmd(args);
         const resp = await exeApi(requireToken(ctx.globalArgs), cmd);
         parseJsonResponse<unknown>(resp, "resize");
@@ -1060,7 +1105,12 @@ export const model = {
           const handle = await ctx.writeResource(
             "vm",
             vm.vmName,
-            vm as unknown as Record<string, unknown>,
+            {
+              ...vm as unknown as Record<string, unknown>,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         }
@@ -1090,6 +1140,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         assertVmName(args.name);
         const resp = await exeApi(
           requireToken(ctx.globalArgs),
@@ -1107,6 +1158,8 @@ export const model = {
           fetchedAt: new Date().toISOString(),
           range: args.range,
           metrics,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
         return { dataHandles: [handle] };
       },
@@ -1179,6 +1232,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         assertVmName(args.name);
         const { stdout, stderr, code, truncated } = await sshWithTimeout(
           [
@@ -1222,6 +1276,9 @@ export const model = {
             output,
             exitCode: code,
             truncated,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
         return { dataHandles: [handle] };
@@ -1299,6 +1356,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         assertVmName(args.name);
         if (args.email) {
           assertEmail(args.email);
@@ -1355,7 +1413,12 @@ export const model = {
             const handle = await ctx.writeResource(
               "vm",
               vm.vmName,
-              vm as unknown as Record<string, unknown>,
+              {
+                ...vm as unknown as Record<string, unknown>,
+                fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
+              },
             );
             ctx.logger.info("exe.dev share info fetched for {name}: {status}", {
               name: args.name,
@@ -1408,6 +1471,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         // Determine which VMs to check
         let vmNames: string[];
         if (args.filter?.length) {
@@ -1513,6 +1577,8 @@ export const model = {
           count: results.length,
           outdatedCount,
           latestObserved,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
         return { dataHandles: [handle] };
       },
@@ -1548,6 +1614,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         let vmNames: string[];
         if (args.names?.length) {
           args.names.forEach(assertVmName);
@@ -1675,6 +1742,9 @@ export const model = {
           results,
           upgradedCount,
           failedCount,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+          fetchedAt: new Date().toISOString(),
         });
         return { dataHandles: [handle] };
       },

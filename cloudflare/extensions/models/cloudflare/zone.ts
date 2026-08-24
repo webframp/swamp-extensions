@@ -11,6 +11,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -40,11 +42,26 @@ const ZoneSchema = z.object({
   }),
   created_on: z.string(),
   modified_on: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZoneListSchema = z.object({
   zones: z.array(ZoneSchema),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ZoneSettingsSchema = z.object({
@@ -52,6 +69,12 @@ const ZoneSettingsSchema = z.object({
   zoneName: z.string(),
   settings: z.record(z.string(), z.unknown()),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -61,7 +84,7 @@ const ZoneSettingsSchema = z.object({
 /** Cloudflare Zone model definition with methods for listing, inspecting, pausing, and configuring zones. */
 export const model = {
   type: "@webframp/cloudflare/zone",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -79,6 +102,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -132,6 +164,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         if (args.status) params.status = args.status;
@@ -155,6 +188,8 @@ export const model = {
           zones,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} zones", { count: zones.length });
@@ -181,6 +216,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const zone = await cfApi<z.infer<typeof ZoneSchema>>(
           apiToken,
@@ -188,7 +224,12 @@ export const model = {
           `/zones/${args.zoneId}`,
         );
 
-        const handle = await context.writeResource("zone", args.zoneId, zone);
+        const handle = await context.writeResource("zone", args.zoneId, {
+          ...zone,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Fetched zone {name}", { name: zone.name });
         return { dataHandles: [handle] };
       },
@@ -213,6 +254,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         // Fetch zone name for context
@@ -242,6 +284,8 @@ export const model = {
           zoneName: zone.name,
           settings,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Fetched {count} settings for zone {name}", {
@@ -275,6 +319,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         await cfApi(
@@ -309,6 +354,8 @@ export const model = {
           zoneName: zone.name,
           settings,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Updated setting {setting} for zone {zoneId}", {
@@ -338,6 +385,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const zone = await cfApi<z.infer<typeof ZoneSchema>>(
@@ -347,7 +395,12 @@ export const model = {
           { paused: true },
         );
 
-        const handle = await context.writeResource("zone", args.zoneId, zone);
+        const handle = await context.writeResource("zone", args.zoneId, {
+          ...zone,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Paused zone {name}", { name: zone.name });
         return { dataHandles: [handle] };
       },
@@ -372,6 +425,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const zone = await cfApi<z.infer<typeof ZoneSchema>>(
@@ -381,7 +435,12 @@ export const model = {
           { paused: false },
         );
 
-        const handle = await context.writeResource("zone", args.zoneId, zone);
+        const handle = await context.writeResource("zone", args.zoneId, {
+          ...zone,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Unpaused zone {name}", { name: zone.name });
         return { dataHandles: [handle] };
       },

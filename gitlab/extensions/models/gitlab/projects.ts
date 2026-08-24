@@ -12,6 +12,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/gitlab";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -51,6 +53,12 @@ const ProjectListSchema = z.object({
     "Whether more projects exist beyond this page",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ProjectInfoSchema = z.object({
@@ -72,6 +80,12 @@ const ProjectInfoSchema = z.object({
   createdAt: z.string().describe("Timestamp the project was created"),
   lastActivityAt: z.string().describe("Timestamp of last project activity"),
   fetchedAt: z.string().describe("Timestamp this info was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MergeRequestSchema = z.object({
@@ -102,6 +116,12 @@ const MergeRequestListSchema = z.object({
   ),
   state: z.string().describe("State filter used for the query"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const IssueSchema = z.object({
@@ -123,6 +143,12 @@ const IssueListSchema = z.object({
   truncated: z.boolean().describe("Whether more issues exist beyond this page"),
   state: z.string().describe("State filter used for the query"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const IssueDetailSchema = z.object({
@@ -135,6 +161,15 @@ const IssueDetailSchema = z.object({
   labels: z.array(z.string()).describe("Labels applied to the issue"),
   createdAt: z.string().describe("Timestamp the issue was created"),
   updatedAt: z.string().describe("Timestamp the issue was last updated"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const NoteSchema = z.object({
@@ -156,6 +191,12 @@ const NoteListSchema = z.object({
   count: z.number().describe("Number of notes returned"),
   truncated: z.boolean().describe("Whether older notes exist beyond this page"),
   fetchedAt: z.string().describe("Timestamp the notes were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // A single note inside a discussion thread. `file`/`line` are the slim diff
@@ -213,6 +254,12 @@ const DiscussionListSchema = z.object({
     "Whether more discussions exist beyond this page",
   ),
   fetchedAt: z.string().describe("Timestamp the discussions were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DiscussionResolutionSchema = z.object({
@@ -226,6 +273,12 @@ const DiscussionResolutionSchema = z.object({
     "Username who resolved the discussion, null if unresolved",
   ),
   fetchedAt: z.string().describe("Timestamp the resolution was recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const NoteDeletedSchema = z.object({
@@ -234,6 +287,12 @@ const NoteDeletedSchema = z.object({
   noteId: z.number().describe("Deleted note's ID"),
   deleted: z.boolean().describe("Whether the deletion was confirmed"),
   fetchedAt: z.string().describe("Timestamp the deletion was recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MrAssigneesSchema = z.object({
@@ -244,6 +303,12 @@ const MrAssigneesSchema = z.object({
     "Resulting assignee usernames after the operation (empty when unassigned)",
   ),
   fetchedAt: z.string().describe("Timestamp the assignees were recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MrReviewersSchema = z.object({
@@ -254,6 +319,12 @@ const MrReviewersSchema = z.object({
     "Resulting reviewer usernames after the operation (empty when cleared)",
   ),
   fetchedAt: z.string().describe("Timestamp the reviewers were recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UnassignResultSchema = z.object({
@@ -279,6 +350,12 @@ const UnassignResultSchema = z.object({
     error: z.string().describe("Why the removal could not be confirmed"),
   })).describe("Per-MR failures; one bad MR does not sink the batch"),
   fetchedAt: z.string().describe("Timestamp the batch was executed"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const RemoveReviewerResultSchema = z.object({
@@ -302,6 +379,12 @@ const RemoveReviewerResultSchema = z.object({
     error: z.string().describe("Why the removal could not be confirmed"),
   })).describe("Per-MR failures; one bad MR does not sink the batch"),
   fetchedAt: z.string().describe("Timestamp the batch was executed"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ReleaseSchema = z.object({
@@ -322,6 +405,12 @@ const ReleaseListSchema = z.object({
     "Whether more releases exist beyond this page",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PipelineSchema = z.object({
@@ -346,6 +435,12 @@ const PipelineListSchema = z.object({
     "Whether more pipelines exist beyond this page",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const LabelSchema = z.object({
@@ -360,6 +455,12 @@ const LabelListSchema = z.object({
   count: z.number().describe("Number of labels returned"),
   truncated: z.boolean().describe("Whether more labels exist beyond this page"),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MemberSchema = z.object({
@@ -378,6 +479,12 @@ const MemberListSchema = z.object({
     "Whether more members exist beyond this page",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const BranchSchema = z.object({
@@ -394,6 +501,12 @@ const BranchListSchema = z.object({
     "Whether more branches exist beyond this page",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DashboardMRSchema = z.object({
@@ -476,6 +589,12 @@ const DashboardSchema = z.object({
   totalCount: z.number().describe("Total items across all dashboard sections"),
   truncated: z.boolean().describe("Whether any section hit its page cap"),
   fetchedAt: z.string().describe("Timestamp the dashboard was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TodoListSchema = z.object({
@@ -492,6 +611,12 @@ const TodoListSchema = z.object({
     "Whether the safety cap (maxTodos) was hit before all pages were read",
   ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const BulkTodoResultSchema = z.object({
@@ -511,6 +636,12 @@ const BulkTodoResultSchema = z.object({
     "Total ids submitted (results.length + failed.length)",
   ),
   fetchedAt: z.string().describe("Timestamp the batch was executed"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MergeStatusSchema = z.object({
@@ -546,6 +677,12 @@ const MergeStatusSchema = z.object({
   ),
   summary: z.string().describe("Plain-English summary of mergeability"),
   fetchedAt: z.string().describe("Timestamp the status was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PipelineJobSchema = z.object({
@@ -579,6 +716,12 @@ const PipelineJobsSchema = z.object({
     "True when the pipeline has more jobs than one page (100) returned",
   ),
   fetchedAt: z.string().describe("Timestamp the jobs were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const JobLogSchema = z.object({
@@ -596,6 +739,12 @@ const JobLogSchema = z.object({
       "treat as sensitive — CI logs can still leak secrets",
   ),
   fetchedAt: z.string().describe("Timestamp the log was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const RetryResultSchema = z.object({
@@ -611,6 +760,12 @@ const RetryResultSchema = z.object({
   ),
   status: z.string().describe("Resulting status after the retry"),
   fetchedAt: z.string().describe("Timestamp the retry was triggered"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const RebaseResultSchema = z.object({
@@ -626,6 +781,12 @@ const RebaseResultSchema = z.object({
     "Error message if the rebase failed",
   ),
   fetchedAt: z.string().describe("Timestamp the rebase was triggered"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -1350,7 +1511,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1388,6 +1549,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1566,6 +1736,7 @@ export const model = {
         "List projects for the authenticated user with basic metadata",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, ctx: ModelContext) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, PROJECTS_QUERY, {
           first: 30,
@@ -1578,6 +1749,8 @@ export const model = {
           count: projects.length,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
         ctx.logger.info("Found {count} projects", { count: projects.length });
         return { dataHandles: [handle] };
@@ -1592,6 +1765,7 @@ export const model = {
         ),
       }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, PROJECT_INFO_QUERY, {
           fullPath: args.project,
@@ -1617,7 +1791,12 @@ export const model = {
         const handle = await ctx.writeResource(
           "projectInfo",
           sanitizeName(args.project),
-          info,
+          {
+            ...info,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         ctx.logger.info("Fetched info for {project}", {
           project: args.project,
@@ -1637,6 +1816,7 @@ export const model = {
         args: { project: string; state: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, MERGE_REQUESTS_QUERY, {
           fullPath: args.project,
@@ -1656,6 +1836,8 @@ export const model = {
             truncated,
             state: args.state,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} MRs for {project} ({state})", {
@@ -1677,6 +1859,7 @@ export const model = {
         args: { project: string; state: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, ISSUES_QUERY, {
           fullPath: args.project,
@@ -1696,6 +1879,8 @@ export const model = {
             truncated,
             state: args.state,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} issues for {project} ({state})", {
@@ -1711,6 +1896,7 @@ export const model = {
       description: "List releases for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, RELEASES_QUERY, {
           fullPath: args.project,
@@ -1734,6 +1920,8 @@ export const model = {
             count: releases.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} releases for {project}", {
@@ -1748,6 +1936,7 @@ export const model = {
       description: "List recent CI/CD pipelines for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, PIPELINES_QUERY, {
           fullPath: args.project,
@@ -1773,6 +1962,8 @@ export const model = {
             count: pipelines.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} pipelines for {project}", {
@@ -1800,6 +1991,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, CREATE_ISSUE_MUTATION, {
           projectPath: args.project,
@@ -1832,6 +2024,9 @@ export const model = {
             labels: issue.labels?.nodes?.map((l: any) => l.title) ?? [],
             createdAt: issue.createdAt ?? "",
             updatedAt: issue.updatedAt ?? "",
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
         ctx.logger.info("Created issue #{iid} in {project}", {
@@ -1864,6 +2059,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -1891,6 +2087,9 @@ export const model = {
             labels: raw.labels ?? [],
             createdAt: raw.created_at ?? "",
             updatedAt: raw.updated_at ?? "",
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
           },
         );
         ctx.logger.info("Updated issue #{iid} in {project}", {
@@ -1912,6 +2111,7 @@ export const model = {
         args: { project: string; iid: number; body: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         // Resolve issue global ID
         const idData = await graphqlRequest(host, token, ISSUE_ID_QUERY, {
@@ -1947,6 +2147,8 @@ export const model = {
             count: 1,
             truncated: false,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Added note to issue #{iid} in {project}", {
@@ -1967,6 +2169,7 @@ export const model = {
         args: { project: string; iid: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, ISSUE_NOTES_QUERY, {
           fullPath: args.project,
@@ -1987,6 +2190,8 @@ export const model = {
             count: notes.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} notes on issue #{iid}", {
@@ -2008,6 +2213,7 @@ export const model = {
         args: { project: string; iid: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         // last:50 returns the most recent notes — what a reviewer/replier wants
         // — rather than first:50 (the oldest). truncated flags older history.
@@ -2030,6 +2236,8 @@ export const model = {
             count: notes.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} notes on MR !{iid}", {
@@ -2089,6 +2297,7 @@ export const model = {
         args: { state: "pending" | "done" | "all"; maxTodos: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         // GraphQL `state` is a list; "all" means both pending and done.
         const stateArg = args.state === "all"
@@ -2146,6 +2355,8 @@ export const model = {
             count: todos.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Fetched {count} todos for {user}{trunc}", {
@@ -2169,6 +2380,7 @@ export const model = {
         ),
       }),
       execute: async (args: { todoIds: string[] }, ctx: ModelContext) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const results: z.infer<typeof BulkTodoResultSchema>["results"] = [];
         const failed: z.infer<typeof BulkTodoResultSchema>["failed"] = [];
@@ -2216,6 +2428,8 @@ export const model = {
             failed,
             count: args.todoIds.length,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Marked {ok}/{total} todos done ({failed} failed)", {
@@ -2246,6 +2460,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, CREATE_MR_MUTATION, {
           projectPath: args.project,
@@ -2276,6 +2491,8 @@ export const model = {
             truncated: false,
             state: "opened",
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Created MR !{iid} in {project}", {
@@ -2297,6 +2514,7 @@ export const model = {
         args: { project: string; iid: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, MR_STATUS_QUERY, {
           fullPath: args.project,
@@ -2348,6 +2566,8 @@ export const model = {
             blockers,
             summary,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info(summary, { project: args.project, iid: args.iid });
@@ -2367,6 +2587,7 @@ export const model = {
         args: { project: string; iid: number; skipCi: boolean },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const client = new GitLabClient(host, token);
         // Trigger the async rebase (202 { rebase_in_progress: true }).
@@ -2407,6 +2628,8 @@ export const model = {
             status,
             mergeError,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info(
@@ -2435,6 +2658,7 @@ export const model = {
         args: { project: string; pipelineId: number; scope: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -2472,6 +2696,8 @@ export const model = {
             count: jobs.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Pipeline {pid}: {count} {scope} job(s)", {
@@ -2495,6 +2721,7 @@ export const model = {
         args: { project: string; jobId: number; tailLines: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -2520,6 +2747,8 @@ export const model = {
             truncated: total > tail.length,
             log: redactSecrets(tail.join("\n")),
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Fetched job {jobId} log tail ({n}/{total} lines)", {
@@ -2542,6 +2771,7 @@ export const model = {
         args: { project: string; jobId: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -2560,6 +2790,8 @@ export const model = {
             newJobId: raw.id ?? null,
             status: raw.status ?? "",
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Retried job {jobId} → new job {newId} ({status})", {
@@ -2581,6 +2813,7 @@ export const model = {
         args: { project: string; pipelineId: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -2599,6 +2832,8 @@ export const model = {
             newJobId: null,
             status: raw.status ?? "",
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Retried pipeline {pid} ({status})", {
@@ -2620,6 +2855,7 @@ export const model = {
         args: { project: string; iid: number; squash: boolean },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -2646,6 +2882,8 @@ export const model = {
             truncated: false,
             state: mr.state,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Merged MR !{iid} in {project}", {
@@ -2677,6 +2915,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -2702,6 +2941,8 @@ export const model = {
             truncated: false,
             state: mr.state,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Updated MR !{iid} in {project}", {
@@ -2733,6 +2974,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         // Resolve MR global ID
         const idData = await graphqlRequest(host, token, MR_ID_QUERY, {
@@ -2775,6 +3017,8 @@ export const model = {
             count: 1,
             truncated: false,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Added note to MR !{iid} in {project}", {
@@ -2797,6 +3041,7 @@ export const model = {
         args: { project: string; iid: number; noteId: number; body: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, UPDATE_NOTE_MUTATION, {
           id: `gid://gitlab/Note/${args.noteId}`,
@@ -2830,6 +3075,8 @@ export const model = {
             count: 1,
             truncated: false,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Updated note {noteId} on MR !{iid}", {
@@ -2851,6 +3098,7 @@ export const model = {
         args: { project: string; iid: number; noteId: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, DESTROY_NOTE_MUTATION, {
           id: `gid://gitlab/Note/${args.noteId}`,
@@ -2875,6 +3123,8 @@ export const model = {
             noteId: args.noteId,
             deleted: true,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Deleted note {noteId} on MR !{iid}", {
@@ -2897,6 +3147,7 @@ export const model = {
         args: { project: string; iid: number; usernames: string[] },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, SET_ASSIGNEES_MUTATION, {
           projectPath: args.project,
@@ -2940,6 +3191,8 @@ export const model = {
             iid: args.iid,
             assignees,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info(
@@ -2967,6 +3220,7 @@ export const model = {
         args: { project: string; iids: number[]; username?: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         let resolved = args.username;
         if (!resolved) {
@@ -3045,6 +3299,8 @@ export const model = {
             results,
             failed,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info(
@@ -3077,6 +3333,7 @@ export const model = {
         args: { project: string; iids: number[]; username?: string },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         let resolved = args.username;
         if (!resolved) {
@@ -3153,6 +3410,8 @@ export const model = {
             results,
             failed,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info(
@@ -3182,6 +3441,7 @@ export const model = {
         args: { project: string; iid: number; usernames: string[] },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, SET_REVIEWERS_MUTATION, {
           projectPath: args.project,
@@ -3219,6 +3479,8 @@ export const model = {
             iid: args.iid,
             reviewers,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info(
@@ -3247,6 +3509,7 @@ export const model = {
         args: { project: string; iid: number; first?: number },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         // `?? 50` is not redundant with the Zod default: the test harness (and
         // any caller that skips schema validation) does not apply defaults.
@@ -3308,6 +3571,8 @@ export const model = {
             discussions,
             truncated: !!conn.pageInfo?.hasNextPage,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           } as unknown as Record<string, unknown>,
         );
         ctx.logger.info(
@@ -3342,6 +3607,7 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const resolve = args.resolved ?? true;
         const data = await graphqlRequest(
@@ -3375,6 +3641,8 @@ export const model = {
             resolved: disc?.resolved ?? resolve,
             resolvedBy: disc?.resolvedBy?.username ?? null,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           } as unknown as Record<string, unknown>,
         );
         ctx.logger.info("{action} discussion on {project}!{iid}", {
@@ -3390,6 +3658,7 @@ export const model = {
       description: "List labels for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, LABELS_QUERY, {
           fullPath: args.project,
@@ -3411,6 +3680,8 @@ export const model = {
             count: labels.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} labels for {project}", {
@@ -3461,6 +3732,7 @@ export const model = {
       description: "List members of a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const data = await graphqlRequest(host, token, MEMBERS_QUERY, {
           fullPath: args.project,
@@ -3482,6 +3754,8 @@ export const model = {
             count: members.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} members for {project}", {
@@ -3496,6 +3770,7 @@ export const model = {
       description: "List branches for a project",
       arguments: z.object({ project: z.string().min(1) }),
       execute: async (args: { project: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
         // REST fallback: GitLab GraphQL does not expose repository branch listing
         const client = new GitLabClient(
           ctx.globalArgs.host,
@@ -3520,6 +3795,8 @@ export const model = {
             count: branches.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         ctx.logger.info("Found {count} branches for {project}", {
@@ -3551,6 +3828,7 @@ export const model = {
         args: { role: string; state: string; includeArchived: boolean },
         ctx: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
         const variables: Record<string, unknown> = {
           mrState: args.state === "all" ? undefined : args.state,
@@ -3612,6 +3890,8 @@ export const model = {
           totalCount,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         ctx.logger.info(

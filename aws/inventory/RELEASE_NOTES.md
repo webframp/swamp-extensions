@@ -1,10 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Fixed:** Corrected installation command (`swamp extension install` →
-`swamp extension pull`).
-
-**Added:** Troubleshooting section documenting the `regions` (array) vs `region`
-(string) global-arg change, `inventory_scan` single-region limitation, silent
-Resource Explorer / Config fallback behavior, `MAX_PAGES = 10` truncation per
-service method, first-run empty diff behavior, S3 region handling, and the
-silent `reservedConcurrency` catch in Lambda inventory.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

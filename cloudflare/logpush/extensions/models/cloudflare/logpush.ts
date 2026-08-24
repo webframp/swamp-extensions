@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/logpush";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -21,7 +23,17 @@ const GlobalArgsSchema = z.object({
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
-const GetAccountsAccountIdLogpushDatasetsDatasetIdFieldsSchema = z.object({});
+const GetAccountsAccountIdLogpushDatasetsDatasetIdFieldsSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
@@ -45,6 +57,12 @@ const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAccountsAccountIdLogpushJobsItemSchema = z.object({
@@ -69,6 +87,12 @@ const GetAccountsAccountIdLogpushJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushJobsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreatePostAccountsAccountIdLogpushJobsSchema = z.object({
@@ -87,6 +111,15 @@ const CreatePostAccountsAccountIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
@@ -105,6 +138,15 @@ const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
@@ -123,33 +165,97 @@ const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostAccountsAccountIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
   message: z.string().optional(),
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostAccountsAccountIdLogpushOwnershipValidateSchema = z.object({
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const DeleteAccountsAccountIdLogpushValidateDestinationSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const DeleteAccountsAccountIdLogpushValidateDestinationExistsSchema = z.object({
   exists: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostAccountsAccountIdLogpushValidateOriginSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
-const GetZonesZoneIdLogpushDatasetsDatasetIdFieldsSchema = z.object({});
+const GetZonesZoneIdLogpushDatasetsDatasetIdFieldsSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
@@ -173,6 +279,12 @@ const GetZonesZoneIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetZonesZoneIdLogpushEdgeJobsItemSchema = z.object({
@@ -187,6 +299,12 @@ const GetZonesZoneIdLogpushEdgeJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushEdgeJobsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreatePostZonesZoneIdLogpushEdgeJobsSchema = z.object({
@@ -195,6 +313,15 @@ const CreatePostZonesZoneIdLogpushEdgeJobsSchema = z.object({
   filter: z.unknown().optional(),
   sample: z.unknown().optional(),
   session_id: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const GetZonesZoneIdLogpushJobsItemSchema = z.object({
@@ -219,6 +346,12 @@ const GetZonesZoneIdLogpushJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushJobsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreatePostZonesZoneIdLogpushJobsSchema = z.object({
@@ -237,6 +370,15 @@ const CreatePostZonesZoneIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
@@ -255,6 +397,15 @@ const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
@@ -273,30 +424,84 @@ const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostZonesZoneIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
   message: z.string().optional(),
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostZonesZoneIdLogpushOwnershipValidateSchema = z.object({
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostZonesZoneIdLogpushValidateDestinationSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostZonesZoneIdLogpushValidateDestinationExistsSchema = z.object({
   exists: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 const CreatePostZonesZoneIdLogpushValidateOriginSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).nullable();
 
 // =============================================================================
@@ -306,10 +511,17 @@ const CreatePostZonesZoneIdLogpushValidateOriginSchema = z.object({
 /** Cloudflare Logpush — log jobs, destinations, field configurations */
 export const model = {
   type: "@webframp/cloudflare/logpush",
-  version: "2026.07.27.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "accounts_account_id_logpush_datasets_dataset_id_fields": {
@@ -480,6 +692,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -490,7 +703,12 @@ export const model = {
         const handle = await context.writeResource(
           "accounts_account_id_logpush_datasets_dataset_id_fields",
           String(args.dataset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched accounts_account_id_logpush_datasets_dataset_id_fields",
@@ -520,6 +738,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["dataset_id", "page", "per_page"]);
@@ -549,6 +768,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -576,6 +797,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -605,6 +827,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -648,6 +872,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -663,7 +888,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_jobs",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_jobs {id}",
@@ -691,6 +921,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -701,7 +932,12 @@ export const model = {
         const handle = await context.writeResource(
           "accounts_account_id_logpush_jobs_job_id",
           String(args.job_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched accounts_account_id_logpush_jobs_job_id",
@@ -741,6 +977,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -759,7 +996,12 @@ export const model = {
         const handle = await context.writeResource(
           "put_accounts_account_id_logpush_jobs_job_id",
           String(args.job_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated put_accounts_account_id_logpush_jobs_job_id",
@@ -819,6 +1061,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -834,7 +1077,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_ownership",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_ownership {id}",
@@ -865,6 +1113,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -880,7 +1129,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_ownership_validate",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_ownership_validate {id}",
@@ -910,6 +1164,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -925,7 +1180,12 @@ export const model = {
         const handle = await context.writeResource(
           "delete_accounts_account_id_logpush_validate_destination",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created delete_accounts_account_id_logpush_validate_destination {id}",
@@ -955,6 +1215,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -970,7 +1231,12 @@ export const model = {
         const handle = await context.writeResource(
           "delete_accounts_account_id_logpush_validate_destination_exists",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created delete_accounts_account_id_logpush_validate_destination_exists {id}",
@@ -998,6 +1264,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1013,7 +1280,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_validate_origin",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_validate_origin {id}",
@@ -1044,6 +1316,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1054,7 +1327,12 @@ export const model = {
         const handle = await context.writeResource(
           "zones_zone_id_logpush_datasets_dataset_id_fields",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched zones_zone_id_logpush_datasets_dataset_id_fields",
@@ -1085,6 +1363,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
@@ -1119,6 +1398,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1148,6 +1429,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["zone_id", "page", "per_page"]);
@@ -1177,6 +1459,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1209,6 +1493,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1228,7 +1513,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_edge_jobs",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_edge_jobs {id}",
@@ -1256,6 +1546,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["zone_id", "page", "per_page"]);
@@ -1285,6 +1576,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -1328,6 +1621,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1347,7 +1641,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_jobs",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created post_zones_zone_id_logpush_jobs {id}", {
           id,
@@ -1375,6 +1674,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1385,7 +1685,12 @@ export const model = {
         const handle = await context.writeResource(
           "zones_zone_id_logpush_jobs_job_id",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched zones_zone_id_logpush_jobs_job_id", {});
         return { dataHandles: [handle] };
@@ -1423,6 +1728,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1441,7 +1747,12 @@ export const model = {
         const handle = await context.writeResource(
           "put_zones_zone_id_logpush_jobs_job_id",
           String(args.zone_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated put_zones_zone_id_logpush_jobs_job_id",
@@ -1503,6 +1814,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1522,7 +1834,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_ownership",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_ownership {id}",
@@ -1554,6 +1871,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1573,7 +1891,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_ownership_validate",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_ownership_validate {id}",
@@ -1604,6 +1927,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1623,7 +1947,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_validate_destination",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_validate_destination {id}",
@@ -1654,6 +1983,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1673,7 +2003,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_validate_destination_exists",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_validate_destination_exists {id}",
@@ -1702,6 +2037,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1721,7 +2057,12 @@ export const model = {
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_validate_origin",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_validate_origin {id}",

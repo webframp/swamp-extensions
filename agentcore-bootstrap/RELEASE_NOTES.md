@@ -1,6 +1,8 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Fixed source/manifest version mismatch. Added Troubleshooting section
-documenting workflow input vs globalArgs gap, no profile support, idempotent
-provisioning, runtime-not-updated behavior, S3 lifecycle policy, and Docker
-requirement.**
+**Added:** Output metadata attributes for observability.
+
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that
+  previously lacked it).

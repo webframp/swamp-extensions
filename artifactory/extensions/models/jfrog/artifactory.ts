@@ -11,6 +11,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/artifactory";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -26,6 +28,12 @@ const GlobalArgsSchema = z.object({
 const HealthSchema = z.object({
   url: z.string().describe("Artifactory base URL that was checked"),
   fetchedAt: z.string().describe("ISO 8601 timestamp when health was checked"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   ping: z.enum(["ok", "error"]).describe("Result of the ping check"),
   pingLatencyMs: z.number().describe("Ping round-trip latency in milliseconds"),
   health: z.object({
@@ -53,6 +61,12 @@ const RepoSchema = z.object({
 const RepoListSchema = z.object({
   url: z.string().describe("Artifactory base URL that was queried"),
   fetchedAt: z.string().describe("ISO 8601 timestamp when repos were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   repos: z.array(RepoSchema).describe("All repositories on the server"),
   totalCount: z.number().describe("Number of repositories returned"),
   truncated: z.boolean().describe(
@@ -64,6 +78,12 @@ const RepoHealthSchema = z.object({
   repoKey: z.string().describe("Repository key/identifier"),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when repo health was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
   artifactCount: z.number().describe("Number of artifacts/files in the repo"),
   usedSpaceBytes: z.number().describe("Storage used by the repo, in bytes"),
@@ -78,6 +98,12 @@ const PackageResultSchema = z.object({
   ),
   query: z.string().describe("The AQL query that was executed"),
   fetchedAt: z.string().describe("ISO 8601 timestamp when the query ran"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   results: z.array(z.object({
     repo: z.string().describe("Repository containing the artifact"),
     path: z.string().describe("Artifact path within the repository"),
@@ -101,6 +127,12 @@ const PackageDiffSchema = z.object({
     "Collision-resistant hash of the AQL query being diffed",
   ),
   fetchedAt: z.string().describe("ISO 8601 timestamp when this diff ran"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
   previousFetchedAt: z.string().optional().describe(
     "ISO 8601 timestamp of the prior scan used as the diff baseline, if any",
   ),
@@ -125,6 +157,12 @@ const PackageDiffSchema = z.object({
 const StorageSchema = z.object({
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when storage info was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
   usedSpace: z.string().describe("Total used storage, human-readable"),
   freeSpace: z.string().describe("Total free storage, human-readable"),
@@ -228,7 +266,7 @@ type MethodContext = {
 /** JFrog Artifactory model for package management and health monitoring. */
 export const model = {
   type: "@webframp/artifactory",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -238,6 +276,15 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.3",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -281,6 +328,7 @@ export const model = {
         "Check Artifactory availability via ping and best-effort health details",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { url, token } = context.globalArgs;
         const opts = { url, token };
 
@@ -346,6 +394,8 @@ export const model = {
           ping,
           pingLatencyMs,
           health,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Health check: ping={ping} latency={ms}ms", {
@@ -360,6 +410,7 @@ export const model = {
       description: "List all repositories with type and package type",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { url, token } = context.globalArgs;
         const opts = { url, token };
 
@@ -390,6 +441,8 @@ export const model = {
           // /api/repositories returns all repos in a single non-paginated array.
           // There is no pagination envelope, token, or total in the response.
           truncated: false,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} repositories", {
@@ -408,6 +461,7 @@ export const model = {
         ),
       }),
       execute: async (args: { repoKey?: string }, context: MethodContext) => {
+        const startMs = Date.now();
         const { url, token } = context.globalArgs;
         const opts = { url, token };
         const handles: Array<{ name: string }> = [];
@@ -423,6 +477,8 @@ export const model = {
               usedSpace: "unknown",
               status: "error",
               error: "Storage info requires admin token (403)",
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             });
             return { dataHandles: [h] };
           }
@@ -448,6 +504,8 @@ export const model = {
             usedSpaceBytes: (r.usedSpaceInBytes as number) ?? 0,
             usedSpace: (r.usedSpace as string) ?? "0 bytes",
             status: "ok",
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
           handles.push(handle);
         }
@@ -460,6 +518,8 @@ export const model = {
             usedSpace: "unknown",
             status: "error",
             error: `Repo '${args.repoKey}' not found in storage info`,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
           handles.push(handle);
         }
@@ -484,6 +544,7 @@ export const model = {
         args: { query: string; limit: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { url, token } = context.globalArgs;
         const opts = { url, token };
         const queryHash = computeQueryHash(args.query);
@@ -532,6 +593,8 @@ export const model = {
           results: mapped,
           totalCount,
           truncated,
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info(
@@ -559,6 +622,7 @@ export const model = {
         args: { query: string; limit: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { url, token } = context.globalArgs;
         const opts = { url, token };
         const queryHash = computeQueryHash(args.query);
@@ -656,6 +720,8 @@ export const model = {
             })),
             totalCount,
             truncated: false,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
         }
 
@@ -674,6 +740,8 @@ export const model = {
             },
             noBaseline,
             truncated,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -693,6 +761,7 @@ export const model = {
       description: "Get global storage summary (may require admin token)",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: MethodContext) => {
+        const startMs = Date.now();
         const { url, token } = context.globalArgs;
         const opts = { url, token };
 
@@ -714,6 +783,8 @@ export const model = {
               repoCount: 0,
               status: "forbidden",
               error: "Storage info requires admin token (403)",
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             });
             return { dataHandles: [handle] };
           }
@@ -744,6 +815,8 @@ export const model = {
               ).length
               : 0,
             status: "ok",
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
 
           context.logger.info("Storage info: {used} used, {free} free", {
@@ -763,6 +836,8 @@ export const model = {
             repoCount: 0,
             status: "error",
             error: e instanceof Error ? e.message : String(e),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           });
           return { dataHandles: [handle] };
         }

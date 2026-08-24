@@ -22,6 +22,8 @@ import {
 } from "npm:@aws-sdk/client-sns@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/alarm-investigation";
+
 const MAX_PAGES = 10;
 
 // =============================================================================
@@ -87,6 +89,12 @@ const AlarmDetailSchema = z.object({
   ]),
   verdictReason: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TriageSummarySchema = z.object({
@@ -94,6 +102,12 @@ const TriageSummarySchema = z.object({
   byVerdict: z.record(z.string(), z.number()),
   byState: z.record(z.string(), z.number()),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -378,7 +392,7 @@ async function enrichAlarm(
  */
 export const model = {
   type: "@webframp/aws/alarm-investigation",
-  version: "2026.08.20.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -395,6 +409,15 @@ export const model = {
     {
       toVersion: "2026.08.20.1",
       description: "Dependency bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -439,6 +462,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { region } = context.globalArgs;
         const { alarmName } = args;
 
@@ -492,7 +516,12 @@ export const model = {
           const handle = await context.writeResource(
             "alarm_detail",
             sanitize(alarmName),
-            detail,
+            {
+              ...detail,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -535,6 +564,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { limit, stateFilter } = args;
 
         context.logger.info(
@@ -635,7 +665,12 @@ export const model = {
             const handle = await context.writeResource(
               "alarm_detail",
               `${sanitize(alarm.AlarmName ?? "unknown")}-${i}`,
-              detail,
+              {
+                ...detail,
+                fetchedAt: new Date().toISOString(),
+                durationMs: Date.now() - startMs,
+                collectedBy: EXTENSION_NAME,
+              },
             );
             handles.push(handle);
           }
@@ -653,6 +688,8 @@ export const model = {
               byVerdict: verdictCounts,
               byState: stateCounts,
               fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
             },
           );
           handles.push(summaryHandle);

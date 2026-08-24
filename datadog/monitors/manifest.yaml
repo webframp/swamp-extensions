@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/monitors"
-version: "2026.08.21.2"
+version: "2026.08.24.1"
 description: "Datadog Monitors — monitor definitions, muting, status, and downtime management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

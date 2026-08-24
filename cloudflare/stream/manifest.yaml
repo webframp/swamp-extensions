@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/stream"
-version: "2026.08.21.2"
+version: "2026.08.24.1"
 description: "Cloudflare Stream — video upload, encoding, delivery, live streaming"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

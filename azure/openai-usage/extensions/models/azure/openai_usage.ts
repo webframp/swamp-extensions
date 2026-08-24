@@ -14,6 +14,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/azure/openai-usage";
+
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -113,6 +115,15 @@ const ResourceListSchema = z.object({
       "CognitiveServices account kind (OpenAI or AIServices)",
     ),
   })).describe("Discovered OpenAI/AIServices resources"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for the full scan results. */
@@ -143,6 +154,15 @@ const ScanResultsSchema = z.object({
       "Total generatedTokens divided by periodMinutes",
     ),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -519,7 +539,7 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -557,6 +577,15 @@ export const model = {
       description:
         "Require at least one subscription ID in globalArguments.subscriptions " +
         "instead of silently scanning nothing when the array is empty",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -607,6 +636,7 @@ export const model = {
           fetchFn?: typeof fetch;
         },
       ) => {
+        const startMs = Date.now();
         const fetchFn = context.fetchFn ?? fetch;
         const { tenantId, clientId, clientSecret } = context.globalArgs;
         const token = await getAccessToken(
@@ -749,7 +779,12 @@ export const model = {
         const handle = await context.writeResource(
           "scan_results",
           "current",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },
@@ -781,6 +816,7 @@ export const model = {
           fetchFn?: typeof fetch;
         },
       ) => {
+        const startMs = Date.now();
         const fetchFn = context.fetchFn ?? fetch;
         const { tenantId, clientId, clientSecret } = context.globalArgs;
         const token = await getAccessToken(
@@ -827,7 +863,12 @@ export const model = {
         const handle = await context.writeResource(
           "resource_list",
           "discovery",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },

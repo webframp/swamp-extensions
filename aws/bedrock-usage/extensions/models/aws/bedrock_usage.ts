@@ -17,6 +17,8 @@ import {
 } from "npm:@aws-sdk/client-cloudwatch@3.1114.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
 
+const EXTENSION_NAME = "@webframp/aws/bedrock-usage";
+
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
@@ -72,6 +74,15 @@ const ScanResultsSchema = z.object({
     inputTokensPerMinute: z.number(),
     outputTokensPerMinute: z.number(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Schema for listing active models in a single account/region. */
@@ -81,6 +92,12 @@ const ActiveModelsSchema = z.object({
   models: z.array(z.string()),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // ---------------------------------------------------------------------------
@@ -296,7 +313,7 @@ async function getInvocations(
 /** AWS Bedrock token usage monitoring model. */
 export const model = {
   type: "@webframp/aws/bedrock-usage",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -319,6 +336,15 @@ export const model = {
       toVersion: "2026.08.21.1",
       description:
         "Error-message quality pass: no schema changes to stored resources",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -368,6 +394,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const endTime = new Date();
         const startTime = new Date(
           endTime.getTime() - args.days * 24 * 60 * 60 * 1000,
@@ -509,7 +536,12 @@ export const model = {
         const handle = await context.writeResource(
           "scan_results",
           "current",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },
@@ -542,6 +574,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? context.globalArgs.profiles[0] ??
           "default";
         const region = args.region ?? context.globalArgs.regions[0] ??
@@ -566,7 +599,12 @@ export const model = {
           const handle = await context.writeResource(
             "active_models",
             sanitizeInstanceName(`${profile}-${region}`),
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {
@@ -605,6 +643,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const profile = args.profile ?? context.globalArgs.profiles[0] ??
           "default";
         const region = args.region ?? context.globalArgs.regions[0] ??
@@ -706,7 +745,12 @@ export const model = {
           const handle = await context.writeResource(
             "single_scan",
             sanitizeInstanceName(`${profile}-${region}`),
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           return { dataHandles: [handle] };
         } finally {

@@ -541,8 +541,8 @@ Deno.test("run_simulation is deterministic for a fixed seed (excluding runAt)", 
 
   const d1 = getWritten1()[0].data as Record<string, unknown>;
   const d2 = getWritten2()[0].data as Record<string, unknown>;
-  const { runAt: _r1, ...rest1 } = d1;
-  const { runAt: _r2, ...rest2 } = d2;
+  const { runAt: _r1, fetchedAt: _f1, durationMs: _d1, ...rest1 } = d1;
+  const { runAt: _r2, fetchedAt: _f2, durationMs: _d2, ...rest2 } = d2;
   assertEquals(JSON.stringify(rest1), JSON.stringify(rest2));
 });
 

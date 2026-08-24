@@ -11,6 +11,8 @@
 
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/system";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -31,6 +33,12 @@ const DiskUsageSchema = z.object({
   filesystems: z.array(FilesystemEntrySchema),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const MemoryRowSchema = z.object({
@@ -50,6 +58,12 @@ const MemorySchema = z.object({
     free: z.string(),
   }),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UptimeSchema = z.object({
@@ -59,6 +73,12 @@ const UptimeSchema = z.object({
   loadAverage5m: z.string(),
   loadAverage15m: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ProcessSchema = z.object({
@@ -73,18 +93,36 @@ const ProcessListSchema = z.object({
   processes: z.array(ProcessSchema),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const NetworkInterfacesSchema = z.object({
   interfaces: z.array(z.record(z.string(), z.unknown())),
   count: z.number(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const OsInfoSchema = z.object({
   osRelease: z.record(z.string(), z.string()),
   uname: z.string(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -147,7 +185,7 @@ async function runCommand(
 /** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
-  version: "2026.08.24.3",
+  version: "2026.08.24.4",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -174,6 +212,15 @@ export const model = {
     {
       toVersion: "2026.08.24.3",
       description: "No schema changes — add missing upgrade description fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.4",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -226,6 +273,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const raw = await runCommand([
           "df",
           "-h",
@@ -252,6 +300,8 @@ export const model = {
           filesystems,
           count: filesystems.length,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} filesystems", {
@@ -268,6 +318,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const raw = await runCommand(["free", "-h"]);
         const lines = raw.split("\n");
 
@@ -296,6 +347,8 @@ export const model = {
           mem,
           swap,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Memory: {total} total, {used} used", {
@@ -313,6 +366,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const bootTime = await runCommand(["uptime", "-s"]);
         const uptimeRaw = await runCommand(["uptime"]);
 
@@ -329,6 +383,8 @@ export const model = {
           loadAverage5m: loadMatch?.[2] || "",
           loadAverage15m: loadMatch?.[3] || "",
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Boot time: {bootTime}, load: {load1m}", {
@@ -353,6 +409,7 @@ export const model = {
         args: { count: number },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const raw = await runCommand(["ps", "aux", "--sort=-%cpu"]);
         const lines = raw.split("\n").slice(1); // skip header
 
@@ -374,6 +431,8 @@ export const model = {
           processes,
           count: processes.length,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Captured top {count} processes", {
@@ -390,6 +449,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const raw = await runCommand(["ip", "-j", "addr", "show"]);
         let interfaces: Record<string, unknown>[];
         try {
@@ -410,6 +470,8 @@ export const model = {
             interfaces,
             count: interfaces.length,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -427,6 +489,7 @@ export const model = {
         _args: Record<string, never>,
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         // Parse /etc/os-release into key-value pairs
         let osReleaseText: string;
         try {
@@ -459,6 +522,8 @@ export const model = {
           osRelease,
           uname,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("OS: {name}, Kernel: {kernel}", {

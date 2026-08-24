@@ -6,6 +6,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/discourse";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -71,12 +73,24 @@ const TopicDetailSchema = z.object({
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when this topic was fetched",
   ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CategoriesResultSchema = z.object({
   categories: z.array(CategorySchema).describe("All forum categories"),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when this listing was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -86,6 +100,12 @@ const TopicsResultSchema = z.object({
   truncated: z.boolean().describe("True if more pages of topics are available"),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when this listing was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -97,6 +117,12 @@ const SearchResultSchema = z.object({
     "True if more search result pages are available",
   ),
   fetchedAt: z.string().describe("ISO 8601 timestamp when the search ran"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -175,12 +201,21 @@ function mapTopic(raw: Record<string, unknown>): z.infer<typeof TopicSchema> {
 /** Discourse forum model — query categories, topics, and posts via REST API. */
 export const model = {
   type: "@webframp/discourse",
-  version: "2026.07.18.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
       toVersion: "2026.07.18.1",
       description: "No schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -215,6 +250,7 @@ export const model = {
       description: "List all forum categories with topic counts.",
       arguments: z.object({}),
       execute: async (_args: Record<string, never>, context: ModelContext) => {
+        const startMs = Date.now();
         const { host, apiKey, apiUsername } = context.globalArgs;
         const raw = await discourseFetch(
           host,
@@ -242,6 +278,8 @@ export const model = {
         const handle = await context.writeResource("categories", "all", {
           categories,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
         context.logger.info("Fetched categories", { count: categories.length });
         return { dataHandles: [handle] };
@@ -259,6 +297,7 @@ export const model = {
         args: { page: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, apiUsername } = context.globalArgs;
         const raw = await discourseFetch(
           host,
@@ -289,6 +328,8 @@ export const model = {
             resultCount: topics.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         context.logger.info("Fetched latest topics", {
@@ -312,6 +353,7 @@ export const model = {
         args: { slug: string; categoryId: number; page: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, apiUsername } = context.globalArgs;
         const raw = await discourseFetch(
           host,
@@ -344,6 +386,8 @@ export const model = {
             resultCount: topics.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         context.logger.info("Fetched category topics", {
@@ -363,6 +407,7 @@ export const model = {
         args: { topicId: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, apiUsername } = context.globalArgs;
         const raw = await discourseFetch(
           host,
@@ -393,7 +438,12 @@ export const model = {
         const handle = await context.writeResource(
           "topicDetail",
           `topic-${args.topicId}`,
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched topic", {
           topicId: args.topicId,
@@ -416,6 +466,7 @@ export const model = {
         args: { query: string; page: number },
         context: ModelContext,
       ) => {
+        const startMs = Date.now();
         const { host, apiKey, apiUsername } = context.globalArgs;
         const raw = await discourseFetch(
           host,
@@ -448,6 +499,8 @@ export const model = {
             resultCount: topics.length,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
         context.logger.info("Search complete", {

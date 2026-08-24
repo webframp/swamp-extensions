@@ -1,6 +1,6 @@
-## 2026.08.23.1
+## 2026.08.24.1
 
-**Changed:** Documentation only — no code changes. Documented the silent
-per-source degrade behavior in `gatherAll` — all 7 scraped sources fail
-independently to an empty array with only an info-level log — and flagged
-the regex-based AI Daily Brief HTML scraping as the most fragile source.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

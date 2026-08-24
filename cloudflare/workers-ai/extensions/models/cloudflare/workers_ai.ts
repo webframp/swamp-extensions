@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/workers-ai";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -36,6 +38,15 @@ const GetCreditBalanceSchema = z.object({
     lastFailedAt: z.number().nullable(),
     threshold: z.number().nullable(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetInvoiceHistorySchema = z.object({
@@ -61,6 +72,15 @@ const GetInvoiceHistorySchema = z.object({
     per_page: z.number(),
     total_count: z.number(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetInvoicePreviewSchema = z.object({
@@ -91,6 +111,15 @@ const GetInvoicePreviewSchema = z.object({
   period_end: z.number(),
   period_start: z.number(),
   status: z.enum(["draft", "open", "paid", "uncollectible", "void"]),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetSpendingLimitSchema = z.object({
@@ -100,6 +129,15 @@ const GetSpendingLimitSchema = z.object({
     strategy: z.string().nullable(),
   }),
   enabled: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateTopupSchema = z.object({
@@ -110,6 +148,15 @@ const CreateTopupSchema = z.object({
   last4: z.string().optional().describe("Last 4 digits of card."),
   onboarding: z.boolean().describe("Whether the user was already onboarded."),
   payment_intent_id: z.string().describe("Stripe invoice ID."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetTopupConfigSchema = z.object({
@@ -118,11 +165,29 @@ const GetTopupConfigSchema = z.object({
   error: z.string().nullable(),
   lastFailedAt: z.number().nullable(),
   threshold: z.number().nullable(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAigBillingSetTopupConfigSchema = z.object({
   amount: z.number(),
   threshold: z.number(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetTopupLimitsSchema = z.object({
@@ -131,11 +196,29 @@ const GetTopupLimitsSchema = z.object({
   min_cents: z.number().int().describe(
     "Minimum allowed top-up amount in cents.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAigBillingCheckTopupStatusSchema = z.object({
   payment_intent_id: z.string(),
   status: z.enum(["completed", "pending"]),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetUsageHistorySchema = z.object({
@@ -145,6 +228,15 @@ const GetUsageHistorySchema = z.object({
     id: z.string(),
     start_time: z.number(),
   })),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AccountProviderItemSchema = z.object({
@@ -169,6 +261,12 @@ const ListAccountProviderSchema = z.object({
   items: z.array(AccountProviderItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AccountProviderCostItemSchema = z.object({
@@ -191,6 +289,12 @@ const ListAccountProviderCostSchema = z.object({
   items: z.array(AccountProviderCostItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAigConfigFetchAccountProviderCostSchema = z.object({
@@ -207,6 +311,15 @@ const GetAigConfigFetchAccountProviderCostSchema = z.object({
   modified_at: z.string(),
   token_pricing: z.string().optional(),
   weight: z.number().int().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAigConfigFetchAccountProviderSchema = z.object({
@@ -225,6 +338,15 @@ const GetAigConfigFetchAccountProviderSchema = z.object({
   name: z.string(),
   position: z.number().int().optional(),
   slug: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const EvaluatorsItemSchema = z.object({
@@ -242,6 +364,12 @@ const ListEvaluatorsSchema = z.object({
   items: z.array(EvaluatorsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GatewayItemSchema = z.object({
@@ -374,6 +502,12 @@ const ListGatewaySchema = z.object({
   items: z.array(GatewayItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DatasetItemSchema = z.object({
@@ -408,6 +542,12 @@ const ListDatasetSchema = z.object({
   items: z.array(DatasetItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAigConfigFetchDatasetSchema = z.object({
@@ -436,6 +576,15 @@ const GetAigConfigFetchDatasetSchema = z.object({
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const EvaluationsItemSchema = z.object({
@@ -492,6 +641,12 @@ const ListEvaluationsSchema = z.object({
   items: z.array(EvaluationsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAigConfigFetchEvaluationsSchema = z.object({
@@ -542,6 +697,15 @@ const GetAigConfigFetchEvaluationsSchema = z.object({
     total_logs: z.number(),
   })),
   total_logs: z.number(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GatewayLogsItemSchema = z.object({
@@ -570,6 +734,12 @@ const ListGatewayLogsSchema = z.object({
   items: z.array(GatewayLogsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetGatewayLogDetailSchema = z.object({
@@ -598,13 +768,52 @@ const GetGatewayLogDetailSchema = z.object({
   success: z.boolean(),
   tokens_in: z.number().int().nullable(),
   tokens_out: z.number().int().nullable(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
-const PatchGatewayLogSchema = z.object({});
+const PatchGatewayLogSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const GetGatewayLogRequestSchema = z.object({});
+const GetGatewayLogRequestSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const GetGatewayLogResponseSchema = z.object({});
+const GetGatewayLogResponseSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const ProvidersItemSchema = z.object({
   alias: z.string(),
@@ -623,6 +832,12 @@ const ListProvidersSchema = z.object({
   items: z.array(ProvidersItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListGatewayDynamicRoutesSchema = z.object({
@@ -711,6 +926,15 @@ const ListGatewayDynamicRoutesSchema = z.object({
     })),
   }),
   success: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAigConfigPostGatewayDynamicRouteSchema = z.object({
@@ -813,6 +1037,15 @@ const CreateAigConfigPostGatewayDynamicRouteSchema = z.object({
     is_valid: z.boolean().optional(),
     version_id: z.string(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetGatewayDynamicRouteSchema = z.object({
@@ -915,6 +1148,15 @@ const GetGatewayDynamicRouteSchema = z.object({
     is_valid: z.boolean().optional(),
     version_id: z.string(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListGatewayDynamicRouteDeploymentsSchema = z.object({
@@ -930,6 +1172,15 @@ const ListGatewayDynamicRouteDeploymentsSchema = z.object({
     per_page: z.number(),
   }),
   success: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAigConfigPostGatewayDynamicRouteDeploymentSchema = z.object({
@@ -1020,6 +1271,15 @@ const CreateAigConfigPostGatewayDynamicRouteDeploymentSchema = z.object({
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListGatewayDynamicRouteVersionsSchema = z.object({
@@ -1037,6 +1297,15 @@ const ListGatewayDynamicRouteVersionsSchema = z.object({
     })),
   }),
   success: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAigConfigPostGatewayDynamicRouteVersionSchema = z.object({
@@ -1127,6 +1396,15 @@ const CreateAigConfigPostGatewayDynamicRouteVersionSchema = z.object({
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetGatewayDynamicRouteVersionSchema = z.object({
@@ -1221,6 +1499,15 @@ const GetGatewayDynamicRouteVersionSchema = z.object({
   modified_at: z.string(),
   name: z.string(),
   version_id: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetGatewayUrlSchema = z.string();
@@ -1349,6 +1636,15 @@ const GetAigConfigFetchGatewaySchema = z.object({
     "Controls how Workers AI inference calls routed through this gateway are billed. Only 'postpaid' i...",
   ),
   zdr: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const InstancesItemSchema = z.object({
@@ -1568,6 +1864,12 @@ const ListInstancesSchema = z.object({
   items: z.array(InstancesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateInstanceSchema = z.object({
@@ -1781,6 +2083,15 @@ const CreateInstanceSchema = z.object({
   token_id: z.string().optional(),
   type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
     .nullable().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAiSearchFetchInstanceSchema = z.object({
@@ -1994,6 +2305,15 @@ const GetAiSearchFetchInstanceSchema = z.object({
   token_id: z.string().optional(),
   type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
     .nullable().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAiSearchInstanceChatCompletionSchema = z.object({
@@ -2039,6 +2359,15 @@ const CreateAiSearchInstanceChatCompletionSchema = z.object({
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const JobsItemSchema = z.object({
@@ -2055,6 +2384,12 @@ const ListJobsSchema = z.object({
   items: z.array(JobsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateJobSchema = z.object({
@@ -2065,6 +2400,15 @@ const CreateJobSchema = z.object({
   last_seen_at: z.string().optional(),
   source: z.enum(["user", "schedule"]),
   started_at: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateAiSearchInstanceChangeJobStatusSchema = z.object({
@@ -2075,6 +2419,15 @@ const UpdateAiSearchInstanceChangeJobStatusSchema = z.object({
   last_seen_at: z.string().optional(),
   source: z.enum(["user", "schedule"]),
   started_at: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const JobLogsItemSchema = z.object({
@@ -2088,6 +2441,12 @@ const ListJobLogsSchema = z.object({
   items: z.array(JobLogsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAiSearchInstanceSearchSchema = z.object({
@@ -2112,6 +2471,15 @@ const CreateAiSearchInstanceSearchSchema = z.object({
   })),
   query_kind: z.enum(["text", "image", "multimodal"]),
   search_query: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAiSearchStatsSchema = z.object({
@@ -2140,6 +2508,15 @@ const GetAiSearchStatsSchema = z.object({
   queued: z.number().int().optional(),
   running: z.number().int().optional(),
   skipped: z.number().int().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const NamespacesItemSchema = z.object({
@@ -2154,6 +2531,12 @@ const ListNamespacesSchema = z.object({
   items: z.array(NamespacesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateNamespaceSchema = z.object({
@@ -2162,6 +2545,15 @@ const CreateNamespaceSchema = z.object({
     "Optional description for the namespace. Max 256 characters.",
   ),
   name: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAiSearchFetchNamespaceSchema = z.object({
@@ -2170,6 +2562,15 @@ const GetAiSearchFetchNamespaceSchema = z.object({
     "Optional description for the namespace. Max 256 characters.",
   ),
   name: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
@@ -2220,6 +2621,15 @@ const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAiSearchNamespaceFetchInstanceSchema = z.object({
@@ -2433,9 +2843,28 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   token_id: z.string().optional(),
   type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
     .nullable().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
-const UpdateAiSearchMoveInstanceSchema = z.object({});
+const UpdateAiSearchMoveInstanceSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
   choices: z.array(z.object({
@@ -2480,6 +2909,15 @@ const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ItemsItemSchema = z.object({
@@ -2514,6 +2952,12 @@ const ListItemsSchema = z.object({
   items: z.array(ItemsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateOrUpdateItemSchema = z.object({
@@ -2542,6 +2986,15 @@ const CreateOrUpdateItemSchema = z.object({
     "skipped",
     "outdated",
   ]),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetItemSchema = z.object({
@@ -2570,6 +3023,15 @@ const GetItemSchema = z.object({
     "skipped",
     "outdated",
   ]),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateAiSearchNamespaceInstanceSyncItemSchema = z.object({
@@ -2598,6 +3060,15 @@ const UpdateAiSearchNamespaceInstanceSyncItemSchema = z.object({
     "skipped",
     "outdated",
   ]),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ItemChunksItemSchema = z.object({
@@ -2616,6 +3087,12 @@ const ListItemChunksSchema = z.object({
   items: z.array(ItemChunksItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AiSearchNamespaceInstanceLogsItemItemSchema = z.object({
@@ -2632,6 +3109,12 @@ const ListAiSearchNamespaceInstanceLogsItemSchema = z.object({
   items: z.array(AiSearchNamespaceInstanceLogsItemItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdateAiSearchNamespaceInstanceChangeJobStatusSchema = z.object({
@@ -2642,6 +3125,15 @@ const UpdateAiSearchNamespaceInstanceChangeJobStatusSchema = z.object({
   last_seen_at: z.string().optional(),
   source: z.enum(["user", "schedule"]),
   started_at: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
@@ -2666,6 +3158,15 @@ const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
   })),
   query_kind: z.enum(["text", "image", "multimodal"]),
   search_query: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAiSearchNamespaceStatsSchema = z.object({
@@ -2694,6 +3195,15 @@ const GetAiSearchNamespaceStatsSchema = z.object({
   queued: z.number().int().optional(),
   running: z.number().int().optional(),
   skipped: z.number().int().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
@@ -2723,6 +3233,15 @@ const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
   })).optional(),
   query_kind: z.enum(["text", "image", "multimodal"]),
   search_query: z.string().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const TokensItemSchema = z.object({
@@ -2741,6 +3260,12 @@ const ListTokensSchema = z.object({
   items: z.array(TokensItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAiSearchFetchTokensSchema = z.object({
@@ -2753,6 +3278,15 @@ const GetAiSearchFetchTokensSchema = z.object({
   modified_at: z.string(),
   modified_by: z.string().nullable().optional(),
   name: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const WorkersAiSearchAuthorItemSchema = z.object({});
@@ -2761,6 +3295,12 @@ const ListWorkersAiSearchAuthorSchema = z.object({
   items: z.array(WorkersAiSearchAuthorItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListFinetunesSchema = z.object({
@@ -2770,6 +3310,15 @@ const ListFinetunesSchema = z.object({
   model: z.string(),
   modified_at: z.string(),
   name: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateFinetuneSchema = z.object({
@@ -2780,6 +3329,15 @@ const CreateFinetuneSchema = z.object({
   modified_at: z.string(),
   name: z.string(),
   public: z.boolean(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PublicFinetunesItemSchema = z.object({
@@ -2796,6 +3354,12 @@ const ListPublicFinetunesSchema = z.object({
   items: z.array(PublicFinetunesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetModelSchemaSchema = z.object({
@@ -2809,6 +3373,15 @@ const GetModelSchemaSchema = z.object({
     description: z.string(),
     type: z.string(),
   }),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetWorkersAiSearchModelSchema = z.union([
@@ -2823,7 +3396,17 @@ const GetWorkersAiSearchModelSchema = z.union([
   }),
 ]);
 
-const CreateWorkersAiPostRunGenericSchema = z.object({});
+const CreateWorkersAiPostRunGenericSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const CreateWorkersAiPostRunCfAi4bharatIndictrans2EnIndic1bSchema = z.object(
   {},
@@ -2832,68 +3415,368 @@ const CreateWorkersAiPostRunCfAi4bharatIndictrans2EnIndic1bSchema = z.object(
 const CreateWorkersAiPostRunCfAi4bharatNonomniIndictrans2EnIndic1bSchema = z
   .object({});
 
-const WorkersAiPostRunCfAisingaporeGemmaSeaLionV427bItSchema = z.object({});
+const WorkersAiPostRunCfAisingaporeGemmaSeaLionV427bItSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiBgeBaseEnV15Schema = z.object({});
+const WorkersAiPostRunCfBaaiBgeBaseEnV15Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiBgeLargeEnV15Schema = z.object({});
+const WorkersAiPostRunCfBaaiBgeLargeEnV15Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiBgeM3Schema = z.object({});
+const WorkersAiPostRunCfBaaiBgeM3Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfBaaiBgeRerankerBaseSchema = z.object({});
+const CreateWorkersAiPostRunCfBaaiBgeRerankerBaseSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiBgeSmallEnV15Schema = z.object({});
+const WorkersAiPostRunCfBaaiBgeSmallEnV15Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiNonomniBgeBaseEnV15Schema = z.object({});
+const WorkersAiPostRunCfBaaiNonomniBgeBaseEnV15Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiNonomniBgeLargeEnV15Schema = z.object({});
+const WorkersAiPostRunCfBaaiNonomniBgeLargeEnV15Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiNonomniBgeM3Schema = z.object({});
+const WorkersAiPostRunCfBaaiNonomniBgeM3Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfBaaiNonomniBgeSmallEnV15Schema = z.object({});
+const WorkersAiPostRunCfBaaiNonomniBgeSmallEnV15Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux1SchnellSchema = z.object({});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux1SchnellSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2DevSchema = z.object({});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux2DevSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein4bSchema = z.object({});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein4bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein9bSchema = z.object({});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein9bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const CreateWorkersAiPostRunCfBytedanceStableDiffusionXlLightningSchema = z
   .object({});
 
-const CreateWorkersAiPostRunCfDeepgramAura1Schema = z.object({});
+const CreateWorkersAiPostRunCfDeepgramAura1Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfDeepgramAura2EnSchema = z.object({});
+const CreateWorkersAiPostRunCfDeepgramAura2EnSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfDeepgramAura2EsSchema = z.object({});
+const CreateWorkersAiPostRunCfDeepgramAura2EsSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfDeepgramFluxSchema = z.object({});
+const CreateWorkersAiPostRunCfDeepgramFluxSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfDeepgramNova3Schema = z.object({});
+const CreateWorkersAiPostRunCfDeepgramNova3Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfDeepseekAiDeepseekMath7bInstructSchema = z.object({});
+const WorkersAiPostRunCfDeepseekAiDeepseekMath7bInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfDeepseekAiDeepseekR1DistillQwen32bSchema = z.object({});
+const WorkersAiPostRunCfDeepseekAiDeepseekR1DistillQwen32bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfDefogSqlcoder7b2Schema = z.object({});
+const WorkersAiPostRunCfDefogSqlcoder7b2Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfFacebookBartLargeCnnSchema = z.object({});
+const CreateWorkersAiPostRunCfFacebookBartLargeCnnSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfFacebookNonomniBartLargeCnnSchema = z.object({});
+const CreateWorkersAiPostRunCfFacebookNonomniBartLargeCnnSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema = z.object({});
+const WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfGoogleEmbeddinggemma300mSchema = z.object({});
+const CreateWorkersAiPostRunCfGoogleEmbeddinggemma300mSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfGoogleGemma2bItLoraSchema = z.object({});
+const WorkersAiPostRunCfGoogleGemma2bItLoraSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfGoogleGemma312bItSchema = z.object({});
+const WorkersAiPostRunCfGoogleGemma312bItSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfGoogleGemma426bA4bItSchema = z.object({});
+const WorkersAiPostRunCfGoogleGemma426bA4bItSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfGoogleGemma7bItLoraSchema = z.object({});
+const WorkersAiPostRunCfGoogleGemma7bItLoraSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const CreateWorkersAiPostRunCfGoogleNonomniEmbeddinggemma300mSchema = z.object(
   {},
@@ -2906,91 +3789,521 @@ const CreateWorkersAiPostRunCfHuggingfaceDistilbertSst2Int8Schema = z.object(
 const CreateWorkersAiPostRunCfHuggingfaceNonomniDistilbertSst2Int8Schema = z
   .object({});
 
-const WorkersAiPostRunCfIbmGraniteGranite40HMicroSchema = z.object({});
+const WorkersAiPostRunCfIbmGraniteGranite40HMicroSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfLeonardoLucidOriginSchema = z.object({});
+const CreateWorkersAiPostRunCfLeonardoLucidOriginSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfLeonardoPhoenix10Schema = z.object({});
+const CreateWorkersAiPostRunCfLeonardoPhoenix10Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfLykonDreamshaper8LcmSchema = z.object({});
+const CreateWorkersAiPostRunCfLykonDreamshaper8LcmSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlamaLlama27bChatHfLoraSchema = z.object({});
+const WorkersAiPostRunCfMetaLlamaLlama27bChatHfLoraSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama27bChatFp16Schema = z.object({});
+const WorkersAiPostRunCfMetaLlama27bChatFp16Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama27bChatInt8Schema = z.object({});
+const WorkersAiPostRunCfMetaLlama27bChatInt8Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama38bInstructSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama38bInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama38bInstructAwqSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama38bInstructAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama3170bInstructFp8FastSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama3170bInstructFp8FastSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama318bInstructAwqSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama318bInstructAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama318bInstructFp8Schema = z.object({});
+const WorkersAiPostRunCfMetaLlama318bInstructFp8Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama318bInstructFp8FastSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama318bInstructFp8FastSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama3211bVisionInstructSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama3211bVisionInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama321bInstructSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama321bInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama323bInstructSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama323bInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama3370bInstructFp8FastSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama3370bInstructFp8FastSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaLlama4Scout17b16eInstructSchema = z.object({});
+const WorkersAiPostRunCfMetaLlama4Scout17b16eInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfMetaLlamaGuard38bSchema = z.object({});
+const CreateWorkersAiPostRunCfMetaLlamaGuard38bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMetaM2m10012bSchema = z.object({});
+const WorkersAiPostRunCfMetaM2m10012bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMicrosoftPhi2Schema = z.object({});
+const WorkersAiPostRunCfMicrosoftPhi2Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMistralMistral7bInstructV01Schema = z.object({});
+const WorkersAiPostRunCfMistralMistral7bInstructV01Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMistralMistral7bInstructV02LoraSchema = z.object({});
+const WorkersAiPostRunCfMistralMistral7bInstructV02LoraSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMistralaiMistralSmall3124bInstructSchema = z.object({});
+const WorkersAiPostRunCfMistralaiMistralSmall3124bInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMoonshotaiKimiK25Schema = z.object({});
+const WorkersAiPostRunCfMoonshotaiKimiK25Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMoonshotaiKimiK26Schema = z.object({});
+const WorkersAiPostRunCfMoonshotaiKimiK26Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfMoonshotaiKimiK27CodeSchema = z.object({});
+const WorkersAiPostRunCfMoonshotaiKimiK27CodeSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfMyshellAiMelottsSchema = z.object({});
+const CreateWorkersAiPostRunCfMyshellAiMelottsSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfNvidiaNemotron3120bA12bSchema = z.object({});
+const WorkersAiPostRunCfNvidiaNemotron3120bA12bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfNvidiaNemotronSpeechStreamingEn06bSchema = z.object({});
+const WorkersAiPostRunCfNvidiaNemotronSpeechStreamingEn06bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfOpenaiGptOss120bSchema = z.object({});
+const WorkersAiPostRunCfOpenaiGptOss120bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfOpenaiGptOss20bSchema = z.object({});
+const WorkersAiPostRunCfOpenaiGptOss20bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema = z.object({});
+const CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfOpenchatOpenchat350106Schema = z.object({});
+const WorkersAiPostRunCfOpenchatOpenchat350106Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfPfnetPlamoEmbedding1bSchema = z.object({});
+const CreateWorkersAiPostRunCfPfnetPlamoEmbedding1bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfQwenQwen1505bChatSchema = z.object({});
+const WorkersAiPostRunCfQwenQwen1505bChatSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfQwenQwen1518bChatSchema = z.object({});
+const WorkersAiPostRunCfQwenQwen1518bChatSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfQwenQwen1514bChatAwqSchema = z.object({});
+const WorkersAiPostRunCfQwenQwen1514bChatAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfQwenQwen157bChatAwqSchema = z.object({});
+const WorkersAiPostRunCfQwenQwen157bChatAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfQwenQwen25Coder32bInstructSchema = z.object({});
+const WorkersAiPostRunCfQwenQwen25Coder32bInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfQwenQwen330bA3bFp8Schema = z.object({});
+const WorkersAiPostRunCfQwenQwen330bA3bFp8Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const CreateWorkersAiPostRunCfQwenQwen3Embedding06bSchema = z.object({});
+const CreateWorkersAiPostRunCfQwenQwen3Embedding06bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfQwenQwq32bSchema = z.object({});
+const WorkersAiPostRunCfQwenQwq32bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15Img2imgSchema = z
   .object({});
@@ -3001,39 +4314,189 @@ const CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15InpaintingSchema = z
 const CreateWorkersAiPostRunCfStabilityaiStableDiffusionXlBase10Schema = z
   .object({});
 
-const WorkersAiPostRunCfTheblokeDiscolmGerman7bV1AwqSchema = z.object({});
+const WorkersAiPostRunCfTheblokeDiscolmGerman7bV1AwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfTiiuaeFalcon7bInstructSchema = z.object({});
+const WorkersAiPostRunCfTiiuaeFalcon7bInstructSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfTinyllamaTinyllama11bChatV10Schema = z.object({});
+const WorkersAiPostRunCfTinyllamaTinyllama11bChatV10Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfZaiOrgGlm47FlashSchema = z.object({});
+const WorkersAiPostRunCfZaiOrgGlm47FlashSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunCfZaiOrgGlm52Schema = z.object({});
+const WorkersAiPostRunCfZaiOrgGlm52Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfGoogleGemma7bItSchema = z.object({});
+const WorkersAiPostRunHfGoogleGemma7bItSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfMistralMistral7bInstructV02Schema = z.object({});
+const WorkersAiPostRunHfMistralMistral7bInstructV02Schema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfNexusflowStarlingLm7bBetaSchema = z.object({});
+const WorkersAiPostRunHfNexusflowStarlingLm7bBetaSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfNousresearchHermes2ProMistral7bSchema = z.object({});
+const WorkersAiPostRunHfNousresearchHermes2ProMistral7bSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfTheblokeDeepseekCoder67bBaseAwqSchema = z.object({});
+const WorkersAiPostRunHfTheblokeDeepseekCoder67bBaseAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const WorkersAiPostRunHfTheblokeDeepseekCoder67bInstructAwqSchema = z.object(
   {},
 );
 
-const WorkersAiPostRunHfTheblokeLlama213bChatAwqSchema = z.object({});
+const WorkersAiPostRunHfTheblokeLlama213bChatAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfTheblokeMistral7bInstructV01AwqSchema = z.object({});
+const WorkersAiPostRunHfTheblokeMistral7bInstructV01AwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfTheblokeNeuralChat7bV31AwqSchema = z.object({});
+const WorkersAiPostRunHfTheblokeNeuralChat7bV31AwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfTheblokeOpenhermes25Mistral7bAwqSchema = z.object({});
+const WorkersAiPostRunHfTheblokeOpenhermes25Mistral7bAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
-const WorkersAiPostRunHfTheblokeZephyr7bBetaAwqSchema = z.object({});
+const WorkersAiPostRunHfTheblokeZephyr7bBetaAwqSchema = z.object({
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 const WorkersAiPostRunModelSchema = z.union([
   z.array(z.object({
@@ -3114,6 +4577,12 @@ const ListWorkersAiSearchTaskSchema = z.object({
   items: z.array(WorkersAiSearchTaskItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetToMarkdownSupportedItemSchema = z.object({
@@ -3125,6 +4594,12 @@ const GetToMarkdownSupportedSchema = z.object({
   items: z.array(GetToMarkdownSupportedItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -3134,10 +4609,17 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "credit_balance": {
@@ -4317,6 +5799,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4327,7 +5810,12 @@ export const model = {
         const handle = await context.writeResource(
           "credit_balance",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched credit_balance", {});
         return { dataHandles: [handle] };
@@ -4354,6 +5842,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4364,7 +5853,12 @@ export const model = {
         const handle = await context.writeResource(
           "invoice_history",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched invoice_history", {});
         return { dataHandles: [handle] };
@@ -4387,6 +5881,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4397,7 +5892,12 @@ export const model = {
         const handle = await context.writeResource(
           "invoice_preview",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched invoice_preview", {});
         return { dataHandles: [handle] };
@@ -4420,6 +5920,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4430,7 +5931,12 @@ export const model = {
         const handle = await context.writeResource(
           "spending_limit",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched spending_limit", {});
         return { dataHandles: [handle] };
@@ -4486,6 +5992,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4498,7 +6005,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("topup", id, result);
+        const handle = await context.writeResource("topup", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created topup {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -4520,6 +6032,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4530,7 +6043,12 @@ export const model = {
         const handle = await context.writeResource(
           "topup_config",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched topup_config", {});
         return { dataHandles: [handle] };
@@ -4560,6 +6078,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4575,7 +6094,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_billing_set_topup_config",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created aig_billing_set_topup_config {id}", {
           id,
@@ -4629,6 +6153,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4639,7 +6164,12 @@ export const model = {
         const handle = await context.writeResource(
           "topup_limits",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched topup_limits", {});
         return { dataHandles: [handle] };
@@ -4666,6 +6196,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4681,7 +6212,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_billing_check_topup_status",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created aig_billing_check_topup_status {id}", {
           id,
@@ -4716,6 +6252,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4726,7 +6263,12 @@ export const model = {
         const handle = await context.writeResource(
           "usage_history",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched usage_history", {});
         return { dataHandles: [handle] };
@@ -4755,6 +6297,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -4781,6 +6324,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} account_provider", {
@@ -4818,6 +6363,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4833,7 +6379,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_provider",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created account_provider {id}", { id });
         return { dataHandles: [handle] };
@@ -4864,6 +6415,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -4893,6 +6445,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -4941,6 +6495,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4956,7 +6511,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_provider_cost",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created account_provider_cost {id}", { id });
         return { dataHandles: [handle] };
@@ -4981,6 +6541,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4991,7 +6552,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_fetch_account_provider_cost",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched aig_config_fetch_account_provider_cost",
@@ -5039,6 +6605,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5057,7 +6624,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_provider_cost",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated account_provider_cost", {});
         return { dataHandles: [handle] };
@@ -5113,6 +6685,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5123,7 +6696,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_fetch_account_provider",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched aig_config_fetch_account_provider", {});
         return { dataHandles: [handle] };
@@ -5160,6 +6738,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5178,7 +6757,12 @@ export const model = {
         const handle = await context.writeResource(
           "account_provider",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated account_provider", {});
         return { dataHandles: [handle] };
@@ -5237,6 +6821,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -5263,6 +6848,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} evaluators", {
@@ -5292,6 +6879,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -5318,6 +6906,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} gateway", { count: results.length });
@@ -5368,6 +6958,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -5380,7 +6971,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("gateway", id, result);
+        const handle = await context.writeResource("gateway", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created gateway {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -5409,6 +7005,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
@@ -5435,6 +7032,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} dataset", { count: results.length });
@@ -5481,6 +7080,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5497,7 +7097,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("dataset", id, result);
+        const handle = await context.writeResource("dataset", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created dataset {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -5522,6 +7127,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5532,7 +7138,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_fetch_dataset",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched aig_config_fetch_dataset", {});
         return { dataHandles: [handle] };
@@ -5579,6 +7190,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5597,7 +7209,12 @@ export const model = {
         const handle = await context.writeResource(
           "dataset",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated dataset", {});
         return { dataHandles: [handle] };
@@ -5659,6 +7276,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
@@ -5685,6 +7303,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} evaluations", {
@@ -5715,6 +7335,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5731,7 +7352,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("evaluations", id, result);
+        const handle = await context.writeResource("evaluations", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created evaluations {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -5756,6 +7382,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5766,7 +7393,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_fetch_evaluations",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched aig_config_fetch_evaluations", {});
         return { dataHandles: [handle] };
@@ -5858,6 +7490,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
@@ -5884,6 +7517,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} gateway_logs", {
@@ -5972,6 +7607,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5982,7 +7618,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway_log_detail",
           String(args.gateway_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched gateway_log_detail", {});
         return { dataHandles: [handle] };
@@ -6014,6 +7655,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6032,7 +7674,12 @@ export const model = {
         const handle = await context.writeResource(
           "patch_gateway_log",
           String(args.gateway_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated patch_gateway_log", {});
         return { dataHandles: [handle] };
@@ -6058,6 +7705,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6068,7 +7716,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway_log_request",
           String(args.gateway_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched gateway_log_request", {});
         return { dataHandles: [handle] };
@@ -6094,6 +7747,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6104,7 +7758,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway_log_response",
           String(args.gateway_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched gateway_log_response", {});
         return { dataHandles: [handle] };
@@ -6131,6 +7790,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
@@ -6157,6 +7817,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} providers", {
@@ -6191,6 +7853,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6207,7 +7870,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("providers", id, result);
+        const handle = await context.writeResource("providers", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created providers {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -6233,6 +7901,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6251,7 +7920,12 @@ export const model = {
         const handle = await context.writeResource(
           "providers",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated providers", {});
         return { dataHandles: [handle] };
@@ -6310,6 +7984,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6320,7 +7995,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_gateway_dynamic_routes",
           String(args.gateway_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_gateway_dynamic_routes", {});
         return { dataHandles: [handle] };
@@ -6428,6 +8108,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6447,7 +8128,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created aig_config_post_gateway_dynamic_route {id}",
@@ -6476,6 +8162,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6486,7 +8173,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway_dynamic_route",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched gateway_dynamic_route", {});
         return { dataHandles: [handle] };
@@ -6513,6 +8205,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6531,7 +8224,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway_dynamic_route",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated gateway_dynamic_route", {});
         return { dataHandles: [handle] };
@@ -6589,6 +8287,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6599,7 +8298,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_gateway_dynamic_route_deployments",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched list_gateway_dynamic_route_deployments",
@@ -6629,6 +8333,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6648,7 +8353,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route_deployment",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created aig_config_post_gateway_dynamic_route_deployment {id}",
@@ -6677,6 +8387,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6687,7 +8398,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_gateway_dynamic_route_versions",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_gateway_dynamic_route_versions", {});
         return { dataHandles: [handle] };
@@ -6795,6 +8511,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6814,7 +8531,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route_version",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created aig_config_post_gateway_dynamic_route_version {id}",
@@ -6844,6 +8566,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6854,7 +8577,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway_dynamic_route_version",
           String(args.version_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched gateway_dynamic_route_version", {});
         return { dataHandles: [handle] };
@@ -6880,6 +8608,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6890,7 +8619,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway_url",
           String(args.provider),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched gateway_url", {});
         return { dataHandles: [handle] };
@@ -6915,6 +8649,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6925,7 +8660,12 @@ export const model = {
         const handle = await context.writeResource(
           "aig_config_fetch_gateway",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched aig_config_fetch_gateway", {});
         return { dataHandles: [handle] };
@@ -7071,6 +8811,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7089,7 +8830,12 @@ export const model = {
         const handle = await context.writeResource(
           "gateway",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated gateway", {});
         return { dataHandles: [handle] };
@@ -7156,6 +8902,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -7182,6 +8929,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} instances", {
@@ -7411,6 +9160,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -7423,7 +9173,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("instance", id, result);
+        const handle = await context.writeResource("instance", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created instance {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7447,6 +9202,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7457,7 +9213,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_fetch_instance",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched ai_search_fetch_instance", {});
         return { dataHandles: [handle] };
@@ -7715,6 +9476,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7733,7 +9495,12 @@ export const model = {
         const handle = await context.writeResource(
           "instance",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated instance", {});
         return { dataHandles: [handle] };
@@ -7917,6 +9684,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7936,7 +9704,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_instance_chat_completion",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created ai_search_instance_chat_completion {id}", {
           id,
@@ -7967,6 +9740,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "page", "per_page"]);
@@ -7993,6 +9767,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} jobs", { count: results.length });
@@ -8021,6 +9797,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8037,7 +9814,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("job", id, result);
+        const handle = await context.writeResource("job", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created job {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -8064,6 +9846,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8074,7 +9857,12 @@ export const model = {
         const handle = await context.writeResource(
           "job",
           String(args.job_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched job", {});
         return { dataHandles: [handle] };
@@ -8103,6 +9891,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8121,7 +9910,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_instance_change_job_status",
           String(args.job_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated ai_search_instance_change_job_status", {});
         return { dataHandles: [handle] };
@@ -8151,6 +9945,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "job_id", "page", "per_page"]);
@@ -8177,6 +9972,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} job_logs", {
@@ -8302,6 +10099,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8321,7 +10119,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_instance_search",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created ai_search_instance_search {id}", { id });
         return { dataHandles: [handle] };
@@ -8348,6 +10151,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8358,7 +10162,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_stats",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched ai_search_stats", {});
         return { dataHandles: [handle] };
@@ -8387,6 +10196,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -8413,6 +10223,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} namespaces", {
@@ -8443,6 +10255,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -8455,7 +10268,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("namespace", id, result);
+        const handle = await context.writeResource("namespace", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created namespace {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -8479,6 +10297,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8489,7 +10308,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_fetch_namespace",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched ai_search_fetch_namespace", {});
         return { dataHandles: [handle] };
@@ -8517,6 +10341,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8535,7 +10360,12 @@ export const model = {
         const handle = await context.writeResource(
           "namespace",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated namespace", {});
         return { dataHandles: [handle] };
@@ -8718,6 +10548,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8737,7 +10568,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_multi_instance_chat_completion",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created ai_search_namespace_multi_instance_chat_completion {id}",
@@ -8766,6 +10602,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8776,7 +10613,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_fetch_instance",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched ai_search_namespace_fetch_instance", {});
         return { dataHandles: [handle] };
@@ -8805,6 +10647,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8823,7 +10666,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_move_instance",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated ai_search_move_instance", {});
         return { dataHandles: [handle] };
@@ -8977,6 +10825,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8996,7 +10845,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_instance_chat_completion",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created ai_search_namespace_instance_chat_completion {id}",
@@ -9053,6 +10907,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "name", "page", "per_page"]);
@@ -9079,6 +10934,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} items", { count: results.length });
@@ -9114,6 +10971,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9132,7 +10990,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_or_update_item",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated create_or_update_item", {});
         return { dataHandles: [handle] };
@@ -9161,6 +11024,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9171,7 +11035,12 @@ export const model = {
         const handle = await context.writeResource(
           "item",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched item", {});
         return { dataHandles: [handle] };
@@ -9204,6 +11073,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9222,7 +11092,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_instance_sync_item",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated ai_search_namespace_instance_sync_item",
@@ -9291,6 +11166,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
@@ -9323,6 +11199,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} item_chunks", {
@@ -9356,6 +11234,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "item_id", "name"]);
@@ -9382,6 +11261,8 @@ export const model = {
             items,
             truncated: false,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -9416,6 +11297,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9434,7 +11316,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_instance_change_job_status",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated ai_search_namespace_instance_change_job_status",
@@ -9561,6 +11448,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9580,7 +11468,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_instance_search",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created ai_search_namespace_instance_search {id}",
@@ -9611,6 +11504,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9621,7 +11515,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_stats",
           String(args.name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched ai_search_namespace_stats", {});
         return { dataHandles: [handle] };
@@ -9743,6 +11642,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9762,7 +11662,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_namespace_multi_instance_search",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created ai_search_namespace_multi_instance_search {id}",
@@ -9794,6 +11699,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -9820,6 +11726,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} tokens", { count: results.length });
@@ -9848,6 +11756,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -9860,7 +11769,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("tokens", id, result);
+        const handle = await context.writeResource("tokens", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created tokens {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -9884,6 +11798,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9894,7 +11809,12 @@ export const model = {
         const handle = await context.writeResource(
           "ai_search_fetch_tokens",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched ai_search_fetch_tokens", {});
         return { dataHandles: [handle] };
@@ -9923,6 +11843,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9941,7 +11862,12 @@ export const model = {
         const handle = await context.writeResource(
           "tokens",
           String(args.id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated tokens", {});
         return { dataHandles: [handle] };
@@ -9995,6 +11921,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -10024,6 +11951,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -10050,6 +11979,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -10060,7 +11990,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_finetunes",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_finetunes", {});
         return { dataHandles: [handle] };
@@ -10088,6 +12023,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -10100,7 +12036,12 @@ export const model = {
         );
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("finetune", id, result);
+        const handle = await context.writeResource("finetune", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created finetune {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -10126,6 +12067,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -10152,6 +12094,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} public_finetunes", {
@@ -10179,6 +12123,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -10189,7 +12134,12 @@ export const model = {
         const handle = await context.writeResource(
           "model_schema",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched model_schema", {});
         return { dataHandles: [handle] };
@@ -10228,6 +12178,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -10238,7 +12189,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_search_model",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched workers_ai_search_model", {});
         return { dataHandles: [handle] };
@@ -10276,6 +12232,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -10291,7 +12248,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_generic",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created workers_ai_post_run_generic {id}", { id });
         return { dataHandles: [handle] };
@@ -10356,6 +12318,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10383,7 +12346,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b {id}",
@@ -10452,6 +12420,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10479,7 +12448,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b {id}",
@@ -10644,6 +12618,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -10666,7 +12641,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it",
@@ -10707,6 +12687,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -10729,7 +12710,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_base_en_v1_5",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_bge_base_en_v1_5",
@@ -10770,6 +12756,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -10792,7 +12779,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_large_en_v1_5",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_bge_large_en_v1_5",
@@ -10849,6 +12841,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -10871,7 +12864,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_m3",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed workers_ai_post_run_cf_baai_bge_m3", {});
         return { dataHandles: [handle] };
@@ -10908,6 +12906,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10935,7 +12934,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_reranker_base",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_baai_bge_reranker_base {id}",
@@ -10976,6 +12980,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -10998,7 +13003,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_small_en_v1_5",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_bge_small_en_v1_5",
@@ -11039,6 +13049,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -11061,7 +13072,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5",
@@ -11102,6 +13118,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -11124,7 +13141,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5",
@@ -11181,6 +13203,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -11203,7 +13226,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_m3",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_m3",
@@ -11244,6 +13272,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -11266,7 +13295,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5",
@@ -11301,6 +13335,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11328,7 +13363,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_1_schnell",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_1_schnell {id}",
@@ -11361,6 +13401,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11388,7 +13429,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_dev",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_2_dev {id}",
@@ -11421,6 +13467,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11448,7 +13495,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b {id}",
@@ -11481,6 +13533,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11508,7 +13561,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b {id}",
@@ -11570,6 +13628,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11597,7 +13656,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning {id}",
@@ -11623,6 +13687,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11633,7 +13698,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura",
@@ -11659,6 +13729,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11669,7 +13740,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_1",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_1",
@@ -11731,6 +13807,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11758,7 +13835,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_1",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_aura_1 {id}",
@@ -11785,6 +13867,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11795,7 +13878,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_1_internal",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_1_internal",
@@ -11821,6 +13909,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11831,7 +13920,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2",
@@ -11858,6 +13952,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11868,7 +13963,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_en",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_en",
@@ -11960,6 +14060,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11987,7 +14088,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_2_en",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_aura_2_en {id}",
@@ -12014,6 +14120,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12024,7 +14131,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws",
@@ -12051,6 +14163,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12061,7 +14174,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_es",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_es",
@@ -12123,6 +14241,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -12150,7 +14269,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_2_es",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_aura_2_es {id}",
@@ -12176,6 +14300,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12186,7 +14311,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_flux",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_flux",
@@ -12239,6 +14369,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -12266,7 +14397,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_flux",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_flux {id}",
@@ -12292,6 +14428,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12302,7 +14439,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3",
@@ -12449,6 +14591,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -12476,7 +14619,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_nova_3",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_nova_3 {id}",
@@ -12503,6 +14651,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12513,7 +14662,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3_internal",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3_internal",
@@ -12540,6 +14694,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12550,7 +14705,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3_ws",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3_ws",
@@ -12658,6 +14818,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -12680,7 +14841,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct",
@@ -12789,6 +14955,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -12811,7 +14978,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b",
@@ -12919,6 +15091,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -12941,7 +15114,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_defog_sqlcoder_7b_2",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_defog_sqlcoder_7b_2",
@@ -12976,6 +15154,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13003,7 +15182,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_facebook_bart_large_cnn",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_facebook_bart_large_cnn {id}",
@@ -13038,6 +15222,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13065,7 +15250,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn {id}",
@@ -13173,6 +15363,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13195,7 +15386,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16",
@@ -13225,6 +15421,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13252,7 +15449,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_embeddinggemma_300m",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_google_embeddinggemma_300m {id}",
@@ -13360,6 +15562,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13382,7 +15585,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_2b_it_lora",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_2b_it_lora",
@@ -13486,6 +15694,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13508,7 +15717,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_3_12b_it",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_3_12b_it",
@@ -13537,6 +15751,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13563,7 +15778,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_4_26b_a4b_it",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_4_26b_a4b_it",
@@ -13671,6 +15891,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13693,7 +15914,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_7b_it_lora",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_7b_it_lora",
@@ -13725,6 +15951,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13752,7 +15979,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m {id}",
@@ -13782,6 +16014,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13809,7 +16042,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8 {id}",
@@ -13840,6 +16078,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13867,7 +16106,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8 {id}",
@@ -13975,6 +16219,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13997,7 +16242,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro",
@@ -14047,6 +16297,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -14074,7 +16325,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_leonardo_lucid_origin",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_leonardo_lucid_origin {id}",
@@ -14124,6 +16380,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -14151,7 +16408,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_leonardo_phoenix_1_0",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_leonardo_phoenix_1_0 {id}",
@@ -14213,6 +16475,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -14240,7 +16503,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_lykon_dreamshaper_8_lcm",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_lykon_dreamshaper_8_lcm {id}",
@@ -14348,6 +16616,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -14370,7 +16639,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora",
@@ -14478,6 +16752,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -14500,7 +16775,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16",
@@ -14608,6 +16888,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -14630,7 +16911,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_2_7b_chat_int8",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_2_7b_chat_int8",
@@ -14738,6 +17024,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -14760,7 +17047,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_8b_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_8b_instruct",
@@ -14868,6 +17160,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -14890,7 +17183,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq",
@@ -14998,6 +17296,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15020,7 +17319,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast",
@@ -15128,6 +17432,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15150,7 +17455,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq",
@@ -15258,6 +17568,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15280,7 +17591,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8",
@@ -15388,6 +17704,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15410,7 +17727,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast",
@@ -15522,6 +17844,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15544,7 +17867,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct",
@@ -15652,6 +17980,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15674,7 +18003,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_1b_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_2_1b_instruct",
@@ -15782,6 +18116,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15804,7 +18139,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_3b_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_2_3b_instruct",
@@ -15930,6 +18270,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15952,7 +18293,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast",
@@ -16132,6 +18478,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16154,7 +18501,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct",
@@ -16200,6 +18552,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16227,7 +18580,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_guard_3_8b",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_meta_llama_guard_3_8b {id}",
@@ -16270,6 +18628,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16292,7 +18651,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_m2m100_1_2b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_m2m100_1_2b",
@@ -16400,6 +18764,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16422,7 +18787,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_microsoft_phi_2",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_microsoft_phi_2",
@@ -16530,6 +18900,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16552,7 +18923,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1",
@@ -16660,6 +19036,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16682,7 +19059,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora",
@@ -16795,6 +19177,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16817,7 +19200,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct",
@@ -16846,6 +19234,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16872,7 +19261,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_5",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_5",
@@ -16901,6 +19295,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16927,7 +19322,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_6",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_6",
@@ -16956,6 +19356,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16982,7 +19383,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_7_code",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_7_code",
@@ -17017,6 +19423,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -17044,7 +19451,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_myshell_ai_melotts",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_myshell_ai_melotts {id}",
@@ -17459,6 +19871,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17481,7 +19894,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b",
@@ -17509,6 +19927,7 @@ export const model = {
             };
           },
         ) => {
+          const startMs = Date.now();
           const { apiToken, accountId } = context.globalArgs;
           const result = await cfApi<Record<string, unknown>>(
             apiToken,
@@ -17519,7 +19938,12 @@ export const model = {
           const handle = await context.writeResource(
             "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
             "latest",
-            result,
+            {
+              ...result,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
           );
           context.logger.info(
             "Fetched workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
@@ -17563,6 +19987,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17585,7 +20010,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
@@ -17705,6 +20135,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17727,7 +20158,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_gpt_oss_120b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_openai_gpt_oss_120b",
@@ -17847,6 +20283,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17869,7 +20306,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_gpt_oss_20b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_openai_gpt_oss_20b",
@@ -17938,6 +20380,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -17965,7 +20408,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_whisper_large_v3_turbo",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_openai_whisper_large_v3_turbo {id}",
@@ -18073,6 +20521,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18095,7 +20544,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openchat_openchat_3_5_0106",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_openchat_openchat_3_5_0106",
@@ -18127,6 +20581,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -18154,7 +20609,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_pfnet_plamo_embedding_1b",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_pfnet_plamo_embedding_1b {id}",
@@ -18181,6 +20641,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -18191,7 +20652,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2",
@@ -18218,6 +20684,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -18228,7 +20695,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3",
@@ -18336,6 +20808,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18358,7 +20831,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat",
@@ -18466,6 +20944,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18488,7 +20967,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat",
@@ -18596,6 +21080,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18618,7 +21103,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq",
@@ -18726,6 +21216,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18748,7 +21239,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq",
@@ -18850,6 +21346,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18872,7 +21369,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct",
@@ -19037,6 +21539,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19059,7 +21562,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8",
@@ -19097,6 +21605,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19124,7 +21633,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b {id}",
@@ -19236,6 +21750,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19258,7 +21773,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwq_32b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed workers_ai_post_run_cf_qwen_qwq_32b", {});
         return { dataHandles: [handle] };
@@ -19317,6 +21837,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19344,7 +21865,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img {id}",
@@ -19407,6 +21933,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19434,7 +21961,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting {id}",
@@ -19497,6 +22029,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19524,7 +22057,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0 {id}",
@@ -19551,6 +22089,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -19561,7 +22100,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_sven_test_pipe_http",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_sven_test_pipe_http",
@@ -19588,6 +22132,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -19598,7 +22143,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_test_hello_world_cog",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_test_hello_world_cog",
@@ -19706,6 +22256,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19728,7 +22279,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq",
@@ -19836,6 +22392,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19858,7 +22415,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_tiiuae_falcon_7b_instruct",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_tiiuae_falcon_7b_instruct",
@@ -19966,6 +22528,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19988,7 +22551,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0",
@@ -20403,6 +22971,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20425,7 +22994,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_zai_org_glm_4_7_flash",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_zai_org_glm_4_7_flash",
@@ -20454,6 +23028,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -20480,7 +23055,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_zai_org_glm_5_2",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_zai_org_glm_5_2",
@@ -20588,6 +23168,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20610,7 +23191,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_google_gemma_7b_it",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_google_gemma_7b_it",
@@ -20718,6 +23304,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20740,7 +23327,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2",
@@ -20848,6 +23440,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20870,7 +23463,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta",
@@ -20978,6 +23576,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21000,7 +23599,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b",
@@ -21108,6 +23712,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21130,7 +23735,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq",
@@ -21239,6 +23849,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21261,7 +23872,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq",
@@ -21369,6 +23985,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21391,7 +24008,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq",
@@ -21499,6 +24121,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21521,7 +24144,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq",
@@ -21629,6 +24257,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21651,7 +24280,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq",
@@ -21759,6 +24393,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21781,7 +24416,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq",
@@ -21889,6 +24529,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21911,7 +24552,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq",
@@ -22124,6 +24770,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -22138,7 +24785,12 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_model",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed workers_ai_post_run_model", {});
         return { dataHandles: [handle] };
@@ -22161,6 +24813,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -22190,6 +24843,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -22216,6 +24871,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -22245,6 +24901,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 

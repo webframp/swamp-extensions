@@ -445,7 +445,15 @@ Deno.test({
       assertEquals(result.dataHandles.length, 1);
       const resources = getWrittenResources();
       assertEquals(resources[0].name, "rec-minimal");
-      assertEquals(resources[0].data, mockRecord);
+      // The resource data contains the API response fields plus metadata
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, mockRecord.id);
+      assertEquals(data.name, mockRecord.name);
+      assertEquals(data.type, mockRecord.type);
+      assertEquals(data.content, mockRecord.content);
+      assertEquals(data.collectedBy, "@webframp/cloudflare");
+      assertEquals(typeof data.durationMs, "number");
+      assertEquals(typeof data.fetchedAt, "string");
     } finally {
       uninstall();
       await server.shutdown();

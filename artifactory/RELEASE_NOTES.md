@@ -1,5 +1,6 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Fixed source/manifest version mismatch. Added Troubleshooting section
-documenting 401 token expiry, 403 graceful degrade on admin endpoints, first-run
-empty diff, truncation-suppressed diff, and URL context path requirements.**
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

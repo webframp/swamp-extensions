@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/snyk/assets";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -90,6 +92,15 @@ const ListAssetsSchema = z.object({
   assets_id: z.string().optional().describe("Related assets ID"),
   organizations_id: z.string().optional().describe("Related organizations ID"),
   projects_id: z.string().optional().describe("Related projects ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAssetSchema = z.object({
@@ -162,6 +173,15 @@ const GetAssetSchema = z.object({
   assets_id: z.string().optional().describe("Related assets ID"),
   organizations_id: z.string().optional().describe("Related organizations ID"),
   projects_id: z.string().optional().describe("Related projects ID"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const RelatedAssetsItemSchema = z.object({
@@ -240,6 +260,12 @@ const ListRelatedAssetsSchema = z.object({
   items: z.array(RelatedAssetsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const AssetProjectsItemSchema = z.object({
@@ -291,6 +317,12 @@ const ListAssetProjectsSchema = z.object({
   items: z.array(AssetProjectsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -300,7 +332,7 @@ const ListAssetProjectsSchema = z.object({
 /** Snyk Assets — asset discovery and classification across the group */
 export const model = {
   type: "@webframp/snyk/assets",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -308,6 +340,15 @@ export const model = {
       toVersion: "2026.08.21.2",
       description:
         "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -357,6 +398,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -375,7 +417,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_assets",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed list_assets", {});
         return { dataHandles: [handle] };
@@ -400,6 +447,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -411,7 +459,12 @@ export const model = {
         const handle = await context.writeResource(
           "asset",
           String(args.asset_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched asset", {});
         return { dataHandles: [handle] };
@@ -439,6 +492,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["asset_id"]);
@@ -464,6 +518,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} related_assets", {
@@ -491,6 +547,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["asset_id"]);
@@ -516,6 +573,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} asset_projects", {

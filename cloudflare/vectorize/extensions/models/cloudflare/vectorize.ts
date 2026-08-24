@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/vectorize";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -37,6 +39,12 @@ const ListVectorizeIndexesSchema = z.object({
   items: z.array(VectorizeIndexesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateVectorizeIndexSchema = z.object({
@@ -49,10 +57,28 @@ const CreateVectorizeIndexSchema = z.object({
     "Specifies the timestamp the resource was modified as an ISO8601 string.",
   ),
   name: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DeleteVectorsByIdSchema = z.object({
   mutationId: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetVectorsByIdSchema = z.object({
@@ -60,6 +86,15 @@ const GetVectorsByIdSchema = z.object({
   metadata: z.object({}).optional(),
   namespace: z.string().nullable().optional(),
   values: z.array(z.number()).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetVectorizeIndexInfoSchema = z.object({
@@ -71,10 +106,28 @@ const GetVectorizeIndexInfoSchema = z.object({
   vectorCount: z.number().int().optional().describe(
     "Specifies the number of vectors present in the index",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const VectorizeInsertVectorSchema = z.object({
   mutationId: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListVectorsSchema = z.object({
@@ -92,14 +145,41 @@ const ListVectorsSchema = z.object({
   ),
   totalCount: z.number().int().describe("Total number of vectors in the index"),
   vectors: z.array(z.unknown()).describe("Array of vector items"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateMetadataIndexSchema = z.object({
   mutationId: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const DeleteMetadataIndexSchema = z.object({
   mutationId: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListMetadataIndexesSchema = z.object({
@@ -107,6 +187,15 @@ const ListMetadataIndexesSchema = z.object({
     indexType: z.enum(["string", "number", "boolean"]).optional(),
     propertyName: z.string().optional(),
   })).optional().describe("Array of indexed metadata properties."),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateVectorizeQueryVectorSchema = z.object({
@@ -120,10 +209,28 @@ const CreateVectorizeQueryVectorSchema = z.object({
     score: z.number().optional(),
     values: z.array(z.number()).nullable().optional(),
   })).optional().describe("Array of vectors matched by the search"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const VectorizeUpsertVectorSchema = z.object({
   mutationId: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -133,10 +240,17 @@ const VectorizeUpsertVectorSchema = z.object({
 /** Cloudflare Vectorize — vector indexes, insert/query/delete operations */
 export const model = {
   type: "@webframp/cloudflare/vectorize",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "vectorize_indexes": {
@@ -231,6 +345,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -260,6 +375,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -290,6 +407,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -305,7 +423,12 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_index",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created vectorize_index {id}", { id });
         return { dataHandles: [handle] };
@@ -330,6 +453,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -340,7 +464,12 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_index",
           String(args.index_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched vectorize_index", {});
         return { dataHandles: [handle] };
@@ -398,6 +527,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -417,7 +547,12 @@ export const model = {
         const handle = await context.writeResource(
           "delete_vectors_by_id",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created delete_vectors_by_id {id}", { id });
         return { dataHandles: [handle] };
@@ -445,6 +580,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -464,7 +600,12 @@ export const model = {
         const handle = await context.writeResource(
           "get_vectors_by_id",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created get_vectors_by_id {id}", { id });
         return { dataHandles: [handle] };
@@ -489,6 +630,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -499,7 +641,12 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_index_info",
           String(args.index_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched vectorize_index_info", {});
         return { dataHandles: [handle] };
@@ -525,6 +672,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const queryParts: string[] = [];
@@ -544,7 +692,12 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_insert_vector",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed vectorize_insert_vector", {});
         return { dataHandles: [handle] };
@@ -571,6 +724,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -581,7 +735,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_vectors",
           String(args.index_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_vectors", {});
         return { dataHandles: [handle] };
@@ -612,6 +771,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -631,7 +791,12 @@ export const model = {
         const handle = await context.writeResource(
           "metadata_index",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created metadata_index {id}", { id });
         return { dataHandles: [handle] };
@@ -659,6 +824,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -678,7 +844,12 @@ export const model = {
         const handle = await context.writeResource(
           "delete_metadata_index",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created delete_metadata_index {id}", { id });
         return { dataHandles: [handle] };
@@ -703,6 +874,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -713,7 +885,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_metadata_indexes",
           String(args.index_name),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_metadata_indexes", {});
         return { dataHandles: [handle] };
@@ -753,6 +930,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -772,7 +950,12 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_query_vector",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created vectorize_query_vector {id}", { id });
         return { dataHandles: [handle] };
@@ -798,6 +981,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const queryParts: string[] = [];
@@ -817,7 +1001,12 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_upsert_vector",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed vectorize_upsert_vector", {});
         return { dataHandles: [handle] };

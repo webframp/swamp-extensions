@@ -9,6 +9,8 @@
  */
 import { z } from "npm:zod@4.4.3";
 
+const EXTENSION_NAME = "@webframp/container-image";
+
 const GlobalArgsSchema = z.object({
   command: z
     .string()
@@ -77,6 +79,15 @@ const BuildResultSchema = z.object({
     "Wall-clock build duration, in milliseconds",
   ),
   builtAt: z.string().describe("ISO 8601 timestamp when the build completed"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PushResultSchema = z.object({
@@ -88,6 +99,15 @@ const PushResultSchema = z.object({
   pushedAt: z.string().describe("ISO 8601 timestamp when the push completed"),
   pushDurationMs: z.number().describe(
     "Wall-clock push duration, in milliseconds",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -107,6 +127,15 @@ const InspectResultSchema = z.object({
   ),
   inspectedAt: z.string().describe(
     "ISO 8601 timestamp when the inspection ran",
+  ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
   ),
 });
 
@@ -141,7 +170,7 @@ async function runCommand(
 /** Container image model definition. */
 export const model = {
   type: "@webframp/container-image",
-  version: "2026.08.01.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -152,6 +181,15 @@ export const model = {
     {
       toVersion: "2026.08.01.1",
       description: "Version bump, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+
+    {
+      toVersion: "2026.08.24.1",
+
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -248,6 +286,7 @@ export const model = {
         },
       ) => {
         const cli = context.globalArgs.command;
+        const startMs = Date.now();
         const start = performance.now();
 
         const buildArgs: string[] = isBuildah(cli)
@@ -311,6 +350,9 @@ export const model = {
           dockerfile: args.dockerfile ?? "Dockerfile",
           buildDurationMs,
           builtAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          fetchedAt: new Date().toISOString(),
+          collectedBy: EXTENSION_NAME,
         };
 
         context.logger.info("Built {tag} in {buildDurationMs}ms", {
@@ -344,6 +386,7 @@ export const model = {
         },
       ) => {
         const cli = context.globalArgs.command;
+        const startMs = Date.now();
         const start = performance.now();
 
         context.logger.info("Pushing {tag}", { tag: args.tag });
@@ -400,6 +443,9 @@ export const model = {
           size,
           pushedAt: new Date().toISOString(),
           pushDurationMs,
+          durationMs: Date.now() - startMs,
+          fetchedAt: new Date().toISOString(),
+          collectedBy: EXTENSION_NAME,
         };
 
         context.logger.info("Pushed {tag} digest={digest}", {
@@ -430,6 +476,7 @@ export const model = {
           ) => Promise<{ name: string }>;
         },
       ) => {
+        const startMs = Date.now();
         const cli = context.globalArgs.command;
 
         const inspectArgs = isBuildah(cli)
@@ -484,7 +531,12 @@ export const model = {
         const handle = await context.writeResource(
           "inspect",
           sanitizeResourceName(args.tag),
-          data,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },

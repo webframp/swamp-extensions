@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/spectrum";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -33,6 +35,12 @@ const GetCurrentAggregatedAnalyticsSchema = z.object({
   items: z.array(GetCurrentAggregatedAnalyticsItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAnalyticsByTimeSchema = z.object({
@@ -50,6 +58,15 @@ const GetAnalyticsByTimeSchema = z.object({
     "List of time interval buckets: [start, end].",
   ),
   totals: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetAnalyticsSummarySchema = z.object({
@@ -67,6 +84,15 @@ const GetAnalyticsSummarySchema = z.object({
     "List of time interval buckets: [start, end].",
   ),
   totals: z.unknown(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const ListSpectrumApplicationsSchema = z.union([
@@ -94,10 +120,17 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
 /** Cloudflare Spectrum — TCP/UDP proxying for non-HTTP applications */
 export const model = {
   type: "@webframp/cloudflare/spectrum",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "get_current_aggregated_analytics": {
@@ -167,6 +200,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -196,6 +230,8 @@ export const model = {
             items: results,
             truncated,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
           },
         );
 
@@ -239,6 +275,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -249,7 +286,12 @@ export const model = {
         const handle = await context.writeResource(
           "analytics_by_time",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched analytics_by_time", {});
         return { dataHandles: [handle] };
@@ -279,6 +321,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -289,7 +332,12 @@ export const model = {
         const handle = await context.writeResource(
           "analytics_summary",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched analytics_summary", {});
         return { dataHandles: [handle] };
@@ -323,6 +371,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -333,7 +382,12 @@ export const model = {
         const handle = await context.writeResource(
           "list_spectrum_applications",
           "latest",
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched list_spectrum_applications", {});
         return { dataHandles: [handle] };
@@ -356,6 +410,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -368,7 +423,12 @@ export const model = {
         const handle = await context.writeResource(
           "create_spectrum_application_using_a_name_for_the_origin",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Executed create_spectrum_application_using_a_name_for_the_origin",
@@ -396,6 +456,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -406,7 +467,12 @@ export const model = {
         const handle = await context.writeResource(
           "spectrum_application_configuration",
           String(args.app_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched spectrum_application_configuration", {});
         return { dataHandles: [handle] };
@@ -432,6 +498,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -450,7 +517,12 @@ export const model = {
         const handle = await context.writeResource(
           "spectrum_application_configuration_using_a_name_for_the_origin",
           String(args.app_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info(
           "Updated spectrum_application_configuration_using_a_name_for_the_origin",

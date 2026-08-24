@@ -1,3 +1,6 @@
-## 2026.08.24.3
+## 2026.08.24.4
 
-**Fixed:** Added missing `description` field to the `2026.08.24.2` upgrade entry. The swamp binary's model loader requires `description: string` on every upgrade entry; the prior publish omitted it, causing a Zod validation error at load time.
+**Added:** Output metadata attributes for observability.
+- `durationMs`: Method execution duration in milliseconds.
+- `collectedBy`: Extension name that produced the data.
+- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).

@@ -10,6 +10,8 @@
 import { z } from "npm:zod@4.4.3";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
+const EXTENSION_NAME = "@webframp/cloudflare/d1";
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -33,6 +35,12 @@ const ListDatabasesSchema = z.object({
   items: z.array(DatabasesItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateDatabaseSchema = z.object({
@@ -44,6 +52,15 @@ const CreateDatabaseSchema = z.object({
   read_replication: z.unknown().optional(),
   uuid: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const UpdatePartialDatabaseSchema = z.object({
@@ -55,6 +72,15 @@ const UpdatePartialDatabaseSchema = z.object({
   read_replication: z.unknown().optional(),
   uuid: z.unknown().optional(),
   version: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const CreateD1ExportDatabaseSchema = z.object({
@@ -74,6 +100,15 @@ const CreateD1ExportDatabaseSchema = z.object({
   status: z.enum(["complete", "error"]).optional(),
   success: z.boolean().optional(),
   type: z.enum(["export"]).optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const D1ImportDatabaseSchema = z.object({
@@ -100,12 +135,30 @@ const D1ImportDatabaseSchema = z.object({
   upload_url: z.string().optional().describe(
     "The R2 presigned URL to use for uploading. Only returned when for the 'init' action.",
   ),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const D1QueryDatabaseSchema = z.object({
   meta: z.unknown().optional(),
   results: z.array(z.object({})).optional(),
   success: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const D1RawDatabaseQuerySchema = z.object({
@@ -116,10 +169,28 @@ const D1RawDatabaseQuerySchema = z.object({
       .optional(),
   }).optional(),
   success: z.boolean().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const GetBookmarkSchema = z.object({
   bookmark: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const D1TimeTravelRestoreSchema = z.object({
@@ -128,6 +199,15 @@ const D1TimeTravelRestoreSchema = z.object({
     "A message describing the result of the restore operation.",
   ),
   previous_bookmark: z.unknown().optional(),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 // =============================================================================
@@ -137,10 +217,17 @@ const D1TimeTravelRestoreSchema = z.object({
 /** Cloudflare D1 serverless SQL databases — databases, queries */
 export const model = {
   type: "@webframp/cloudflare/d1",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.08.24.1",
+      description:
+        "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "databases": {
@@ -221,6 +308,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
@@ -258,6 +346,8 @@ export const model = {
           items: results,
           truncated,
           fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} databases", {
@@ -288,6 +378,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         if (
@@ -318,7 +409,12 @@ export const model = {
         }
 
         const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("database", id, result);
+        const handle = await context.writeResource("database", id, {
+          ...result,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Created database {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -345,6 +441,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -365,7 +462,12 @@ export const model = {
         const handle = await context.writeResource(
           "database",
           String(args.database_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched database", {});
         return { dataHandles: [handle] };
@@ -391,6 +493,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -419,7 +522,12 @@ export const model = {
         const handle = await context.writeResource(
           "database",
           String(args.database_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated database", {});
         return { dataHandles: [handle] };
@@ -445,6 +553,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -473,7 +582,12 @@ export const model = {
         const handle = await context.writeResource(
           "partial_database",
           String(args.database_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Updated partial_database", {});
         return { dataHandles: [handle] };
@@ -548,6 +662,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -577,7 +692,12 @@ export const model = {
         const handle = await context.writeResource(
           "d1_export_database",
           id,
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Created d1_export_database {id}", { id });
         return { dataHandles: [handle] };
@@ -602,6 +722,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -630,7 +751,12 @@ export const model = {
         const handle = await context.writeResource(
           "d1_import_database",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed d1_import_database", {});
         return { dataHandles: [handle] };
@@ -655,6 +781,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -683,7 +810,12 @@ export const model = {
         const handle = await context.writeResource(
           "d1_query_database",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed d1_query_database", {});
         return { dataHandles: [handle] };
@@ -708,6 +840,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -736,7 +869,12 @@ export const model = {
         const handle = await context.writeResource(
           "d1_raw_database_query",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed d1_raw_database_query", {});
         return { dataHandles: [handle] };
@@ -764,6 +902,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         let result: Record<string, unknown>;
         try {
@@ -784,7 +923,12 @@ export const model = {
         const handle = await context.writeResource(
           "bookmark",
           String(args.database_id),
-          result,
+          {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Fetched bookmark", {});
         return { dataHandles: [handle] };
@@ -815,6 +959,7 @@ export const model = {
           };
         },
       ) => {
+        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         if (args.bookmark === undefined && args.timestamp === undefined) {
@@ -852,7 +997,12 @@ export const model = {
         const handle = await context.writeResource(
           "d1_time_travel_restore",
           "latest",
-          result ?? {},
+          {
+            ...result ?? {},
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         context.logger.info("Executed d1_time_travel_restore", {});
         return { dataHandles: [handle] };

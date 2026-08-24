@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/rice-scoring"
-version: "2026.08.24.2"
+version: "2026.08.24.3"
 description: |
   RICE scoring methodology as an agent-guided framework.
   Accepts items, conducts structured interviews to derive
