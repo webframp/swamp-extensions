@@ -65,6 +65,43 @@ At minimum the calling identity needs:
 - `ec2:DescribeInstances`, `lambda:ListFunctions`
 - `elasticloadbalancing:DescribeLoadBalancers`, `ec2:DescribeNatGateways`
 
+## Troubleshooting
+
+### Report shows "No data available" for every section
+
+Both workflows mark all steps as `allowFailure: true`. If every dependency model
+fails (credentials, permissions, wrong region), the workflow still "succeeds"
+and the report renders with placeholder text in each section. Check
+`swamp run history` to identify which steps failed and why.
+
+### `investigate-outage` workflow `--input region=...` has no effect
+
+The workflow declares a `region` input but no step references it. The actual
+region is baked into the dependency model instances at creation time
+(`--global-arg region=us-east-1`). To target a different region, recreate the
+model instances.
+
+### `morning-pulse` workflow is undocumented
+
+The extension ships two workflows: `investigate-outage` (documented above) and
+`morning-pulse` (fleet health overview). The morning-pulse workflow requires
+additional model instances not listed in the Prerequisites section:
+`aws-alarms-{region}`, `alarm-investigation-{region}`, `aws-costs` (from
+`@webframp/aws/cost-explorer`), and `github` (from `@webframp/github`).
+
+### Display limits truncate report content
+
+The incident report slices output for readability: alarm state changes (10),
+active alarms (10), anomalies (5), top faulty services/URLs (5), and non-running
+EC2 instances (10). These are report display limits, not API fetch limits. The
+underlying data may contain more entries than shown.
+
+### Profile configuration not documented
+
+Pass `--global-arg profile=<name>` when creating dependency model instances for
+SSO or named-profile credential resolution. The README only lists IAM
+permissions without guidance on profile configuration.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md).
