@@ -489,7 +489,7 @@ function computeDaysUntilExpiry(notAfter: string | null): number | null {
  */
 export const model = {
   type: "@webframp/network",
-  version: "2026.08.24.2",
+  version: "2026.08.24.3",
   globalArguments: z.object({}),
 
   upgrades: [
@@ -508,6 +508,12 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      description: "No schema changes — version bump for republish",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.24.3",
+      description: "No schema changes — add missing upgrade description fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
