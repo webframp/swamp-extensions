@@ -1,5 +1,3 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Added Troubleshooting section documenting command-not-found errors,
-get_os_info graceful degradation, ip -j requirement, Linux-only restriction, and
-zero-config design.**
+**Fixed:** Added missing `description` field to the `2026.08.24.2` upgrade entry. The swamp binary's model loader requires `description: string` on every upgrade entry; the prior publish omitted it, causing a Zod validation error at load time.

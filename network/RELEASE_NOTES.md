@@ -1,5 +1,3 @@
-## 2026.08.24.2
+## 2026.08.24.3
 
-**Added Troubleshooting section documenting error-resource-not-exception
-pattern, http_check catch-all, per-port independence, dig JSON fallback, command
-timeouts, and zero global args.**
+**Fixed:** Added missing `description` field to the `2026.08.24.2` upgrade entry. The swamp binary's model loader requires `description: string` on every upgrade entry; the prior publish omitted it, causing a Zod validation error at load time.
