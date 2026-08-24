@@ -129,6 +129,10 @@ export const model = {
         "Added .describe() to name/description fields on the scored-item schema",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   globalArguments: GlobalArgsSchema,
 

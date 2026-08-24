@@ -216,6 +216,10 @@ export const model = {
         "Added .describe() to Row/Series resource schema fields, matching the existing append_metrics argument descriptions",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {

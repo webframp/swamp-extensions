@@ -185,6 +185,10 @@ export const model = {
         "No schema changes (error messages now name the request path and target item/user)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {

@@ -360,6 +360,10 @@ export const model = {
         "No schema changes other than rejecting an empty title (new_task) — existing stored resources are unaffected.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     kanbanTask: {

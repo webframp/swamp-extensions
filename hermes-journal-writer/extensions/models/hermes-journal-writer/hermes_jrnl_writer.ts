@@ -635,6 +635,10 @@ export const model = {
       description: "No schema changes (added field descriptions only)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     journalEntry: {
