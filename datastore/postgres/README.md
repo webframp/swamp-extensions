@@ -87,10 +87,9 @@ Three layers are instrumented:
 - **SQL** — one span per round trip, named for what the statement does
   (`PostgreSQL acquireLock`, `PostgreSQL scanFileMetadata`,
   `PostgreSQL fetchRemoteManifest`, …) with `db.system.name`,
-  `db.operation.name`, `db.collection.name`, and
-  `db.response.returned_rows`. Push transactions get a single span rather than
-  one per statement, so a thousand-file push produces one span and not a
-  thousand.
+  `db.operation.name`, `db.collection.name`, and `db.response.returned_rows`.
+  Push transactions get a single span rather than one per statement, so a
+  thousand-file push produces one span and not a thousand.
 - **Lock** — `postgres-datastore lock acquire` / `release` / `withLock` /
   `inspect` / `forceRelease`. Acquire records `lock.wait_duration_ms` and
   `lock.contended`; inspect records `lock.holder`. Heartbeat renewals are
@@ -111,6 +110,54 @@ only hand-written operation labels, table names, and counts.
 
 This is independent of `SWAMP_PG_SYNC_TRACE=1`, which writes phase timings to
 stderr and remains available whether or not OTel is configured.
+
+## Troubleshooting
+
+### Schema and tables are auto-created
+
+The README's "Required Schema" section implies manual DDL is needed, but the
+extension auto-creates its schema, tables (`locks`, `files`, `sync_state`),
+indexes, and sequence on first use via `ensureInfrastructure()`. The calling
+identity needs `CREATE` privileges on the database. If auto-creation fails, the
+error propagates and the next operation retries.
+
+### Lock heartbeat failure is silent
+
+The background interval that renews the lock catches all errors with an empty
+catch block. If the PostgreSQL connection drops mid-operation, the lock expires
+via its 30-second TTL. The lock holder receives no notification that renewal
+failed — long operations may lose their lock without knowing.
+
+### Connection pool is 5 connections, never closed
+
+The pool size is hardcoded to 5 with `idle_timeout: 0` (connections persist
+until process exit). There is no explicit `sql.end()` call. If your process
+lifecycle requires clean shutdown, be aware that connections remain open.
+
+### Retries only on specific PostgreSQL error codes
+
+The retry utility handles: serialization_failure (`40001`), deadlock_detected
+(`40P01`), cannot_connect_now (`57P03`), and connection exceptions (`08xxx`).
+Permission errors, relation-not-found, and other non-transient errors throw
+immediately without retry.
+
+### Sidecar bulk invalidation after 200 dirty paths
+
+When more than 200 files are modified without a push, the sidecar switches to
+`bulkInvalidated` mode, forcing a full filesystem walk on the next push. This is
+slower but correct. Push frequently to avoid hitting this cap.
+
+### Read replica detection
+
+If connected to an Aurora reader endpoint, the health check returns
+`healthy: false` with an explanation. The extension requires a writer endpoint
+for lock and sync operations.
+
+### `ssl: "verify-ca"` requires `sslCaPath`
+
+The Zod schema enforces that `sslCaPath` is provided when `ssl` is set to
+`"verify-ca"`. The path must not contain `..` segments (path traversal
+protection).
 
 ## Development
 
