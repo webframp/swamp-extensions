@@ -120,6 +120,47 @@ apps. This model uses bounded pagination (maximum 10 pages per method call) to
 avoid triggering rate limits on large subreddits. If results exceed the
 pagination cap, the output `truncated` field is set to `true`.
 
+## Troubleshooting
+
+### Rate-limit self-throttling at 5 remaining
+
+When Reddit's `X-Ratelimit-Remaining` drops to 5 or below, the extension sleeps
+until the rate-limit window resets. This prevents 429 errors but means methods
+can pause mid-execution without warning.
+
+### 401 triggers one automatic re-authentication
+
+If the access token expires mid-call, the extension clears its token cache,
+re-authenticates using the password grant, and retries the failed request once.
+A second consecutive 401 throws. Token refresh uses `client_id` and
+`client_secret` — ensure these remain valid.
+
+### `MAX_PAGES = 10` with method limits capped at 100
+
+Most methods cap `limit` at 100 via Zod validation. Since Reddit returns up to
+100 items per page, most calls complete in a single page. The 10-page cap is a
+safety bound for partially-filled pages. The `truncated` field is set honestly
+when more data exists.
+
+### No timeout on HTTP requests
+
+Fetch calls have no `AbortController` or timeout configured. A hung Reddit
+connection blocks the method indefinitely. If you observe hanging, check network
+connectivity to `oauth.reddit.com` and `reddit.com`.
+
+### Action methods check for Reddit-level errors
+
+Methods like `approve`, `remove`, `ban_user`, and `flair_post` check the
+response body for a `json.errors` array even on HTTP 200. Reddit returns 200
+with error payloads for some failure modes (invalid thing ID, insufficient
+permissions). These surface as thrown errors with the target item named.
+
+### Token not persisted between invocations
+
+Each method call creates a fresh API client and authenticates from scratch. The
+OAuth2 token is not cached across invocations. This adds ~200ms latency per call
+but avoids stale-token issues.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.

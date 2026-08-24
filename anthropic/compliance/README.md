@@ -48,3 +48,41 @@ swamp data query claude-compliance \
 swamp data query claude-compliance \
   'data.latest("claude-compliance","effectiveSettings").attributes.settings'
 ```
+
+## Troubleshooting
+
+### 600 req/min shared rate limit with no backoff
+
+The Anthropic Compliance API has a 600 requests/minute budget shared across all
+consumers. This extension has no rate-limit detection or retry logic. A 429
+response throws like any other non-2xx error. Space out invocations of
+`sync_directory` (which makes 3+ API calls internally) to stay within budget.
+
+### `paginateAll` caps at 20,000 items
+
+The paginated helper fetches up to 20 pages of 1,000 items each. Organizations
+with more than 20,000 users or group members will receive truncated results. The
+`hasMore` field in the output is honest when this cap is reached.
+
+### `collect_activities` does not paginate
+
+The activities method fetches a single page (up to 5,000 entries). The
+`has_more` field indicates whether more data exists, but follow-up pagination is
+the caller's responsibility (adjust `since` for the next window).
+
+### Group name resolution is best-effort
+
+In `get_group_members`, if the API call to resolve the group's display name
+fails, the method continues using the raw `groupId` as the name. The failure is
+logged at `info` level.
+
+### `orgId` auto-discovery takes the first organization
+
+When `orgId` is omitted from global args, the extension queries
+`/v1/compliance/organizations` and uses the first result's `uuid` (or `id`).
+Multi-org accounts must set `orgId` explicitly.
+
+### No retry on any API failure
+
+All non-2xx HTTP responses throw immediately. Transient network errors, 5xx from
+Anthropic, or brief outages will crash the method invocation without retry.
