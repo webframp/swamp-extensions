@@ -75,6 +75,43 @@ The report returns both Markdown (for human review) and structured JSON (for
 programmatic consumption). Each finding includes a check category, severity
 level (`ok`, `warn`, `critical`, or `error`), and a descriptive message.
 
+## Troubleshooting
+
+### Report shows "HEALTHY" despite misconfigured model instances
+
+The workflow marks all data-collection steps as `allowFailure: true`. If a model
+instance has wrong credentials or missing permissions, the step fails silently,
+and the report omits findings for that domain. Worker and cache check functions
+return empty findings (not errors) when their data is null, so a fully failed
+worker or cache model produces a "HEALTHY" report rather than flagging the data
+gap.
+
+### Hardcoded model instance names
+
+The workflow references `cf-zone`, `cf-dns`, `cf-waf`, `cf-worker`, and
+`cf-cache` by exact name. Model instances must be created with these names.
+Using different names causes step failures that are silently absorbed by
+`allowFailure: true`, producing a degraded report with no explanation.
+
+### "No zone data available" or "No WAF data available" findings
+
+These `severity: "error"` findings mean the corresponding model instance failed
+during data collection. Common causes: expired API token, token missing required
+permissions, wrong `zoneId` or `accountId` global arg, or network issues. Check
+`swamp run history` to see which workflow steps failed.
+
+### Security events limited to 100 per run
+
+The workflow passes `limit: 100` to `get_security_events`. High-traffic zones
+may have more events in the analysis window. This is a workflow-level cap, not a
+pagination limit in the report itself.
+
+### Report output location
+
+Use `swamp report get <report-name> --model <model>` to retrieve the latest
+report output. The report produces both Markdown (for human review) and
+structured JSON (for programmatic consumption).
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.
