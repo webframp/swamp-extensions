@@ -82,6 +82,40 @@ swamp model method run net-probe port_check --input host=example.com --input por
 | `traceroute`   | Trace network path to a host                              |
 | `port_check`   | Test TCP connectivity on specific ports                   |
 
+## Troubleshooting
+
+### Command failures produce error resources, not exceptions
+
+Every CLI-based method (dns_lookup, whois, cert_check, traceroute) writes a
+resource with an `error` field populated on failure, rather than throwing. Check
+the resource output's `error` and `commandError` fields for diagnostic details.
+
+### `http_check` catches all fetch errors
+
+Network failures, DNS resolution errors, and invalid URLs are caught and written
+as error resources with `statusCode: 0`. The method never throws to the caller.
+
+### `port_check` reports per-port independently
+
+A connection failure on one port does not abort the scan. Each port produces an
+`{ open: boolean, error?: string }` entry in the results array.
+
+### `dns_lookup` falls back from `dig +json` to text parsing
+
+If the `dig` binary does not support `+json` (indicated by "Invalid option" in
+stderr), the method retries with standard text output and parses the text format
+instead.
+
+### 30-second command timeout (60s for traceroute)
+
+CLI commands that exceed their timeout are killed. The resource is written with
+the timeout error in the `error` field.
+
+### No global args — all configuration is per-method
+
+The model defines zero global arguments. Target hosts, ports, domains, and
+options are passed per-method via `--input` arguments.
+
 ## License
 
 Apache-2.0 -- see [LICENSE.md](LICENSE.md) for details.

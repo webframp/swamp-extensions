@@ -287,7 +287,7 @@ type MethodContext = {
 /** Team topology and value stream mapping model. */
 export const model = {
   type: "@webframp/team-topology",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",

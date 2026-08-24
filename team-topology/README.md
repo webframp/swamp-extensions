@@ -10,7 +10,7 @@ the model persists.
 ## Why This Extension
 
 Organizations struggling with delivery speed, quality, or team burnout often
-have a *topology problem* — teams structured in ways that create unnecessary
+have a _topology problem_ — teams structured in ways that create unnecessary
 handoffs, cognitive overload, or Conway's Law mismatches between team boundaries
 and system architecture. But these problems are invisible without a structured
 way to capture and analyze the current state.
@@ -19,9 +19,11 @@ This extension makes team topology visible and queryable as versioned data. It
 supports:
 
 - **Discovery**: Map what exists today through guided conversations
-- **Analysis**: Identify cognitive load issues, Conway mismatches, and flow bottlenecks
+- **Analysis**: Identify cognitive load issues, Conway mismatches, and flow
+  bottlenecks
 - **Evolution tracking**: Version history shows how topology changes over time
-- **Decision support**: Data to inform restructuring proposals (tracked via `@magistr/good-planning`)
+- **Decision support**: Data to inform restructuring proposals (tracked via
+  `@magistr/good-planning`)
 
 ## Conceptual Foundations
 
@@ -35,8 +37,8 @@ supports:
   expanding to the full picture
 - **Ruth Malan**: architecture decisions (including team boundaries) are
   hypotheses — treat them as experiments with success criteria
-- **Value Stream Mapping (lean)**: lead time, process time, wait time, %C&A
-  at each step reveals where flow breaks down
+- **Value Stream Mapping (lean)**: lead time, process time, wait time, %C&A at
+  each step reveals where flow breaks down
 
 ## Design Principles
 
@@ -138,38 +140,38 @@ Atomic snapshot of team structure, interactions, and system ownership.
 
 **Teams:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| name | string | yes | Team name |
-| type | enum | yes | `stream-aligned`, `enabling`, `complicated-subsystem`, `platform` |
-| domains | string[] | yes | Business domains or bounded contexts owned |
-| systems | string[] | no | Systems, services, or repos owned (defaults to []) |
-| cognitiveLoad | object | no | `{intrinsic, extraneous, germane, capacity}` — each 0-10 |
-| size | number | no | Number of team members |
-| culture | enum | no | Westrum: `pathological`, `bureaucratic`, `generative` |
-| notes | string | no | Freeform context |
+| Field         | Type     | Required | Description                                                       |
+| ------------- | -------- | -------- | ----------------------------------------------------------------- |
+| name          | string   | yes      | Team name                                                         |
+| type          | enum     | yes      | `stream-aligned`, `enabling`, `complicated-subsystem`, `platform` |
+| domains       | string[] | yes      | Business domains or bounded contexts owned                        |
+| systems       | string[] | no       | Systems, services, or repos owned (defaults to [])                |
+| cognitiveLoad | object   | no       | `{intrinsic, extraneous, germane, capacity}` — each 0-10          |
+| size          | number   | no       | Number of team members                                            |
+| culture       | enum     | no       | Westrum: `pathological`, `bureaucratic`, `generative`             |
+| notes         | string   | no       | Freeform context                                                  |
 
 **Interactions:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| source | string | yes | Source team name |
-| target | string | yes | Target team name |
-| mode | enum | yes | `collaboration`, `x-as-a-service`, `facilitating` |
-| purpose | string | yes | Why these teams interact |
-| duration | enum | no | `permanent`, `temporary`, `evolving` (default: permanent) |
-| health | enum | no | `flowing`, `friction`, `blocked` (default: flowing) |
-| notes | string | no | Additional context |
+| Field    | Type   | Required | Description                                               |
+| -------- | ------ | -------- | --------------------------------------------------------- |
+| source   | string | yes      | Source team name                                          |
+| target   | string | yes      | Target team name                                          |
+| mode     | enum   | yes      | `collaboration`, `x-as-a-service`, `facilitating`         |
+| purpose  | string | yes      | Why these teams interact                                  |
+| duration | enum   | no       | `permanent`, `temporary`, `evolving` (default: permanent) |
+| health   | enum   | no       | `flowing`, `friction`, `blocked` (default: flowing)       |
+| notes    | string | no       | Additional context                                        |
 
 **System Dependencies:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| from | string | yes | Consuming system/service |
-| to | string | yes | Providing system/service |
-| type | enum | yes | `sync`, `async`, `shared-db`, `file`, `manual` |
-| ownerFrom | string | no | Team owning the consumer |
-| ownerTo | string | no | Team owning the provider |
+| Field     | Type   | Required | Description                                    |
+| --------- | ------ | -------- | ---------------------------------------------- |
+| from      | string | yes      | Consuming system/service                       |
+| to        | string | yes      | Providing system/service                       |
+| type      | enum   | yes      | `sync`, `async`, `shared-db`, `file`, `manual` |
+| ownerFrom | string | no       | Team owning the consumer                       |
+| ownerTo   | string | no       | Team owning the provider                       |
 
 ### flows
 
@@ -177,26 +179,26 @@ Value stream maps with step-level metrics.
 
 **Value Stream:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| name | string | yes | Stream name |
-| purpose | string | yes | What value it delivers and to whom |
-| trigger | string | no | What initiates work |
-| steps | FlowStep[] | yes | Ordered steps |
-| totalLeadTimeDays | number | no | End-to-end lead time |
-| notes | string | no | Additional context |
+| Field             | Type       | Required | Description                        |
+| ----------------- | ---------- | -------- | ---------------------------------- |
+| name              | string     | yes      | Stream name                        |
+| purpose           | string     | yes      | What value it delivers and to whom |
+| trigger           | string     | no       | What initiates work                |
+| steps             | FlowStep[] | yes      | Ordered steps                      |
+| totalLeadTimeDays | number     | no       | End-to-end lead time               |
+| notes             | string     | no       | Additional context                 |
 
 **Flow Step:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| name | string | yes | Step name |
-| ownerTeam | string | yes | Team responsible |
-| leadTimeDays | number | no | Total elapsed time for this step |
-| processTimeDays | number | no | Actual hands-on work time |
-| waitTimeDays | number | no | Time queued/waiting |
-| percentCompleteAccurate | number | no | %C&A: work arriving without needing rework (0-100) |
-| notes | string | no | Additional context |
+| Field                   | Type   | Required | Description                                        |
+| ----------------------- | ------ | -------- | -------------------------------------------------- |
+| name                    | string | yes      | Step name                                          |
+| ownerTeam               | string | yes      | Team responsible                                   |
+| leadTimeDays            | number | no       | Total elapsed time for this step                   |
+| processTimeDays         | number | no       | Actual hands-on work time                          |
+| waitTimeDays            | number | no       | Time queued/waiting                                |
+| percentCompleteAccurate | number | no       | %C&A: work arriving without needing rework (0-100) |
+| notes                   | string | no       | Additional context                                 |
 
 ### assessment
 
@@ -204,15 +206,15 @@ Agent-produced findings about topology health.
 
 **Finding:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| id | string | yes | Short ID (e.g., CL-01, CW-03) |
-| category | enum | yes | See categories below |
-| severity | enum | yes | `info`, `warning`, `critical` |
-| title | string | yes | One-line summary |
-| description | string | yes | Detailed explanation |
-| affectedTeams | string[] | yes | Teams impacted |
-| recommendation | string | no | What to do about it |
+| Field          | Type     | Required | Description                   |
+| -------------- | -------- | -------- | ----------------------------- |
+| id             | string   | yes      | Short ID (e.g., CL-01, CW-03) |
+| category       | enum     | yes      | See categories below          |
+| severity       | enum     | yes      | `info`, `warning`, `critical` |
+| title          | string   | yes      | One-line summary              |
+| description    | string   | yes      | Detailed explanation          |
+| affectedTeams  | string[] | yes      | Teams impacted                |
+| recommendation | string   | no       | What to do about it           |
 
 **Finding categories:** `cognitive-load`, `conways-mismatch`,
 `interaction-friction`, `bottleneck`, `missing-team`, `team-coupling`,
@@ -222,8 +224,8 @@ Agent-produced findings about topology health.
 
 ### discover_topology
 
-Map teams, interactions, and system ownership through guided conversation.
-The agent guides through: team inventory → type classification → domain/system
+Map teams, interactions, and system ownership through guided conversation. The
+agent guides through: team inventory → type classification → domain/system
 ownership → cognitive load → interaction mapping → system dependencies.
 
 ### map_flow
@@ -240,26 +242,26 @@ structured findings with severities and recommendations.
 
 ## Team Types
 
-| Type | Purpose | Signal |
-|------|---------|--------|
-| stream-aligned | Delivers value directly along a flow of work | "We ship features to users" |
-| enabling | Helps other teams acquire capabilities (temporary) | "We teach/coach, then leave" |
-| complicated-subsystem | Owns deep-specialist knowledge | "You need a PhD to understand this" |
-| platform | Provides self-service internal capabilities | "Other teams use our APIs/tools" |
+| Type                  | Purpose                                            | Signal                              |
+| --------------------- | -------------------------------------------------- | ----------------------------------- |
+| stream-aligned        | Delivers value directly along a flow of work       | "We ship features to users"         |
+| enabling              | Helps other teams acquire capabilities (temporary) | "We teach/coach, then leave"        |
+| complicated-subsystem | Owns deep-specialist knowledge                     | "You need a PhD to understand this" |
+| platform              | Provides self-service internal capabilities        | "Other teams use our APIs/tools"    |
 
 Most teams should be stream-aligned. If your org has more platform teams than
 stream-aligned teams, that's a signal worth investigating.
 
 ## Interaction Modes
 
-| Mode | What it looks like | Duration expectation |
-|------|-------------------|---------------------|
-| collaboration | Pairing, shared standups, joint design | Temporary (weeks to months) |
-| x-as-a-service | API calls, tickets, self-service | Permanent |
-| facilitating | Teaching, coaching, pair-programming to transfer skill | Temporary |
+| Mode           | What it looks like                                     | Duration expectation        |
+| -------------- | ------------------------------------------------------ | --------------------------- |
+| collaboration  | Pairing, shared standups, joint design                 | Temporary (weeks to months) |
+| x-as-a-service | API calls, tickets, self-service                       | Permanent                   |
+| facilitating   | Teaching, coaching, pair-programming to transfer skill | Temporary                   |
 
-**Key heuristic:** Collaboration should evolve to x-as-a-service over time. If
-a collaboration interaction has been active for 6+ months, that's a signal —
+**Key heuristic:** Collaboration should evolve to x-as-a-service over time. If a
+collaboration interaction has been active for 6+ months, that's a signal —
 either define a clear contract and transition, or merge the teams.
 
 ## Cognitive Load Model
@@ -278,15 +280,41 @@ invest in germane load (learning/improvement). Symptoms: slow delivery, high
 defect rate, burnout, knowledge silos.
 
 **Interventions:**
+
 - Reduce extraneous: better tooling, simpler processes, platform self-service
 - Reduce intrinsic: narrow the team's domain scope, split the team
 - Increase capacity: add people (diminishing returns beyond ~8)
 
+## Troubleshooting
+
+### `discover_topology` rejects unknown team names in interactions
+
+Every `source` and `target` in the `interactions` array must reference a team
+name from the `teams` array in the same call. Unknown names throw with the full
+list of known teams for reference.
+
+### Methods enforce strict ordering
+
+`discover_topology` must run first to establish the team and interaction data.
+`map_flow` and `record_assessment` can run in any order after discovery, as they
+write to independent resource specs.
+
+### Global args are agent context, not programmatic config
+
+`organizationContext` and `scope` appear in the method descriptions for agent
+guidance. No branching logic depends on their values.
+
+### Complex `--input` arguments need JSON format
+
+The `teams`, `interactions`, and `findings` arguments are arrays of objects.
+Pass them as JSON via `--input-file` or use the agent-guided workflow where the
+agent constructs the input interactively.
+
 ## Complements
 
-| Extension | How it complements team-topology |
-|-----------|--------------------------------|
-| `@webframp/ddd-guidance` | Bounded contexts map to team domain ownership |
-| `@magistr/good-planning` | Track restructuring proposals as commitments with hypotheses |
-| `@webframp/rice-scoring` | Prioritize which topology changes to tackle first |
-| `@webframp/aws/event-topology` | Technical dependency graph to validate Conway alignment |
+| Extension                      | How it complements team-topology                             |
+| ------------------------------ | ------------------------------------------------------------ |
+| `@webframp/ddd-guidance`       | Bounded contexts map to team domain ownership                |
+| `@magistr/good-planning`       | Track restructuring proposals as commitments with hypotheses |
+| `@webframp/rice-scoring`       | Prioritize which topology changes to tackle first            |
+| `@webframp/aws/event-topology` | Technical dependency graph to validate Conway alignment      |

@@ -147,7 +147,7 @@ async function runCommand(
 /** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
-  version: "2026.08.21.2",
+  version: "2026.08.24.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
