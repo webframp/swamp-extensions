@@ -1,44 +1,6 @@
-## 2026.08.20.1
+## 2026.08.24.1
 
-**Changed:** Bump @webframp/terraform 2026.07.18.1 → 2026.08.20.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.08.05.1 → 2026.08.20.1
-
-**Changed:** Bump @webframp/aws/networking 2026.08.05.1 → 2026.08.20.1
-
-## 2026.08.15.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.08.02.1 → 2026.08.05.1
-
-**Changed:** Bump @webframp/aws/networking 2026.08.02.1 → 2026.08.05.1
-
-## 2026.08.05.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.08.01.1 → 2026.08.02.1
-
-**Changed:** Bump @webframp/aws/networking 2026.08.01.1 → 2026.08.02.1
-
-## 2026.08.02.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.07.30.1 → 2026.08.01.1
-
-**Changed:** Bump @webframp/aws/networking 2026.07.30.1 → 2026.08.01.1
-
-## 2026.07.31.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.07.24.1 → 2026.07.30.1
-
-**Changed:** Bump @webframp/aws/networking 2026.07.24.1 → 2026.07.30.1
-
-## 2026.07.27.1
-
-**Changed:** Bump @webframp/aws/inventory 2026.07.21.1 → 2026.07.24.1
-
-**Changed:** Bump @webframp/aws/networking 2026.07.21.1 → 2026.07.24.1
-
-## 2026.07.24.1
-
-**Changed:** Bump dependency pins to latest published versions:
-- @webframp/terraform 2026.07.16.1 → 2026.07.18.1
-- @webframp/aws/inventory 2026.07.18.1 → 2026.07.21.1
-- @webframp/aws/networking 2026.07.18.1 → 2026.07.21.1
+**Added:** Troubleshooting section documenting false "No Drift Detected" when
+upstream data is missing, false "missing_in_aws" from failed gather steps, the
+ineffective workflow `region` input, silent resource skipping for unmapped ID
+fields, and the fully-silent `getData` error handling.

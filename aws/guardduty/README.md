@@ -27,8 +27,8 @@ Alternatively, enable GuardDuty through the AWS console or CLI
 ## Authentication
 
 Uses the default AWS credential chain. Point at the delegated admin account
-(e.g. via `AWS_PROFILE` or the `profile` global argument) to see findings
-across all member accounts.
+(e.g. via `AWS_PROFILE` or the `profile` global argument) to see findings across
+all member accounts.
 
 ## Required IAM Permissions
 
@@ -82,3 +82,38 @@ steps:
       severityMin: 7
       startTime: "24h"
 ```
+
+## Troubleshooting
+
+### "Failed to list GuardDuty detectors" or no detector found
+
+GuardDuty must be enabled in the target region before this extension can query
+findings. The `getDetectorId` helper throws a descriptive error pointing to
+`@swamp/aws/guardduty/detector` or the equivalent AWS CLI command
+(`aws guardduty create-detector --enable`). Confirm the detector exists with
+`aws guardduty list-detectors --region <region>`.
+
+### `list_findings` returns fewer results than expected with `typePrefix`
+
+When `typePrefix` is set (e.g. `Recon:`), the extension fetches up to
+`limit * 20` finding IDs from the API and filters client-side. If the ratio of
+matching findings is lower than 1-in-20, results will be truncated. The
+`truncated` field is set honestly. Narrowing the time window or raising `limit`
+(max 500) helps, but extreme type rarity may still produce fewer results.
+
+### Region scope
+
+GuardDuty findings are regional. The default is `us-east-1`. Each model instance
+targets one region; create separate instances for multi-region coverage. Pass
+`--global-arg profile=<name>` for named-profile or SSO credential resolution.
+
+### `get_finding_details` capped at 50 IDs
+
+The method accepts at most 50 finding IDs per call (enforced by Zod validation
+and the `GetFindingsCommand` API limit). Passing more than 50 will fail at input
+validation. Batch large ID lists into multiple calls.
+
+### `list_members` only shows associated accounts by default
+
+The `onlyAssociated` parameter defaults to `true`. To see all member accounts
+regardless of association status, pass `--input onlyAssociated=false`.

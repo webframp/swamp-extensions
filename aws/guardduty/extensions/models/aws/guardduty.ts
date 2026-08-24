@@ -239,7 +239,7 @@ function mapMember(m: Member): z.infer<typeof MemberSchema> {
  */
 export const model = {
   type: "@webframp/aws/guardduty",
-  version: "2026.08.21.1",
+  version: "2026.08.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

@@ -16,7 +16,7 @@ without writing SDK boilerplate.
 ## Installation
 
 ```bash
-swamp extension install @webframp/aws/traces
+swamp extension pull @webframp/aws/traces
 ```
 
 ## Quick Start
@@ -63,6 +63,45 @@ swamp model method run aws-traces analyze_errors --input startTime=6h
 
 The `startTime` and `endTime` parameters accept relative durations (`30m`, `1h`,
 `2d`) and ISO 8601 timestamps (`2026-03-30T12:00:00Z`).
+
+## Troubleshooting
+
+### Empty results or zero traces returned
+
+X-Ray is regional. The default region is `us-east-1`; if your services run
+elsewhere, pass `--global-arg region=<your-region>` when creating the model
+instance. Zero traces can also mean no instrumented traffic occurred in the
+requested time window.
+
+### Invalid `startTime` silently returns one hour of data
+
+The `parseRelativeTime` helper accepts `30m`, `1h`, `2d` (digits followed by
+`m`, `h`, or `d`) and ISO 8601 timestamps. Any value that matches neither format
+silently falls back to "1 hour ago." If your time window looks wrong, check for
+typos — a string like `"1x"` or `"2hrs"` will not error but will quietly use a
+one-hour lookback.
+
+### Results are truncated at 20 pages
+
+All methods except `analyze_errors` cap pagination at `MAX_PAGES = 20`. If the
+`truncated` field in the output resource is `true`, narrow your time window or
+add a filter expression to reduce the result set. The `analyze_errors` method
+lacks this cap but terminates at 1,000 traces.
+
+### `get_traces` returns fewer results than `limit`
+
+The `limit` parameter (default 100, max 1000) controls the target count, but
+pagination may stop early if the `MAX_PAGES` cap is reached first. Set a
+narrower `startTime` rather than raising `limit` past the point where 20 pages
+of results can satisfy the request.
+
+### Authentication failures
+
+When `profile` is set, credentials resolve via `fromIni({ profile })`, which
+supports SSO token cache. If your SSO session is expired, re-authenticate with
+`aws sso login --profile <profile>` before running methods. When `profile` is
+omitted, the default credential chain applies (environment variables, shared
+credentials file, instance metadata).
 
 ## License
 
