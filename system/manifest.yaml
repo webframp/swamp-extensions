@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/system"
-version: "2026.08.24.4"
+version: "2026.08.24.5"
 description: |
   Query local system diagnostics via shell commands for operational visibility.
 

@@ -125,6 +125,66 @@ const OsInfoSchema = z.object({
   ),
 });
 
+const ServiceEntrySchema = z.object({
+  unit: z.string(),
+  load: z.string(),
+  active: z.string(),
+  sub: z.string(),
+  description: z.string(),
+});
+
+const ServiceListSchema = z.object({
+  services: z.array(ServiceEntrySchema),
+  count: z.number(),
+  stateFilter: z.string().nullable(),
+  typeFilter: z.string().nullable(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const ListeningPortSchema = z.object({
+  protocol: z.string(),
+  localAddress: z.string(),
+  port: z.number(),
+  process: z.string().nullable(),
+  pid: z.number().nullable(),
+});
+
+const ListeningPortsSchema = z.object({
+  ports: z.array(ListeningPortSchema),
+  count: z.number(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const SearchProcessesSchema = z.object({
+  processes: z.array(ProcessSchema),
+  count: z.number(),
+  truncated: z.boolean(),
+  filters: z.object({
+    name: z.string().nullable(),
+    minCpu: z.number().nullable(),
+    minMem: z.number().nullable(),
+  }),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // Context Type
 // =============================================================================
@@ -185,7 +245,7 @@ async function runCommand(
 /** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
-  version: "2026.08.24.4",
+  version: "2026.08.24.5",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -221,6 +281,13 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.24.5",
+      description:
+        "Added list_services, list_ports, and search_processes methods with " +
+        "new services, listening_ports, and search_results resource specs",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -262,6 +329,24 @@ export const model = {
       schema: OsInfoSchema,
       lifetime: "1h" as const,
       garbageCollection: 3,
+    },
+    services: {
+      description: "Systemd service units and their states",
+      schema: ServiceListSchema,
+      lifetime: "5m" as const,
+      garbageCollection: 5,
+    },
+    listening_ports: {
+      description: "TCP ports in LISTEN state with owning processes",
+      schema: ListeningPortsSchema,
+      lifetime: "5m" as const,
+      garbageCollection: 5,
+    },
+    search_results: {
+      description: "Filtered process search results",
+      schema: SearchProcessesSchema,
+      lifetime: "5m" as const,
+      garbageCollection: 5,
     },
   },
 
@@ -529,6 +614,234 @@ export const model = {
         context.logger.info("OS: {name}, Kernel: {kernel}", {
           name: osRelease["PRETTY_NAME"] || "unknown",
           kernel: uname,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_services: {
+      description:
+        "List systemd service units, optionally filtered by active state",
+      arguments: z.object({
+        state: z
+          .enum(["active", "inactive", "failed", "all"])
+          .default("all")
+          .describe("Filter by service active state"),
+        type: z
+          .enum(["service", "timer", "socket", "mount", "all"])
+          .default("service")
+          .describe("Unit type to list"),
+      }),
+      execute: async (
+        args: { state: string; type: string },
+        context: MethodContext,
+      ) => {
+        const startMs = Date.now();
+        const cmdArgs = [
+          "systemctl",
+          "list-units",
+          "--no-pager",
+          "--no-legend",
+          "--plain",
+        ];
+        if (args.type !== "all") {
+          cmdArgs.push(`--type=${args.type}`);
+        }
+        if (args.state !== "all") {
+          cmdArgs.push(`--state=${args.state}`);
+        }
+
+        const raw = await runCommand(cmdArgs);
+        const lines = raw.split("\n").filter((l) => l.trim().length > 0);
+
+        const services = lines.map((line) => {
+          const parts = line.trim().split(/\s+/);
+          return {
+            unit: parts[0] || "",
+            load: parts[1] || "",
+            active: parts[2] || "",
+            sub: parts[3] || "",
+            description: parts.slice(4).join(" ") || "",
+          };
+        });
+
+        const handle = await context.writeResource("services", "current", {
+          services,
+          count: services.length,
+          stateFilter: args.state === "all" ? null : args.state,
+          typeFilter: args.type === "all" ? null : args.type,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info(
+          "Found {count} units (state={state}, type={type})",
+          {
+            count: services.length,
+            state: args.state,
+            type: args.type,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_ports: {
+      description:
+        "List TCP ports in LISTEN state with their owning processes via ss",
+      arguments: z.object({}),
+      execute: async (
+        _args: Record<string, never>,
+        context: MethodContext,
+      ) => {
+        const startMs = Date.now();
+        const raw = await runCommand(["ss", "-tlnp"]);
+        const lines = raw.split("\n").slice(1); // skip header
+
+        const ports = lines
+          .filter((line) => line.trim().length > 0)
+          .map((line) => {
+            const parts = line.trim().split(/\s+/);
+            // ss -tlnp output columns: State Recv-Q Send-Q Local Address:Port Peer Address:Port Process
+            const localAddr = parts[3] || "";
+            const lastColon = localAddr.lastIndexOf(":");
+            const address = lastColon >= 0
+              ? localAddr.slice(0, lastColon)
+              : localAddr;
+            const port = lastColon >= 0
+              ? parseInt(localAddr.slice(lastColon + 1), 10)
+              : 0;
+
+            // Process info is in the last column, format: users:(("name",pid=N,...))
+            const processCol = parts.slice(5).join(" ");
+            const procMatch = processCol.match(
+              /\(\("([^"]+)",pid=(\d+)/,
+            );
+            const process = procMatch ? procMatch[1] : null;
+            const pid = procMatch ? parseInt(procMatch[2], 10) : null;
+
+            return {
+              protocol: "tcp",
+              localAddress: address,
+              port,
+              process,
+              pid,
+            };
+          })
+          .filter((entry) => entry.port > 0);
+
+        const handle = await context.writeResource(
+          "listening_ports",
+          "current",
+          {
+            ports,
+            count: ports.length,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} listening TCP ports", {
+          count: ports.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    search_processes: {
+      description:
+        "Search running processes by name pattern and/or CPU/memory thresholds",
+      arguments: z.object({
+        name: z
+          .string()
+          .optional()
+          .describe(
+            "Substring to match against the command column (case-insensitive)",
+          ),
+        minCpu: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Minimum %CPU threshold to include"),
+        minMem: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Minimum %MEM threshold to include"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .default(50)
+          .describe("Maximum number of results to return"),
+      }),
+      execute: async (
+        args: {
+          name?: string;
+          minCpu?: number;
+          minMem?: number;
+          limit: number;
+        },
+        context: MethodContext,
+      ) => {
+        const startMs = Date.now();
+        const raw = await runCommand(["ps", "aux", "--sort=-%cpu"]);
+        const lines = raw.split("\n").slice(1); // skip header
+
+        const namePattern = args.name?.toLowerCase();
+
+        const filtered = lines
+          .filter((line) => line.trim().length > 0)
+          .map((line) => {
+            const parts = line.trim().split(/\s+/);
+            return {
+              user: parts[0] || "",
+              pid: parseInt(parts[1] || "0", 10),
+              cpu: parseFloat(parts[2] || "0"),
+              mem: parseFloat(parts[3] || "0"),
+              command: parts.slice(10).join(" ") || "",
+            };
+          })
+          .filter((proc) => {
+            if (
+              namePattern && !proc.command.toLowerCase().includes(namePattern)
+            ) {
+              return false;
+            }
+            if (args.minCpu !== undefined && proc.cpu < args.minCpu) {
+              return false;
+            }
+            if (args.minMem !== undefined && proc.mem < args.minMem) {
+              return false;
+            }
+            return true;
+          });
+
+        const truncated = filtered.length > args.limit;
+        const processes = filtered.slice(0, args.limit);
+
+        const handle = await context.writeResource(
+          "search_results",
+          "current",
+          {
+            processes,
+            count: processes.length,
+            truncated,
+            filters: {
+              name: args.name ?? null,
+              minCpu: args.minCpu ?? null,
+              minMem: args.minMem ?? null,
+            },
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("search_processes matched {count} processes", {
+          count: processes.length,
         });
         return { dataHandles: [handle] };
       },

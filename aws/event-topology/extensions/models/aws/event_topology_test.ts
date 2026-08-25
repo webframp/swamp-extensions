@@ -802,3 +802,219 @@ Deno.test("discover: pagination cap sets truncated flag and terminates", async (
     restore();
   }
 });
+
+// =============================================================================
+// list_event_buses Tests
+// =============================================================================
+
+type ListEventBusesContext = Parameters<
+  typeof model.methods.list_event_buses.execute
+>[1];
+
+Deno.test("model defines list_event_buses method", () => {
+  assertExists(model.methods.list_event_buses);
+  assertExists(model.resources.event_buses);
+});
+
+Deno.test("list_event_buses: returns buses with rule counts", async () => {
+  const mocks = baseMocks();
+  mocks.eventbridge = (cmd: unknown) => {
+    const name = (cmd as { constructor: { name: string } }).constructor.name;
+    if (name === "ListEventBusesCommand") {
+      return {
+        EventBuses: [
+          {
+            Name: "default",
+            Arn: "arn:aws:events:us-east-1:123456789012:event-bus/default",
+          },
+          {
+            Name: "custom-bus",
+            Arn: "arn:aws:events:us-east-1:123456789012:event-bus/custom-bus",
+          },
+        ],
+      };
+    }
+    if (name === "ListRulesCommand") {
+      // deno-lint-ignore no-explicit-any
+      const input = (cmd as any).input;
+      if (input?.EventBusName === "default") {
+        return {
+          Rules: [
+            { Name: "rule-1", State: "ENABLED" },
+            { Name: "rule-2", State: "ENABLED" },
+            { Name: "rule-3", State: "DISABLED" },
+          ],
+        };
+      }
+      if (input?.EventBusName === "custom-bus") {
+        return {
+          Rules: [{ Name: "custom-rule-1", State: "ENABLED" }],
+        };
+      }
+      return { Rules: [] };
+    }
+    return {};
+  };
+
+  const restore = mockClients(mocks);
+  try {
+    const { context, getWrittenResources } = makeContext();
+    await model.methods.list_event_buses.execute(
+      {},
+      context as unknown as ListEventBusesContext,
+    );
+
+    const resources = getWrittenResources();
+    const busRes = resources.find((r) => r.specName === "event_buses");
+    assertExists(busRes);
+
+    const data = busRes.data as {
+      buses: Array<{
+        name: string;
+        arn: string | null;
+        ruleCount: number;
+        ruleCountTruncated: boolean;
+      }>;
+      count: number;
+      truncated: boolean;
+    };
+    assertEquals(data.count, 2);
+    assertEquals(data.truncated, false);
+    assertEquals(data.buses[0].name, "default");
+    assertEquals(
+      data.buses[0].arn,
+      "arn:aws:events:us-east-1:123456789012:event-bus/default",
+    );
+    assertEquals(data.buses[0].ruleCount, 3);
+    assertEquals(data.buses[0].ruleCountTruncated, false);
+    assertEquals(data.buses[1].name, "custom-bus");
+    assertEquals(data.buses[1].ruleCount, 1);
+    assertEquals(data.buses[1].ruleCountTruncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_event_buses: handles ListEventBuses failure", async () => {
+  const mocks = baseMocks();
+  mocks.eventbridge = (cmd: unknown) => {
+    const name = (cmd as { constructor: { name: string } }).constructor.name;
+    if (name === "ListEventBusesCommand") {
+      throw new Error("Access Denied");
+    }
+    return {};
+  };
+
+  const restore = mockClients(mocks);
+  try {
+    const { context } = makeContext();
+    await assertRejects(
+      () =>
+        model.methods.list_event_buses.execute(
+          {},
+          context as unknown as ListEventBusesContext,
+        ),
+      Error,
+      "Failed to list EventBridge event buses",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_event_buses: continues if ListRules fails for a bus", async () => {
+  const mocks = baseMocks();
+  mocks.eventbridge = (cmd: unknown) => {
+    const name = (cmd as { constructor: { name: string } }).constructor.name;
+    if (name === "ListEventBusesCommand") {
+      return {
+        EventBuses: [{ Name: "failing-bus", Arn: null }],
+      };
+    }
+    if (name === "ListRulesCommand") {
+      throw new Error("InternalError");
+    }
+    return {};
+  };
+
+  const restore = mockClients(mocks);
+  try {
+    const { context, getWrittenResources } = makeContext();
+    await model.methods.list_event_buses.execute(
+      {},
+      context as unknown as ListEventBusesContext,
+    );
+
+    const resources = getWrittenResources();
+    const busRes = resources.find((r) => r.specName === "event_buses");
+    assertExists(busRes);
+
+    const data = busRes.data as {
+      buses: Array<
+        { name: string; ruleCount: number; ruleCountTruncated: boolean }
+      >;
+      count: number;
+      truncated: boolean;
+    };
+    assertEquals(data.count, 1);
+    assertEquals(data.truncated, false);
+    assertEquals(data.buses[0].name, "failing-bus");
+    assertEquals(data.buses[0].ruleCount, 0);
+    assertEquals(data.buses[0].ruleCountTruncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test(
+  "list_event_buses: sets ruleCountTruncated when rule pagination cap fires",
+  async () => {
+    const mocks = baseMocks();
+    mocks.eventbridge = (cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "ListEventBusesCommand") {
+        return {
+          EventBuses: [{ Name: "busy-bus", Arn: null }],
+        };
+      }
+      if (name === "ListRulesCommand") {
+        // Always return 100 rules and a NextToken so the loop hits the cap
+        const rules = Array.from({ length: 100 }, (_, i) => ({
+          Name: `rule-${i}`,
+          State: "ENABLED",
+        }));
+        return { Rules: rules, NextToken: "always-more" };
+      }
+      return {};
+    };
+
+    const restore = mockClients(mocks);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_event_buses.execute(
+        {},
+        context as unknown as ListEventBusesContext,
+      );
+
+      const resources = getWrittenResources();
+      const busRes = resources.find((r) => r.specName === "event_buses");
+      assertExists(busRes);
+
+      const data = busRes.data as {
+        buses: Array<{
+          name: string;
+          ruleCount: number;
+          ruleCountTruncated: boolean;
+        }>;
+        truncated: boolean;
+      };
+      assertEquals(data.buses[0].name, "busy-bus");
+      assertEquals(data.buses[0].ruleCountTruncated, true);
+      // 10 pages of 100 rules = 1000 (initial fetch + 9 more before cap)
+      assertEquals(data.buses[0].ruleCount >= 100, true);
+      assertEquals(data.truncated, true);
+    } finally {
+      restore();
+    }
+  },
+);
