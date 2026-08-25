@@ -1,6 +1,5 @@
-## 2026.08.24.3
+## 2026.08.25.1
 
-**Added:** Output metadata attributes for observability.
-- `durationMs`: Method execution duration in milliseconds.
-- `collectedBy`: Extension name that produced the data.
-- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

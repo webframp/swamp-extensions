@@ -394,7 +394,7 @@ async function queryTokenMetrics(
 /** GCP Vertex AI token usage monitoring model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

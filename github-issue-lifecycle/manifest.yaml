@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/github-issue-lifecycle"
-version: "2026.08.24.2"
+version: "2026.08.25.1"
 description: |
   GitHub issue lifecycle tracker for swamp. Drives issues from open through
   triage, planning, implementation, PR linkage, and merge as versioned swamp
@@ -78,7 +78,10 @@ platforms:
   - darwin-x86_64
   - darwin-aarch64
 labels:
+  - automation
+  - devops
   - github
+  - incident-response
   - issue-lifecycle
   - sdlc
   - triage

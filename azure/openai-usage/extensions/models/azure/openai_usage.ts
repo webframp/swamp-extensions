@@ -539,7 +539,7 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

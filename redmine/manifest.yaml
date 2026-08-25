@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/redmine"
-version: "2026.08.24.3"
+version: "2026.08.25.1"
 description: |
   Redmine issue tracker integration — workflow-agnostic CRUD model.
 
@@ -30,9 +30,11 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - redmine/redmine.ts
 labels:
-  - redmine
-  - issue-tracker
   - api
+  - issue-tracker
+  - ops
+  - project-management
+  - redmine
 platforms:
   - linux-x86_64
   - linux-aarch64

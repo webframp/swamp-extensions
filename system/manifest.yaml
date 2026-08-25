@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/system"
-version: "2026.08.24.5"
+version: "2026.08.25.1"
 description: |
   Query local system diagnostics via shell commands for operational visibility.
 
@@ -41,10 +41,11 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - system/diagnostics.ts
 labels:
-  - system
-  - linux
   - diagnostics
+  - linux
+  - observability
   - ops
+  - system
 platforms:
   - linux-x86_64
   - linux-aarch64

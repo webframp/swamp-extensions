@@ -257,7 +257,7 @@ type ModelContext = {
 /** GitHub model definition exposing repository query methods. */
 export const model = {
   type: "@webframp/github",
-  version: "2026.08.24.3",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
