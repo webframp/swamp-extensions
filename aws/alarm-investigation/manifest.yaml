@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/alarm-investigation"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   CloudWatch alarm investigation and triage model.
 
@@ -65,12 +65,13 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/alarm_investigation.ts
 labels:
+  - alarms
   - aws
   - cloudwatch
-  - alarms
+  - incident-response
+  - infrastructure
   - observability
   - ops
-  - incident-response
   - triage
 platforms:
   - linux-x86_64

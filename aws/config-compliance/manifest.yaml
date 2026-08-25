@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/config-compliance"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   Observe AWS Config compliance evaluations as typed queryable data.
 
@@ -39,9 +39,10 @@ models:
   - aws/config_compliance.ts
 labels:
   - aws
-  - config
   - compliance
+  - config
   - convergence
+  - infrastructure
   - observability
 platforms:
   - linux-x86_64

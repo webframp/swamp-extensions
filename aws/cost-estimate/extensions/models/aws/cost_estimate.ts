@@ -265,7 +265,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.08.24.3",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 

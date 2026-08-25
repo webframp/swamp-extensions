@@ -303,7 +303,7 @@ interface ModelContext {
 /** AWS Support case management model. */
 export const model = {
   type: "@webframp/aws/support",
-  version: "2026.08.24.3",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

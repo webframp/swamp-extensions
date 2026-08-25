@@ -342,7 +342,7 @@ interface ModelContext {
 /** AWS IAM observation model — cross-account role, user, and policy discovery. */
 export const model = {
   type: "@webframp/aws/iam",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

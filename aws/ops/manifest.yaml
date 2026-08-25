@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws-ops"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   AWS Operations Toolkit - Unified incident investigation and daily operational visibility.
 
@@ -84,12 +84,13 @@ reports:
 labels:
   - aws
   - cloudwatch
-  - xray
+  - daily
+  - incident-response
+  - infrastructure
   - observability
   - ops
-  - incident-response
-  - daily
   - workflow
+  - xray
 platforms:
   - linux-x86_64
   - linux-aarch64

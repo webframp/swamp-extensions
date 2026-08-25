@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/traces"
-version: "2026.08.24.4"
+version: "2026.08.25.1"
 description: |
   Query and analyze X-Ray distributed traces for incident investigation and performance analysis.
 
@@ -71,12 +71,13 @@ platforms:
   - darwin-aarch64
 labels:
   - aws
-  - xray
-  - traces
   - distributed-tracing
+  - incident-response
+  - infrastructure
   - observability
   - ops
-  - incident-response
+  - traces
+  - xray
 additionalFiles:
   - README.md
   - LICENSE.md

@@ -1,6 +1,5 @@
-## 2026.08.24.1
+## 2026.08.25.1
 
-**Added:** Troubleshooting section documenting the `allowFailure` all-steps
-behavior, the dead `region` workflow input in `investigate-outage`, the
-undocumented `morning-pulse` workflow and its additional model dependencies,
-report display limits, and profile configuration guidance.
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

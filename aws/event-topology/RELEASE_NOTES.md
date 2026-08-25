@@ -1,8 +1,5 @@
-## 2026.08.24.2
+## 2026.08.25.1
 
-**Added:** `list_event_buses` method — enumerate EventBridge buses with the
-number of rules on each. A lightweight alternative to `discover` when you only
-need to know which buses exist and how many rules they carry, without
-performing full topology graph construction.
-
-**Added:** `event_buses` resource spec to store the bus listing output.
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

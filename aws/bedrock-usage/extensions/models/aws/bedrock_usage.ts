@@ -313,7 +313,7 @@ async function getInvocations(
 /** AWS Bedrock token usage monitoring model. */
 export const model = {
   type: "@webframp/aws/bedrock-usage",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

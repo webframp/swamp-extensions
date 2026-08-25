@@ -399,7 +399,7 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.08.24.4",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

@@ -124,7 +124,7 @@ const PriceResultSchema = z.object({
  */
 export const model = {
   type: "@webframp/aws/pricing",
-  version: "2026.08.24.3",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

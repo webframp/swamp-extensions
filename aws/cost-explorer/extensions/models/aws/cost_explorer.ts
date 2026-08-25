@@ -215,7 +215,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

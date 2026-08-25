@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/support"
-version: "2026.08.24.3"
+version: "2026.08.25.1"
 description: |
   Manage AWS Support cases across accounts. Query case details, track
   correspondence, create new cases, and fan-out across profiles for
@@ -72,6 +72,7 @@ platforms:
   - darwin-aarch64
 labels:
   - aws
-  - support
   - cases
+  - infrastructure
   - ops
+  - support

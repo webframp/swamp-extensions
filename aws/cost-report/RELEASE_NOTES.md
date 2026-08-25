@@ -1,9 +1,5 @@
-## 2026.08.23.1
+## 2026.08.25.1
 
-**Fixed:** README documented a `swamp model report cost-est --json` command
-that doesn't exist. The correct form is `swamp report get <report-name>
---model <model>`.
-
-**Changed:** Documentation only — no code changes otherwise. Documented that
-the resource table only exists for `estimate_from_spec` and always shows
-`$0.00`.
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.
