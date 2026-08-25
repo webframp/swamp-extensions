@@ -1,6 +1,5 @@
-## 2026.08.24.1
+## 2026.08.25.1
 
-**Added:** Troubleshooting section documenting the silent `allowFailure`
-behavior producing false-healthy reports, hardcoded model instance name
-requirements, data-loading failure diagnostics, the 100-event workflow cap, and
-report output retrieval.
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

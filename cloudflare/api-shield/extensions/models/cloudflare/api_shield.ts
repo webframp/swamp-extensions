@@ -412,7 +412,7 @@ const GetApiShieldEndpointManagementRetrieveOperationsAndFeaturesAsOpenApiSchema
 /** Cloudflare API Shield — schema validation, endpoint discovery, sequence rules */
 export const model = {
   type: "@webframp/cloudflare/api-shield",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

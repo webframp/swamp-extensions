@@ -294,7 +294,7 @@ const CreateQueuesPurgeSchema = z.object({
 /** Cloudflare Queues — queue management, consumers, message operations */
 export const model = {
   type: "@webframp/cloudflare/queues",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

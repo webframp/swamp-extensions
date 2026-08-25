@@ -471,7 +471,7 @@ const GetWaitingRoomStatusSchema = z.object({
 /** Cloudflare Waiting Room — traffic queuing, rules, events, analytics */
 export const model = {
   type: "@webframp/cloudflare/waiting-room",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

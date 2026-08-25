@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare-audit"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   Cloudflare security and configuration audit workflow.
   Inspects zone settings, DNS records, WAF rules, Workers, and cache
@@ -45,10 +45,12 @@ workflows:
 reports:
   - cloudflare_audit_report.ts
 labels:
-  - cloudflare
-  - security
   - audit
+  - cloudflare
+  - compliance
   - dns
+  - networking
+  - security
   - waf
 platforms:
   - linux-x86_64

@@ -875,7 +875,7 @@ const PatchLoadBalancerSchema = z.object({
 /** Cloudflare Load Balancing — pools, monitors, load balancers, steering policies */
 export const model = {
   type: "@webframp/cloudflare/load-balancing",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

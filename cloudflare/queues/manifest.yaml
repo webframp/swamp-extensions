@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/queues"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: "Cloudflare Queues — queue management, consumers, message operations"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -14,6 +14,8 @@ additionalFiles:
   - README.md
   - LICENSE.md
 labels:
+  - async
   - cloudflare
-  - queues
+  - event-driven
   - messaging
+  - queues
