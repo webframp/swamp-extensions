@@ -473,7 +473,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
 /** Datadog Security Signals — signal search, triage, and archiving */
 export const model = {
   type: "@webframp/datadog/security-signals",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

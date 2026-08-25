@@ -156,7 +156,7 @@ const ListDoraFailuresSchema = z.object({
 /** Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate */
 export const model = {
   type: "@webframp/datadog/dora",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
