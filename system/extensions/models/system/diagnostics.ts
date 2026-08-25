@@ -137,6 +137,7 @@ const ServiceListSchema = z.object({
   services: z.array(ServiceEntrySchema),
   count: z.number(),
   stateFilter: z.string().nullable(),
+  typeFilter: z.string().nullable(),
   fetchedAt: z.string(),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
@@ -169,6 +170,7 @@ const ListeningPortsSchema = z.object({
 const SearchProcessesSchema = z.object({
   processes: z.array(ProcessSchema),
   count: z.number(),
+  truncated: z.boolean(),
   filters: z.object({
     name: z.string().nullable(),
     minCpu: z.number().nullable(),
@@ -667,6 +669,7 @@ export const model = {
           services,
           count: services.length,
           stateFilter: args.state === "all" ? null : args.state,
+          typeFilter: args.type === "all" ? null : args.type,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
@@ -789,7 +792,7 @@ export const model = {
 
         const namePattern = args.name?.toLowerCase();
 
-        const processes = lines
+        const filtered = lines
           .filter((line) => line.trim().length > 0)
           .map((line) => {
             const parts = line.trim().split(/\s+/);
@@ -814,8 +817,10 @@ export const model = {
               return false;
             }
             return true;
-          })
-          .slice(0, args.limit);
+          });
+
+        const truncated = filtered.length > args.limit;
+        const processes = filtered.slice(0, args.limit);
 
         const handle = await context.writeResource(
           "search_results",
@@ -823,6 +828,7 @@ export const model = {
           {
             processes,
             count: processes.length,
+            truncated,
             filters: {
               name: args.name ?? null,
               minCpu: args.minCpu ?? null,

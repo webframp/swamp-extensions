@@ -1091,7 +1091,7 @@ export const model = {
           });
 
           const instanceName = args.groupName
-            ? `services-${args.groupName.replace(/[\/\s]/g, "-")}`
+            ? `services-${await shortHash(args.groupName)}`
             : "services-all";
 
           const handle = await context.writeResource(

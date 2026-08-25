@@ -146,11 +146,13 @@ const EventBusEntrySchema = z.object({
   name: z.string(),
   arn: z.string().nullable(),
   ruleCount: z.number(),
+  ruleCountTruncated: z.boolean(),
 });
 
 const EventBusListSchema = z.object({
   buses: z.array(EventBusEntrySchema),
   count: z.number(),
+  truncated: z.boolean(),
   fetchedAt: z.string(),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
@@ -1064,30 +1066,51 @@ export const model = {
         const startMs = Date.now();
         const ebClient = new EventBridgeClient(clientConfig(context));
         try {
-          let busResp;
-          try {
-            busResp = await ebClient.send(new ListEventBusesCommand({}));
-          } catch (err) {
-            const region = context.globalArgs.region ?? "us-east-1";
-            throw new Error(
-              `Failed to list EventBridge event buses (region=${region}): ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-              { cause: err },
-            );
-          }
+          const allBusEntries: Array<{
+            Name?: string;
+            Arn?: string;
+          }> = [];
+          let busToken: string | undefined;
+          let busPages = 0;
+
+          // Paginate bus listing (API default page size is 50)
+          do {
+            let busResp;
+            try {
+              busResp = await ebClient.send(
+                new ListEventBusesCommand({ NextToken: busToken }),
+              );
+            } catch (err) {
+              const region = context.globalArgs.region ?? "us-east-1";
+              throw new Error(
+                `Failed to list EventBridge event buses (region=${region}): ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
+            for (const bus of busResp.EventBuses ?? []) {
+              allBusEntries.push(bus);
+            }
+            busToken = busResp.NextToken;
+            busPages++;
+          } while (busToken && busPages < 10);
+
+          const busTruncated = !!busToken;
 
           const buses: Array<{
             name: string;
             arn: string | null;
             ruleCount: number;
+            ruleCountTruncated: boolean;
           }> = [];
 
-          for (const bus of busResp.EventBuses ?? []) {
+          for (const bus of allBusEntries) {
             const busName = bus.Name ?? "default";
             let ruleCount = 0;
             let nextToken: string | undefined;
             let rulePages = 0;
+            let ruleCountTruncated = false;
 
             // Count rules by paginating (only counting, not fetching targets)
             while (true) {
@@ -1110,15 +1133,25 @@ export const model = {
 
               ruleCount += (rulesResp.Rules ?? []).length;
               nextToken = rulesResp.NextToken;
-              if (!nextToken || ++rulePages >= 10) break;
+              if (!nextToken) break;
+              if (++rulePages >= 10) {
+                ruleCountTruncated = true;
+                break;
+              }
             }
 
             buses.push({
               name: busName,
               arn: bus.Arn ?? null,
               ruleCount,
+              ruleCountTruncated,
             });
           }
+
+          // Overall truncated: bus listing itself was capped, or any bus had
+          // its rule count capped
+          const truncated = busTruncated ||
+            buses.some((b) => b.ruleCountTruncated);
 
           const handle = await context.writeResource(
             "event_buses",
@@ -1126,15 +1159,17 @@ export const model = {
             {
               buses,
               count: buses.length,
+              truncated,
               fetchedAt: new Date().toISOString(),
               durationMs: Date.now() - startMs,
               collectedBy: EXTENSION_NAME,
             },
           );
 
-          context.logger.info("Found {count} EventBridge buses", {
-            count: buses.length,
-          });
+          context.logger.info(
+            "Found {count} EventBridge buses (truncated: {truncated})",
+            { count: buses.length, truncated },
+          );
           return { dataHandles: [handle] };
         } finally {
           ebClient.destroy();

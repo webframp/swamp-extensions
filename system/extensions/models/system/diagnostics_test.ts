@@ -622,9 +622,11 @@ Deno.test("system model: list_services parses systemctl output", async () => {
         }>;
         count: number;
         stateFilter: string | null;
+        typeFilter: string | null;
       };
       assertEquals(data.count, 3);
       assertEquals(data.stateFilter, "active");
+      assertEquals(data.typeFilter, "service");
       assertEquals(data.services[0].unit, "sshd.service");
       assertEquals(data.services[0].load, "loaded");
       assertEquals(data.services[0].active, "active");
@@ -658,8 +660,12 @@ Deno.test("system model: list_services state=all sets stateFilter to null", asyn
       );
 
       const resources = getWrittenResources();
-      const data = resources[0].data as { stateFilter: string | null };
+      const data = resources[0].data as {
+        stateFilter: string | null;
+        typeFilter: string | null;
+      };
       assertEquals(data.stateFilter, null);
+      assertEquals(data.typeFilter, null);
     },
   );
 });
@@ -945,6 +951,7 @@ Deno.test("system model: services schema validates", () => {
     }],
     count: 1,
     stateFilter: "active",
+    typeFilter: "service",
     fetchedAt: "2026-01-01T00:00:00Z",
   });
   assertEquals(result.success, true);
@@ -975,6 +982,7 @@ Deno.test("system model: search_results schema validates", () => {
       command: "/sbin/init",
     }],
     count: 1,
+    truncated: false,
     filters: { name: "init", minCpu: null, minMem: null },
     fetchedAt: "2026-01-01T00:00:00Z",
   });

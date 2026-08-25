@@ -869,18 +869,27 @@ Deno.test("list_event_buses: returns buses with rule counts", async () => {
     assertExists(busRes);
 
     const data = busRes.data as {
-      buses: Array<{ name: string; arn: string | null; ruleCount: number }>;
+      buses: Array<{
+        name: string;
+        arn: string | null;
+        ruleCount: number;
+        ruleCountTruncated: boolean;
+      }>;
       count: number;
+      truncated: boolean;
     };
     assertEquals(data.count, 2);
+    assertEquals(data.truncated, false);
     assertEquals(data.buses[0].name, "default");
     assertEquals(
       data.buses[0].arn,
       "arn:aws:events:us-east-1:123456789012:event-bus/default",
     );
     assertEquals(data.buses[0].ruleCount, 3);
+    assertEquals(data.buses[0].ruleCountTruncated, false);
     assertEquals(data.buses[1].name, "custom-bus");
     assertEquals(data.buses[1].ruleCount, 1);
+    assertEquals(data.buses[1].ruleCountTruncated, false);
   } finally {
     restore();
   }
@@ -941,12 +950,17 @@ Deno.test("list_event_buses: continues if ListRules fails for a bus", async () =
     assertExists(busRes);
 
     const data = busRes.data as {
-      buses: Array<{ name: string; ruleCount: number }>;
+      buses: Array<
+        { name: string; ruleCount: number; ruleCountTruncated: boolean }
+      >;
       count: number;
+      truncated: boolean;
     };
     assertEquals(data.count, 1);
+    assertEquals(data.truncated, false);
     assertEquals(data.buses[0].name, "failing-bus");
     assertEquals(data.buses[0].ruleCount, 0);
+    assertEquals(data.buses[0].ruleCountTruncated, false);
   } finally {
     restore();
   }
