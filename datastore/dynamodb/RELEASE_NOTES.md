@@ -1,6 +1,5 @@
-## 2026.08.24.1
+## 2026.08.25.1
 
-**Added Troubleshooting section documenting silent heartbeat/release failures,
-missing profile config, autoCreateTable permissions, chunk cleanup leaks,
-BatchWriteItem retry budget, dirty paths cap, maxChunkBytes limits, and
-retryable error codes.**
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

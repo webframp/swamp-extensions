@@ -1,6 +1,5 @@
-## 2026.08.24.1
+## 2026.08.25.1
 
-**Added Troubleshooting section documenting silent lease heartbeat/release,
-non-retried network errors, container pre-existence requirement, sovereign cloud
-endpoint configuration, ETag conflict retries, dirty paths cap, and best-effort
-release.**
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

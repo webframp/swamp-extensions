@@ -1,5 +1,5 @@
-## 2026.08.24.1
+## 2026.08.25.1
 
-**Added Troubleshooting section documenting silent heartbeat/release failures,
-PATH_LIMIT cap, dirty paths overflow, network error non-retry, TLS
-configuration, tombstone GC behavior, and single-connection architecture.**
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.
