@@ -919,8 +919,10 @@ Deno.test("system model: search_processes respects limit", async () => {
       const data = resources[0].data as {
         processes: Array<{ pid: number }>;
         count: number;
+        truncated: boolean;
       };
       assertEquals(data.count, 3);
+      assertEquals(data.truncated, true);
     },
   );
 });

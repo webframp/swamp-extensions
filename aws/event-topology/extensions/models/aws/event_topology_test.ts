@@ -965,3 +965,56 @@ Deno.test("list_event_buses: continues if ListRules fails for a bus", async () =
     restore();
   }
 });
+
+Deno.test(
+  "list_event_buses: sets ruleCountTruncated when rule pagination cap fires",
+  async () => {
+    const mocks = baseMocks();
+    mocks.eventbridge = (cmd: unknown) => {
+      const name = (cmd as { constructor: { name: string } }).constructor.name;
+      if (name === "ListEventBusesCommand") {
+        return {
+          EventBuses: [{ Name: "busy-bus", Arn: null }],
+        };
+      }
+      if (name === "ListRulesCommand") {
+        // Always return 100 rules and a NextToken so the loop hits the cap
+        const rules = Array.from({ length: 100 }, (_, i) => ({
+          Name: `rule-${i}`,
+          State: "ENABLED",
+        }));
+        return { Rules: rules, NextToken: "always-more" };
+      }
+      return {};
+    };
+
+    const restore = mockClients(mocks);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_event_buses.execute(
+        {},
+        context as unknown as ListEventBusesContext,
+      );
+
+      const resources = getWrittenResources();
+      const busRes = resources.find((r) => r.specName === "event_buses");
+      assertExists(busRes);
+
+      const data = busRes.data as {
+        buses: Array<{
+          name: string;
+          ruleCount: number;
+          ruleCountTruncated: boolean;
+        }>;
+        truncated: boolean;
+      };
+      assertEquals(data.buses[0].name, "busy-bus");
+      assertEquals(data.buses[0].ruleCountTruncated, true);
+      // 10 pages of 100 rules = 1000 (initial fetch + 9 more before cap)
+      assertEquals(data.buses[0].ruleCount >= 100, true);
+      assertEquals(data.truncated, true);
+    } finally {
+      restore();
+    }
+  },
+);
