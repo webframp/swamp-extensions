@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/memberships"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: "Snyk Memberships — group and org member management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -14,7 +14,8 @@ additionalFiles:
   - README.md
   - LICENSE.md
 labels:
-  - snyk
-  - memberships
-  - users
   - access
+  - memberships
+  - security
+  - snyk
+  - users

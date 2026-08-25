@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/collections"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: "Snyk Collections — project collection groupings and management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -14,6 +14,7 @@ additionalFiles:
   - README.md
   - LICENSE.md
 labels:
-  - snyk
   - collections
   - organization
+  - security
+  - snyk

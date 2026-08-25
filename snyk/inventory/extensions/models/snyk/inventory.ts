@@ -629,7 +629,7 @@ const ListAssetTargetsOrgSchema = z.object({
 /** Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources */
 export const model = {
   type: "@webframp/snyk/inventory",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

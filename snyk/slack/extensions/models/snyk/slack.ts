@@ -140,7 +140,7 @@ const GetChannelNameByIdSchema = z.object({
 /** Snyk Slack Integration — Slack app configuration and channel management */
 export const model = {
   type: "@webframp/snyk/slack",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

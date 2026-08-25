@@ -182,7 +182,7 @@ const GetOrgPolicyEventsSchema = z.object({
 /** Snyk Policies — security policy management and rule configuration */
 export const model = {
   type: "@webframp/snyk/policies",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

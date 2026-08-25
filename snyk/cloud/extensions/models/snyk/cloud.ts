@@ -216,7 +216,7 @@ const ListScanSchema = z.object({
 /** Snyk Cloud — cloud environments, scans, and resource posture management */
 export const model = {
   type: "@webframp/snyk/cloud",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

@@ -115,7 +115,7 @@ const CreateOrgMembershipSchema = z.object({
 /** Snyk Memberships — group and org member management */
 export const model = {
   type: "@webframp/snyk/memberships",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

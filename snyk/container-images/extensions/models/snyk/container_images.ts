@@ -232,7 +232,7 @@ const ListImageTargetRefsSchema = z.object({
 /** Snyk Container Images — container image scanning and vulnerability data */
 export const model = {
   type: "@webframp/snyk/container-images",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

@@ -381,7 +381,7 @@ const CreateSecretsRuleExtensionSchema = z.object({
 /** Snyk Groups — group management, orgs, members, and audit */
 export const model = {
   type: "@webframp/snyk/groups",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

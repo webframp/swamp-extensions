@@ -160,7 +160,7 @@ const ListPersonalAccessTokenSchema = z.object({
 /** Snyk Self — current user context, org listing, and app management */
 export const model = {
   type: "@webframp/snyk/self",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
