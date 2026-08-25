@@ -1,6 +1,9 @@
-## 2026.08.24.3
+## 2026.08.24.4
 
-**Added:** Output metadata attributes for observability.
-- `durationMs`: Method execution duration in milliseconds.
-- `collectedBy`: Extension name that produced the data.
-- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).
+**Added:** `list_services` method — lightweight service enumeration from X-Ray
+service graph data. Returns service name, type, account ID, request count,
+fault/error/throttle counts, and average response time in milliseconds. A
+faster alternative to `get_service_graph` when you only need to know which
+services are active and their high-level health.
+
+**Added:** `service_list` resource spec to store the lightweight service listing.

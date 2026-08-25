@@ -171,6 +171,41 @@ const PortScanSchema = z.object({
   ),
 });
 
+/** Schema for an aggregated endpoint description. */
+const EndpointSummarySchema = z.object({
+  host: z.string(),
+  dns: z.object({
+    resolved: z.boolean(),
+    records: z.array(z.object({
+      type: z.string(),
+      data: z.string(),
+    })),
+    error: z.string().nullable(),
+  }),
+  http: z.object({
+    reachable: z.boolean(),
+    statusCode: z.number(),
+    timingMs: z.number(),
+    tlsProtocol: z.string().nullable(),
+    error: z.string().nullable(),
+  }),
+  certificate: z.object({
+    valid: z.boolean(),
+    subject: z.string().nullable(),
+    issuer: z.string().nullable(),
+    daysUntilExpiry: z.number().nullable(),
+    error: z.string().nullable(),
+  }),
+  healthy: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // Helper: Run a shell command
 // =============================================================================
@@ -527,7 +562,7 @@ function computeDaysUntilExpiry(notAfter: string | null): number | null {
  */
 export const model = {
   type: "@webframp/network",
-  version: "2026.08.24.4",
+  version: "2026.08.24.5",
   globalArguments: z.object({}),
 
   upgrades: [
@@ -561,6 +596,13 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.24.5",
+      description:
+        "Added describe_endpoint method and endpoint_summary resource spec " +
+        "for aggregated DNS + HTTP + TLS health checks on a single host",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -601,6 +643,12 @@ export const model = {
       schema: PortScanSchema,
       lifetime: "10m" as const,
       garbageCollection: 10,
+    },
+    endpoint_summary: {
+      description: "Aggregated endpoint health: DNS + HTTP + TLS certificate",
+      schema: EndpointSummarySchema,
+      lifetime: "10m" as const,
+      garbageCollection: 5,
     },
   },
 
@@ -923,7 +971,10 @@ export const model = {
       description:
         "Inspect TLS certificate subject, issuer, and validity dates",
       arguments: z.object({
-        host: z.string().min(1, "host must not be empty").describe(
+        host: z.string().min(1, "host must not be empty").regex(
+          /^[a-zA-Z0-9._-]+$/,
+          "host must contain only alphanumeric characters, dots, hyphens, or underscores",
+        ).describe(
           "Hostname to check",
         ),
         port: z.number().default(443).describe("TLS port to connect to"),
@@ -1137,6 +1188,159 @@ export const model = {
           open: openPorts.length,
           closed: closedPorts.length,
         });
+
+        return { dataHandles: [handle] };
+      },
+    },
+
+    describe_endpoint: {
+      description:
+        "Aggregate DNS, HTTP, and TLS certificate checks for a single host into one health summary",
+      arguments: z.object({
+        host: z.string().min(1, "host must not be empty").regex(
+          /^[a-zA-Z0-9._-]+$/,
+          "host must contain only alphanumeric characters, dots, hyphens, or underscores",
+        ).describe(
+          "Hostname to describe (e.g. example.com)",
+        ),
+        port: z.number().default(443).describe(
+          "HTTPS/TLS port to check (default 443)",
+        ),
+      }),
+      execute: async (
+        args: { host: string; port: number },
+        context: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const fetchUrl = args.port === 443
+          ? `https://${args.host}`
+          : `https://${args.host}:${args.port}`;
+
+        // --- DNS check ---
+        let dnsResolved = false;
+        let dnsRecords: Array<{ type: string; data: string }> = [];
+        let dnsError: string | null = null;
+        try {
+          const label = `dns_lookup ${args.host} A`;
+          let result = await runCommand(
+            ["dig", "+json", args.host, "A"],
+            label,
+          );
+          let parsed;
+          if (
+            result.success ||
+            !result.stderr.includes("Invalid option: +json")
+          ) {
+            parsed = parseDigJson(result.stdout);
+          } else {
+            result = await runCommand(["dig", args.host, "A"], label);
+            parsed = parseDigText(result.stdout);
+          }
+          if (!result.success) {
+            dnsError = result.stderr.trim() ||
+              "dig exited non-zero with no stderr";
+          } else {
+            dnsRecords = parsed.records.map((r) => ({
+              type: r.type,
+              data: r.data,
+            }));
+            dnsResolved = dnsRecords.length > 0;
+          }
+        } catch (err) {
+          dnsError = err instanceof Error ? err.message : String(err);
+        }
+
+        // --- HTTP check ---
+        let httpReachable = false;
+        let httpStatusCode = 0;
+        let httpTimingMs = 0;
+        let httpTlsProtocol: string | null = null;
+        let httpError: string | null = null;
+        try {
+          const httpStart = performance.now();
+          const response = await fetch(fetchUrl, {
+            method: "HEAD",
+            redirect: "follow",
+          });
+          httpTimingMs = Math.round(performance.now() - httpStart);
+          httpStatusCode = response.status;
+          httpReachable = response.status > 0 && response.status < 500;
+          httpTlsProtocol = "TLS";
+          await response.body?.cancel();
+        } catch (err) {
+          httpError = err instanceof Error ? err.message : String(err);
+        }
+
+        // --- Certificate check ---
+        let certValid = false;
+        let certSubject: string | null = null;
+        let certIssuer: string | null = null;
+        let certDaysUntilExpiry: number | null = null;
+        let certError: string | null = null;
+        try {
+          const certResult = await runCommand([
+            "bash",
+            "-c",
+            `echo | openssl s_client -connect ${args.host}:${args.port} -servername ${args.host} 2>/dev/null | openssl x509 -noout -dates -subject -issuer -serial`,
+          ], `cert_check ${args.host}:${args.port}`);
+
+          if (!certResult.success) {
+            certError = certResult.stderr.trim() || "openssl command failed";
+          } else {
+            const parsed = parseCertOutput(certResult.stdout);
+            certSubject = parsed.subject;
+            certIssuer = parsed.issuer;
+            certDaysUntilExpiry = computeDaysUntilExpiry(parsed.notAfter);
+            certValid = certDaysUntilExpiry !== null && certDaysUntilExpiry > 0;
+          }
+        } catch (err) {
+          certError = err instanceof Error ? err.message : String(err);
+        }
+
+        // --- Compute overall health ---
+        const healthy = dnsResolved && httpReachable && certValid;
+
+        const handle = await context.writeResource(
+          "endpoint_summary",
+          `endpoint-${args.host}`,
+          {
+            host: args.host,
+            dns: {
+              resolved: dnsResolved,
+              records: dnsRecords,
+              error: dnsError,
+            },
+            http: {
+              reachable: httpReachable,
+              statusCode: httpStatusCode,
+              timingMs: httpTimingMs,
+              tlsProtocol: httpTlsProtocol,
+              error: httpError,
+            },
+            certificate: {
+              valid: certValid,
+              subject: certSubject,
+              issuer: certIssuer,
+              daysUntilExpiry: certDaysUntilExpiry,
+              error: certError,
+            },
+            healthy,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info(
+          "Endpoint {host}: healthy={healthy} (dns={dns}, http={http}, cert={cert})",
+          {
+            host: args.host,
+            healthy,
+            dns: dnsResolved,
+            http: httpReachable,
+            cert: certValid,
+          },
+        );
 
         return { dataHandles: [handle] };
       },

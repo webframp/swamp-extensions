@@ -1,6 +1,8 @@
-## 2026.08.24.1
+## 2026.08.24.2
 
-**Added:** Output metadata attributes for observability.
-- `durationMs`: Method execution duration in milliseconds.
-- `collectedBy`: Extension name that produced the data.
-- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).
+**Added:** `list_event_buses` method — enumerate EventBridge buses with the
+number of rules on each. A lightweight alternative to `discover` when you only
+need to know which buses exist and how many rules they carry, without
+performing full topology graph construction.
+
+**Added:** `event_buses` resource spec to store the bus listing output.

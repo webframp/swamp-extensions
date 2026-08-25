@@ -1,6 +1,8 @@
-## 2026.08.24.4
+## 2026.08.24.5
 
-**Added:** Output metadata attributes for observability.
-- `durationMs`: Method execution duration in milliseconds.
-- `collectedBy`: Extension name that produced the data.
-- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).
+**Added:** `describe_endpoint` method — aggregated health check that runs DNS
+resolution, HTTP reachability, and TLS certificate inspection for a single host
+in one call. Returns a unified `endpoint_summary` resource with per-check
+results and an overall `healthy` boolean.
+
+**Added:** `endpoint_summary` resource spec storing the aggregated check output.

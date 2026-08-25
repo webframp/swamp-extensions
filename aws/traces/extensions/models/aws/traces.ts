@@ -196,6 +196,34 @@ const ErrorAnalysisSchema = z.object({
   ),
 });
 
+const ServiceListItemSchema = z.object({
+  name: z.string(),
+  type: z.string().nullable(),
+  accountId: z.string().nullable(),
+  requestCount: z.number(),
+  faultCount: z.number(),
+  errorCount: z.number(),
+  throttleCount: z.number(),
+  avgResponseTimeMs: z.number(),
+});
+
+const ServiceListSchema = z.object({
+  services: z.array(ServiceListItemSchema),
+  count: z.number(),
+  timeRange: z.object({
+    start: z.string(),
+    end: z.string(),
+  }),
+  truncated: z.boolean().default(false),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // Helper Functions
 // =============================================================================
@@ -371,7 +399,7 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.08.24.3",
+  version: "2026.08.24.4",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -411,6 +439,13 @@ export const model = {
 
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.4",
+      description:
+        "Added list_services method and service_list resource spec for " +
+        "lightweight service enumeration with request counts and error rates",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -430,6 +465,13 @@ export const model = {
       description: "Analysis of errors and faults in traces",
       schema: ErrorAnalysisSchema,
       lifetime: "1h" as const,
+      garbageCollection: 5,
+    },
+    service_list: {
+      description:
+        "Lightweight service listing with request counts and error rates",
+      schema: ServiceListSchema,
+      lifetime: "30m" as const,
       garbageCollection: 5,
     },
   },
@@ -951,6 +993,127 @@ export const model = {
               faults: faultCount,
               rate: (faultRate * 100).toFixed(1),
             },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
+      },
+    },
+
+    list_services: {
+      description:
+        "List services observed by X-Ray with request counts and error rates — a lightweight alternative to get_service_graph",
+      arguments: z.object({
+        startTime: z
+          .string()
+          .default("1h")
+          .describe("Start time (ISO date or relative: 1h, 30m, 2d)"),
+        endTime: z
+          .string()
+          .optional()
+          .describe("End time (ISO date, defaults to now)"),
+        groupName: z
+          .string()
+          .optional()
+          .describe("X-Ray group name to filter by"),
+      }),
+      execute: async (
+        args: { startTime: string; endTime?: string; groupName?: string },
+        context: {
+          globalArgs: GlobalArgs;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const startMs = Date.now();
+        const client = new XRayClient(makeClientConfig(context.globalArgs));
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
+
+          const rawServices: ServiceNode[] = [];
+          let nextToken: string | undefined;
+          let pages = 0;
+
+          do {
+            const command = new GetServiceGraphCommand({
+              StartTime: startTime,
+              EndTime: endTime,
+              GroupName: args.groupName,
+              NextToken: nextToken,
+            });
+            let response;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              wrapApiError("GetServiceGraph (list_services)", {
+                groupName: args.groupName,
+                startTime: args.startTime,
+                page: pages,
+              }, err);
+            }
+
+            if (response.Services) {
+              rawServices.push(...(response.Services as ServiceNode[]));
+            }
+
+            nextToken = response.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_PAGES);
+
+          const truncated = !!nextToken;
+
+          const services = rawServices.map((svc) => {
+            const stats = svc.SummaryStatistics;
+            const totalCount = stats?.TotalCount ?? 0;
+            const totalResponseTime = stats?.TotalResponseTime ?? 0;
+            return {
+              name: svc.Name || "",
+              type: svc.Type || null,
+              accountId: svc.AccountId || null,
+              requestCount: totalCount,
+              faultCount: stats?.FaultStatistics?.TotalCount ?? 0,
+              errorCount: stats?.ErrorStatistics?.TotalCount ?? 0,
+              throttleCount: stats?.ErrorStatistics?.ThrottleCount ?? 0,
+              avgResponseTimeMs: totalCount > 0
+                ? Math.round((totalResponseTime / totalCount) * 1000)
+                : 0,
+            };
+          });
+
+          const instanceName = args.groupName
+            ? `services-${args.groupName.replace(/[\/\s]/g, "-")}`
+            : "services-all";
+
+          const handle = await context.writeResource(
+            "service_list",
+            instanceName,
+            {
+              services,
+              count: services.length,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              truncated,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          );
+
+          context.logger.info(
+            "Listed {count} services (truncated: {truncated})",
+            { count: services.length, truncated },
           );
           return { dataHandles: [handle] };
         } finally {

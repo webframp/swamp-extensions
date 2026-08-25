@@ -142,6 +142,24 @@ const AnalysisResultSchema = z.object({
   summary: z.record(z.string(), z.unknown()),
 });
 
+const EventBusEntrySchema = z.object({
+  name: z.string(),
+  arn: z.string().nullable(),
+  ruleCount: z.number(),
+});
+
+const EventBusListSchema = z.object({
+  buses: z.array(EventBusEntrySchema),
+  count: z.number(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -263,7 +281,7 @@ function isSnsEndpointInternal(protocol: string, endpoint: string): boolean {
 /** Event topology model — observes the directed graph of AWS event relationships. */
 export const model = {
   type: "@webframp/aws/event-topology",
-  version: "2026.08.24.1",
+  version: "2026.08.24.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -295,6 +313,13 @@ export const model = {
 
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.24.2",
+      description:
+        "Added list_event_buses method and event_buses resource spec for " +
+        "lightweight bus enumeration with per-bus rule counts",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -308,6 +333,12 @@ export const model = {
       description: "Derived analysis views from graph data",
       schema: AnalysisResultSchema,
       lifetime: "6h" as const,
+      garbageCollection: 5,
+    },
+    event_buses: {
+      description: "EventBridge bus listing with rule counts",
+      schema: EventBusListSchema,
+      lifetime: "15m" as const,
       garbageCollection: 5,
     },
   },
@@ -1016,6 +1047,98 @@ export const model = {
         });
 
         return { dataHandles: [handle] };
+      },
+    },
+
+    // =========================================================================
+    // list_event_buses — lightweight bus enumeration with rule counts
+    // =========================================================================
+    list_event_buses: {
+      description:
+        "List EventBridge buses with the number of rules on each — a lightweight alternative to full topology discovery",
+      arguments: z.object({}),
+      execute: async (
+        _args: Record<string, never>,
+        context: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const ebClient = new EventBridgeClient(clientConfig(context));
+        try {
+          let busResp;
+          try {
+            busResp = await ebClient.send(new ListEventBusesCommand({}));
+          } catch (err) {
+            const region = context.globalArgs.region ?? "us-east-1";
+            throw new Error(
+              `Failed to list EventBridge event buses (region=${region}): ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { cause: err },
+            );
+          }
+
+          const buses: Array<{
+            name: string;
+            arn: string | null;
+            ruleCount: number;
+          }> = [];
+
+          for (const bus of busResp.EventBuses ?? []) {
+            const busName = bus.Name ?? "default";
+            let ruleCount = 0;
+            let nextToken: string | undefined;
+            let rulePages = 0;
+
+            // Count rules by paginating (only counting, not fetching targets)
+            while (true) {
+              let rulesResp;
+              try {
+                rulesResp = await ebClient.send(
+                  new ListRulesCommand({
+                    EventBusName: busName,
+                    NextToken: nextToken,
+                    Limit: 100,
+                  }),
+                );
+              } catch (err) {
+                context.logger.warn(
+                  "Failed to list rules for bus {bus}: {error}",
+                  { bus: busName, error: String(err) },
+                );
+                break;
+              }
+
+              ruleCount += (rulesResp.Rules ?? []).length;
+              nextToken = rulesResp.NextToken;
+              if (!nextToken || ++rulePages >= 10) break;
+            }
+
+            buses.push({
+              name: busName,
+              arn: bus.Arn ?? null,
+              ruleCount,
+            });
+          }
+
+          const handle = await context.writeResource(
+            "event_buses",
+            "current",
+            {
+              buses,
+              count: buses.length,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          );
+
+          context.logger.info("Found {count} EventBridge buses", {
+            count: buses.length,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          ebClient.destroy();
+        }
       },
     },
   },
