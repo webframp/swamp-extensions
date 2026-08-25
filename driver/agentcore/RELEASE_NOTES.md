@@ -1,47 +1,5 @@
-## 2026.08.21.1
+## 2026.08.25.1
 
-**Changed:** S3 and AgentCore SDK failures now say which object or runtime they
-were acting on — a failed stage now reads as "AgentCore driver: failed to stage
-s3://bucket/task/bundle.js: Access Denied" instead of a bare SDK error with no
-indication of which of the three staged objects (bundle, request envelope,
-status poll) failed. A malformed worker status document now names the S3 key it
-came from instead of surfacing a bare JSON parse error. `createDriver` now
-rejects a non-positive `timeout` or `pollInterval` at construction time instead
-of letting a `0` or negative value cause an immediate timeout or a tight poll
-loop.
-
-**Upgrade note:** No breaking changes; this is validation and error-message
-tightening only.
-
-## 2026.08.20.1
-
-**Changed:** Bump @aws-sdk/* 3.1111.0 → 3.1114.0 (3 packages)
-
-## 2026.08.15.1
-
-**Changed:** Bump @aws-sdk/* 3.1104.0 → 3.1111.0 (3 packages)
-
-## 2026.08.05.1
-
-**Changed:** Bump @aws-sdk/* 3.1101.0 → 3.1104.0 (3 packages)
-
-## 2026.08.02.1
-
-**Changed:** Bump @aws-sdk/* 3.1100.0 → 3.1101.0 (3 packages)
-
-## 2026.07.31.1
-
-**Changed:** Bump @aws-sdk/* 3.1096.0 → 3.1100.0 (3 packages)
-
-## 2026.07.27.2
-
-**Changed:** Bump @aws-sdk/* 3.1094.0 → 3.1096.0 (3 packages)
-
-## 2026.07.27.1
-
-**Fixed:** `deno fmt` no longer inspects `CLAUDE.md` / `AGENTS.md`. Those files
-are gitignored and never present in CI, but `deno fmt` does not read .gitignore,
-so `deno task fmt:check` could fail locally on a file CI does not have.
-
-**Upgrade note:** Tooling and formatting only. No model, method, schema, or
-behavior change — nothing to do on upgrade.
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.
