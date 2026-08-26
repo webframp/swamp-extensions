@@ -316,7 +316,7 @@ type MethodContext = {
 /** Team topology and value stream mapping model. */
 export const model = {
   type: "@webframp/team-topology",
-  version: "2026.08.24.3",
+  version: "2026.08.26.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -337,6 +337,7 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
 
@@ -346,6 +347,11 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.1",
+      description: "Fix missing upgrade description metadata",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

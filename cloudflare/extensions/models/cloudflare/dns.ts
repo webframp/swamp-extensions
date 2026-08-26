@@ -104,7 +104,7 @@ function buildDnsRecordPayload(
 /** Cloudflare DNS model definition with full CRUD methods and BIND-format export. */
 export const model = {
   type: "@webframp/cloudflare/dns",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -124,6 +124,7 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
 
@@ -138,6 +139,11 @@ export const model = {
     {
       toVersion: "2026.08.25.1",
       description: "Label metadata update, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.1",
+      description: "Fix missing upgrade description metadata",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
