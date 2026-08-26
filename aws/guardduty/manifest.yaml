@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/guardduty"
-version: "2026.08.24.3"
+version: "2026.08.25.1"
 description: |
   Read-only observability model for GuardDuty findings. Query and inspect
   findings from a delegated administrator account, covering all member accounts
@@ -69,6 +69,7 @@ platforms:
 labels:
   - aws
   - guardduty
+  - incident-response
+  - infrastructure
   - security
   - threat-detection
-  - incident-response

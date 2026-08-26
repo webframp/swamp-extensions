@@ -392,7 +392,7 @@ async function enrichAlarm(
  */
 export const model = {
   type: "@webframp/aws/alarm-investigation",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -418,6 +418,11 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

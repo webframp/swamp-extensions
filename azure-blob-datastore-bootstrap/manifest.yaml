@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/azure-blob-datastore-bootstrap"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   One-shot bootstrap for @webframp/azure-blob-datastore. Creates an Azure
   Storage account with a blob container, then switches the current swamp
@@ -52,7 +52,8 @@ platforms:
   - darwin-x86_64
   - darwin-aarch64
 labels:
-  - datastore
-  - bootstrap
   - azure
   - blob-storage
+  - bootstrap
+  - datastore
+  - infrastructure

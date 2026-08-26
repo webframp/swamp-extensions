@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-report"
-version: "2026.08.23.1"
+version: "2026.08.25.1"
 description: |
   Format AWS cost estimates into readable reports with breakdowns and recommendations.
 
@@ -48,6 +48,7 @@ labels:
   - aws
   - cost
   - finops
+  - infrastructure
   - report
 platforms:
   - linux-x86_64

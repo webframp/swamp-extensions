@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/iam"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   Cross-account IAM observation model for role, user, and policy inventory.
   Factory-pattern discovery fans out across AWS profiles to capture trust
@@ -13,10 +13,13 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/iam.ts
 labels:
+  - access-management
   - aws
   - iam
-  - security
+  - identity
+  - infrastructure
   - observation
+  - security
 platforms:
   - linux-x86_64
   - linux-aarch64

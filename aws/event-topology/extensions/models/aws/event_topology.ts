@@ -283,7 +283,7 @@ function isSnsEndpointInternal(protocol: string, endpoint: string): boolean {
 /** Event topology model — observes the directed graph of AWS event relationships. */
 export const model = {
   type: "@webframp/aws/event-topology",
-  version: "2026.08.24.2",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -320,6 +320,11 @@ export const model = {
       description:
         "Added list_event_buses method and event_buses resource spec for " +
         "lightweight bus enumeration with per-bus rule counts",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

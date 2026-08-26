@@ -201,7 +201,7 @@ function mapTopic(raw: Record<string, unknown>): z.infer<typeof TopicSchema> {
 /** Discourse forum model — query categories, topics, and posts via REST API. */
 export const model = {
   type: "@webframp/discourse",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -216,6 +216,11 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

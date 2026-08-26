@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/azure/openai-usage"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   Azure OpenAI / AI Services token usage monitoring — multi-subscription
   scanning of ProcessedPromptTokens and GeneratedTokens via Azure Monitor.
@@ -42,12 +42,13 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - azure/openai_usage.ts
 labels:
-  - azure
-  - openai
   - ai
-  - token-usage
-  - monitoring
+  - azure
   - finops
+  - infrastructure
+  - monitoring
+  - openai
+  - token-usage
 platforms:
   - linux-x86_64
   - linux-aarch64

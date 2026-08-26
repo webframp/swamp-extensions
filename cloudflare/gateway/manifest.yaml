@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/gateway"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: "Cloudflare Gateway — DNS/HTTP policies, locations, proxy endpoints"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -15,6 +15,7 @@ additionalFiles:
   - LICENSE.md
 labels:
   - cloudflare
-  - gateway
-  - zero-trust
   - dns-filtering
+  - gateway
+  - security
+  - zero-trust

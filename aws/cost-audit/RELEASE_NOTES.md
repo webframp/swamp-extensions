@@ -1,6 +1,5 @@
-## 2026.08.24.1
+## 2026.08.25.1
 
-**Added:** Troubleshooting section documenting the `allowFailure: true`
-all-steps behavior, the dead `region` workflow input, `MAX_PAGES = 10`
-truncation in dependent models, and the `regions` (array) vs `region` (string)
-mismatch for the inventory model.
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

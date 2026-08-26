@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/network"
-version: "2026.08.24.5"
+version: "2026.08.25.1"
 description: |
   DNS and network probing model that generates diverse diagnostic events.
 
@@ -49,17 +49,20 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - network/probe.ts
 labels:
-  - network
+  - certificate
+  - diagnostics
   - dns
   - http
-  - diagnostics
+  - network
+  - networking
+  - observability
   - ops
-  - tls
-  - certificate
-  - whois
-  - traceroute
   - port-scan
   - probe
+  - security
+  - tls
+  - traceroute
+  - whois
 platforms:
   - linux-x86_64
   - linux-aarch64

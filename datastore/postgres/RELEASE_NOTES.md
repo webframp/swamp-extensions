@@ -1,5 +1,5 @@
-## 2026.08.24.1
+## 2026.08.25.1
 
-**Added Troubleshooting section documenting auto-created infrastructure, silent
-heartbeat failure, connection pool behavior, retryable PG error codes, sidecar
-bulk invalidation, read replica detection, and SSL CA requirements.**
+**Changed:** Updated labels for improved extension discoverability. Added
+cross-cutting category labels (security, observability, finops, infrastructure,
+networking, compliance, devops, ai, incident-response) where applicable.

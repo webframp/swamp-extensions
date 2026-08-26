@@ -400,7 +400,7 @@ const UpdateSslVerificationEditSslCertificatePackValidationMethodSchema = z
 /** Cloudflare SSL/TLS — certificate packs, custom certificates, certificate authority */
 export const model = {
   type: "@webframp/cloudflare/ssl-certificates",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -408,6 +408,11 @@ export const model = {
       toVersion: "2026.08.24.1",
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

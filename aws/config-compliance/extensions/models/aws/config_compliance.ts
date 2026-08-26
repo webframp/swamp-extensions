@@ -167,7 +167,7 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.08.24.1",
+  version: "2026.08.25.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -197,6 +197,11 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

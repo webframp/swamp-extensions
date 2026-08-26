@@ -562,7 +562,7 @@ function computeDaysUntilExpiry(notAfter: string | null): number | null {
  */
 export const model = {
   type: "@webframp/network",
-  version: "2026.08.24.5",
+  version: "2026.08.25.1",
   globalArguments: z.object({}),
 
   upgrades: [
@@ -603,6 +603,11 @@ export const model = {
       description:
         "Added describe_endpoint method and endpoint_summary resource spec " +
         "for aggregated DNS + HTTP + TLS health checks on a single host",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

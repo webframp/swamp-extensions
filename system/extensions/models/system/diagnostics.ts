@@ -245,7 +245,7 @@ async function runCommand(
 /** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
-  version: "2026.08.24.5",
+  version: "2026.08.25.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",
@@ -288,6 +288,11 @@ export const model = {
       description:
         "Added list_services, list_ports, and search_processes methods with " +
         "new services, listening_ports, and search_results resource specs",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

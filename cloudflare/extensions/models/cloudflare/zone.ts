@@ -84,7 +84,7 @@ const ZoneSettingsSchema = z.object({
 /** Cloudflare Zone model definition with methods for listing, inspecting, pausing, and configuring zones. */
 export const model = {
   type: "@webframp/cloudflare/zone",
-  version: "2026.08.24.3",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -111,6 +111,11 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

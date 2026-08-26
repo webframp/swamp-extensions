@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/drift-state"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   Unified drift detection surface that composes observations from existing
   models (adopt, inventory, terraform, config, dns) into queryable versioned
@@ -66,11 +66,13 @@ workflows:
   - drift-state-refresh.yaml
 labels:
   - aws
-  - drift
   - compliance
   - convergence
-  - observability
   - dns
+  - drift
+  - infrastructure
+  - networking
+  - observability
   - topology
 platforms:
   - linux-x86_64

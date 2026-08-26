@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-estimate"
-version: "2026.08.24.3"
+version: "2026.08.25.1"
 description: |
   Calculate AWS infrastructure costs from inventory data or planned specs.
 
@@ -52,11 +52,12 @@ models:
   - aws/cost_estimate.ts
 labels:
   - aws
-  - cost
-  - pricing
-  - finops
-  - estimate
   - cloud
+  - cost
+  - estimate
+  - finops
+  - infrastructure
+  - pricing
 platforms:
   - linux-x86_64
   - linux-aarch64

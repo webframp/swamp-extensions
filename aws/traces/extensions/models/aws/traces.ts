@@ -399,7 +399,7 @@ interface TraceSummaryItem {
  */
 export const model = {
   type: "@webframp/aws/traces",
-  version: "2026.08.24.4",
+  version: "2026.08.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -444,6 +444,11 @@ export const model = {
       description:
         "Added list_services method and service_list resource spec for " +
         "lightweight service enumeration with request counts and error rates",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/bedrock-usage"
-version: "2026.08.24.1"
+version: "2026.08.25.1"
 description: |
   AWS Bedrock token usage monitoring — multi-account fan-out scanning of
   InputTokenCount and OutputTokenCount metrics via CloudWatch. Provides
@@ -47,12 +47,13 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/bedrock_usage.ts
 labels:
+  - ai
   - aws
   - bedrock
-  - ai
-  - token-usage
-  - monitoring
   - finops
+  - infrastructure
+  - monitoring
+  - token-usage
 platforms:
   - linux-x86_64
   - linux-aarch64
