@@ -257,7 +257,7 @@ interface ModelContext {
 /** Agile threat modeling concept model. */
 export const model = {
   type: "@webframp/threat-model",
-  version: "2026.08.24.3",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -279,6 +279,7 @@ export const model = {
     },
     {
       toVersion: "2026.08.24.2",
+      description: "No schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
 
@@ -288,6 +289,11 @@ export const model = {
       description:
         "Added optional durationMs, collectedBy, and fetchedAt output metadata fields",
 
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.1",
+      description: "Fix missing upgrade description metadata",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
