@@ -446,6 +446,11 @@ export const model = {
         "lightweight service enumeration with request counts and error rates",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {

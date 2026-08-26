@@ -605,6 +605,11 @@ export const model = {
         "for aggregated DNS + HTTP + TLS health checks on a single host",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.25.1",
+      description: "Label metadata update, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
