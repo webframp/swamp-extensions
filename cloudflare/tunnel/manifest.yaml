@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/tunnel"
-version: "2026.08.25.1"
+version: "2026.08.26.1"
 description: "Cloudflare Tunnel — tunnel management, configurations, connections"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

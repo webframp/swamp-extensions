@@ -42,7 +42,8 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@systeminit/swamp-testing@0.20260604.20"
+      "jsr:@systeminit/swamp-testing@0.20260604.20",
+      "npm:zod@4.4.3"
     ]
   }
 }

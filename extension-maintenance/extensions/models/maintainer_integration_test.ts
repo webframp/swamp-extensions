@@ -289,7 +289,7 @@ Deno.test("apply-bump regenerates deno.lock with direct specifiers", async () =>
   // Use a real npm package that exists — zod is a safe bet
   const { root, cleanup } = await createFixture({
     sourceContent:
-      `import { z } from "npm:zod@3.23.0";\nexport const s = z.string();\n`,
+      `import { z } from "zod";\nexport const s = z.string();\n`,
     denoJson: { imports: {} },
   });
 

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/vectorize"
-version: "2026.08.25.1"
+version: "2026.08.26.1"
 description: "Cloudflare Vectorize — vector indexes, insert/query/delete operations"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

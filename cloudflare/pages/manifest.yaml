@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/pages"
-version: "2026.08.25.1"
+version: "2026.08.26.1"
 description: "Cloudflare Pages — projects, deployments, domains, build configs"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

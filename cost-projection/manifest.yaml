@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cost-projection"
-version: "2026.08.25.1"
+version: "2026.08.26.1"
 description: |
   GPU inference cost projection across cloud, rental, and capex scenarios.
 

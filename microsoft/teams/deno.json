@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
     "check": "deno check extensions/models/microsoft/*.ts extensions/models/microsoft/_lib/*.ts",
     "lint": "deno lint extensions/models/ extensions/reports/",
@@ -8,7 +11,9 @@
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": [
+        "no-import-prefix"
+      ]
     }
   },
   "imports": {

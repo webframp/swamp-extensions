@@ -11,7 +11,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/terraform";
 
@@ -247,7 +247,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
 
   upgrades: [
     {

@@ -14,7 +14,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/anydoc-ingest";
 
@@ -475,7 +475,7 @@ interface MethodContext {
 /** Document ingestion model powered by anydoc. */
 export const model = {
   type: "@webframp/anydoc-ingest",
-  version: "2026.08.24.2",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     "scan": {

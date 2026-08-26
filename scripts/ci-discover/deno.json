@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
     "discover": "deno run --allow-read --allow-run --allow-env --allow-write main.ts",
     "check": "deno check main.ts main_test.ts lib/*.ts",

@@ -10,7 +10,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   GetHostedZoneCommand,
   ListHostedZonesCommand,
@@ -499,7 +499,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   upgrades: [
     {
       toVersion: "2026.07.30.1",

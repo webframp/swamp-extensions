@@ -11,7 +11,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   DescribeServicesCommand,
   Filter,
@@ -124,7 +124,7 @@ const PriceResultSchema = z.object({
  */
 export const model = {
   type: "@webframp/aws/pricing",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

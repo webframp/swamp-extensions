@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/agentcore-bootstrap";
 
@@ -135,7 +135,7 @@ async function ecrRepoExists(
 /** Model definition for the AgentCore bootstrap provisioner. */
 export const model = {
   type: "@webframp/agentcore-bootstrap/provisioner",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

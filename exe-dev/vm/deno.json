@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
     "check": "deno check extensions/models/exe-dev/*.ts",
     "lint": "deno lint extensions/models/",
@@ -8,11 +11,16 @@
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": [
+        "no-import-prefix"
+      ]
     }
   },
   "fmt": {
-    "exclude": ["CLAUDE.md", "AGENTS.md"]
+    "exclude": [
+      "CLAUDE.md",
+      "AGENTS.md"
+    ]
   },
   "imports": {
     "zod": "npm:zod@4.4.3"

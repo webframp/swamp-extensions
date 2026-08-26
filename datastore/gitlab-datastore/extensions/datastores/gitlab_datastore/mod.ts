@@ -9,7 +9,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { Attr, recordRetry, SpanStatusCode, withSpan } from "./_lib/tracing.ts";
 
 /**

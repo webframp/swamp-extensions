@@ -9,7 +9,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/system";
 
@@ -245,7 +245,7 @@ async function runCommand(
 /** System diagnostics model -- exposes methods for querying disk, memory, processes, uptime, network, and OS info. */
 export const model = {
   type: "@webframp/system",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   upgrades: [
     {
       toVersion: "2026.07.18.1",

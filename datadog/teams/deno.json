@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
     "check": "deno check extensions/models/datadog/*.ts extensions/models/datadog/_lib/*.ts",
     "lint": "deno lint extensions/models/",
@@ -14,6 +17,7 @@
     }
   },
   "imports": {
+    "zod": "npm:zod@4.4.3",
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
   }
 }

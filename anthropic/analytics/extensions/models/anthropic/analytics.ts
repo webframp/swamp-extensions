@@ -13,7 +13,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/anthropic/analytics";
 
@@ -414,7 +414,7 @@ function usedAcrossProducts(user: any, field: string): boolean {
 /** Claude Enterprise Analytics — seat counts, adoption, DAU/WAU/MAU, and cost via the Analytics API. */
 export const model = {
   type: "@webframp/anthropic/analytics",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

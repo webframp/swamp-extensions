@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/swamp-adoption";
 
@@ -195,7 +195,7 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -704,7 +704,7 @@ Each generated file includes TODO comments marking where the user adds real logi
           `// ${safeExtName} Model`,
           "// SPDX-License-Identifier: Apache-2.0",
           "",
-          'import { z } from "npm:zod@4.4.3";',
+          'import { z } from "zod";',
           "",
           "const GlobalArgsSchema = z.object({",
           "  // TODO: add global arguments from design",
@@ -738,6 +738,7 @@ Each generated file includes TODO comments marking where the user adds real logi
 
         const denoJsonContent = JSON.stringify(
           {
+            compilerOptions: { strict: true },
             tasks: {
               check: `deno check extensions/models/${shortName}/mod.ts`,
               lint: "deno lint extensions/models/",
@@ -747,6 +748,7 @@ Each generated file includes TODO comments marking where the user adds real logi
             },
             lint: { rules: { exclude: ["no-import-prefix"] } },
             imports: {
+              zod: "npm:zod@4.4.3",
               "@systeminit/swamp-testing":
                 "jsr:@systeminit/swamp-testing@0.20260604.20",
             },

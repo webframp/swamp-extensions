@@ -15,7 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/cost-projection";
 
@@ -349,7 +349,7 @@ function computeSensitivity(
 /** GPU capex inference cost projection model with amortization. */
 export const model = {
   type: "@webframp/cost-projection/gpu-capex",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: z.object({}),
   reports: ["@webframp/cost-projection-comparison"],
 

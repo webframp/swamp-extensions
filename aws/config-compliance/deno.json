@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
     "check": "deno check extensions/models/aws/config_compliance.ts",
     "lint": "deno lint extensions/models/",
@@ -8,10 +11,13 @@
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": [
+        "no-import-prefix"
+      ]
     }
   },
   "imports": {
+    "zod": "npm:zod@4.4.3",
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
   }
 }

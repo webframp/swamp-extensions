@@ -20,7 +20,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   type DashboardRow,
   renderDashboardHtml,
@@ -197,7 +197,7 @@ type AppendArgs = {
 /** Durable append-only time-series accumulator for operator-briefing trends. */
 export const model = {
   type: "@webframp/operator-briefing/metrics",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

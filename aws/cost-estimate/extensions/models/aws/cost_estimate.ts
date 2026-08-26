@@ -10,7 +10,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   GetProductsCommand,
   PricingClient,
@@ -265,7 +265,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 

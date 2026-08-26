@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   ConfigServiceClient,
   DescribeComplianceByConfigRuleCommand,
@@ -167,7 +167,7 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",

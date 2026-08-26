@@ -1,7 +1,7 @@
 // ABOUTME: DynamoDB datastore extension for swamp — single-table design with
 // ABOUTME: conditional-write distributed locking and chunked blob storage.
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   CreateTableCommand,
   DescribeTableCommand,

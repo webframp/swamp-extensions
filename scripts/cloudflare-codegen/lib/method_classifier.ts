@@ -182,7 +182,7 @@ export function generateModelSource(
     `// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception`,
   );
   lines.push(``);
-  lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
+  lines.push(`import { z } from "zod";`);
 
   // Only import the API helpers that are actually used
   const usesCfApi = methods.some((m) =>

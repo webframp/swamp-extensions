@@ -12,7 +12,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/bench-datastore";
 
@@ -190,7 +190,7 @@ async function runModelMethod(
 /** Harness model definition. */
 export const model = {
   type: "@webframp/bench-datastore/harness",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

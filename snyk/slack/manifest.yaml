@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/slack"
-version: "2026.08.25.1"
+version: "2026.08.26.1"
 description: "Snyk Slack Integration — Slack app configuration and channel management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

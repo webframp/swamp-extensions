@@ -11,7 +11,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/network";
 
@@ -562,7 +562,7 @@ function computeDaysUntilExpiry(notAfter: string | null): number | null {
  */
 export const model = {
   type: "@webframp/network",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: z.object({}),
 
   upgrades: [
