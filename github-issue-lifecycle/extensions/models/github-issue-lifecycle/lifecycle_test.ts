@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { createModelTestContext } from "@systeminit/swamp-testing";
 import {
   assertTransition,
   instanceName,
@@ -225,37 +226,38 @@ function withMockedCommand<T>(
 /** A single stored resource, keyed the same way the model writes it. */
 interface StoredResource {
   specName: string;
-  instance: string;
+  name: string;
   data: Record<string, unknown>;
 }
 
+/**
+ * Wrap the shared `createModelTestContext` factory with this model's default
+ * global args and expose the written resources. The factory supplies the
+ * in-memory `readResource`/`writeResource`/`logger` implementations; the seed
+ * maps instance names to stored resource data, exactly as the factory's
+ * `storedResources` option expects.
+ */
 function makeContext(
   seed: Record<string, Record<string, unknown>> = {},
 ): { context: MethodContext; getWritten: () => StoredResource[] } {
-  const written: StoredResource[] = [];
-  const store = new Map<string, Record<string, unknown>>(
-    Object.entries(seed),
-  );
-  return {
-    context: {
-      globalArgs: {
-        repo: "webframp/swamp-extensions",
-        postComments: false,
-        syncLabels: false,
-      },
-      readResource: (name: string) => Promise.resolve(store.get(name) ?? null),
-      writeResource: (spec: string, instance: string, data: unknown) => {
-        written.push({
-          specName: spec,
-          instance,
-          data: data as Record<string, unknown>,
-        });
-        store.set(instance, data as Record<string, unknown>);
-        return Promise.resolve({ name: instance });
-      },
-      logger: { info: () => {}, warn: () => {} },
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {
+      repo: "webframp/swamp-extensions",
+      postComments: false,
+      syncLabels: false,
     },
-    getWritten: () => written,
+    storedResources: seed,
+  });
+  return {
+    // The factory types globalArgs as Record<string, unknown>; this model
+    // declares a narrower GlobalArgs shape, so bridge through unknown.
+    context: context as unknown as MethodContext,
+    getWritten: () =>
+      getWrittenResources().map((r) => ({
+        specName: r.specName,
+        name: r.name,
+        data: r.data,
+      })),
   };
 }
 

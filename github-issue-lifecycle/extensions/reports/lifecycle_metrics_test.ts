@@ -1,6 +1,14 @@
 import { assertEquals } from "@std/assert";
 import { report } from "./lifecycle_metrics.ts";
 
+// NOTE: This report test keeps a hand-rolled dataRepository rather than using
+// createReportTestContext. The report matches stored artifacts via
+// `entry.tags?.specName`, but the factory's TestData type exposes `attributes`
+// and carries no `tags` field, so a factory-backed repository cannot drive this
+// report's filtering path. Migrating would require fabricating a field the
+// factory does not model — see PR discussion. Revisit if swamp-testing's
+// TestData gains a `tags` field.
+
 interface DataEntry {
   name: string;
   version: number;
