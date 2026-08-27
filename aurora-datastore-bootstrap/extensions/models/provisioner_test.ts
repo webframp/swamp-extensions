@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects } from "@std/assert";
+import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./provisioner.ts";
 
 type CommandHandler = (
@@ -63,18 +64,24 @@ function createMockContext(globalArgs: {
     name: string;
     data: Record<string, unknown>;
   }> = [];
-  return {
-    context: {
-      globalArgs,
-      writeResource: (
-        specName: string,
-        name: string,
-        data: Record<string, unknown>,
-      ) => {
-        written.push({ specName, name, data });
-        return Promise.resolve({ name });
-      },
+  // Build the method context from the shared factory, then wrap writeResource
+  // so callers can still read the live `written` array. The factory supplies
+  // the full context (logger, readResource); this model only uses globalArgs
+  // and writeResource.
+  const { context: base } = createModelTestContext({ globalArgs });
+  const context = {
+    ...base,
+    writeResource: (
+      specName: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
+      written.push({ specName, name, data });
+      return base.writeResource(specName, name, data);
     },
+  } as unknown as Parameters<typeof model.methods.provision.execute>[1];
+  return {
+    context,
     written,
   };
 }
@@ -95,7 +102,7 @@ const DEFAULT_ARGS = {
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/aurora-datastore-bootstrap/provisioner");
-  assertEquals(model.version, "2026.08.26.3");
+  assertEquals(model.version, "2026.08.27.1");
 });
 
 Deno.test("model has provision method", () => {

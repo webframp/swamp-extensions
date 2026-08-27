@@ -3,7 +3,8 @@
     "strict": true
   },
   "imports": {
-    "@std/assert": "jsr:@std/assert@1.0.19"
+    "@std/assert": "jsr:@std/assert@1.0.19",
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
   },
   "tasks": {
     "check": "deno check extensions/models/harness.ts extensions/models/harness_test.ts",

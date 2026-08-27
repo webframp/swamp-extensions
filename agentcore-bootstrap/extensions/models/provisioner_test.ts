@@ -1,4 +1,5 @@
 import { assertEquals, assertMatch, assertRejects } from "@std/assert";
+import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./provisioner.ts";
 
 type CommandHandler = (
@@ -121,9 +122,10 @@ Deno.test("provision method arguments apply defaults", () => {
 // Execute tests with mocked Deno.Command
 // ---------------------------------------------------------------------------
 
+type ProvisionContext = Parameters<typeof model.methods.provision.execute>[1];
+
 function makeProvisionContext() {
-  const written: Array<{ specName: string; name: string; data: unknown }> = [];
-  const context = {
+  const { context: base, getWrittenResources } = createModelTestContext({
     globalArgs: {
       region: "us-east-1",
       bucket_name: "test-bucket",
@@ -131,18 +133,23 @@ function makeProvisionContext() {
       runtime_name: "test-runtime",
       role_name: "TestRole",
     },
-    logger: { info: () => {}, warn: () => {} },
-    writeResource: (
-      specName: string,
-      name: string,
-      data: Record<string, unknown>,
-    ) => {
-      written.push({ specName, name, data });
-      return Promise.resolve({ name });
-    },
+  });
+  // The provisioner context needs extensionFile(), which the shared factory
+  // does not model; augment the factory context with a stub. The factory
+  // supplies writeResource/readResource/logger and captures written resources.
+  const context = {
+    ...base,
     extensionFile: () => Promise.resolve("/tmp/worker"),
+  } as unknown as ProvisionContext;
+  return {
+    context,
+    getWritten: () =>
+      getWrittenResources().map((r) => ({
+        specName: r.specName,
+        name: r.name,
+        data: r.data as unknown,
+      })),
   };
-  return { context, written };
 }
 
 function awsMockHandler(cmd: string, args: string[]) {
@@ -209,15 +216,14 @@ function awsMockHandler(cmd: string, args: string[]) {
 
 Deno.test("provision execute: success path writes resource with all fields", async () => {
   await withMockedCommand(awsMockHandler, async () => {
-    const { context, written } = makeProvisionContext();
+    const { context, getWritten } = makeProvisionContext();
 
     const result = await model.methods.provision.execute(
       { workerContextPath: "worker", platform: "linux/arm64" },
-      context as unknown as Parameters<
-        typeof model.methods.provision.execute
-      >[1],
+      context,
     );
 
+    const written = getWritten();
     assertEquals(result.dataHandles.length, 1);
     assertEquals(written.length, 1);
     assertEquals(written[0].specName, "provision");
@@ -262,9 +268,7 @@ Deno.test("provision execute: IAM get-role failure rethrows when stderr lacks No
       () =>
         model.methods.provision.execute(
           { workerContextPath: "worker", platform: "linux/arm64" },
-          context as unknown as Parameters<
-            typeof model.methods.provision.execute
-          >[1],
+          context,
         ),
       Error,
     );
@@ -283,9 +287,7 @@ Deno.test("provision execute: transient IAM error rethrows instead of creating r
         const { context } = makeProvisionContext();
         await model.methods.provision.execute(
           { workerContextPath: "worker", platform: "linux/arm64" },
-          context as unknown as Parameters<
-            typeof model.methods.provision.execute
-          >[1],
+          context,
         );
       }),
     Error,

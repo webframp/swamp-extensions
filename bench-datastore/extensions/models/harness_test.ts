@@ -1,5 +1,48 @@
 import { assertEquals, assertExists } from "@std/assert";
+import { createModelTestContext } from "@systeminit/swamp-testing";
 import { model } from "./harness.ts";
+
+// =============================================================================
+// Test context helper
+// =============================================================================
+
+/** A resource captured by the wrapped writeResource. */
+interface WrittenResource {
+  specName: string;
+  name: string;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Build a harness method context from the shared `createModelTestContext`
+ * factory, wrapping `writeResource` so tests can read the live `written`
+ * array. The factory supplies the full context; this model only reads
+ * globalArgs and calls writeResource.
+ */
+function makeContext(globalArgs: {
+  scenario: "throughput" | "write-stress";
+  worker_id: number;
+  models_per_worker: number;
+}): {
+  context: Parameters<typeof model.methods.setup.execute>[1];
+  written: WrittenResource[];
+} {
+  const written: WrittenResource[] = [];
+  const { context: base } = createModelTestContext({ globalArgs });
+  const context = {
+    ...base,
+    globalArgs,
+    writeResource: (
+      specName: string,
+      name: string,
+      data: Record<string, unknown>,
+    ) => {
+      written.push({ specName, name, data });
+      return base.writeResource(specName, name, data);
+    },
+  } as unknown as Parameters<typeof model.methods.setup.execute>[1];
+  return { context, written };
+}
 
 // =============================================================================
 // Export Structure Tests
@@ -271,26 +314,11 @@ Deno.test("setup: creates worker models and probe model for throughput", async (
   await withMockedCommand(
     (_cmd, _args) => ({ stdout: "{}", success: true }),
     async (getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "throughput" as const,
-          worker_id: 1,
-          models_per_worker: 3,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context, written } = makeContext({
+        scenario: "throughput" as const,
+        worker_id: 1,
+        models_per_worker: 3,
+      });
 
       const result = await model.methods.setup.execute({}, context);
 
@@ -329,26 +357,11 @@ Deno.test("setup: creates 1 worker model + probe for write-stress", async () => 
   await withMockedCommand(
     (_cmd, _args) => ({ stdout: "{}", success: true }),
     async (getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "write-stress" as const,
-          worker_id: 5,
-          models_per_worker: 50,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context, written } = makeContext({
+        scenario: "write-stress" as const,
+        worker_id: 5,
+        models_per_worker: 50,
+      });
 
       await model.methods.setup.execute({}, context);
 
@@ -368,26 +381,11 @@ Deno.test("setup: handles already-exists gracefully (idempotent)", async () => {
   await withMockedCommand(
     (_cmd, _args) => ({ stdout: "already exists", success: false }),
     async (getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "write-stress" as const,
-          worker_id: 2,
-          models_per_worker: 50,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context } = makeContext({
+        scenario: "write-stress" as const,
+        worker_id: 2,
+        models_per_worker: 50,
+      });
 
       // Should not throw even though all commands "fail" with "already exists"
       const result = await model.methods.setup.execute({}, context);
@@ -407,26 +405,11 @@ Deno.test("execute: throughput scenario spawns swamp with --stdin and correct ta
   await withMockedCommand(
     (_cmd, _args, _stdinData) => ({ stdout: "{}", success: true }),
     async (getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "throughput" as const,
-          worker_id: 1,
-          models_per_worker: 5,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context, written } = makeContext({
+        scenario: "throughput" as const,
+        worker_id: 1,
+        models_per_worker: 5,
+      });
 
       await model.methods.execute.execute({ iteration: 3 }, context);
 
@@ -462,26 +445,11 @@ Deno.test("execute: write-stress scenario uses correct model and payload size", 
   await withMockedCommand(
     (_cmd, _args, _stdinData) => ({ stdout: "{}", success: true }),
     async (getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "write-stress" as const,
-          worker_id: 3,
-          models_per_worker: 50,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context, written } = makeContext({
+        scenario: "write-stress" as const,
+        worker_id: 3,
+        models_per_worker: 50,
+      });
 
       // iteration 2 => PAYLOAD_SIZES[(2-1) % 3] = "medium"
       await model.methods.execute.execute({ iteration: 2 }, context);
@@ -502,26 +470,11 @@ Deno.test("execute: write-stress respects explicit payload_size input", async ()
   await withMockedCommand(
     (_cmd, _args, _stdinData) => ({ stdout: "{}", success: true }),
     async (_getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "write-stress" as const,
-          worker_id: 1,
-          models_per_worker: 50,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context, written } = makeContext({
+        scenario: "write-stress" as const,
+        worker_id: 1,
+        models_per_worker: 50,
+      });
 
       // Explicit large payload regardless of iteration rotation
       await model.methods.execute.execute(
@@ -544,26 +497,11 @@ Deno.test("execute: records error on command failure", async () => {
       success: false,
     }),
     async (_getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "throughput" as const,
-          worker_id: 1,
-          models_per_worker: 5,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context, written } = makeContext({
+        scenario: "throughput" as const,
+        worker_id: 1,
+        models_per_worker: 5,
+      });
 
       const result = await model.methods.execute.execute(
         { iteration: 1 },
@@ -584,26 +522,11 @@ Deno.test("execute: resource name includes worker_id to prevent collision", asyn
   await withMockedCommand(
     (_cmd, _args, _stdinData) => ({ stdout: "{}", success: true }),
     async (_getCommands) => {
-      const written: Array<{
-        specName: string;
-        name: string;
-        data: Record<string, unknown>;
-      }> = [];
-      const context = {
-        globalArgs: {
-          scenario: "throughput" as const,
-          worker_id: 7,
-          models_per_worker: 5,
-        },
-        writeResource: (
-          specName: string,
-          name: string,
-          data: Record<string, unknown>,
-        ) => {
-          written.push({ specName, name, data });
-          return Promise.resolve({ name });
-        },
-      };
+      const { context, written } = makeContext({
+        scenario: "throughput" as const,
+        worker_id: 7,
+        models_per_worker: 5,
+      });
 
       await model.methods.execute.execute({ iteration: 42 }, context);
 
