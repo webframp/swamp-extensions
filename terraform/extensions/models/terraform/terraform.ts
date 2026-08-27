@@ -11,7 +11,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/terraform";
 
@@ -247,7 +247,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.08.26.2",
+  version: "2026.08.26.3",
 
   upgrades: [
     {
@@ -290,6 +290,18 @@ export const model = {
     {
       toVersion: "2026.08.26.1",
       description: "Fix missing upgrade description metadata",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.2",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.3",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

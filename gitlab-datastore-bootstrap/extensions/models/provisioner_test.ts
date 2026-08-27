@@ -75,7 +75,7 @@ const BASE_ARGS = {
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/gitlab-datastore-bootstrap/provisioner");
-  assertEquals(model.version, "2026.08.26.1");
+  assertEquals(model.version, "2026.08.26.3");
 });
 
 Deno.test("model has provision method", () => {

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/azure-blob-datastore"
-version: "2026.08.26.1"
+version: "2026.08.26.3"
 description: >
   Stores swamp runtime data in Azure Blob Storage using native blob-lease
   distributed locking (the lease ID doubles as the fencing-token nonce) and

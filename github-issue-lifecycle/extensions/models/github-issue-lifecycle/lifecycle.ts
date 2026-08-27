@@ -26,7 +26,7 @@
  *
  * @module
  */
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/github-issue-lifecycle";
 
@@ -1198,7 +1198,7 @@ async function status(
 
 export const model = {
   type: "@webframp/github-issue-lifecycle" as const,
-  version: "2026.08.26.1",
+  version: "2026.08.26.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

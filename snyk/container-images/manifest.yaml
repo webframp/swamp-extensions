@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/container-images"
-version: "2026.08.26.1"
+version: "2026.08.26.2"
 description: "Snyk Container Images — container image scanning and vulnerability data"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

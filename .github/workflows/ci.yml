@@ -196,6 +196,41 @@ jobs:
             echo "Validating $manifest"
             (cd "$dir" && swamp extension fmt manifest.yaml --check)
           done
+      - name: Enforce inline import specifiers (no bare specifiers)
+        # The registry quality scorer cannot resolve bare import specifiers
+        # (e.g. `from "zod"`); such extensions publish but score as UNSCORED.
+        # Standard deno check/lint/test pass with bare imports, so this is the
+        # only place CI can catch the regression cheaply. Shipped source must
+        # use inline `npm:`/`jsr:` pinned specifiers. See CLAUDE.md
+        # "Dependency Import Specifiers (HARD RULE)".
+        run: |
+          # Search shipped source only (extensions/), skip tests and caches.
+          matches=$(grep -rnE 'from "(zod|postgres|ioredis)"' \
+            --include="*.ts" \
+            --exclude="*_test.ts" \
+            --exclude-dir=.swamp \
+            --exclude-dir=.worktrees \
+            $(find . -type d -name extensions -not -path "*/.swamp/*") 2>/dev/null || true)
+          if [ -n "$matches" ]; then
+            echo "::error::Bare import specifier(s) found in shipped source. Use inline npm:/jsr: pins (e.g. \"npm:zod@4.4.3\")."
+            echo "$matches"
+            exit 1
+          fi
+          # Enforce a single consistent zod pin across shipped extension source.
+          # Exclude scripts/ (codegen templates interpolate ${ZOD_VERSION}).
+          pins=$(grep -rhoE 'from "npm:zod@[^"]*"' \
+            --include="*.ts" \
+            --exclude-dir=.swamp \
+            --exclude-dir=.worktrees \
+            --exclude-dir=scripts \
+            . 2>/dev/null | sort -u)
+          count=$(printf '%s\n' "$pins" | grep -c . || true)
+          if [ "$count" -gt 1 ]; then
+            echo "::error::Inconsistent zod pins across extensions — must be identical everywhere:"
+            printf '%s\n' "$pins"
+            exit 1
+          fi
+          echo "Import specifier check passed (zod pin: ${pins:-none})"
 
   adversarial-review:
     name: Adversarial Code Review

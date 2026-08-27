@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gopass"
-version: "2026.08.26.1"
+version: "2026.08.26.3"
 description: "gopass password manager (gopass.pw) - pass compatible with extra features. Emits OpenTelemetry spans for get, put, and list so vault reads are visible in traces, including reads during model and workflow runs where the host emits nothing. Span attributes carry the vault name, key name, and backend only — never secret values or error messages."
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:

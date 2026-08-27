@@ -3,7 +3,6 @@
     "strict": true
   },
   "imports": {
-    "zod": "npm:zod@4.4.3",
     "@std/assert": "jsr:@std/assert@1.0.19"
   },
   "tasks": {

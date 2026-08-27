@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/elasticache-datastore-bootstrap";
 
@@ -485,7 +485,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/elasticache-datastore-bootstrap/provisioner",
-  version: "2026.08.26.1",
+  version: "2026.08.26.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

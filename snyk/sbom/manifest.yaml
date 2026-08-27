@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/sbom"
-version: "2026.08.26.1"
+version: "2026.08.26.2"
 description: "Snyk SBOM — software bill of materials testing and analysis"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

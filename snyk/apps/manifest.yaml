@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/apps"
-version: "2026.08.26.1"
+version: "2026.08.26.2"
 description: "Snyk Apps — OAuth application management, bots, installations"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

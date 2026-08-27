@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/cost-projection";
 
@@ -216,7 +216,7 @@ function computeProjection(s: ScenarioInput) {
 /** GPU rental inference cost projection model. */
 export const model = {
   type: "@webframp/cost-projection/gpu-rental",
-  version: "2026.08.26.1",
+  version: "2026.08.26.3",
   globalArguments: z.object({}),
   reports: ["@webframp/cost-projection-comparison"],
 

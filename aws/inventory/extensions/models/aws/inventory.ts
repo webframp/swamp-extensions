@@ -10,7 +10,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 import {
   DescribeDBInstancesCommand,
   RDSClient,
@@ -627,7 +627,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.08.26.2",
+  version: "2026.08.26.3",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -682,6 +682,18 @@ export const model = {
     {
       toVersion: "2026.08.26.1",
       description: "Fix missing upgrade description metadata",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.2",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.3",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

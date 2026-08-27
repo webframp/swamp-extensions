@@ -101,6 +101,38 @@ swamp extension fmt manifest.yaml --check
 swamp extension quality manifest.yaml --json
 ```
 
+`swamp extension quality` MUST report `"status": "passed"` and
+`"percentage": 100`. Anything less blocks the push. This is the ONLY gate that
+catches the import-specifier failure below — the standard `deno task` gates all
+pass with bare imports.
+
+### 2b. Import specifiers must be inline (blocking)
+
+Shipped source MUST import dependencies with an inline, pinned `npm:`/`jsr:`
+specifier — never a bare specifier resolved through a `deno.json` import map:
+
+```typescript
+import { z } from "npm:zod@4.4.3";   // RIGHT
+import { z } from "zod";              // WRONG — publishes UNSCORED
+```
+
+The registry scorer cannot resolve bare specifiers; an extension importing
+`from "zod"` publishes but scores as unscored and fails the 14/14 rubric.
+`deno task check`/`lint`/`test` do NOT catch this — only
+`swamp extension quality` does. The specifier MUST be identical across every
+extension in the repo (currently `npm:zod@4.4.3`); verify with:
+
+```bash
+grep -rho 'from "npm:zod@[^"]*"' --include="*.ts" \
+  --exclude-dir=.worktrees --exclude-dir=.swamp | sort -u
+# → must print exactly one line
+```
+
+Do not add a dependency to a `deno.json` import map for shipped extensions, and
+keep the `no-import-prefix` lint exclude (it exists to allow inline prefixes).
+Code generators and scaffold templates must emit the same inline pinned
+specifier.
+
 ### 3. ci-discover compatibility
 
 The manifest `name` field MUST use double quotes (not single quotes, not

@@ -9,7 +9,7 @@
  * @module
  */
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/hermes-journal-writer";
 
@@ -615,7 +615,7 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.08.26.2",
+  version: "2026.08.26.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -664,6 +664,18 @@ export const model = {
     {
       toVersion: "2026.08.26.1",
       description: "Fix missing upgrade description metadata",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.2",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.3",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

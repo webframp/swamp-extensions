@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/registrar"
-version: "2026.08.26.1"
+version: "2026.08.26.2"
 description: "Cloudflare Registrar — domain registration, transfers, contacts"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

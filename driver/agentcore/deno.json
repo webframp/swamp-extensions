@@ -24,7 +24,6 @@
     ]
   },
   "imports": {
-    "zod": "npm:zod@4.4.3",
     "@aws-sdk/client-bedrock-agentcore": "npm:@aws-sdk/client-bedrock-agentcore@3.1091.0",
     "@aws-sdk/client-s3": "npm:@aws-sdk/client-s3@3.1091.0",
     "@std/assert": "jsr:@std/assert@1.0.19",

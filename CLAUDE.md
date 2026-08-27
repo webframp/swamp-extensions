@@ -111,7 +111,7 @@ When building models that wrap external APIs:
 - **Zod schemas are the contract.** Add `.min()`, `.max()`, and other constraints that match the API's actual limits. Don't rely on runtime slicing to enforce bounds — fail fast at validation.
 - **Null safety on SDK responses.** AWS SDK types are often `T | undefined`. Use `?? defaultValue` (not `|| defaultValue`) to handle both `null` and `undefined` without masking falsy values like `0` or `""`.
 - **Deterministic resource instance names.** Use filter parameters or entity IDs, not timestamps. `Date.now()` in instance names causes unbounded data accumulation.
-- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must score 14/14 (100%) on the quality rubric. Anything less blocks the PR.
+- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must score 14/14 (100%) on the quality rubric. Anything less blocks the PR. This is also the ONLY gate that catches bare import specifiers — `from "zod"` instead of `from "npm:zod@4.4.3"` publishes unscored and fails the rubric, yet passes `deno task check`/`lint`/`test`. See "Dependency Import Specifiers (HARD RULE)".
 - **Bounded pagination is mandatory.** Never use `Infinity` or unbounded loops for API pagination. Cap fetch limits to a practical multiple (e.g., `limit * 20`) and set a `truncated: boolean` field in the output when results may be incomplete. Unbounded pagination can trigger API throttling and OOM on large accounts.
 - **`truncated` must be honest.** If results are sliced, capped, or filtered after fetching, the `truncated` field must reflect whether more data exists. Hardcoding `false` is a data integrity bug.
 - **SDK timestamp fields may be `Date` or `string`.** Use `String(field)` or `field?.toISOString?.() ?? String(field)` to normalize. Don't assume the SDK returns strings — some versions return `Date` objects.
@@ -141,6 +141,53 @@ deno task test     # Run tests
 - **`fmt` formats, `fmt:check` verifies.** Every extension defines both. A single `fmt` task running `deno fmt --check` is a bug: it makes `deno task fmt` unable to format anything, and leaves CI with no check task to call. If an extension's `fmt` task is unscoped (`deno fmt` with no path), add `fmt.exclude` for `CLAUDE.md` and `AGENTS.md` — they are gitignored and absent in CI, but `deno fmt` does not read `.gitignore`, so without the exclude `fmt:check` fails locally on files CI never sees.
 - Pin all npm dependencies to exact versions in `deno.json` (no ranges)
 - Swamp's bundler inlines npm packages at bundle time; `deno.lock` does NOT cover extension deps
+
+## Dependency Import Specifiers (HARD RULE)
+
+**Never use bare import specifiers in extension source. Always use an explicit
+`npm:` or `jsr:` prefix with a pinned version, inline in the source file.**
+
+```typescript
+// WRONG — bare specifier resolved via a deno.json import map:
+import { z } from "zod";
+
+// RIGHT — inline, explicit, pinned:
+import { z } from "npm:zod@4.4.3";
+```
+
+Why this is non-negotiable:
+
+- **The registry quality scorer cannot resolve bare specifiers.** An extension
+  that imports `from "zod"` publishes but scores as **unscored** — it fails the
+  14/14 rubric. `swamp extension quality` reports:
+  `Extension uses bare import specifiers that cannot be resolved by the
+  server-side scorer: "zod". Use explicit npm: or jsr: prefixes.`
+- Local `deno task check`/`lint`/`test` all PASS with bare imports (Deno
+  resolves them via the import map). Only the server-side scorer rejects them,
+  so this bug is invisible to the standard gates. You MUST run
+  `swamp extension quality manifest.yaml` (from inside the extension directory)
+  to catch it.
+- **The inline specifier is the contract the scorer reads.** Do not "clean this
+  up" by moving the version into a `deno.json` import map — that is precisely
+  what breaks scoring.
+
+Rules:
+
+1. Every dependency import in a shipped source file uses `npm:<pkg>@<version>`
+   or `jsr:<pkg>@<version>` inline. No exceptions for shipped code.
+2. **The specifier MUST be identical across every extension.** The whole repo
+   pins `npm:zod@4.4.3`. A bump changes it everywhere in one sweep, never
+   piecemeal. Verify with:
+   `grep -rho 'from "npm:zod@[^"]*"' --include="*.ts" | sort -u` → exactly one line.
+3. Do NOT add a `"zod"` (or any dependency) entry to a `deno.json` import map for
+   shipped extensions. The `no-import-prefix` lint exclude in `deno.json` exists
+   specifically to allow inline `npm:`/`jsr:` prefixes — keep it.
+4. Code generators and scaffold templates (`scripts/*-codegen`,
+   `swamp-adoption`) MUST emit the same inline pinned specifier. Generated
+   `deno.json` carries no dependency import-map entry.
+5. **Run `swamp extension quality manifest.yaml` before pushing any extension.**
+   Require `status: "passed"` and `percentage: 100`. This is the only gate that
+   catches an unscored-specifier regression.
 
 ## Repository Maintenance Sweep
 

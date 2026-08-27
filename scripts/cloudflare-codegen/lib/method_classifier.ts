@@ -13,6 +13,7 @@
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
 import { schemaToZod } from "./type_mapper.ts";
+import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
 export type MethodType =
@@ -181,7 +182,7 @@ export function generateModelSource(
     `// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception`,
   );
   lines.push(``);
-  lines.push(`import { z } from "zod";`);
+  lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
 
   // Only import the API helpers that are actually used
   const usesCfApi = methods.some((m) =>

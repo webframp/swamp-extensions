@@ -1,7 +1,7 @@
 // ABOUTME: PostgreSQL datastore extension for swamp — provides row-based distributed
 // ABOUTME: locking, team-safe sync, and ACID-backed storage for shared datastores.
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 import postgres from "npm:postgres@3.4.9";
 import {
   createSyncService as createSync,
