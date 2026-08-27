@@ -1,6 +1,6 @@
-## 2026.08.26.1
+## 2026.08.26.2
 
-**Fixed:** Added missing `description` field to upgrade entry for version
-2026.08.24.2. The omission caused `swamp extension pull` to fail with a catalog
-validation error ("upgrades.N.description: Invalid input: expected string,
-received undefined").
+**Changed:** Normalized `deno.json` configuration for repo-wide consistency:
+added explicit `compilerOptions.strict` and migrated zod dependency to the
+import map (bare `"zod"` specifier instead of inline `npm:zod@4.4.3`). No
+behavioral changes — runtime resolution is identical.

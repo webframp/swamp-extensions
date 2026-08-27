@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/container-images";
@@ -232,7 +232,7 @@ const ListImageTargetRefsSchema = z.object({
 /** Snyk Container Images — container image scanning and vulnerability data */
 export const model = {
   type: "@webframp/snyk/container-images",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

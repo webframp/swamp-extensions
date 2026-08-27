@@ -13,7 +13,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   type AwsSecurityFinding,
   type AwsSecurityFindingFilters,
@@ -371,7 +371,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

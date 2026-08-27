@@ -11,7 +11,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/gitlab-datastore-bootstrap";
 
@@ -231,7 +231,7 @@ async function createProjectToken(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/gitlab-datastore-bootstrap/provisioner",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

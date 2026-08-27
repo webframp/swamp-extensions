@@ -1,6 +1,6 @@
-## 2026.08.24.1
+## 2026.08.26.1
 
-**Added:** Output metadata attributes for observability.
-- `durationMs`: Method execution duration in milliseconds.
-- `collectedBy`: Extension name that produced the data.
-- `fetchedAt`: ISO 8601 timestamp when data was fetched (added to resources that previously lacked it).
+**Changed:** Normalized `deno.json` configuration for repo-wide consistency:
+added explicit `compilerOptions.strict` and migrated zod dependency to the
+import map (bare `"zod"` specifier instead of inline `npm:zod@4.4.3`). No
+behavioral changes — runtime resolution is identical.

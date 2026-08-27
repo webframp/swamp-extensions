@@ -12,7 +12,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/extension-maintenance";
 
@@ -872,7 +872,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.08.24.2",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {

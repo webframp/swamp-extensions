@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
     "check": "deno check extensions/drivers/nix_driver.ts extensions/drivers/nix_driver_test.ts",
     "lint": "deno lint extensions/drivers/",
@@ -8,7 +11,9 @@
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": [
+        "no-import-prefix"
+      ]
     }
   },
   "imports": {

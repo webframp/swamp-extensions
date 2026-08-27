@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "strict": true
+  },
   "tasks": {
     "check": "deno check extensions/drivers/dry_run.ts extensions/drivers/dry_run_test.ts",
     "lint": "deno lint extensions/drivers/",
@@ -8,7 +11,9 @@
   },
   "lint": {
     "rules": {
-      "exclude": ["no-import-prefix"]
+      "exclude": [
+        "no-import-prefix"
+      ]
     }
   },
   "imports": {

@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { createRedditClient, type RedditActionResponse } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/reddit/moderation";
@@ -221,7 +221,7 @@ interface MethodContext {
 /** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

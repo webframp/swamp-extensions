@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   initiateDeviceCode,
   pollDeviceCode,
@@ -389,7 +389,7 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.08.24.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

@@ -21,7 +21,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/team-topology";
 
@@ -316,7 +316,7 @@ type MethodContext = {
 /** Team topology and value stream mapping model. */
 export const model = {
   type: "@webframp/team-topology",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   upgrades: [
     {
       toVersion: "2026.07.18.1",

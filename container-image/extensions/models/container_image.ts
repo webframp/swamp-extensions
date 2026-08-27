@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/container-image";
 
@@ -170,7 +170,7 @@ async function runCommand(
 /** Container image model definition. */
 export const model = {
   type: "@webframp/container-image",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

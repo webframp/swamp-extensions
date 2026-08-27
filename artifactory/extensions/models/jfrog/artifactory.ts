@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/artifactory";
 
@@ -266,7 +266,7 @@ type MethodContext = {
 /** JFrog Artifactory model for package management and health monitoring. */
 export const model = {
   type: "@webframp/artifactory",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

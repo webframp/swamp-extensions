@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/rice-scoring";
 
@@ -127,7 +127,7 @@ interface ModelContext {
 /** RICE scoring methodology model. */
 export const model = {
   type: "@webframp/rice-scoring",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   upgrades: [
     {
       toVersion: "2026.07.18.1",

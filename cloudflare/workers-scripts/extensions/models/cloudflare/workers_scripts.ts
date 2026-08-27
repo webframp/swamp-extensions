@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/workers-scripts";
@@ -396,7 +396,7 @@ const GetVersionDetailSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.08.24.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

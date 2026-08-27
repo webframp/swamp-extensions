@@ -23,7 +23,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/org-simulation";
 
@@ -1173,7 +1173,7 @@ function slugify(label: string): string {
 /** Organization design simulation model. */
 export const model = {
   type: "@webframp/org-simulation",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   upgrades: [
     {
       toVersion: "2026.07.23.1",

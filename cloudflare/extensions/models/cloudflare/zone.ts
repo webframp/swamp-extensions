@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare";
@@ -84,7 +84,7 @@ const ZoneSettingsSchema = z.object({
 /** Cloudflare Zone model definition with methods for listing, inspecting, pausing, and configuring zones. */
 export const model = {
   type: "@webframp/cloudflare/zone",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

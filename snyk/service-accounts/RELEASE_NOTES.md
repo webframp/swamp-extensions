@@ -1,5 +1,6 @@
-## 2026.08.25.1
+## 2026.08.26.1
 
-**Changed:** Updated labels for improved extension discoverability. Added
-cross-cutting category labels (security, observability, finops, infrastructure,
-networking, compliance, devops, ai, incident-response) where applicable.
+**Changed:** Normalized `deno.json` configuration for repo-wide consistency:
+added explicit `compilerOptions.strict` and migrated zod dependency to the
+import map (bare `"zod"` specifier instead of inline `npm:zod@4.4.3`). No
+behavioral changes — runtime resolution is identical.

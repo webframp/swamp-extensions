@@ -9,7 +9,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/hermes-journal-writer";
 
@@ -615,7 +615,7 @@ async function writeDailyEntry(
 /** Journal writer model. Reads research-collector data and writes org-mode journal entries with commit and push. */
 export const model = {
   type: "@webframp/hermes-journal-writer" as const,
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

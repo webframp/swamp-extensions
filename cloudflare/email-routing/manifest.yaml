@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/email-routing"
-version: "2026.08.25.1"
+version: "2026.08.26.1"
 description: "Cloudflare Email Routing — rules, addresses, catch-all, DNS setup"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

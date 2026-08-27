@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/azure-blob-datastore-bootstrap";
 
@@ -253,7 +253,7 @@ async function getConnectionString(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/azure-blob-datastore-bootstrap/provisioner",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

@@ -4,7 +4,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/discourse";
 
@@ -201,7 +201,7 @@ function mapTopic(raw: Record<string, unknown>): z.infer<typeof TopicSchema> {
 /** Discourse forum model — query categories, topics, and posts via REST API. */
 export const model = {
   type: "@webframp/discourse",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {

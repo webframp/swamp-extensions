@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { redmineApi, redmineApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/redmine";
@@ -232,7 +232,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
 
   upgrades: [
     {

@@ -26,7 +26,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   Attr,
   redactSecret,

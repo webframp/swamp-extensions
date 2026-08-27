@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare";
@@ -104,7 +104,7 @@ function buildDnsRecordPayload(
 /** Cloudflare DNS model definition with full CRUD methods and BIND-format export. */
 export const model = {
   type: "@webframp/cloudflare/dns",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

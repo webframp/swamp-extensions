@@ -9,7 +9,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 import {
   CloudWatchClient,
   GetMetricDataCommand,
@@ -313,7 +313,7 @@ async function getInvocations(
 /** AWS Bedrock token usage monitoring model. */
 export const model = {
   type: "@webframp/aws/bedrock-usage",
-  version: "2026.08.25.1",
+  version: "2026.08.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [

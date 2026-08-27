@@ -10,7 +10,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "zod";
 
 const EXTENSION_NAME = "@webframp/ddd-guidance";
 
@@ -328,7 +328,7 @@ type MethodContext = {
 /** DDD guidance model — bounded context discovery, ubiquitous language capture, aggregate boundary design. */
 export const model = {
   type: "@webframp/ddd-guidance",
-  version: "2026.08.26.1",
+  version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
