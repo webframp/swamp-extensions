@@ -290,7 +290,7 @@ Deno.test("apply-bump regenerates deno.lock with direct specifiers", async () =>
   const { root, cleanup } = await createFixture({
     sourceContent:
       `import { z } from "zod";\nexport const s = z.string();\n`,
-    denoJson: { imports: {} },
+    denoJson: { imports: { zod: "npm:zod@3.23.0" } },
   });
 
   // Create an initial lockfile that does NOT contain zod@3.23.8
@@ -310,7 +310,7 @@ Deno.test("apply-bump regenerates deno.lock with direct specifiers", async () =>
         nextVersion: "2026.07.27.1",
         changes: [
           {
-            file: "extensions/**/*.ts",
+            file: "deno.json",
             find: "zod@3.23.0",
             replace: "zod@3.23.8",
             category: "npm",
@@ -325,11 +325,11 @@ Deno.test("apply-bump regenerates deno.lock with direct specifiers", async () =>
   const { context, logs } = mockContext(root, plan);
   await model.methods["apply-bump"].execute({}, context);
 
-  // Verify source was updated
-  const src = await Deno.readTextFile(
-    `${root}/test-ext/extensions/models/mod.ts`,
+  // Verify deno.json was updated
+  const denoJsonContent = await Deno.readTextFile(
+    `${root}/test-ext/deno.json`,
   );
-  assertStringIncludes(src, "zod@3.23.8");
+  assertStringIncludes(denoJsonContent, "zod@3.23.8");
 
   // Verify deno.lock now contains the new version
   const lock = await Deno.readTextFile(`${root}/test-ext/deno.lock`);

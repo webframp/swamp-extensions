@@ -13,7 +13,6 @@
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
 import { schemaToZod } from "./type_mapper.ts";
-import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
 export type MethodType =
