@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/org-simulation"
-version: "2026.08.26.2"
+version: "2026.08.26.3"
 description: |
   Agent-guided organization design simulation model inspired by the Curious
   Duck simulation studio (ducksimng.onrender.com). Capture an organization as

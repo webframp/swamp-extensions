@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 import {
   CloudFormationClient,
   ListStackResourcesCommand,
@@ -1251,7 +1251,7 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.08.26.2",
+  version: "2026.08.26.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1304,6 +1304,18 @@ export const model = {
     {
       toVersion: "2026.08.26.1",
       description: "Fix missing upgrade description metadata",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.2",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.26.3",
+      description:
+        "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

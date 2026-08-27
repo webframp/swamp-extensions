@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/assets"
-version: "2026.08.26.1"
+version: "2026.08.26.2"
 description: "Snyk Assets — asset discovery and classification across the group"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

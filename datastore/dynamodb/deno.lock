@@ -430,8 +430,7 @@
       "jsr:@std/assert@1.0.19",
       "jsr:@systeminit/swamp-testing@0.20260604.20",
       "npm:@aws-sdk/client-dynamodb@3.1091.0",
-      "npm:@aws-sdk/lib-dynamodb@3.1091.0",
-      "npm:zod@4.4.3"
+      "npm:@aws-sdk/lib-dynamodb@3.1091.0"
     ]
   }
 }

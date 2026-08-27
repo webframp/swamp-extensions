@@ -7,7 +7,8 @@
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.6",
     "jsr:@std/path@^1.1.5": "1.1.6",
-    "jsr:@std/yaml@1": "1.1.2"
+    "jsr:@std/yaml@1": "1.1.2",
+    "npm:zod@4.4.3": "4.4.3"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -36,12 +37,18 @@
       "integrity": "de612653c036749ba2044165e316f52412b0f0698afffb7ee80b5331d6d2abae"
     }
   },
+  "npm": {
+    "zod@4.4.3": {
+      "integrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="
+    }
+  },
   "workspace": {
     "dependencies": [
       "jsr:@std/assert@1.0.19",
       "jsr:@std/fs@1",
       "jsr:@std/path@1",
-      "jsr:@std/yaml@1"
+      "jsr:@std/yaml@1",
+      "npm:zod@4.4.3"
     ]
   }
 }

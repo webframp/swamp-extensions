@@ -1,6 +1,9 @@
-## 2026.08.26.1
+## 2026.08.26.3
 
-**Changed:** Normalized `deno.json` configuration for repo-wide consistency:
-added explicit `compilerOptions.strict` and migrated zod dependency to the
-import map (bare `"zod"` specifier instead of inline `npm:zod@4.4.3`). No
-behavioral changes — runtime resolution is identical.
+**Fixed:** Restored inline `npm:zod@4.4.3` import specifiers so the registry
+quality scorer can resolve dependencies and score the extension. An earlier
+release used a bare `"zod"` import-map specifier, which published but scored as
+unscored.
+
+**Changed:** Retained explicit `compilerOptions.strict` in `deno.json`. No
+behavioral or schema changes.

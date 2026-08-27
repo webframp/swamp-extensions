@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab-datastore-bootstrap"
-version: "2026.08.26.1"
+version: "2026.08.26.3"
 description: |
   One-shot bootstrap for @webframp/gitlab-datastore. Validates access to a
   GitLab project, optionally creates a scoped project access token, and

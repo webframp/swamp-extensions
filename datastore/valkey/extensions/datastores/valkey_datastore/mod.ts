@@ -13,7 +13,7 @@
  * @module
  */
 
-import { z } from "zod";
+import { z } from "npm:zod@4.4.3";
 import { Redis } from "npm:ioredis@6.0.0";
 import { Buffer } from "node:buffer";
 import { Sidecar } from "./sidecar.ts";

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/tenants"
-version: "2026.08.26.1"
+version: "2026.08.26.2"
 description: "Snyk Tenants — tenant and organization lifecycle management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

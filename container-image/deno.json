@@ -7,7 +7,6 @@
     "fmt:check": "deno fmt --check"
   },
   "imports": {
-    "zod": "npm:zod@4.4.3",
     "@std/assert": "jsr:@std/assert@1.0.19",
     "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
   },

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/exe-dev/vm"
-version: "2026.08.26.1"
+version: "2026.08.26.3"
 description: |
   exe.dev VM lifecycle model. Wraps the exe.dev HTTPS API to manage VMs as
   typed swamp resources — create, destroy, restart, resize, observe fleet

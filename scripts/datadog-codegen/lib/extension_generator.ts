@@ -47,6 +47,7 @@ ${config.labels.map((l) => `  - ${l}`).join("\n")}
 export function generateDenoJson(): string {
   return JSON.stringify(
     {
+      compilerOptions: { strict: true },
       tasks: {
         check:
           "deno check extensions/models/datadog/*.ts extensions/models/datadog/_lib/*.ts",

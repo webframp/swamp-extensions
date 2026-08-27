@@ -12,7 +12,6 @@
     "test": "deno test --allow-net --allow-read --allow-write --allow-env --permit-no-files"
   },
   "imports": {
-    "zod": "npm:zod@4.4.3",
     "@std/path": "jsr:@std/path@1",
     "@std/fs": "jsr:@std/fs@1",
     "@std/assert": "jsr:@std/assert@1.0.19",

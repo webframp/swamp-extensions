@@ -6,9 +6,7 @@
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20",
     "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
-    "npm:zod@4": "4.4.3",
-    "npm:zod@4.4.3": "4.4.3",
-    "npm:zod@^4.3.6": "4.4.3"
+    "npm:zod@4.4.3": "4.4.3"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -24,8 +22,7 @@
       "integrity": "643f4bbc7752a46e0188e21fea0b2907c2d333a4edfb61e4bd47ffae6286a29a",
       "dependencies": [
         "jsr:@std/assert@1.0.19",
-        "npm:@marcbachmann/cel-js",
-        "npm:zod@^4.3.6"
+        "npm:@marcbachmann/cel-js"
       ]
     }
   },
@@ -40,8 +37,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@systeminit/swamp-testing@0.20260604.20",
-      "npm:zod@4.4.3"
+      "jsr:@systeminit/swamp-testing@0.20260604.20"
     ]
   }
 }

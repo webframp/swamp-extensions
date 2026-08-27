@@ -47,6 +47,7 @@ ${config.labels.map((l) => `  - ${l}`).join("\n")}
 export function generateDenoJson(): string {
   return JSON.stringify(
     {
+      compilerOptions: { strict: true },
       tasks: {
         check:
           "deno check extensions/models/cloudflare/*.ts extensions/models/cloudflare/_lib/*.ts",
