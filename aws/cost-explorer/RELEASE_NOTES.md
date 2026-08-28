@@ -1,3 +1,7 @@
+## 2026.08.28.1
+
+**Changed:** Bump @aws-sdk/* 3.1114.0 → 3.1120.0 (2 packages)
+
 ## 2026.08.26.2
 
 **Fixed:** Restored inline `npm:zod@4.4.3` import specifiers so the registry

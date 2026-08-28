@@ -8,7 +8,7 @@ import {
   assertMatch,
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
-import { SecurityHubClient } from "npm:@aws-sdk/client-securityhub@3.1114.0";
+import { SecurityHubClient } from "npm:@aws-sdk/client-securityhub@3.1120.0";
 import { model } from "./securityhub_findings.ts";
 
 // =============================================================================
@@ -759,7 +759,7 @@ Deno.test({
   fn: async () => {
     // Mock OrganizationsClient
     const { OrganizationsClient } = await import(
-      "npm:@aws-sdk/client-organizations@3.1114.0"
+      "npm:@aws-sdk/client-organizations@3.1120.0"
     );
     const original = OrganizationsClient.prototype.send;
     OrganizationsClient.prototype.send = () =>

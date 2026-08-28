@@ -1,3 +1,9 @@
+## 2026.08.28.1
+
+**Changed:** Bump @webframp/container-image 2026.08.01.1 → 2026.08.26.2
+
+**Changed:** Bump @webframp/agentcore 2026.08.20.1 → 2026.08.26.3
+
 ## 2026.08.27.1
 
 **Changed:** Test suite now uses the shared `createModelTestContext` factory
