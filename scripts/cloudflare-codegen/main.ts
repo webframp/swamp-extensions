@@ -17,6 +17,7 @@ import {
   generateModelSource,
 } from "./lib/method_classifier.ts";
 import { generateTestSource } from "./lib/test_generator.ts";
+import { computeModelVersion, computeUpgradesBlock } from "./lib/upgrades.ts";
 import {
   generateApiLib,
   generateDenoJson,
@@ -75,42 +76,23 @@ function parseArgs(): GenerateOptions {
   return opts;
 }
 
-/** Get next CalVer, incrementing N if today already has a version */
-async function getNextVersion(outputBase: string): Promise<string> {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const datePrefix = `${y}.${m}.${d}`;
-
-  let maxN = 0;
-  for (const service of SERVICES) {
-    const manifestPath = join(outputBase, service.name, "manifest.yaml");
-    try {
-      const content = await Deno.readTextFile(manifestPath);
-      const match = content.match(/version:\s*"(\d{4}\.\d{2}\.\d{2}\.\d+)"/);
-      if (match) {
-        const existingVersion = match[1];
-        if (existingVersion.startsWith(datePrefix)) {
-          const n = parseInt(existingVersion.split(".")[3], 10);
-          if (Number.isFinite(n) && n >= maxN) maxN = n;
-        }
-      }
-    } catch {
-      // File doesn't exist yet
-    }
-  }
-
-  return `${datePrefix}.${maxN + 1}`;
-}
-
 async function main() {
   const opts = parseArgs();
   const outputBase = opts.outputBase ?? OUTPUT_BASE;
-  const version = opts.version ?? await getNextVersion(outputBase);
+
+  // Date prefix for CalVer. Per-model versions are computed from a content
+  // diff (see computeModelVersion); `--version` forces a specific version.
+  const now = new Date();
+  const datePrefix = `${now.getFullYear()}.${
+    String(now.getMonth() + 1).padStart(2, "0")
+  }.${String(now.getDate()).padStart(2, "0")}`;
 
   console.log(`\n🔧 Cloudflare Extension Code Generator`);
-  console.log(`   Version: ${version}`);
+  console.log(
+    `   Version: ${
+      opts.version ?? `${datePrefix}.* (per-model, content-based)`
+    }`,
+  );
   console.log(`   Output:  ${outputBase}/`);
   console.log(`   Mode:    ${opts.dryRun ? "DRY RUN" : "GENERATE"}`);
   console.log(``);
@@ -188,13 +170,42 @@ async function main() {
 
     console.log(`   🔨 ${config.name}: ${methods.length} methods`);
 
+    const modelPath = join(modelDir, modelFileName);
+
+    // Content-based version: generate a candidate with a placeholder version
+    // and empty upgrades, compare against the on-disk file, and keep the
+    // existing version when nothing changed. This makes regeneration idempotent
+    // (no date reset on no-op runs) and preserves the hand-written upgrade
+    // ledger instead of erasing it.
+    const PLACEHOLDER = "0.0.0.0";
+    const candidateSource = generateModelSource(
+      group,
+      methods,
+      PLACEHOLDER,
+      "  upgrades: [],",
+    );
+    const versionResult = await computeModelVersion(
+      modelPath,
+      datePrefix,
+      candidateSource,
+      PLACEHOLDER,
+    );
+    // `--version` forces a specific version (still skips writing unchanged).
+    const version = opts.version ?? versionResult.version;
+    const upgradesBlock = computeUpgradesBlock(
+      versionResult.status,
+      version,
+      versionResult.existingContent,
+    );
+
+    if (versionResult.status === "unchanged" && !opts.version) {
+      console.log(`      ↳ unchanged (${version}) — no write needed`);
+      continue;
+    }
+    console.log(`      ↳ ${versionResult.status} → ${version}`);
+
     if (opts.dryRun) {
-      console.log(`      Would create: ${extDir}/`);
-      console.log(`        manifest.yaml, deno.json, README.md, LICENSE.md`);
-      console.log(`        RELEASE_NOTES.md, .swamp.yaml, .gitignore`);
-      console.log(`        extensions/models/cloudflare/${modelFileName}`);
-      console.log(`        extensions/models/cloudflare/${testFileName}`);
-      console.log(`        extensions/models/cloudflare/_lib/api.ts`);
+      console.log(`      [DRY RUN] would write ${extDir}/ (${version})`);
       continue;
     }
 
@@ -202,7 +213,12 @@ async function main() {
     await ensureDir(libDir);
 
     // Generate all files
-    const modelSource = generateModelSource(group, methods, version);
+    const modelSource = generateModelSource(
+      group,
+      methods,
+      version,
+      upgradesBlock,
+    );
     const testSource = generateTestSource(
       config,
       methods,
