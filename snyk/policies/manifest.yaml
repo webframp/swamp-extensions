@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/policies"
-version: "2026.08.26.2"
+version: "2026.08.28.1"
 description: "Snyk Policies — security policy management and rule configuration"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

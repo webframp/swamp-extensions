@@ -478,7 +478,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.08.28.2",
+  version: "2026.08.28.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -522,6 +522,12 @@ export const model = {
       toVersion: "2026.08.28.2",
       description:
         "Re-pinned @webframp/aws/bedrock-usage dependency to 2026.08.28.1; no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.3",
+      description:
+        "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -104,7 +104,7 @@ function buildDnsRecordPayload(
 /** Cloudflare DNS model definition with full CRUD methods and BIND-format export. */
 export const model = {
   type: "@webframp/cloudflare/dns",
-  version: "2026.08.26.3",
+  version: "2026.08.28.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -150,6 +150,12 @@ export const model = {
       toVersion: "2026.08.26.3",
       description:
         "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.1",
+      description:
+        "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

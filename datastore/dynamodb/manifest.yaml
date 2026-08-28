@@ -1,13 +1,12 @@
 manifestVersion: 1
 name: "@webframp/dynamodb-datastore"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: >
   Stores swamp runtime data in AWS DynamoDB with conditional-write distributed
   locking (fencing tokens + TTL-as-defense-in-depth) and chunked blob storage
   for items exceeding DynamoDB's 400KB size limit. Emits OpenTelemetry spans
   for DynamoDB operations, lock acquisition/release, and push/pull sync so
   datastore activity is visible in traces when a TracerProvider is configured.
-license: Apache-2.0
 repository: https://github.com/webframp/swamp-extensions
 platforms:
   - linux-x86_64

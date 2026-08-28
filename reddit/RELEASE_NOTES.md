@@ -1,3 +1,13 @@
+## 2026.08.28.1
+
+**Changed:** Normalized the extension license to Apache-2.0 and corrected the
+copyright holder to "Sean Escriva". Extensions that previously shipped an MIT
+LICENSE.md are now Apache-2.0, consistent with the repository root and every
+other extension. No code or behavioral changes.
+
+**Upgrade note:** License text only. No API, schema, or runtime behavior
+changed.
+
 ## 2026.08.26.3
 
 **Fixed:** Restored inline `npm:zod@4.4.3` import specifiers so the registry
