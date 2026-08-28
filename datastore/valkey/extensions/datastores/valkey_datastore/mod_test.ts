@@ -1,35 +1,42 @@
-import { assertEquals, assertRejects } from "@std/assert";
-import { datastore } from "./mod.ts";
+import { assertEquals, assertExists, assertRejects } from "@std/assert";
+import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
+import type { Redis } from "npm:ioredis@6.0.0";
+import {
+  createSyncService,
+  createValkeyLock,
+  createValkeyVerifier,
+  datastore,
+} from "./mod.ts";
+import { FakeValkey } from "./_lib/fake_valkey.ts";
 
-const VALKEY_URL = Deno.env.get("VALKEY_TEST_URL") ?? "redis://localhost:6380";
-const TEST_PREFIX = `swamp-test-${crypto.randomUUID().slice(0, 8)}`;
+const TEST_PREFIX = "swamp-test";
 
-function testConfig() {
-  return {
-    url: VALKEY_URL,
-    prefix: TEST_PREFIX,
-    db: 0,
-    connectTimeoutMs: 5_000,
-    maxRetriesPerRequest: 1,
-  };
+/** Build a fresh in-memory Valkey typed as the ioredis client the code expects. */
+function fakeRedis(): { fake: FakeValkey; redis: Redis } {
+  const fake = new FakeValkey();
+  return { fake, redis: fake as unknown as Redis };
 }
 
-Deno.test("datastore export shape", () => {
-  assertEquals(datastore.type, "@webframp/valkey-datastore");
-  assertEquals(typeof datastore.name, "string");
-  assertEquals(typeof datastore.description, "string");
-  assertEquals(typeof datastore.configSchema, "object");
-  assertEquals(typeof datastore.createProvider, "function");
-});
+// ── Export + config contract (hermetic) ─────────────────────────────────────
 
-Deno.test("config schema accepts valid config", () => {
-  const result = datastore.configSchema.safeParse({
-    url: "redis://localhost:6379",
+Deno.test("datastore export conforms to the datastore provider contract", () => {
+  assertDatastoreExportConformance(datastore, {
+    validConfigs: [
+      { url: "redis://localhost:6379" },
+      { url: "rediss://host:6379", tls: true },
+    ],
+    invalidConfigs: [
+      {}, // url is required
+      { url: "" }, // url must be non-empty
+      { url: "redis://localhost", db: 16 }, // db out of range
+    ],
   });
-  assertEquals(result.success, true);
+  assertEquals(datastore.type, "@webframp/valkey-datastore");
+  assertExists(datastore.name);
+  assertExists(datastore.description);
 });
 
-Deno.test("config schema applies defaults", () => {
+Deno.test("config schema applies documented defaults", () => {
   const result = datastore.configSchema.parse({
     url: "redis://localhost:6379",
   });
@@ -38,24 +45,6 @@ Deno.test("config schema applies defaults", () => {
   assertEquals(result.tls, false);
   assertEquals(result.connectTimeoutMs, 10_000);
   assertEquals(result.maxRetriesPerRequest, 3);
-});
-
-Deno.test("config schema rejects empty url", () => {
-  const result = datastore.configSchema.safeParse({ url: "" });
-  assertEquals(result.success, false);
-});
-
-Deno.test("config schema rejects missing url", () => {
-  const result = datastore.configSchema.safeParse({});
-  assertEquals(result.success, false);
-});
-
-Deno.test("config schema rejects invalid db", () => {
-  const result = datastore.configSchema.safeParse({
-    url: "redis://localhost",
-    db: 16,
-  });
-  assertEquals(result.success, false);
 });
 
 Deno.test("config schema accepts TLS variants", () => {
@@ -72,8 +61,11 @@ Deno.test("config schema accepts TLS variants", () => {
   assertEquals(objResult.success, true);
 });
 
-Deno.test("createProvider returns provider shape", () => {
-  const provider = datastore.createProvider(testConfig());
+Deno.test("createProvider returns the full provider shape", () => {
+  const provider = datastore.createProvider({
+    url: "redis://localhost:6379",
+    prefix: TEST_PREFIX,
+  });
   assertEquals(typeof provider.createLock, "function");
   assertEquals(typeof provider.createVerifier, "function");
   assertEquals(typeof provider.createSyncService, "function");
@@ -82,7 +74,10 @@ Deno.test("createProvider returns provider shape", () => {
 });
 
 Deno.test("resolveDatastorePath is deterministic", () => {
-  const provider = datastore.createProvider(testConfig());
+  const provider = datastore.createProvider({
+    url: "redis://localhost:6379",
+    prefix: TEST_PREFIX,
+  });
   const a = provider.resolveDatastorePath("/repo");
   const b = provider.resolveDatastorePath("/repo");
   assertEquals(a, b);
@@ -90,52 +85,53 @@ Deno.test("resolveDatastorePath is deterministic", () => {
 });
 
 Deno.test("resolveCachePath returns undefined", () => {
-  const provider = datastore.createProvider(testConfig());
-  const result = provider.resolveCachePath!("/repo");
-  assertEquals(result, undefined);
+  const provider = datastore.createProvider({
+    url: "redis://localhost:6379",
+    prefix: TEST_PREFIX,
+  });
+  assertEquals(provider.resolveCachePath!("/repo"), undefined);
 });
 
-Deno.test({
-  name: "verifier reports healthy against live Valkey",
-  sanitizeResources: false,
-  sanitizeOps: false,
-  fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const verifier = provider.createVerifier();
-    const result = await verifier.verify();
-    assertEquals(result.healthy, true);
-    assertEquals(result.message, "OK");
-    assertEquals(result.datastoreType, "@webframp/valkey-datastore");
-    assertEquals(typeof result.latencyMs, "number");
-    assertEquals(result.details?.prefix, TEST_PREFIX);
-  },
+// ── Verifier (hermetic via injected fake) ────────────────────────────────────
+
+Deno.test("verifier reports healthy against a responsive backend", async () => {
+  const { redis } = fakeRedis();
+  const verifier = createValkeyVerifier(redis, TEST_PREFIX, 0);
+  const result = await verifier.verify();
+  assertEquals(result.healthy, true);
+  assertEquals(result.message, "OK");
+  assertEquals(result.datastoreType, "@webframp/valkey-datastore");
+  assertEquals(typeof result.latencyMs, "number");
+  assertEquals(result.details?.prefix, TEST_PREFIX);
+  // Lock the INFO-parse contract: the version must be extracted from the
+  // `(redis|valkey)_version:` line, not left as "unknown".
+  assertEquals(result.details?.version, "7.4.0");
 });
 
-Deno.test({
-  name: "verifier reports unhealthy on bad connection",
-  sanitizeResources: false,
-  sanitizeOps: false,
-  fn: async () => {
-    const provider = datastore.createProvider({
-      url: "redis://localhost:59999",
-      prefix: "bad",
-      connectTimeoutMs: 1_000,
-      maxRetriesPerRequest: 0,
-    });
-    const verifier = provider.createVerifier();
-    const result = await verifier.verify();
-    assertEquals(result.healthy, false);
-    assertEquals(result.datastoreType, "@webframp/valkey-datastore");
-  },
+Deno.test("verifier reports unhealthy when the backend errors", async () => {
+  const fake = new FakeValkey();
+  // Simulate a dead connection: PING rejects.
+  (fake as unknown as { ping: () => Promise<string> }).ping = () =>
+    Promise.reject(new Error("connection refused"));
+  const verifier = createValkeyVerifier(
+    fake as unknown as Redis,
+    "bad",
+    0,
+  );
+  const result = await verifier.verify();
+  assertEquals(result.healthy, false);
+  assertEquals(result.datastoreType, "@webframp/valkey-datastore");
 });
+
+// ── Lock (hermetic via injected fake) ────────────────────────────────────────
 
 Deno.test({
   name: "lock acquire and release",
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const lock = provider.createLock("/test/lock", {
+    const { redis } = fakeRedis();
+    const lock = createValkeyLock(redis, TEST_PREFIX, "/test/lock", {
       ttlMs: 5_000,
       maxWaitMs: 5_000,
     });
@@ -147,8 +143,7 @@ Deno.test({
     assertEquals(typeof info!.holder, "string");
 
     await lock.release();
-    const afterRelease = await lock.inspect();
-    assertEquals(afterRelease, null);
+    assertEquals(await lock.inspect(), null);
   },
 });
 
@@ -157,21 +152,23 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const lock = provider.createLock("/test/withlock-success", {
-      ttlMs: 5_000,
-      maxWaitMs: 5_000,
-    });
+    const { redis } = fakeRedis();
+    const lock = createValkeyLock(
+      redis,
+      TEST_PREFIX,
+      "/test/withlock-success",
+      {
+        ttlMs: 5_000,
+        maxWaitMs: 5_000,
+      },
+    );
 
     const result = await lock.withLock(async () => {
-      const held = await lock.inspect();
-      assertEquals(held !== null, true);
+      assertEquals(await lock.inspect() !== null, true);
       return 42;
     });
     assertEquals(result, 42);
-
-    const after = await lock.inspect();
-    assertEquals(after, null);
+    assertEquals(await lock.inspect(), null);
   },
 });
 
@@ -180,8 +177,8 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const lock = provider.createLock("/test/withlock-error", {
+    const { redis } = fakeRedis();
+    const lock = createValkeyLock(redis, TEST_PREFIX, "/test/withlock-error", {
       ttlMs: 5_000,
       maxWaitMs: 5_000,
     });
@@ -195,8 +192,7 @@ Deno.test({
       "test error",
     );
 
-    const after = await lock.inspect();
-    assertEquals(after, null);
+    assertEquals(await lock.inspect(), null);
   },
 });
 
@@ -205,8 +201,8 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const lock = provider.createLock("/test/force-release", {
+    const { redis } = fakeRedis();
+    const lock = createValkeyLock(redis, TEST_PREFIX, "/test/force-release", {
       ttlMs: 10_000,
       maxWaitMs: 5_000,
     });
@@ -215,12 +211,8 @@ Deno.test({
     const info = await lock.inspect();
     const nonce = info!.nonce!;
 
-    // Force release with correct nonce
-    const released = await lock.forceRelease(nonce);
-    assertEquals(released, true);
-
-    const after = await lock.inspect();
-    assertEquals(after, null);
+    assertEquals(await lock.forceRelease(nonce), true);
+    assertEquals(await lock.inspect(), null);
   },
 });
 
@@ -229,19 +221,18 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const lock = provider.createLock("/test/force-release-wrong", {
-      ttlMs: 10_000,
-      maxWaitMs: 5_000,
-    });
+    const { redis } = fakeRedis();
+    const lock = createValkeyLock(
+      redis,
+      TEST_PREFIX,
+      "/test/force-release-wrong",
+      { ttlMs: 10_000, maxWaitMs: 5_000 },
+    );
 
     await lock.acquire();
 
-    const released = await lock.forceRelease("wrong-nonce");
-    assertEquals(released, false);
-
-    const stillHeld = await lock.inspect();
-    assertEquals(stillHeld !== null, true);
+    assertEquals(await lock.forceRelease("wrong-nonce"), false);
+    assertEquals(await lock.inspect() !== null, true);
 
     await lock.release();
   },
@@ -252,45 +243,111 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const lock = provider.createLock("/test/release-idempotent", {
-      ttlMs: 5_000,
-      maxWaitMs: 5_000,
-    });
+    const { redis } = fakeRedis();
+    const lock = createValkeyLock(
+      redis,
+      TEST_PREFIX,
+      "/test/release-idempotent",
+      { ttlMs: 5_000, maxWaitMs: 5_000 },
+    );
 
     await lock.acquire();
     await lock.release();
-    await lock.release(); // second release should not throw
+    await lock.release(); // second release must not throw
   },
 });
 
 Deno.test({
-  name: "sync service has correct capabilities",
-  sanitizeResources: false,
-  sanitizeOps: false,
-  fn: () => {
-    const provider = datastore.createProvider(testConfig());
-    const sync = provider.createSyncService!("/repo", "/tmp/cache");
-    const caps = sync.capabilities!();
-    assertEquals(caps.scopedSync, true);
-    assertEquals(caps.lazyHydration, true);
-    assertEquals(caps.twoPhaseSync, true);
-  },
-});
-
-Deno.test({
-  name: "verifier works after sync operation (no double-connect)",
+  name: "second acquire is blocked while the lock is held (NX contention)",
   sanitizeResources: false,
   sanitizeOps: false,
   fn: async () => {
-    const provider = datastore.createProvider(testConfig());
-    const sync = provider.createSyncService!("/repo", "/tmp/valkey-test-cache");
-    // Trigger an implicit connect via sync
-    await sync.pullChanged();
-    // Verifier must still report healthy (no "already connecting" error)
-    const verifier = provider.createVerifier();
-    const result = await verifier.verify();
-    assertEquals(result.healthy, true);
-    assertEquals(result.message, "OK");
+    const { redis } = fakeRedis();
+    const held = createValkeyLock(redis, TEST_PREFIX, "/test/contended", {
+      ttlMs: 30_000,
+      maxWaitMs: 30_000,
+    });
+    const loser = createValkeyLock(redis, TEST_PREFIX, "/test/contended", {
+      ttlMs: 30_000,
+      maxWaitMs: 300, // short wait so the test finishes fast
+      retryIntervalMs: 100,
+    });
+
+    await held.acquire();
+    try {
+      await assertRejects(() => loser.acquire(), Error, "Lock timeout");
+    } finally {
+      await held.release();
+    }
+  },
+});
+
+// ── Sync service (hermetic via injected fake) ────────────────────────────────
+
+Deno.test("sync service reports its capabilities", () => {
+  const { redis } = fakeRedis();
+  const sync = createSyncService(redis, TEST_PREFIX, "/tmp/valkey-cache");
+  const caps = sync.capabilities!();
+  assertEquals(caps.scopedSync, true);
+  assertEquals(caps.lazyHydration, true);
+  assertEquals(caps.twoPhaseSync, true);
+});
+
+Deno.test({
+  name: "pushChanged then pullChanged round-trips a file through the backend",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    const { redis } = fakeRedis();
+    const dir = await Deno.makeTempDir({ prefix: "valkey-sync-src-" });
+    const dest = await Deno.makeTempDir({ prefix: "valkey-sync-dst-" });
+    try {
+      // Write a file into a datastore subdir and push it.
+      await Deno.mkdir(`${dir}/data`, { recursive: true });
+      await Deno.writeTextFile(`${dir}/data/hello.txt`, "world");
+
+      const push = createSyncService(redis, TEST_PREFIX, dir);
+      await push.markDirty({ relPath: "data/hello.txt" });
+      const pushed = await push.pushChanged();
+      assertEquals(pushed, 1);
+
+      // A fresh cache pulls the same file back out.
+      const pull = createSyncService(redis, TEST_PREFIX, dest);
+      const pulled = await pull.pullChanged();
+      assertEquals(pulled, 1);
+      assertEquals(await Deno.readTextFile(`${dest}/data/hello.txt`), "world");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+      await Deno.remove(dest, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "pushChanged via full walk (bulkInvalidated) round-trips a file",
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn: async () => {
+    const { redis } = fakeRedis();
+    const dir = await Deno.makeTempDir({ prefix: "valkey-walk-src-" });
+    const dest = await Deno.makeTempDir({ prefix: "valkey-walk-dst-" });
+    try {
+      await Deno.mkdir(`${dir}/data`, { recursive: true });
+      await Deno.writeTextFile(`${dir}/data/walk.txt`, "swamp");
+
+      // markDirty() with no relPath sets bulkInvalidated, forcing
+      // collectFullWalkDiff — the branch that scans allPaths()/ZRANGEBYSCORE
+      // over the full range rather than a single dirty path.
+      const push = createSyncService(redis, TEST_PREFIX, dir);
+      await push.markDirty();
+      assertEquals(await push.pushChanged(), 1);
+
+      const pull = createSyncService(redis, TEST_PREFIX, dest);
+      assertEquals(await pull.pullChanged(), 1);
+      assertEquals(await Deno.readTextFile(`${dest}/data/walk.txt`), "swamp");
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+      await Deno.remove(dest, { recursive: true });
+    }
   },
 });

@@ -134,9 +134,10 @@ function main() {
     (seed) => expandDependents(seed, dependents),
   );
 
-  // Apply exclusions AFTER classification. Excluded extensions are tested
-  // elsewhere (e.g. datastore/valkey needs a service container), so they are
-  // removed from this matrix but NOT from CI coverage.
+  // Apply exclusions AFTER classification. Excluded extensions are removed
+  // from this matrix but NOT from CI coverage — the exclude flag exists for
+  // extensions that must be tested by a dedicated job (e.g. one needing a
+  // service container) rather than the generic per-extension matrix.
   if (opts.exclude.length > 0) {
     const excludeSet = new Set(opts.exclude);
     const before = result.extensions.length;

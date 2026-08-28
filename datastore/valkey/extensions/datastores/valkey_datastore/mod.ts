@@ -267,7 +267,12 @@ return 0
 
 // -- Lock implementation --
 
-function createValkeyLock(
+/**
+ * Create a distributed lock backed by a Valkey `SET NX PX` key with a
+ * Lua-guarded, nonce-checked release. Exported so callers and tests can supply
+ * their own `redis` client; `createProvider` uses it internally.
+ */
+export function createValkeyLock(
   redis: Redis,
   prefix: string,
   datastorePath: string,
@@ -469,7 +474,13 @@ function createValkeyLock(
 
 // -- Sync service --
 
-function createSyncService(
+/**
+ * Create the two-phase sync service that mirrors the local cache to Valkey via
+ * a sorted-set path index and per-file blob/metadata keys. Exported so callers
+ * and tests can supply their own `redis` client; `createProvider` uses it
+ * internally.
+ */
+export function createSyncService(
   redis: Redis,
   prefix: string,
   cachePath: string,
@@ -1440,6 +1451,66 @@ function createSyncService(
   };
 }
 
+// -- Verifier --
+
+/**
+ * Create the datastore health verifier, which issues `PING` and `INFO` to
+ * confirm the backend is reachable and report its version. Exported so callers
+ * and tests can supply their own `redis` client; `createProvider` uses it
+ * internally.
+ */
+export function createValkeyVerifier(
+  redis: Redis,
+  prefix: string,
+  db: number,
+): DatastoreVerifier {
+  return {
+    verify: async (): Promise<DatastoreHealthResult> => {
+      const start = performance.now();
+      try {
+        const pong = await commandSpan(
+          "PING",
+          undefined,
+          () => redis.ping(),
+        );
+        if (pong !== "PONG") {
+          return {
+            healthy: false,
+            message: `Unexpected PING response: ${pong}`,
+            latencyMs: Math.round(performance.now() - start),
+            datastoreType: "@webframp/valkey-datastore",
+          };
+        }
+        const info = await commandSpan(
+          "INFO",
+          undefined,
+          () => redis.info("server"),
+        );
+        const versionMatch = info.match(/(?:redis|valkey)_version:(.+)/);
+        const version = versionMatch ? versionMatch[1].trim() : "unknown";
+        return {
+          healthy: true,
+          message: "OK",
+          latencyMs: Math.round(performance.now() - start),
+          datastoreType: "@webframp/valkey-datastore",
+          details: {
+            version,
+            prefix,
+            db: String(db),
+          },
+        };
+      } catch (error) {
+        return {
+          healthy: false,
+          message: String(error),
+          latencyMs: Math.round(performance.now() - start),
+          datastoreType: "@webframp/valkey-datastore",
+        };
+      }
+    },
+  };
+}
+
 // -- Config --
 
 const TlsConfigSchema = z.union([
@@ -1548,51 +1619,8 @@ export const datastore = {
         return createValkeyLock(redis, parsed.prefix, datastorePath, options);
       },
 
-      createVerifier: (): DatastoreVerifier => ({
-        verify: async (): Promise<DatastoreHealthResult> => {
-          const start = performance.now();
-          try {
-            const pong = await commandSpan(
-              "PING",
-              undefined,
-              () => redis.ping(),
-            );
-            if (pong !== "PONG") {
-              return {
-                healthy: false,
-                message: `Unexpected PING response: ${pong}`,
-                latencyMs: Math.round(performance.now() - start),
-                datastoreType: "@webframp/valkey-datastore",
-              };
-            }
-            const info = await commandSpan(
-              "INFO",
-              undefined,
-              () => redis.info("server"),
-            );
-            const versionMatch = info.match(/(?:redis|valkey)_version:(.+)/);
-            const version = versionMatch ? versionMatch[1].trim() : "unknown";
-            return {
-              healthy: true,
-              message: "OK",
-              latencyMs: Math.round(performance.now() - start),
-              datastoreType: "@webframp/valkey-datastore",
-              details: {
-                version,
-                prefix: parsed.prefix,
-                db: String(parsed.db),
-              },
-            };
-          } catch (error) {
-            return {
-              healthy: false,
-              message: String(error),
-              latencyMs: Math.round(performance.now() - start),
-              datastoreType: "@webframp/valkey-datastore",
-            };
-          }
-        },
-      }),
+      createVerifier: (): DatastoreVerifier =>
+        createValkeyVerifier(redis, parsed.prefix, parsed.db),
 
       createSyncService: (
         _repoDir: string,

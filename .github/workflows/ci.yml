@@ -57,10 +57,10 @@ jobs:
         working-directory: scripts/ci-discover
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            deno task discover -- --github-output --exclude datastore/valkey \
+            deno task discover -- --github-output \
               --diff-base "${{ github.event.pull_request.base.sha }}"
           else
-            deno task discover -- --github-output --exclude datastore/valkey
+            deno task discover -- --github-output
           fi
 
   extension-check:
@@ -68,10 +68,6 @@ jobs:
     #
     # GitHub caps a matrix at 256 jobs per workflow run, so 137 extensions x 4
     # tasks (548) cannot be expressed, while 137 x 1 can.
-    #
-    # datastore/valkey is excluded from this matrix because it needs a service
-    # container; it has its own job below. The exclusion is visible in the
-    # discover job's --exclude flag, not hidden in YAML.
     needs: [discover]
     name: ${{ matrix.extension }}
     runs-on: ubuntu-latest
@@ -82,52 +78,6 @@ jobs:
     defaults:
       run:
         working-directory: ${{ matrix.extension }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cache Deno binary
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.tool_cache }}/deno
-          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
-        with:
-          deno-version: ${{ env.DENO_VERSION }}
-      - name: deno check
-        run: deno task check
-      - name: deno lint
-        run: deno task lint
-      - name: deno fmt
-        run: deno task fmt:check
-      - name: deno test
-        run: deno task test
-
-  datastore-valkey:
-    # Kept out of the generic matrix: its test task needs a live Valkey, and a
-    # service container cannot be declared per-step. Collapsing the tasks into
-    # one job still cuts four container startups to one -- and that startup is
-    # what flaked on #284.
-    #
-    # needs: [discover] serialises this job behind the discover job, which
-    # populates the Deno tool cache. Cold-cache workflow runs then have a
-    # single Deno download (in discover) instead of one-per-parallel-job.
-    needs: [discover]
-    name: datastore/valkey
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: datastore/valkey
-    services:
-      valkey:
-        image: valkey/valkey:8-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    env:
-      VALKEY_TEST_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - name: Cache Deno binary

@@ -1,3 +1,14 @@
+## 2026.08.28.1
+
+**Changed:** Test suite is now fully hermetic — the lock, sync, and verifier
+tests run against an in-memory fake and no longer require a live Valkey server
+or a CI service container. The extension rejoins the standard CI test matrix.
+
+**Added:** `createValkeyLock`, `createSyncService`, and `createValkeyVerifier`
+are now exported from the module. They were already the internal building
+blocks of `createProvider`; exporting them lets callers (and tests) inject a
+client. Behavior of the datastore provider is unchanged.
+
 ## 2026.08.26.3
 
 **Fixed:** Restored inline `npm:zod@4.4.3` import specifiers so the registry
